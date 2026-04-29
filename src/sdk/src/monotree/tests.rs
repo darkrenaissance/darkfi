@@ -34,7 +34,7 @@ fn monotree_test_insert_then_verify_values() {
 
     for (i, (key, value)) in keys.iter().zip(values.iter()).enumerate() {
         root = tree.insert(root.as_ref(), key, value).unwrap();
-        tree.set_headroot(root.as_ref());
+        tree.set_headroot(root.as_ref()).unwrap();
 
         for (k, v) in keys.iter().zip(values.iter()).take(i + 1) {
             assert_eq!(tree.get(root.as_ref(), k).unwrap(), Some(*v));
@@ -55,11 +55,11 @@ fn monotree_test_insert_keys_then_gen_and_verify_proof() {
 
     for (i, (key, value)) in keys.iter().zip(values.iter()).enumerate() {
         root = tree.insert(root.as_ref(), key, value).unwrap();
-        tree.set_headroot(root.as_ref());
+        tree.set_headroot(root.as_ref()).unwrap();
 
         for (k, v) in keys.iter().zip(values.iter()).take(i + 1) {
             let proof = tree.get_merkle_proof(root.as_ref(), k).unwrap();
-            assert!(verify_proof(root.as_ref(), v, proof.as_ref()));
+            assert!(verify_proof(root.as_ref(), v, proof.as_ref()).unwrap());
         }
     }
 
@@ -77,7 +77,7 @@ fn monotree_test_insert_keys_then_delete_keys_in_order() {
 
     // pre-insertion for removal test
     root = tree.inserts(root.as_ref(), &keys, &values).unwrap();
-    tree.set_headroot(root.as_ref());
+    tree.set_headroot(root.as_ref()).unwrap();
 
     // Removal test with keys in order
     for (i, (key, _)) in keys.iter().zip(values.iter()).enumerate() {
@@ -86,12 +86,12 @@ fn monotree_test_insert_keys_then_delete_keys_in_order() {
         for (k, v) in keys.iter().zip(values.iter()).skip(i) {
             assert_eq!(tree.get(root.as_ref(), k).unwrap(), Some(*v));
             let proof = tree.get_merkle_proof(root.as_ref(), k).unwrap();
-            assert!(verify_proof(root.as_ref(), v, proof.as_ref()));
+            assert!(verify_proof(root.as_ref(), v, proof.as_ref()).unwrap());
         }
 
         // Delete a key and check if it worked
         root = tree.remove(root.as_ref(), key).unwrap();
-        tree.set_headroot(root.as_ref());
+        tree.set_headroot(root.as_ref()).unwrap();
         assert_eq!(tree.get(root.as_ref(), key).unwrap(), None);
     }
 
@@ -110,7 +110,7 @@ fn monotree_test_insert_then_delete_keys_reverse() {
 
     // pre-insertion for removal test
     root = tree.inserts(root.as_ref(), &keys, &values).unwrap();
-    tree.set_headroot(root.as_ref());
+    tree.set_headroot(root.as_ref()).unwrap();
 
     // Removal test with keys in reverse order
     for (i, (key, _)) in keys.iter().zip(values.iter()).rev().enumerate() {
@@ -119,12 +119,12 @@ fn monotree_test_insert_then_delete_keys_reverse() {
         for (k, v) in keys.iter().zip(values.iter()).rev().skip(i) {
             assert_eq!(tree.get(root.as_ref(), k).unwrap(), Some(*v));
             let proof = tree.get_merkle_proof(root.as_ref(), k).unwrap();
-            assert!(verify_proof(root.as_ref(), v, proof.as_ref()));
+            assert!(verify_proof(root.as_ref(), v, proof.as_ref()).unwrap());
         }
 
         // Delete a key and check if it worked
         root = tree.remove(root.as_ref(), key).unwrap();
-        tree.set_headroot(root.as_ref());
+        tree.set_headroot(root.as_ref()).unwrap();
         assert_eq!(tree.get(root.as_ref(), key).unwrap(), None);
     }
 
@@ -143,7 +143,7 @@ fn monotree_test_insert_then_delete_keys_random() {
 
     // pre-insertion for removal test
     root = tree.inserts(root.as_ref(), &keys, &values).unwrap();
-    tree.set_headroot(root.as_ref());
+    tree.set_headroot(root.as_ref()).unwrap();
 
     // Shuffles keys/leaves' index for imitating random access
     let mut idx: Vec<usize> = (0..keys.len()).collect();
@@ -157,12 +157,12 @@ fn monotree_test_insert_then_delete_keys_random() {
         for j in idx.iter().skip(n) {
             assert_eq!(tree.get(root.as_ref(), &keys[*j]).unwrap(), Some(values[*j]));
             let proof = tree.get_merkle_proof(root.as_ref(), &keys[*j]).unwrap();
-            assert!(verify_proof(root.as_ref(), &values[*j], proof.as_ref()));
+            assert!(verify_proof(root.as_ref(), &values[*j], proof.as_ref()).unwrap());
         }
 
         // Delete a key by random index and check if it worked
         root = tree.remove(root.as_ref(), &keys[*i]).unwrap();
-        tree.set_headroot(root.as_ref());
+        tree.set_headroot(root.as_ref()).unwrap();
         assert_eq!(tree.get(root.as_ref(), &values[*i]).unwrap(), None);
     }
 
@@ -185,14 +185,14 @@ fn monotree_test_deterministic_ordering() {
 
     // Insert in normal order
     root1 = tree1.inserts(root1.as_ref(), &keys, &values).unwrap();
-    tree1.set_headroot(root1.as_ref());
+    tree1.set_headroot(root1.as_ref()).unwrap();
     assert_ne!(root1, None);
 
     // Insert in reverse order
     let rev_keys: Vec<Hash> = keys.iter().rev().cloned().collect();
     let rev_vals: Vec<Hash> = values.iter().rev().cloned().collect();
     root2 = tree2.inserts(root2.as_ref(), &rev_keys, &rev_vals).unwrap();
-    tree2.set_headroot(root2.as_ref());
+    tree2.set_headroot(root2.as_ref()).unwrap();
     assert_ne!(root2, None);
 
     // Verify roots match
@@ -201,10 +201,10 @@ fn monotree_test_deterministic_ordering() {
     // Verify removal consistency
     for key in keys {
         root1 = tree1.remove(root1.as_ref(), &key).unwrap();
-        tree1.set_headroot(root1.as_ref());
+        tree1.set_headroot(root1.as_ref()).unwrap();
 
         root2 = tree2.remove(root2.as_ref(), &key).unwrap();
-        tree2.set_headroot(root2.as_ref());
+        tree2.set_headroot(root2.as_ref()).unwrap();
 
         assert_eq!(root1, root2);
     }

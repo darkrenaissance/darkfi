@@ -105,9 +105,10 @@ impl<'a> Node<'a> {
         let len_bits = std::mem::size_of::<BitsLen>();
         let offset_hash = if right { 0_usize } else { HASH_LEN };
         let range_hash = if right { len_bytes - HASH_LEN..len_bytes } else { 0..HASH_LEN };
-        let start: BitsLen = bytes_to_int(&bytes[offset_hash..offset_hash + len_bits]);
-        let end: BitsLen = bytes_to_int(&bytes[offset_hash + len_bits..offset_hash + 2 * len_bits]);
-        let offset_bits = nbytes_across(start, end) as usize;
+        let start: BitsLen = bytes_to_int(&bytes[offset_hash..offset_hash + len_bits])?;
+        let end: BitsLen =
+            bytes_to_int(&bytes[offset_hash + len_bits..offset_hash + 2 * len_bits])?;
+        let offset_bits = nbytes_across(start, end)? as usize;
 
         Ok((
             Some(Unit {

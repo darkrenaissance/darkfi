@@ -335,18 +335,20 @@ impl<D: MonotreeStorageAdapter> Monotree<D> {
     }
 
     /// Sets the latest state (root) to the database.
-    pub fn set_headroot(&mut self, headroot: Option<&Hash>) {
+    pub fn set_headroot(&mut self, headroot: Option<&Hash>) -> GenericResult<()> {
         if let Some(root) = headroot {
-            self.db.put(ROOT_KEY, root.to_vec()).expect("set_headroot(): hash");
+            self.db.put(ROOT_KEY, root.to_vec())?;
         }
+
+        Ok(())
     }
 
-    pub fn prepare(&mut self) {
-        self.db.init_batch().expect("prepare(): failed to initialize batch");
+    pub fn prepare(&mut self) -> GenericResult<()> {
+        self.db.init_batch()
     }
 
-    pub fn commit(&mut self) {
-        self.db.finish_batch().expect("commit(): failed to initialize batch");
+    pub fn commit(&mut self) -> GenericResult<()> {
+        self.db.finish_batch()
     }
 
     /// Insert key-leaf entry into the tree. Returns a new root hash.
@@ -456,10 +458,12 @@ impl<D: MonotreeStorageAdapter> Monotree<D> {
     ///   Immediately split node into two with the longest common prefix,
     ///   then wind the recursive stack from there returning resulting hashes.
     fn put(&mut self, root: &[u8], bits: Bits, leaf: &[u8]) -> GenericResult<Option<Hash>> {
-        let bytes = self.db.get(root)?.expect("put(): bytes");
+        let bytes =
+            self.db.get(root)?.ok_or(ContractError::MonotreeError("put(): bytes".to_string()))?;
         let (left, right) = Node::cells_from_bytes(&bytes, bits.first())?;
-        let unit = left.as_ref().expect("put(): left-unit");
-        let n = Bits::len_common_bits(&unit.bits, &bits);
+        let unit =
+            left.as_ref().ok_or(ContractError::MonotreeError("put(): left-unit".to_string()))?;
+        let n = Bits::len_common_bits(&unit.bits, &bits)?;
 
         match n {
             0 => self.put_node(Node::new(left, Some(Unit { hash: leaf, bits }))),
@@ -467,8 +471,9 @@ impl<D: MonotreeStorageAdapter> Monotree<D> {
                 self.put_node(Node::new(Some(Unit { hash: leaf, bits }), right))
             }
             n if n == unit.bits.len() => {
-                let hash =
-                    &self.put(unit.hash, bits.drop(n), leaf)?.expect("put(): consume & pass-over");
+                let hash = &self.put(unit.hash, bits.drop(n), leaf)?.ok_or(
+                    ContractError::MonotreeError("put(): consume & pass-over".to_string()),
+                )?;
 
                 self.put_node(Node::new(Some(Unit { hash, bits: unit.bits.to_owned() }), right))
             }
@@ -478,9 +483,9 @@ impl<D: MonotreeStorageAdapter> Monotree<D> {
                         Some(Unit { hash: unit.hash, bits: unit.bits.drop(n) }),
                         Some(Unit { hash: leaf, bits: bits.drop(n) }),
                     ))?
-                    .expect("put(): split-node");
+                    .ok_or(ContractError::MonotreeError("put(): split-node".to_string()))?;
 
-                self.put_node(Node::new(Some(Unit { hash, bits: unit.bits.take(n) }), right))
+                self.put_node(Node::new(Some(Unit { hash, bits: unit.bits.take(n)? }), right))
             }
         }
     }
@@ -494,10 +499,15 @@ impl<D: MonotreeStorageAdapter> Monotree<D> {
     }
 
     fn find_key(&mut self, root: &[u8], bits: Bits) -> GenericResult<Option<Hash>> {
-        let bytes = self.db.get(root)?.expect("find_key(): bytes");
+        let bytes = self
+            .db
+            .get(root)?
+            .ok_or(ContractError::MonotreeError("find_key(): bytes".to_string()))?;
         let (cell, _) = Node::cells_from_bytes(&bytes, bits.first())?;
-        let unit = cell.as_ref().expect("find_key(): left-unit");
-        let n = Bits::len_common_bits(&unit.bits, &bits);
+        let unit = cell
+            .as_ref()
+            .ok_or(ContractError::MonotreeError("find_key(): left-unit".to_string()))?;
+        let n = Bits::len_common_bits(&unit.bits, &bits)?;
         match n {
             n if n == bits.len() => Ok(Some(slice_to_hash(unit.hash))),
             n if n == unit.bits.len() => self.find_key(unit.hash, bits.drop(n)),
@@ -514,10 +524,15 @@ impl<D: MonotreeStorageAdapter> Monotree<D> {
     }
 
     fn delete_key(&mut self, root: &[u8], bits: Bits) -> GenericResult<Option<Hash>> {
-        let bytes = self.db.get(root)?.expect("delete_key(): bytes");
+        let bytes = self
+            .db
+            .get(root)?
+            .ok_or(ContractError::MonotreeError("delete_key(): bytes".to_string()))?;
         let (left, right) = Node::cells_from_bytes(&bytes, bits.first())?;
-        let unit = left.as_ref().expect("delete_key(): left-unit");
-        let n = Bits::len_common_bits(&unit.bits, &bits);
+        let unit = left
+            .as_ref()
+            .ok_or(ContractError::MonotreeError("delete_key(): left-unit".to_string()))?;
+        let n = Bits::len_common_bits(&unit.bits, &bits)?;
 
         match n {
             // Found the exact key to delete
@@ -594,14 +609,14 @@ impl<D: MonotreeStorageAdapter> Monotree<D> {
         leaves: &[Hash],
     ) -> GenericResult<Option<Hash>> {
         let indices = get_sorted_indices(keys, false);
-        self.prepare();
+        self.prepare()?;
 
         let mut root = root.cloned();
         for i in indices.iter() {
             root = self.insert(root.as_ref(), &keys[*i], &leaves[*i])?;
         }
 
-        self.commit();
+        self.commit()?;
         Ok(root)
     }
 
@@ -619,13 +634,13 @@ impl<D: MonotreeStorageAdapter> Monotree<D> {
     pub fn removes(&mut self, root: Option<&Hash>, keys: &[Hash]) -> GenericResult<Option<Hash>> {
         let indices = get_sorted_indices(keys, false);
         let mut root = root.cloned();
-        self.prepare();
+        self.prepare()?;
 
         for i in indices.iter() {
             root = self.remove(root.as_ref(), &keys[*i])?;
         }
 
-        self.commit();
+        self.commit()?;
         Ok(root)
     }
 
@@ -648,10 +663,15 @@ impl<D: MonotreeStorageAdapter> Monotree<D> {
         bits: Bits,
         proof: &mut Proof,
     ) -> GenericResult<Option<Proof>> {
-        let bytes = self.db.get(root)?.expect("gen_proof(): bytes");
+        let bytes = self
+            .db
+            .get(root)?
+            .ok_or(ContractError::MonotreeError("gen_proof(): bytes".to_string()))?;
         let (cell, _) = Node::cells_from_bytes(&bytes, bits.first())?;
-        let unit = cell.as_ref().expect("gen_proof(): left-unit");
-        let n = Bits::len_common_bits(&unit.bits, &bits);
+        let unit = cell
+            .as_ref()
+            .ok_or(ContractError::MonotreeError("gen_proof(): left-unit".to_string()))?;
+        let n = Bits::len_common_bits(&unit.bits, &bits)?;
 
         match n {
             n if n == bits.len() => {
@@ -683,9 +703,13 @@ impl<D: MonotreeStorageAdapter> Monotree<D> {
 /// Verify a MerkleProof with the given root and leaf.
 ///
 /// NOTE: We use `Monotree::<MemoryDb>` to `hash_digest()` but it doesn't matter.
-pub fn verify_proof(root: Option<&Hash>, leaf: &Hash, proof: Option<&Proof>) -> bool {
+pub fn verify_proof(
+    root: Option<&Hash>,
+    leaf: &Hash,
+    proof: Option<&Proof>,
+) -> GenericResult<bool> {
     match proof {
-        None => false,
+        None => Ok(false),
         Some(proof) => {
             let mut hash = leaf.to_owned();
             proof.iter().rev().for_each(|(right, cut)| {
@@ -698,7 +722,9 @@ pub fn verify_proof(root: Option<&Hash>, leaf: &Hash, proof: Option<&Proof>) -> 
                     hash = Monotree::<MemoryDb>::hash_digest(&o);
                 }
             });
-            root.expect("verify_proof(): root") == &hash
+
+            Ok(root.ok_or(ContractError::MonotreeError("verify_proof(): root".to_string()))? ==
+                &hash)
         }
     }
 }

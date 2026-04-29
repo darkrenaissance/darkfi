@@ -221,11 +221,11 @@ impl<'a> Bits<'a> {
     }
 
     /// Construct `Bits` instance by deserializing bytes slice.
-    pub fn from_bytes(bytes: &'a [u8]) -> Self {
+    pub fn from_bytes(bytes: &'a [u8]) -> GenericResult<Self> {
         let u = std::mem::size_of::<BitsLen>();
-        let start: BitsLen = bytes_to_int(&bytes[..u]);
-        let end: BitsLen = bytes_to_int(&bytes[u..2 * u]);
-        Self { path: &bytes[2 * u..], range: start..end }
+        let start: BitsLen = bytes_to_int(&bytes[..u])?;
+        let end: BitsLen = bytes_to_int(&bytes[u..2 * u])?;
+        Ok(Self { path: &bytes[2 * u..], range: start..end })
     }
 
     /// Serialize `Bits` into bytes.
@@ -261,11 +261,11 @@ impl<'a> Bits<'a> {
     }
 
     /// Get the first `n` bits.
-    pub fn take(&self, n: BitsLen) -> Self {
+    pub fn take(&self, n: BitsLen) -> GenericResult<Self> {
         let x = self.range.start + n;
-        let q = nbytes_across(self.range.start, x);
+        let q = nbytes_across(self.range.start, x)?;
         let range = self.range.start..x;
-        Self { path: &self.path[..q as usize], range }
+        Ok(Self { path: &self.path[..q as usize], range })
     }
 
     /// Skip the first `n` bits.
@@ -277,7 +277,7 @@ impl<'a> Bits<'a> {
     }
 
     /// Get length of the longest common prefix bits for the given two `Bits`.
-    pub fn len_common_bits(a: &Self, b: &Self) -> BitsLen {
+    pub fn len_common_bits(a: &Self, b: &Self) -> GenericResult<BitsLen> {
         len_lcp(a.path, &a.range, b.path, &b.range)
     }
 

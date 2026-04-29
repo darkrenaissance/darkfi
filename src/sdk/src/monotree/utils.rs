@@ -19,6 +19,7 @@
 
 use std::{cmp, ops::Range};
 
+use crate::{ContractError, GenericResult};
 use num::{NumCast, PrimInt};
 use rand::Rng;
 
@@ -39,8 +40,8 @@ macro_rules! min {
 }
 
 /// Cast from a typed scalar to another based on `num_traits`
-pub fn cast<T: NumCast, U: NumCast>(n: T) -> U {
-    NumCast::from(n).expect("cast(): Numcast")
+pub fn cast<T: NumCast, U: NumCast>(n: T) -> GenericResult<U> {
+    NumCast::from(n).ok_or(ContractError::NumCastError)
 }
 
 /// Generate a random byte based on `rand::random`.
@@ -97,12 +98,12 @@ where
 }
 
 /// Get length of the longest common prefix bits for the given two slices.
-pub fn len_lcp<T>(a: &[u8], m: &Range<T>, b: &[u8], n: &Range<T>) -> T
+pub fn len_lcp<T>(a: &[u8], m: &Range<T>, b: &[u8], n: &Range<T>) -> GenericResult<T>
 where
     T: PrimInt + NumCast,
     Range<T>: Iterator<Item = T>,
 {
-    let count = (cast(0)..min!(m.end - m.start, n.end - n.start))
+    let count = (cast(0)?..min!(m.end - m.start, n.end - n.start))
         .take_while(|&i| bit(a, m.start + i) == bit(b, n.start + i))
         .count();
     cast(count)
@@ -123,14 +124,14 @@ pub fn bit<T: PrimInt + NumCast>(bytes: &[u8], i: T) -> bool {
 }
 
 /// Get the required length of bytes from a `Range`, bits indices across the bytes.
-pub fn nbytes_across<T: PrimInt + NumCast>(start: T, end: T) -> T {
-    let eight = cast(8);
+pub fn nbytes_across<T: PrimInt + NumCast>(start: T, end: T) -> GenericResult<T> {
+    let eight = cast(8)?;
     let bits = end - (start - start % eight);
-    (bits + eight - T::one()) / eight
+    Ok((bits + eight - T::one()) / eight)
 }
 
 /// Convert big-endian bytes into base10 or decimal number.
-pub fn bytes_to_int<T: PrimInt + NumCast>(bytes: &[u8]) -> T {
+pub fn bytes_to_int<T: PrimInt + NumCast>(bytes: &[u8]) -> GenericResult<T> {
     let l = bytes.len();
     let sum = (0..l).fold(0, |sum, i| sum + (1 << ((l - i - 1) * 8)) * bytes[i] as usize);
     cast(sum)
@@ -182,16 +183,16 @@ mod tests {
 
     #[test]
     fn test_nbyte_across() {
-        assert_eq!(nbytes_across(0, 8), 1);
-        assert_eq!(nbytes_across(1, 7), 1);
-        assert_eq!(nbytes_across(5, 9), 2);
-        assert_eq!(nbytes_across(9, 16), 1);
-        assert_eq!(nbytes_across(7, 19), 3);
+        assert_eq!(nbytes_across(0, 8).unwrap(), 1);
+        assert_eq!(nbytes_across(1, 7).unwrap(), 1);
+        assert_eq!(nbytes_across(5, 9).unwrap(), 2);
+        assert_eq!(nbytes_across(9, 16).unwrap(), 1);
+        assert_eq!(nbytes_across(7, 19).unwrap(), 3);
     }
 
     #[test]
     fn test_bytes_to_int() {
-        let number: usize = bytes_to_int(&[0x73, 0x6f, 0x66, 0x69, 0x61]);
+        let number: usize = bytes_to_int(&[0x73, 0x6f, 0x66, 0x69, 0x61]).unwrap();
         assert_eq!(number, 495790221665usize);
     }
 
@@ -235,9 +236,9 @@ mod tests {
     fn test_len_lcp() {
         let sofia = [0x73, 0x6f, 0x66, 0x69, 0x61];
         let maria = [0x6d, 0x61, 0x72, 0x69, 0x61];
-        assert_eq!(len_lcp(&sofia, &(0..3), &maria, &(0..3)), 3);
-        assert_eq!(len_lcp(&sofia, &(0..3), &maria, &(5..9)), 0);
-        assert_eq!(len_lcp(&sofia, &(2..9), &maria, &(18..30)), 5);
-        assert_eq!(len_lcp(&sofia, &(20..30), &maria, &(3..15)), 4);
+        assert_eq!(len_lcp(&sofia, &(0..3), &maria, &(0..3)).unwrap(), 3);
+        assert_eq!(len_lcp(&sofia, &(0..3), &maria, &(5..9)).unwrap(), 0);
+        assert_eq!(len_lcp(&sofia, &(2..9), &maria, &(18..30)).unwrap(), 5);
+        assert_eq!(len_lcp(&sofia, &(20..30), &maria, &(3..15)).unwrap(), 4);
     }
 }

@@ -612,7 +612,7 @@ impl ContractStoreOverlay {
             }
 
             // Set root
-            monotree.set_headroot(monotree_root.as_ref());
+            monotree.set_headroot(monotree_root.as_ref())?;
 
             // Keep track of the new root for the main monotree
             let monotree_root = match monotree_root {
@@ -645,7 +645,7 @@ impl ContractStoreOverlay {
         }
 
         // Set new global root
-        monotree.set_headroot(monotree_root.as_ref());
+        monotree.set_headroot(monotree_root.as_ref())?;
 
         // Return its hash
         let monotree_root = match monotree_root {

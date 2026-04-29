@@ -95,6 +95,12 @@ pub enum ContractError {
 
     #[error("Hex string is not properly formatted")]
     HexFmtErr,
+
+    #[error("Numcast: cast failed")]
+    NumCastError,
+
+    #[error("Monotree error: {0}")]
+    MonotreeError(String),
 }
 
 /// Builtin return values occupy the upper 32 bits
@@ -126,6 +132,8 @@ pub const SMT_DEL_FAILED: i64 = to_builtin!(19);
 pub const GET_SYSTEM_TIME_FAILED: i64 = to_builtin!(20);
 pub const DATA_TOO_LARGE: i64 = to_builtin!(21);
 pub const HEX_FMT_ERR: i64 = to_builtin!(22);
+pub const NUM_CAST_ERR: i64 = to_builtin!(23);
+pub const MONOTREE_ERROR: i64 = to_builtin!(24);
 
 impl From<ContractError> for i64 {
     fn from(err: ContractError) -> Self {
@@ -151,6 +159,8 @@ impl From<ContractError> for i64 {
             ContractError::GetSystemTimeFailed => GET_SYSTEM_TIME_FAILED,
             ContractError::DataTooLarge => DATA_TOO_LARGE,
             ContractError::HexFmtErr => HEX_FMT_ERR,
+            ContractError::NumCastError => NUM_CAST_ERR,
+            ContractError::MonotreeError(_) => MONOTREE_ERROR,
             ContractError::Custom(error) => {
                 if error == 0 {
                     CUSTOM_ZERO
@@ -187,6 +197,8 @@ impl From<i64> for ContractError {
             GET_SYSTEM_TIME_FAILED => Self::GetSystemTimeFailed,
             DATA_TOO_LARGE => Self::DataTooLarge,
             HEX_FMT_ERR => Self::HexFmtErr,
+            NUM_CAST_ERR => Self::NumCastError,
+            MONOTREE_ERROR => Self::MonotreeError("Unknown".to_string()),
             _ => Self::Custom(error as u32),
         }
     }
