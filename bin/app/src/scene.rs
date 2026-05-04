@@ -120,6 +120,7 @@ pub enum SceneNodeType {
     SettingRoot = 20,
     Setting = 21,
     Menu = 22,
+    TokenTable = 23,
     PluginRoot = 100,
     Plugin = 101,
 }
@@ -590,10 +591,13 @@ pub enum Pimpl {
     Gesture(ui::GesturePtr),
     EmojiPicker(ui::EmojiPickerPtr),
     Menu(ui::MenuPtr),
+    TokenTable(ui::TokenTablePtr),
     #[cfg(feature = "enable-plugins")]
     DarkIrc(plugin::DarkIrcPtr),
     #[cfg(feature = "enable-plugins")]
     Fud(plugin::FudPtr),
+    #[cfg(feature = "enable-plugins")]
+    Drk(plugin::DrkPtr),
 }
 
 impl std::fmt::Debug for Pimpl {

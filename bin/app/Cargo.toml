@@ -20,9 +20,11 @@ glam = "0.30.9"
 #async_zmq = "0.4.0"
 zeromq = { version = "0.4.1", default-features = false, features = ["async-std-runtime", "all-transport"] }
 darkfi = {path = "../../", features = ["async-daemonize", "event-graph", "net", "util", "system", "zk"]}
-#darkfi-sdk = {path = "../../src/sdk", features = ["async"]}
+darkfi-sdk = {path = "../../src/sdk", features = ["async"]}
 darkfi-serial = {path = "../../src/serial", features = ["async"]}
+darkfi_money_contract = { path = "../../src/contract/money/" }
 fud = { path = "../fud/fud/" }
+drk = { path = "../drk/" }
 bs58 = "0.5.1"
 thiserror = "2.0.17"
 smol = "2.0.2"

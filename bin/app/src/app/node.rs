@@ -745,3 +745,58 @@ pub fn create_menu(name: &str) -> SceneNode {
 
     node
 }
+
+pub fn create_tokentable(name: &str) -> SceneNode {
+    let mut node = SceneNode::new(name, SceneNodeType::TokenTable);
+
+    let mut prop = Property::new("rect", PropertyType::Float32, PropertySubType::Pixel);
+    prop.set_array_len(4);
+    prop.allow_exprs();
+    node.add_property(prop).unwrap();
+
+    let prop = Property::new("font_size", PropertyType::Float32, PropertySubType::Pixel);
+    node.add_property(prop).unwrap();
+
+    let mut prop = Property::new("text_color", PropertyType::Float32, PropertySubType::Color);
+    prop.set_array_len(4);
+    prop.set_defaults_f32(vec![1., 1., 1., 1.]).unwrap();
+    prop.set_range_f32(0., 1.);
+    node.add_property(prop).unwrap();
+
+    let mut prop = Property::new("separator_color", PropertyType::Float32, PropertySubType::Color);
+    prop.set_array_len(4);
+    prop.set_defaults_f32(vec![0.3, 0.3, 0.3, 1.]).unwrap();
+    prop.set_range_f32(0., 1.);
+    node.add_property(prop).unwrap();
+
+    let prop = Property::new("column_spacing", PropertyType::Float32, PropertySubType::Pixel);
+    node.add_property(prop).unwrap();
+
+    let prop = Property::new("padding_x", PropertyType::Float32, PropertySubType::Pixel);
+    node.add_property(prop).unwrap();
+
+    let prop = Property::new("padding_y", PropertyType::Float32, PropertySubType::Pixel);
+    node.add_property(prop).unwrap();
+
+    let prop = Property::new("z_index", PropertyType::Uint32, PropertySubType::Null);
+    node.add_property(prop).unwrap();
+
+    let prop = Property::new("priority", PropertyType::Uint32, PropertySubType::Null);
+    node.add_property(prop).unwrap();
+
+    node.add_signal(
+        "row_click",
+        "Row clicked event",
+        vec![("row", "Token row data", CallArgType::Hash)],
+    )
+    .unwrap();
+
+    node.add_method(
+        "set_tokens",
+        vec![("tokens", "Token rows data", CallArgType::Hash)],
+        None,
+    )
+    .unwrap();
+
+    node
+}

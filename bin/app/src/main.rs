@@ -22,6 +22,9 @@
 
 use clap::Parser;
 use darkfi::system::CondVar;
+use darkfi::tx::Transaction;
+use darkfi_money_contract::model::DARK_TOKEN_ID;
+use darkfi_serial::{Decodable, Encodable, deserialize};
 use std::sync::{Arc, OnceLock};
 
 #[macro_use]
@@ -54,18 +57,17 @@ use crate::{
     app::{App, AppPtr},
     gfx::EpochIndex,
     prop::{Property, PropertySubType, PropertyType},
-    scene::{CallArgType, SceneNode, SceneNodeType},
+    scene::{CallArgType, SceneNode, SceneNodePtr, SceneNodeType},
     util::AsyncRuntime,
 };
 #[cfg(feature = "enable-netdebug")]
 use net::ZeroMQAdapter;
 #[cfg(feature = "enable-plugins")]
 use {
-    darkfi_serial::{deserialize, Decodable, Encodable},
     // Local imports
     gfx::Renderer,
     prop::{PropertyBool, PropertyStr, Role},
-    scene::{SceneNodePtr, Slot},
+    scene::Slot,
     std::io::Cursor,
     ui::chatview,
     // Global imports
@@ -345,6 +347,7 @@ async fn load_plugins(
     let (slot, recvr) = Slot::new("connect");
     darkirc.register("connect", slot).unwrap();
     let sg_root2 = sg_root.clone();
+    let renderer2 = renderer.clone();
     let listen_connect = ex.spawn(async move {
         let net0 = sg_root2.lookup_node("/window/content/netstatus_layer/net0").unwrap();
         let net1 = sg_root2.lookup_node("/window/content/netstatus_layer/net1").unwrap();
@@ -359,7 +362,7 @@ async fn load_plugins(
         while let Ok(data) = recvr.recv().await {
             let (peers_count, is_dag_synced): (u32, bool) = deserialize(&data).unwrap();
 
-            let atom = &mut renderer.make_guard(gfxtag!("netstatus change"));
+            let atom = &mut renderer2.make_guard(gfxtag!("netstatus change"));
 
             if peers_count == 0 {
                 net0_is_visible.set(atom, true);
@@ -426,8 +429,185 @@ async fn load_plugins(
 
     plugin.link(fud);
 
+    let drk = create_drk("drk");
+    let sg_root2 = sg_root.clone();
+    let ex2 = ex.clone();
+    let (drk_pimpl_send, drk_pimpl_recv) = smol::channel::bounded(1);
+    let drk = drk
+        .setup(move |me| async move {
+            // Drk uses rusqlite which is not Send, so we run it on a dedicated thread
+            let handle = std::thread::spawn(move || {
+                let (pimpl, local_ex) = smol::block_on(plugin::DrkPlugin::new(me, sg_root2, ex2))
+                    .expect("Drk pimpl setup");
+
+                // Send Pimpl back to the setup closure
+                smol::block_on(drk_pimpl_send.send(pimpl)).unwrap();
+
+                // Block on local executor to process spawned tasks forever
+                smol::block_on(local_ex.run(async { futures::future::pending::<()>().await }));
+            });
+
+            // Wait for Pimpl to be created
+            let pimpl = drk_pimpl_recv.recv().await.unwrap();
+
+            drop(handle);
+
+            pimpl
+        })
+        .await;
+
+    let (slot, recv) = Slot::new("balances_update");
+    let _ = drk.register("balances_updated", slot);
+    let sg_root2 = sg_root.clone();
+    let renderer2 = renderer.clone();
+    let drk_node2 = drk.clone();
+    let listen_balances = ex.spawn(async move {
+        use crate::ui::TokenRow;
+        use darkfi_money_contract::model::TokenId;
+        use darkfi_serial::Encodable;
+
+        while let Ok(_) = recv.recv().await {
+            d!("drk balances_updated signal received");
+
+            // Fetch and update main wallet tokens table
+            if let Ok(Some(response_data)) = drk_node2.call_method("get_balances", vec![]).await {
+                let atom = &mut renderer2.make_guard(gfxtag!("wallet - refresh tokens"));
+
+                let mut cur = std::io::Cursor::new(response_data);
+                if let Ok(balances) = Vec::<(String, TokenId, f32)>::decode(&mut cur) {
+                    let token_rows: Vec<TokenRow> = balances
+                        .iter()
+                        .enumerate()
+                        .map(|(i, (symbol, token_id, balance))| {
+                            TokenRow {
+                                id: *token_id,
+                                symbol: symbol.clone(),
+                                balance: balance.to_string(),
+                            }
+                        })
+                        .collect();
+
+                    let mut data: Vec<u8> = vec![];
+                    for row in &token_rows {
+                        let _ = TokenRow::encode(row, &mut data);
+                    }
+
+                    if let Some(tokens_table) = sg_root2.lookup_node("/window/content/wallet_main_layer/tokens_table") {
+                        let _ = tokens_table.call_method("set_tokens", data.clone()).await;
+                    }
+
+                    if let Some(send_tokens_table) = sg_root2.lookup_node("/window/content/wallet_send_step1_layer/tokens_table") {
+                        let _ = send_tokens_table.call_method("set_tokens", data).await;
+                    }
+
+                    // Update main wallet balance
+                    if let Some(drk_balance) = balances.iter().find(|(_, token_id, _)| *token_id == *DARK_TOKEN_ID) {
+                        if let Some(balance_node) = sg_root2.lookup_node("/window/content/wallet_main_layer/wallet_balance") {
+                            balance_node.set_property_str(atom, Role::App, "text", format!("DRK {}", drk_balance.2)).unwrap();
+                        }
+                    }
+
+                    if let Some(tx_status_layer) = sg_root2.lookup_node("/window/content/wallet_tx_status_layer") {
+                        let tx_id = tx_status_layer.get_property_str("tx_id").unwrap();
+                        if !tx_id.is_empty() {
+                            let mut tx_id_data = vec![];
+                            tx_id.encode(&mut tx_id_data).unwrap();
+                            if let Ok(Some(data)) = drk_node2.call_method("get_tx_status", tx_id_data).await {
+                                let mut cur = std::io::Cursor::new(data);
+                                let status_text = String::decode(&mut cur).unwrap();
+                                if let Some(status_node) = tx_status_layer.lookup_node("/status") {
+                                    status_node.set_property_str(atom, Role::App, "text", status_text).unwrap();
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    });
+
+    let (slot, recv) = Slot::new("tx_updated");
+    let _ = drk.register("tx_updated", slot);
+    let sg_root2 = sg_root.clone();
+    let listen_tx = ex.spawn(async move {
+        while let Ok(data) = recv.recv().await {
+            if let Some(tx_status_layer) = sg_root2.lookup_node("/window/content/wallet_tx_status_layer") {
+                let _ = tx_status_layer.call_method("set_tx_status", data).await;
+            }
+        }
+    });
+
+    // Listen for tx_built signal - emitted when transaction is built (non-blocking)
+    let (slot, recv) = Slot::new("tx_built");
+    let _ = drk.register("tx_built", slot);
+    let sg_root2 = sg_root.clone();
+    let renderer2 = renderer.clone();
+    let listen_tx_built = ex.spawn(async move {
+        while let Ok(data) = recv.recv().await {
+            let mut cur = std::io::Cursor::new(data);
+            let amount = String::decode(&mut cur).unwrap();
+            let token_symbol = String::decode(&mut cur).unwrap();
+            let recipient_str = String::decode(&mut cur).unwrap();
+
+            // Decode transaction and pass to wallet schema
+            let tx = Transaction::decode(&mut cur).unwrap();
+
+            // Update tx_status_layer with built transaction
+            let atom = &mut renderer2.make_guard(gfxtag!("tx built"));
+            if let Some(tx_status) = sg_root2.lookup_node("/window/content/wallet_tx_status_layer") {
+                let mut tx_status_data = vec![];
+                None::<String>.encode(&mut tx_status_data).unwrap();
+                Some("Broadcasting transaction...".to_string()).encode(&mut tx_status_data).unwrap();
+                Some(amount).encode(&mut tx_status_data).unwrap();
+                Some(token_symbol).encode(&mut tx_status_data).unwrap();
+                Some(recipient_str).encode(&mut tx_status_data).unwrap();
+                let _ = tx_status.call_method("set_tx_status", tx_status_data).await;
+
+                // Call set_built_tx to store transaction for later broadcast
+                let mut set_built_tx_data = vec![];
+                tx.encode(&mut set_built_tx_data).unwrap();
+                let _ = tx_status.call_method("set_built_tx", set_built_tx_data).await;
+            }
+
+            // Hide step3 layer
+            if let Some(step4_layer) = sg_root2.lookup_node("/window/content/wallet_send_step3_layer") {
+                step4_layer.set_property_bool(atom, Role::App, "is_visible", false).unwrap();
+            }
+
+            // Show step4 layer
+            if let Some(step4_layer) = sg_root2.lookup_node("/window/content/wallet_send_step4_layer") {
+                step4_layer.set_property_bool(atom, Role::App, "is_visible", true).unwrap();
+            }
+        }
+    });
+
+    // Listen for tx_built_error signal - emitted when transaction building fails
+    let (slot, recv) = Slot::new("tx_built_error");
+    let _ = drk.register("tx_built_error", slot);
+    let sg_root2 = sg_root.clone();
+    let renderer2 = renderer.clone();
+    let listen_tx_built_error = ex.spawn(async move {
+        while let Ok(data) = recv.recv().await {
+            let mut cur = std::io::Cursor::new(data);
+            let error_message = String::decode(&mut cur).unwrap();
+            let atom = &mut renderer2.make_guard(gfxtag!("tx built error"));
+
+            // TODO: display error somewhere
+
+            // Reset button state
+            if let Some(btn_node) = sg_root2.lookup_node("/window/content/wallet_send_step3_layer/send_amount_button") {
+                btn_node.set_property_bool(atom, Role::App, "is_active", true).unwrap();
+                if let Some(label_node) = sg_root2.lookup_node("/window/content/wallet_send_step3_layer/send_amount_button_label") {
+                    label_node.set_property_str(atom, Role::App, "text", "add amount").unwrap();
+                }
+            }
+        }
+    });
+
+    plugin.link(drk);
+
     i!("Plugins loaded");
-    futures::join!(listen_recv, listen_connect, listen_file_status);
+    futures::join!(listen_recv, listen_connect, listen_file_status, listen_balances, listen_tx, listen_tx_built, listen_tx_built_error);
 }
 
 pub fn create_darkirc(name: &str) -> SceneNode {
@@ -491,6 +671,76 @@ pub fn create_fud(name: &str) -> SceneNode {
 
     node.add_method("get", vec![("url", "Url", CallArgType::Str)], None).unwrap();
     node.add_method("track_file", vec![("url", "Url", CallArgType::Str)], None).unwrap();
+
+    node
+}
+
+pub fn create_drk(name: &str) -> SceneNode {
+    t!("create_drk({name})");
+    let mut node = SceneNode::new(name, SceneNodeType::Plugin);
+
+    node.add_method(
+        "get_default_address",
+        vec![],
+        Some(vec![("address", "Default address", CallArgType::Str)]),
+    ).unwrap();
+
+    node.add_method(
+        "get_balances",
+        vec![],
+        Some(vec![("balances", "Token balances", CallArgType::Hash)]),
+    ).unwrap();
+
+    node.add_method(
+        "get_tx_status",
+        vec![("tx_id", "Transaction hash", CallArgType::Str)],
+        Some(vec![("status_text", "Status text", CallArgType::Str)]),
+    ).unwrap();
+
+    node.add_method(
+        "build_tx",
+        vec![
+            ("amount", "Amount", CallArgType::Str),
+            ("token_id", "Token ID", CallArgType::Hash),
+            ("recipient", "Recipient address", CallArgType::Str),
+        ],
+        Some(vec![("tx", "Transaction", CallArgType::Hash)]),
+    ).unwrap();
+
+    node.add_method(
+        "broadcast_tx",
+        vec![("tx", "Transaction", CallArgType::Hash)],
+        Some(vec![("status_text", "Status text", CallArgType::Str)]),
+    ).unwrap();
+
+    node.add_signal("balances_updated", "Balances changed", vec![]).unwrap();
+
+    node.add_signal(
+        "tx_updated",
+        "Transaction status updated",
+        vec![
+            ("tx_id", "Transaction ID", CallArgType::Str),
+            ("status_text", "Transaction status text", CallArgType::Str),
+        ],
+    ).unwrap();
+
+    node.add_signal(
+        "tx_built",
+        "Transaction built - for wallet send flow",
+        vec![
+            ("amount", "Amount", CallArgType::Str),
+            ("token_symbol", "Token symbol", CallArgType::Str),
+            ("recipient_str", "Recipient address", CallArgType::Str),
+        ],
+    ).unwrap();
+
+    node.add_signal(
+        "tx_built_error",
+        "Transaction build error",
+        vec![
+            ("error_message", "Error message", CallArgType::Str),
+        ],
+    ).unwrap();
 
     node
 }

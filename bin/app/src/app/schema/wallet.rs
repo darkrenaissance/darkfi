@@ -17,25 +17,35 @@
  */
 
 use darkfi::system::msleep;
+use darkfi::tx::Transaction;
+use darkfi::util::parse::encode_base10;
+use darkfi_money_contract::model::TokenId;
+use darkfi_sdk::crypto::keypair::Address;
+use darkfi_serial::{deserialize, Decodable, Encodable};
 use super::{ColorScheme, COLOR_SCHEME};
-use std::pin::Pin;
 use std::sync::{Arc, Mutex};
+
+macro_rules! d { ($($arg:tt)*) => { debug!(target: "app::schema::wallet", $($arg)*); } }
+macro_rules! e { ($($arg:tt)*) => { error!(target: "app::schema::wallet", $($arg)*); } }
+
 use crate::{
     app::{
         App, node::{
-            create_button, create_layer, create_menu, create_singleline_edit, create_text,
-            create_vector_art,
+            create_button, create_layer, create_singleline_edit, create_text,
+            create_tokentable, create_vector_art,
         }
     },
     expr,
-    gfx::gfxtag,
+    gfx::{Renderer, gfxtag},
     mesh::{COLOR_CYAN, COLOR_TEAL},
-    prop::{PropertyAtomicGuard, PropertyBool, PropertyFloat32, PropertyPtr, PropertyRect, PropertyStr, Role},
-    scene::{Pimpl, SceneNode, SceneNodePtr, SceneNodeType, Slot},
+    prop::{Property, PropertyAtomicGuard, PropertyBool, PropertyFloat32, PropertyRect, PropertyStr, PropertySubType, PropertyType, Role},
+    scene::{CallArgType, Pimpl, SceneNodePtr, Slot},
     shape,
-    ui::{BaseEdit, BaseEditType, Button, Layer, Menu, ShapeVertex, Shortcut, Text, VectorArt, VectorShape},
+    ui::{BaseEdit, BaseEditType, Button, Layer, Text, TokenRow, TokenTable, VectorArt, VectorShape},
     util::i18n::I18nBabelFish,
 };
+
+pub const BALANCE_BASE10_DECIMALS: usize = 8;
 
 #[cfg(any(target_os = "android", feature = "emulate-android"))]
 mod android_ui_consts {
@@ -141,8 +151,12 @@ fn get_balance(token_symbol: &str) -> f32 {
 struct SendTxData {
     token_symbol: Option<String>,
     token_name: Option<String>,
-    recipient: Option<String>,
+    token_id: Option<TokenId>,
+    recipient_str: Option<String>,
+    recipient: Option<Address>,
     amount: Option<String>,
+    tx_built: bool,
+    tx: Option<Transaction>,
 }
 
 impl SendTxData {
@@ -150,8 +164,12 @@ impl SendTxData {
         Self {
             token_symbol: None,
             token_name: None,
+            token_id: None,
+            recipient_str: None,
             recipient: None,
             amount: None,
+            tx_built: false,
+            tx: None,
         }
     }
 }
@@ -251,7 +269,7 @@ pub async fn make(app: &App, content: SceneNodePtr, i18n_fish: &I18nBabelFish) {
     prop.set_f32(atom, Role::App, 2, 1000.).unwrap();
     prop.set_f32(atom, Role::App, 3, TITLE_FONTSIZE).unwrap();
     node.set_property_f32(atom, Role::App, "font_size", TITLE_FONTSIZE).unwrap();
-    node.set_property_str(atom, Role::App, "text", "DRK 100.24").unwrap();
+    node.set_property_str(atom, Role::App, "text", "DRK 0").unwrap();
     let prop = node.get_property("text_color").unwrap();
     if COLOR_SCHEME == ColorScheme::DarkMode {
         prop.set_f32(atom, Role::App, 0, 1.).unwrap();
@@ -272,7 +290,7 @@ pub async fn make(app: &App, content: SceneNodePtr, i18n_fish: &I18nBabelFish) {
 
     y += TITLE_PADDING * 2. + TITLE_FONTSIZE + 1.;
 
-    create_separator(app, atom, &wallet_layer, "wallet_balance_separator", &mut y).await;
+    create_separator(&app.renderer, atom, &wallet_layer, "wallet_balance_separator", &mut y).await;
 
     // Receive button bg
     let node = create_vector_art("wallet_receive_btn_bg");
@@ -305,18 +323,41 @@ pub async fn make(app: &App, content: SceneNodePtr, i18n_fish: &I18nBabelFish) {
     prop.set_expr(atom, Role::App, 2, code).unwrap();
     prop.set_f32(atom, Role::App, 3, BUTTON_HEIGHT).unwrap();
 
-    let receive_layer = wallet_receive_layer(app, content.clone(), wallet_layer.clone(), i18n_fish, window_scale.clone()).await;
+    let (receive_layer, receive_address_text) = wallet_receive_layer(app, content.clone(), wallet_layer.clone(), i18n_fish, window_scale.clone()).await;
     let receive_is_visible =
         PropertyBool::wrap(&receive_layer, Role::App, "is_visible", 0).unwrap();
+
     let renderer = app.renderer.clone();
     let wallet_is_visible2 = wallet_is_visible.clone();
+    let sg_root = app.sg_root.clone();
     let (slot, recvr) = Slot::new("receive_clicked");
     node.register("click", slot).unwrap();
+    let sg_root3 = sg_root.clone();
     let listen_click = app.ex.spawn(async move {
-        while let Ok(_) = recvr.recv().await {
+        while recvr.recv().await.is_ok() {
             let atom = &mut renderer.make_guard(gfxtag!("receive button click"));
             wallet_is_visible2.set(atom, false);
             receive_is_visible.set(atom, true);
+
+            // Get the default address from drk plugin and update the UI
+            if let Some(drk_node) = sg_root3.lookup_node("/plugin/drk") {
+                if let Ok(Some(response_data)) = drk_node.call_method("get_default_address", vec![]).await {
+                    let mut cur = std::io::Cursor::new(response_data);
+                    if let Ok(address) = String::decode(&mut cur) {
+                        d!("Got default address from drk: {address}");
+                        receive_address_text.set(atom, address);
+                    } else {
+                        e!("Failed to decode default address response");
+                        receive_address_text.set(atom, MOCK_RECEIVE_ADDRESS);
+                    }
+                } else {
+                    e!("Failed to call get_default_address method");
+                    receive_address_text.set(atom, MOCK_RECEIVE_ADDRESS);
+                }
+            } else {
+                e!("Failed to lookup drk plugin node");
+                receive_address_text.set(atom, MOCK_RECEIVE_ADDRESS);
+            }
         }
     });
     app.tasks.lock().unwrap().push(listen_click);
@@ -435,11 +476,98 @@ pub async fn make(app: &App, content: SceneNodePtr, i18n_fish: &I18nBabelFish) {
 
     y += PADDING_X * 2. + BUTTON_HEIGHT + 1.;
 
-    create_separator(app, atom, &wallet_layer, "wallet_buttons_separator", &mut y).await;
+    create_separator(&app.renderer, atom, &wallet_layer, "wallet_buttons_separator", &mut y).await;
 
     create_title(app, atom, &wallet_layer, &window_scale, i18n_fish, "TOKENS", &mut y).await;
 
-    create_tokens_table(app, atom, &window_scale, i18n_fish, &wallet_layer, MOCK_TOKENS, &mut y, |_, _, _, _| {}).await;
+    let mut cc = expr::Compiler::new();
+    cc.add_const_f32("PADDING_X", PADDING_X);
+    cc.add_const_f32("TOKENS_Y", y);
+
+    let tokens_table = create_tokentable("tokens_table");
+    let prop = tokens_table.get_property("rect").unwrap();
+    prop.set_f32(atom, Role::App, 0, 0.).unwrap();
+    let code = cc.compile("TOKENS_Y").unwrap();
+    prop.set_expr(atom, Role::App, 1, code).unwrap();
+    prop.set_expr(atom, Role::App, 2, expr::load_var("w")).unwrap();
+    prop.set_expr(atom, Role::App, 3, expr::load_var("h")).unwrap();
+    tokens_table.set_property_f32(atom, Role::App, "font_size", BASE_FONTSIZE).unwrap();
+    tokens_table.set_property_f32(atom, Role::App, "column_spacing", TOKEN_NAME_OFFSET).unwrap();
+    tokens_table.set_property_f32(atom, Role::App, "padding_x", PADDING_X).unwrap();
+    tokens_table.set_property_f32(atom, Role::App, "padding_y", PADDING_Y).unwrap();
+    tokens_table.set_property_u32(atom, Role::App, "z_index", 2).unwrap();
+    tokens_table.set_property_u32(atom, Role::App, "priority", 0).unwrap();
+
+    let prop = tokens_table.get_property("text_color").unwrap();
+    if COLOR_SCHEME == ColorScheme::DarkMode {
+        prop.set_f32(atom, Role::App, 0, 1.).unwrap();
+        prop.set_f32(atom, Role::App, 1, 1.).unwrap();
+        prop.set_f32(atom, Role::App, 2, 1.).unwrap();
+        prop.set_f32(atom, Role::App, 3, 1.).unwrap();
+    } else {
+        prop.set_f32(atom, Role::App, 0, 0.).unwrap();
+        prop.set_f32(atom, Role::App, 1, 0.).unwrap();
+        prop.set_f32(atom, Role::App, 2, 0.).unwrap();
+        prop.set_f32(atom, Role::App, 3, 1.).unwrap();
+    }
+
+    let prop = tokens_table.get_property("separator_color").unwrap();
+    prop.set_f32(atom, Role::App, 0, 0.2).unwrap();
+    prop.set_f32(atom, Role::App, 1, 0.2745).unwrap();
+    prop.set_f32(atom, Role::App, 2, 0.2784).unwrap();
+    prop.set_f32(atom, Role::App, 3, 1.).unwrap();
+
+    let tokens_table = tokens_table
+        .setup(|me| TokenTable::new(me, app.renderer.clone(), app.sg_root.clone()))
+        .await;
+    wallet_layer.link(tokens_table.clone());
+
+    let wallet_layer = wallet_layer.clone();
+    let wallet_is_visible2 = wallet_is_visible.clone();
+    let tokens_table2 = tokens_table.clone();
+    let sg_root2 = app.sg_root.clone();
+    let renderer2 = app.renderer.clone();
+    let wallet_is_visible_sub = wallet_is_visible.prop().subscribe_modify();
+    let listen_wallet_visible = app.ex.spawn(async move {
+        while let Ok(_) = wallet_is_visible_sub.receive().await {
+            if wallet_is_visible2.get() {
+                let atom = &mut renderer2.make_guard(gfxtag!("wallet - refresh tokens"));
+
+                if let Some(drk_node) = sg_root2.lookup_node("/plugin/drk") {
+                    if let Ok(Some(response_data)) = drk_node.call_method("get_balances", vec![]).await {
+                        let mut cur = std::io::Cursor::new(response_data);
+                        if let Ok(balances) = Vec::<(String, TokenId, f32)>::decode(&mut cur) {
+                            let token_rows: Vec<TokenRow> = balances
+                                .iter()
+                                .enumerate()
+                                .map(|(i, (symbol, token_id, balance))| TokenRow {
+                                    id: *token_id,
+                                    symbol: symbol.clone(),
+                                    balance: balance.to_string(),
+                                })
+                                .collect();
+
+                            let mut data: Vec<u8> = vec![];
+                            for row in &token_rows {
+                                let _ = TokenRow::encode(row, &mut data);
+                            }
+
+                            let _ = tokens_table2.call_method("set_tokens", data).await;
+
+                            // Update main wallet balance
+                            use darkfi_money_contract::model::DARK_TOKEN_ID;
+                            if let Some(drk_balance) = balances.iter().find(|(_, token_id, _)| *token_id == *DARK_TOKEN_ID) {
+                                if let Some(balance_node) = sg_root2.lookup_node("/window/content/wallet_main_layer/wallet_balance") {
+                                    balance_node.set_property_str(atom, Role::App, "text", format!("DRK {}", drk_balance.2)).unwrap();
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    });
+    app.tasks.lock().unwrap().push(listen_wallet_visible);
 }
 
 async fn wallet_receive_layer(
@@ -448,7 +576,7 @@ async fn wallet_receive_layer(
     wallet_layer: SceneNodePtr,
     i18n_fish: &I18nBabelFish,
     window_scale: PropertyFloat32,
-) -> SceneNodePtr {
+) -> (SceneNodePtr, PropertyStr) {
     let atom = &mut PropertyAtomicGuard::none();
 
     let mut cc = expr::Compiler::new();
@@ -513,7 +641,7 @@ async fn wallet_receive_layer(
 
     create_title(app, atom, &receive_layer, &window_scale, i18n_fish, "RECEIVE", &mut y).await;
 
-    create_subtitle(app, atom, &receive_layer, &window_scale, i18n_fish, "Address", &mut y).await;
+    create_subtitle(app, atom, &receive_layer, &window_scale, i18n_fish, "address", "Address", &mut y).await;
 
     // Address display
     let node = create_text("receive_address");
@@ -590,7 +718,11 @@ async fn wallet_receive_layer(
     let prop = sep.get_property("rect").unwrap();
     prop.add_depend(&addr_h_prop, 0, "addr_height");
 
-    receive_layer
+    // Get the address text property to return
+    let receive_address_node = receive_layer.lookup_node("/receive_address").unwrap();
+    let receive_address_text = PropertyStr::wrap(&receive_address_node, Role::App, "text", 0).unwrap();
+
+    (receive_layer, receive_address_text)
 }
 
 async fn wallet_send_layer(
@@ -744,7 +876,7 @@ async fn wallet_send_layers(
 
     create_title(app, atom, &send_step1_layer, &window_scale, i18n_fish, "SEND", &mut y).await;
 
-    create_subtitle(app, atom, &send_step1_layer, &window_scale, i18n_fish, "Pick a token to send", &mut y).await;
+    create_subtitle(app, atom, &send_step1_layer, &window_scale, i18n_fish, "pick_label", "Pick a token to send", &mut y).await;
 
     // ============================================
     // Step 2: Recipient layer
@@ -792,31 +924,213 @@ async fn wallet_send_layers(
     let step4_is_visible = PropertyBool::wrap(&send_step4_layer, Role::App, "is_visible", 0).unwrap();
 
     // ============================================
-    // Step 5: Transaction in progress layer
+    // Transaction status layer
     // ============================================
-    let send_step5_layer = create_layer("wallet_send_step5_layer");
-    let prop = send_step5_layer.get_property("rect").unwrap();
+    let mut tx_status_layer = create_layer("wallet_tx_status_layer");
+    let prop = tx_status_layer.get_property("rect").unwrap();
     prop.set_f32(atom, Role::App, 0, 0.).unwrap();
     prop.set_f32(atom, Role::App, 1, 0.).unwrap();
     prop.set_expr(atom, Role::App, 2, expr::load_var("w")).unwrap();
     prop.set_expr(atom, Role::App, 3, expr::load_var("h")).unwrap();
-    send_step5_layer.set_property_bool(atom, Role::App, "is_visible", false).unwrap();
-    send_step5_layer.set_property_u32(atom, Role::App, "z_index", 2).unwrap();
-    let send_step5_layer = send_step5_layer.setup(|me| Layer::new(me, app.renderer.clone())).await;
-    content.link(send_step5_layer.clone());
-    let step5_is_visible = PropertyBool::wrap(&send_step5_layer, Role::App, "is_visible", 0).unwrap();
+    tx_status_layer.set_property_bool(atom, Role::App, "is_visible", false).unwrap();
+    tx_status_layer.set_property_u32(atom, Role::App, "z_index", 2).unwrap();
+
+    let prop = Property::new("tx_id", PropertyType::Str, PropertySubType::Null);
+    tx_status_layer.add_property(prop).unwrap();
+    tx_status_layer.set_property_str(atom, Role::App, "tx_id", "").unwrap();
+
+    tx_status_layer.add_method(
+        "set_tx_status",
+        vec![
+            ("tx_id", "Transaction ID", CallArgType::Str),
+            ("status_text", "Transaction status text", CallArgType::Str),
+        ],
+        None,
+    ).unwrap();
+
+    tx_status_layer.add_method(
+        "set_built_tx",
+        vec![
+            ("tx_bytes", "Transaction bytes", CallArgType::Hash),
+        ],
+        None,
+    ).unwrap();
+
+    let tx_status_layer = tx_status_layer.setup(|me| Layer::new(me, app.renderer.clone())).await;
+    content.link(tx_status_layer.clone());
+    let tx_status_is_visible = PropertyBool::wrap(&tx_status_layer, Role::App, "is_visible", 0).unwrap();
+
+    let mut tx_y = 0.;
+    tx_y += HEADER_HEIGHT;
+    create_title(app, atom, &tx_status_layer, &window_scale, i18n_fish, "SEND", &mut tx_y).await;
+    let status_subtitle_node = create_subtitle(app, atom, &tx_status_layer, &window_scale, i18n_fish, "status", "", &mut tx_y).await;
+
+    // Transaction info text: "Sending {amount} {token_symbol} to {recipient_address}"
+    let node = create_text("send_tx_info5");
+    let info_h_prop = node.get_property("height").unwrap();
+    let prop = node.get_property("rect").unwrap();
+    prop.set_f32(atom, Role::App, 0, PADDING_X).unwrap();
+    prop.set_f32(atom, Role::App, 1, tx_y + PADDING_Y).unwrap();
+    let code = cc.compile("w - PADDING_X * 2").unwrap();
+    prop.set_expr(atom, Role::App, 2, code).unwrap();
+    prop.set_f32(atom, Role::App, 3, BASE_FONTSIZE).unwrap();
+    node.set_property_f32(atom, Role::App, "font_size", BASE_FONTSIZE).unwrap();
+    node.set_property_str(atom, Role::App, "text", "Sending 0 DRK to recipient").unwrap();
+    node.set_property_enum(atom, Role::App, "overflow_wrap", "anywhere").unwrap();
+    let prop = node.get_property("text_color").unwrap();
+    if COLOR_SCHEME == ColorScheme::DarkMode {
+        prop.set_f32(atom, Role::App, 0, 1.).unwrap();
+        prop.set_f32(atom, Role::App, 1, 1.).unwrap();
+        prop.set_f32(atom, Role::App, 2, 1.).unwrap();
+        prop.set_f32(atom, Role::App, 3, 1.).unwrap();
+    } else {
+        prop.set_f32(atom, Role::App, 0, 0.).unwrap();
+        prop.set_f32(atom, Role::App, 1, 0.).unwrap();
+        prop.set_f32(atom, Role::App, 2, 0.).unwrap();
+        prop.set_f32(atom, Role::App, 3, 1.).unwrap();
+    }
+    node.set_property_u32(atom, Role::App, "z_index", 2).unwrap();
+    let node = node
+        .setup(|me| Text::new(me, window_scale.clone(), app.renderer.clone(), i18n_fish.clone()))
+        .await;
+    tx_status_layer.link(node);
+
+    let sep = create_separator(&app.renderer, atom, &tx_status_layer, "send_info_separator5", &mut 0.).await;
+    let prop = sep.get_property("rect").unwrap();
+    let code = cc.compile(format!("{tx_y} + PADDING_Y * 2 + info_height + 1")).unwrap();
+    prop.set_expr(atom, Role::App, 1, code).unwrap();
+    prop.add_depend(&info_h_prop, 0, "info_height");
+
+    // Hint text
+    let hint_text_node = create_text("send_close_hint5");
+    let prop = hint_text_node.get_property("rect").unwrap();
+    let code = cc.compile("w / 2 - (HINT_FONTSIZE * 0.7 * 31) / 2").unwrap();
+    prop.set_expr(atom, Role::App, 0, code).unwrap();
+    let code = cc.compile("h - PADDING_X * 2 - BUTTON_HEIGHT - PADDING_Y - HINT_FONTSIZE * 2").unwrap();
+    prop.set_expr(atom, Role::App, 1, code).unwrap();
+    let code = cc.compile("HINT_FONTSIZE * 0.7 * 31").unwrap();
+    prop.set_expr(atom, Role::App, 2, code).unwrap();
+    prop.set_f32(atom, Role::App, 3, HINT_FONTSIZE/2.).unwrap();
+    hint_text_node.set_property_f32(atom, Role::App, "font_size", HINT_FONTSIZE).unwrap();
+    hint_text_node.set_property_enum(atom, Role::App, "text_align", "center").unwrap();
+    hint_text_node.set_property_str(atom, Role::App, "text", "You can close this screen while the transaction is confirming.").unwrap();
+    let prop = hint_text_node.get_property("text_color").unwrap();
+    if COLOR_SCHEME == ColorScheme::DarkMode {
+        prop.set_f32(atom, Role::App, 0, 1.).unwrap();
+        prop.set_f32(atom, Role::App, 1, 1.).unwrap();
+        prop.set_f32(atom, Role::App, 2, 1.).unwrap();
+        prop.set_f32(atom, Role::App, 3, 0.7).unwrap();
+    } else {
+        prop.set_f32(atom, Role::App, 0, 0.).unwrap();
+        prop.set_f32(atom, Role::App, 1, 0.).unwrap();
+        prop.set_f32(atom, Role::App, 2, 0.).unwrap();
+        prop.set_f32(atom, Role::App, 3, 0.7).unwrap();
+    }
+    hint_text_node.set_property_u32(atom, Role::App, "z_index", 2).unwrap();
+
+    let node = hint_text_node
+        .setup(|me| Text::new(me, window_scale.clone(), app.renderer.clone(), i18n_fish.clone()))
+        .await;
+    tx_status_layer.link(node);
+
+    // Close label (bottom button)
+    let close_label_node = create_text("send_close_label");
+    let prop = close_label_node.get_property("rect").unwrap();
+    prop.set_f32(atom, Role::App, 0, PADDING_X).unwrap();
+    let code = cc.compile("h - PADDING_X - BUTTON_HEIGHT + BUTTON_HEIGHT / 2 - BUTTON_FONTSIZE / 1.8").unwrap();
+    prop.set_expr(atom, Role::App, 1, code).unwrap();
+    let code = cc.compile("w - PADDING_X * 2.").unwrap();
+    prop.set_expr(atom, Role::App, 2, code).unwrap();
+    prop.set_f32(atom, Role::App, 3, BUTTON_HEIGHT).unwrap();
+    close_label_node.set_property_f32(atom, Role::App, "font_size", BUTTON_FONTSIZE).unwrap();
+    close_label_node.set_property_enum(atom, Role::App, "text_align", "center").unwrap();
+    close_label_node.set_property_str(atom, Role::App, "text", "close").unwrap();
+    let prop = close_label_node.get_property("text_color").unwrap();
+    prop.set_f32(atom, Role::App, 0, COLOR_CYAN[0]).unwrap();
+    prop.set_f32(atom, Role::App, 1, COLOR_CYAN[1]).unwrap();
+    prop.set_f32(atom, Role::App, 2, COLOR_CYAN[2]).unwrap();
+    prop.set_f32(atom, Role::App, 3, COLOR_CYAN[3]).unwrap();
+    close_label_node.set_property_u32(atom, Role::App, "z_index", 3).unwrap();
+    let close_label_node = close_label_node
+        .setup(|me| Text::new(me, window_scale.clone(), app.renderer.clone(), i18n_fish.clone()))
+        .await;
+    tx_status_layer.link(close_label_node);
+
+    // Close button
+    let node = create_bottom_button(
+        app,
+        atom,
+        &tx_status_layer,
+        "send_close_btn",
+        &mut cc,
+        Some("close"),
+        &window_scale,
+        i18n_fish,
+    ).await;
+
+    // Click handler
+    let wallet_is_visible = wallet_is_visible.clone();
+    let tx_status_is_visible_for_close = tx_status_is_visible.clone();
+    let renderer = app.renderer.clone();
+    let (slot, recvr) = Slot::new("send_close_clicked");
+    node.register("click", slot).unwrap();
+    let listen_click = app.ex.spawn(async move {
+        while let Ok(_) = recvr.recv().await {
+            let atom = &mut renderer.make_guard(gfxtag!("close button"));
+            tx_status_is_visible_for_close.set(atom, false);
+            wallet_is_visible.set(atom, true);
+        }
+    });
+    app.tasks.lock().unwrap().push(listen_click);
+
+    create_bg_mesh(app, atom, &tx_status_layer, "send_bg5").await;
+    create_header_bg(app, atom, &tx_status_layer, "send_header_bg5").await;
+
+    let method_sub = tx_status_layer.subscribe_method_call("set_tx_status").unwrap();
+    let renderer = app.renderer.clone();
+    let sg_root2 = app.sg_root.clone();
+    let tx_status_layer2 = tx_status_layer.clone();
+    app.tasks.lock().unwrap().push(app.ex.spawn(async move {
+        while let Ok(method_call) = method_sub.receive().await {
+            let mut cur = std::io::Cursor::new(method_call.data);
+            let tx_id = Option::<String>::decode(&mut cur).unwrap();
+            let status_text = Option::<String>::decode(&mut cur).unwrap();
+            let amount = Option::<String>::decode(&mut cur).unwrap();
+            let token_symbol = Option::<String>::decode(&mut cur).unwrap();
+            let recipient_str = Option::<String>::decode(&mut cur).unwrap();
+            let atom = &mut renderer.make_guard(gfxtag!("set_tx_status"));
+            if let Some(tx_id) = tx_id {
+                tx_status_layer2.set_property_str(atom, Role::App, "tx_id", tx_id.as_str()).unwrap();
+            }
+            if let Some(status_text) = status_text {
+                status_subtitle_node.set_property_str(atom, Role::App, "text", status_text.as_str()).unwrap();
+            }
+            if let Some(tx_info_node) = sg_root2.lookup_node("/window/content/wallet_tx_status_layer/send_tx_info5") {
+                if amount.is_some() && token_symbol.is_some() && recipient_str.is_some() {
+                    let tx_text = format!("Sending {} {} to {}", amount.unwrap(), token_symbol.unwrap(), recipient_str.unwrap());
+                    tx_info_node.set_property_str(atom, Role::App, "text", tx_text).unwrap();
+                }
+            }
+        }
+    }));
+
+    let set_built_tx_sub = tx_status_layer.subscribe_method_call("set_built_tx").unwrap();
+    let send_tx_data8 = send_tx_data.clone();
+    app.tasks.lock().unwrap().push(app.ex.spawn(async move {
+        while let Ok(method_call) = set_built_tx_sub.receive().await {
+            let mut cur = std::io::Cursor::new(method_call.data);
+            if let Ok(tx) = Transaction::decode(&mut cur) {
+                let mut data = send_tx_data8.lock().unwrap();
+                data.tx_built = true;
+                data.tx = Some(tx);
+            }
+        }
+    }));
 
     // ========
 
-    let step2_is_visible2 = step2_is_visible.clone();
-    let send_tx_data2 = send_tx_data.clone();
-    let renderer = app.renderer.clone();
-    let step1_is_visible2 = step1_is_visible.clone();
-
-    // Subscribe to step2 visibility changes to call focus/unfocus when layer becomes visible/hidden
     let step2_is_visible_for_focus = step2_is_visible.clone();
     let sg_root_for_focus = app.sg_root.clone();
-    let renderer_for_focus = app.renderer.clone();
     let step2_is_visible_sub = step2_is_visible.prop().subscribe_modify();
     let listen_step2_visible = app.ex.spawn(async move {
         while let Ok(_) = step2_is_visible_sub.receive().await {
@@ -839,22 +1153,117 @@ async fn wallet_send_layers(
     });
     app.tasks.lock().unwrap().push(listen_step2_visible);
 
-    create_tokens_table(app, atom, &window_scale, i18n_fish, &send_step1_layer, MOCK_TOKENS, &mut y, move |sg_root, symbol, name, _balance| {
-        {
-            let mut data = send_tx_data2.lock().unwrap();
-            data.token_symbol = Some(symbol.to_string());
-            data.token_name = Some(name.to_string());
+    let send_tokens_table = create_tokentable("tokens_table");
+    let prop = send_tokens_table.get_property("rect").unwrap();
+    prop.set_f32(atom, Role::App, 0, 0.).unwrap();
+    prop.set_f32(atom, Role::App, 1, y).unwrap();
+    prop.set_expr(atom, Role::App, 2, expr::load_var("w")).unwrap();
+    prop.set_expr(atom, Role::App, 3, expr::load_var("h")).unwrap();
+    send_tokens_table.set_property_f32(atom, Role::App, "font_size", BASE_FONTSIZE).unwrap();
+    send_tokens_table.set_property_f32(atom, Role::App, "column_spacing", TOKEN_NAME_OFFSET).unwrap();
+    send_tokens_table.set_property_f32(atom, Role::App, "padding_x", PADDING_X).unwrap();
+    send_tokens_table.set_property_f32(atom, Role::App, "padding_y", PADDING_Y).unwrap();
+    send_tokens_table.set_property_u32(atom, Role::App, "z_index", 2).unwrap();
+    send_tokens_table.set_property_u32(atom, Role::App, "priority", 0).unwrap();
+
+    let prop = send_tokens_table.get_property("text_color").unwrap();
+    if COLOR_SCHEME == ColorScheme::DarkMode {
+        prop.set_f32(atom, Role::App, 0, 1.).unwrap();
+        prop.set_f32(atom, Role::App, 1, 1.).unwrap();
+        prop.set_f32(atom, Role::App, 2, 1.).unwrap();
+        prop.set_f32(atom, Role::App, 3, 1.).unwrap();
+    } else {
+        prop.set_f32(atom, Role::App, 0, 0.).unwrap();
+        prop.set_f32(atom, Role::App, 1, 0.).unwrap();
+        prop.set_f32(atom, Role::App, 2, 0.).unwrap();
+        prop.set_f32(atom, Role::App, 3, 1.).unwrap();
+    }
+
+    let prop = send_tokens_table.get_property("separator_color").unwrap();
+    prop.set_f32(atom, Role::App, 0, 0.2).unwrap();
+    prop.set_f32(atom, Role::App, 1, 0.2745).unwrap();
+    prop.set_f32(atom, Role::App, 2, 0.2784).unwrap();
+    prop.set_f32(atom, Role::App, 3, 1.).unwrap();
+
+    let send_tokens_table = send_tokens_table
+        .setup(|me| TokenTable::new(me, app.renderer.clone(), app.sg_root.clone()))
+        .await;
+    send_step1_layer.link(send_tokens_table.clone());
+
+    let (slot, recvr) = Slot::new("token_row_clicked");
+    send_tokens_table.register("row_click", slot).unwrap();
+    let sg_root = app.sg_root.clone();
+    let renderer = app.renderer.clone();
+    let send_tx_data2 = send_tx_data.clone();
+    let step1_is_visible3 = step1_is_visible.clone();
+    let step2_is_visible3 = step2_is_visible.clone();
+    let listen_click = app.ex.spawn(async move {
+        while let Ok(data) = recvr.recv().await {
+            let mut cur = std::io::Cursor::new(data);
+            if let Ok(row) = TokenRow::decode(&mut cur) {
+                let mut data = send_tx_data2.lock().unwrap();
+                data.token_symbol = Some(row.symbol.clone());
+                data.token_id = Some(row.id.clone());
+                drop(data);
+
+                let atom = &mut renderer.make_guard(gfxtag!("token selection"));
+                let selected_token_symbol = sg_root.lookup_node("/window/content/wallet_send_step2_layer/send_selected_token_symbol").unwrap();
+                selected_token_symbol.set_property_str(atom, Role::App, "text", &row.symbol).unwrap();
+                // let selected_token_name = sg_root.lookup_node("/window/content/wallet_send_step2_layer/send_selected_token_name").unwrap();
+                // selected_token_name.set_property_str(atom, Role::App, "text", &row.name).unwrap();
+
+                step1_is_visible3.set(atom, false);
+                step2_is_visible3.set(atom, true);
+            }
         }
+    });
+    app.tasks.lock().unwrap().push(listen_click);
 
-        let mut atom = renderer.make_guard(gfxtag!("token selection"));
-        let selected_token_symbol = sg_root.lookup_node("/window/content/wallet_send_step2_layer/send_selected_token_symbol").unwrap();
-        selected_token_symbol.set_property_str(&mut atom, Role::App, "text", symbol).unwrap();
-        let selected_token_name = sg_root.lookup_node("/window/content/wallet_send_step2_layer/send_selected_token_name").unwrap();
-        selected_token_name.set_property_str(&mut atom, Role::App, "text", name).unwrap();
+    let step1_is_visible3 = step1_is_visible.clone();
+    let sg_root2 = app.sg_root.clone();
+    let renderer2 = app.renderer.clone();
+    let send_tokens_table2 = send_tokens_table.clone();
+    let step1_is_visible_sub = step1_is_visible.prop().subscribe_modify();
+    let listen_step1_visible = app.ex.spawn(async move {
+        while let Ok(_) = step1_is_visible_sub.receive().await {
+            if step1_is_visible3.get() {
+                let atom = &mut renderer2.make_guard(gfxtag!("wallet - refresh send tokens"));
 
-        step1_is_visible2.set(&mut atom, false);
-        step2_is_visible2.set(&mut atom, true);
-    }).await;
+                if let Some(drk_node) = sg_root2.lookup_node("/plugin/drk") {
+                    if let Ok(Some(response_data)) = drk_node.call_method("get_balances", vec![]).await {
+                        let mut cur = std::io::Cursor::new(response_data);
+                        if let Ok(balances) = Vec::<(String, TokenId, f32)>::decode(&mut cur) {
+                            let token_rows: Vec<TokenRow> = balances
+                                .iter()
+                                .enumerate()
+                                .map(|(i, (symbol, token_id, balance))| TokenRow {
+                                    id: *token_id,
+                                    symbol: symbol.clone(),
+                                    balance: balance.to_string(),
+                                })
+                                .collect();
+
+                            let mut data: Vec<u8> = vec![];
+                            for row in &token_rows {
+                                let _ = TokenRow::encode(row, &mut data);
+                            }
+
+                            let _ = send_tokens_table2.call_method("set_tokens", data).await;
+
+                            // Update main wallet balance
+                            use darkfi_money_contract::model::DARK_TOKEN_ID;
+                            if let Some(drk_balance) = balances.iter().find(|(_, token_id, _)| *token_id == *DARK_TOKEN_ID) {
+                                if let Some(balance_node) = sg_root2.lookup_node("/window/content/wallet_main_layer/wallet_balance") {
+                                    balance_node.set_property_str(atom, Role::App, "text", format!("DRK {}", drk_balance.2)).unwrap();
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    });
+    app.tasks.lock().unwrap().push(listen_step1_visible);
 
     create_bg_mesh(app, atom, &send_step2_layer, "send_bg2").await;
     create_header_bg(app, atom, &send_step2_layer, "send_header_bg2").await;
@@ -929,35 +1338,35 @@ async fn wallet_send_layers(
         .await;
     send_step2_layer.link(node);
 
-    let node = create_text("send_selected_token_name");
-    let prop = node.get_property("rect").unwrap();
-    prop.set_f32(atom, Role::App, 0, PADDING_X + TOKEN_NAME_OFFSET).unwrap();
-    prop.set_f32(atom, Role::App, 1, y + PADDING_Y).unwrap();
-    prop.set_f32(atom, Role::App, 2, 1000.).unwrap();
-    prop.set_f32(atom, Role::App, 3, BASE_FONTSIZE).unwrap();
-    node.set_property_f32(atom, Role::App, "font_size", BASE_FONTSIZE).unwrap();
-    node.set_property_str(atom, Role::App, "text", "DRK").unwrap();
-    let prop = node.get_property("text_color").unwrap();
-    if COLOR_SCHEME == ColorScheme::DarkMode {
-        prop.set_f32(atom, Role::App, 0, 1.).unwrap();
-        prop.set_f32(atom, Role::App, 1, 1.).unwrap();
-        prop.set_f32(atom, Role::App, 2, 1.).unwrap();
-        prop.set_f32(atom, Role::App, 3, 1.).unwrap();
-    } else {
-        prop.set_f32(atom, Role::App, 0, 0.).unwrap();
-        prop.set_f32(atom, Role::App, 1, 0.).unwrap();
-        prop.set_f32(atom, Role::App, 2, 0.).unwrap();
-        prop.set_f32(atom, Role::App, 3, 1.).unwrap();
-    }
-    node.set_property_u32(atom, Role::App, "z_index", 2).unwrap();
-    let selected_token_text = node
-        .setup(|me| Text::new(me, window_scale.clone(), app.renderer.clone(), i18n_fish.clone()))
-        .await;
-    send_step2_layer.link(selected_token_text.clone());
+    // let node = create_text("send_selected_token_name");
+    // let prop = node.get_property("rect").unwrap();
+    // prop.set_f32(atom, Role::App, 0, PADDING_X + TOKEN_NAME_OFFSET).unwrap();
+    // prop.set_f32(atom, Role::App, 1, y + PADDING_Y).unwrap();
+    // prop.set_f32(atom, Role::App, 2, 1000.).unwrap();
+    // prop.set_f32(atom, Role::App, 3, BASE_FONTSIZE).unwrap();
+    // node.set_property_f32(atom, Role::App, "font_size", BASE_FONTSIZE).unwrap();
+    // node.set_property_str(atom, Role::App, "text", "DRK").unwrap();
+    // let prop = node.get_property("text_color").unwrap();
+    // if COLOR_SCHEME == ColorScheme::DarkMode {
+    //     prop.set_f32(atom, Role::App, 0, 1.).unwrap();
+    //     prop.set_f32(atom, Role::App, 1, 1.).unwrap();
+    //     prop.set_f32(atom, Role::App, 2, 1.).unwrap();
+    //     prop.set_f32(atom, Role::App, 3, 1.).unwrap();
+    // } else {
+    //     prop.set_f32(atom, Role::App, 0, 0.).unwrap();
+    //     prop.set_f32(atom, Role::App, 1, 0.).unwrap();
+    //     prop.set_f32(atom, Role::App, 2, 0.).unwrap();
+    //     prop.set_f32(atom, Role::App, 3, 1.).unwrap();
+    // }
+    // node.set_property_u32(atom, Role::App, "z_index", 2).unwrap();
+    // let selected_token_text = node
+    //     .setup(|me| Text::new(me, window_scale.clone(), app.renderer.clone(), i18n_fish.clone()))
+    //     .await;
+    // send_step2_layer.link(selected_token_text.clone());
 
     y += PADDING_Y * 2. + BASE_FONTSIZE + 1.;
 
-    create_separator(app, atom, &send_step2_layer, "send_token_separator", &mut y).await;
+    create_separator(&app.renderer, atom, &send_step2_layer, "send_token_separator", &mut y).await;
 
     // Recipient label
     let node = create_text("send_recipient_label");
@@ -1180,10 +1589,13 @@ async fn wallet_send_layers(
             }
 
             let atom = &mut renderer.make_guard(gfxtag!("add recipient button"));
-            {
-                let mut data = send_tx_data3.lock().unwrap();
-                data.recipient = Some(text.clone());
-            }
+
+            let mut tx_data = send_tx_data3.lock().unwrap();
+            tx_data.recipient_str = Some(text.clone());
+            // unwrap is okay here, recipient string is already verified by is_valid_address()
+            tx_data.recipient = Some(text.clone().parse::<Address>().unwrap());
+            drop(tx_data);
+
             // Update step3 display with token and recipient
             let data = send_tx_data3.lock().unwrap().clone();
 
@@ -1202,13 +1614,13 @@ async fn wallet_send_layers(
                     }
                 }
             }
-            if let Some(token_name) = &data.token_name {
-                let token_name_node = sg_root.lookup_node("/window/content/wallet_send_step3_layer/send_selected_token_name3").unwrap();
-                token_name_node.set_property_str(atom, Role::App, "text", token_name).unwrap();
-            }
-            if let Some(recipient) = &data.recipient {
+            // if let Some(token_name) = &data.token_name {
+            //     let token_name_node = sg_root.lookup_node("/window/content/wallet_send_step3_layer/send_selected_token_name3").unwrap();
+            //     token_name_node.set_property_str(atom, Role::App, "text", token_name).unwrap();
+            // }
+            if let Some(recipient_str) = &data.recipient_str {
                 let recipient_node = sg_root.lookup_node("/window/content/wallet_send_step3_layer/send_recipient_value3").unwrap();
-                recipient_node.set_property_str(atom, Role::App, "text", recipient).unwrap();
+                recipient_node.set_property_str(atom, Role::App, "text", recipient_str).unwrap();
             }
 
             step2_is_visible2.set(atom, false);
@@ -1303,7 +1715,7 @@ async fn wallet_send_layers(
     prop.set_f32(atom, Role::App, 3, BASE_FONTSIZE).unwrap();
     node.set_property_f32(atom, Role::App, "font_size", BASE_FONTSIZE).unwrap();
     // Set initial token value from send_tx_data
-    let token_name_text = send_tx_data.lock().unwrap().token_name.clone().unwrap_or_else(|| "---".to_string());
+    let token_name_text = send_tx_data.lock().unwrap().token_name.clone().unwrap_or_else(|| "".to_string());
     node.set_property_str(atom, Role::App, "text", &token_name_text).unwrap();
     let prop = node.get_property("text_color").unwrap();
     if COLOR_SCHEME == ColorScheme::DarkMode {
@@ -1325,7 +1737,7 @@ async fn wallet_send_layers(
 
     y += PADDING_Y * 2. + BASE_FONTSIZE + 1.;
 
-    create_separator(app, atom, &send_step3_layer, "send_token_separator3", &mut y).await;
+    create_separator(&app.renderer, atom, &send_step3_layer, "send_token_separator3", &mut y).await;
 
     // Recipient display
     let node = create_text("send_recipient_label3");
@@ -1389,7 +1801,7 @@ async fn wallet_send_layers(
     // Separator line
     let mut y_ = y.clone();
     let y2 = format!("{y} + (PADDING_Y * 2. + addr_height) + 1");
-    let node = create_separator(app, atom, &send_step3_layer, "send_amount_label_separator", &mut y_).await;
+    let node = create_separator(&app.renderer, atom, &send_step3_layer, "send_amount_label_separator", &mut y_).await;
     let prop = node.get_property("rect").unwrap();
     let code = cc.compile(&y2).unwrap();
     prop.set_expr(atom, Role::App, 1, code).unwrap();
@@ -1588,11 +2000,12 @@ async fn wallet_send_layers(
     let renderer = app.renderer.clone();
     let btn_bg_valid_clone = btn_bg_valid.clone();
     let btn_bg_invalid_clone = btn_bg_invalid.clone();
+    let add_amount_label_node_for_validation = add_amount_label_node.clone();
     let listen_amount_text = app.ex.spawn(async move {
         let mut old_amount_text = "0".to_string();
         while let Ok(_) = amount_text_sub.receive().await {
             let atom = &mut renderer.make_guard(gfxtag!("wallet amount input recv"));
-            let label_text_color = add_amount_label_node.get_property("text_color").unwrap();
+            let label_text_color = add_amount_label_node_for_validation.get_property("text_color").unwrap();
             let btn_bg_valid_visible = btn_bg_valid_clone.get_property("is_visible").unwrap();
             let btn_bg_invalid_visible = btn_bg_invalid_clone.get_property("is_visible").unwrap();
             let amount_input_text_color = amount_input2.get_property("text_color").unwrap();
@@ -1710,6 +2123,8 @@ async fn wallet_send_layers(
     let step3_is_visible2 = step3_is_visible.clone();
     let step4_is_visible2 = step4_is_visible.clone();
     let sg_root = app.sg_root.clone();
+    let add_amount_btn_node = node.clone();
+    let add_amount_label_node2 = add_amount_label_node.clone();
     let (slot, recvr) = Slot::new("send_add_amount_clicked");
     node.register("click", slot).unwrap();
     let listen_click = app.ex.spawn(async move {
@@ -1725,35 +2140,58 @@ async fn wallet_send_layers(
                 }
             };
             if is_valid {
-                let atom = &mut renderer.make_guard(gfxtag!("add amount button"));
-                {
-                    let mut data = send_tx_data4.lock().unwrap();
-                    data.amount = Some(text.clone());
-                }
-                // Update step4 display with transaction data
-                let data = send_tx_data4.lock().unwrap().clone();
-                if let Some(token_symbol) = &data.token_symbol {
-                    let token_symbol_node = sg_root.lookup_node("/window/content/wallet_send_step4_layer/send_selected_token_symbol4").unwrap();
-                    token_symbol_node.set_property_str(atom, Role::App, "text", token_symbol).unwrap();
+                let atom = &mut renderer.make_guard(gfxtag!("switch to step4 and show building"));
 
-                    if let Some(amount_token_node) = sg_root.lookup_node("/window/content/wallet_send_step4_layer/send_amount_token_symbol4") {
-                        amount_token_node.set_property_str(atom, Role::App, "text", token_symbol).unwrap();
-                    }
+                // Store the amount
+                let mut data = send_tx_data4.lock().unwrap();
+                data.amount = Some(text.clone());
+
+                // Update step4 display with transaction data
+                if let Some(token_symbol_node) = sg_root.lookup_node("/window/content/wallet_send_step4_layer/send_selected_token_symbol4") {
+                    token_symbol_node.set_property_str(atom, Role::App, "text", &data.token_symbol.clone().unwrap()).unwrap();
                 }
-                if let Some(token_name) = &data.token_name {
-                    let token_name_node = sg_root.lookup_node("/window/content/wallet_send_step4_layer/send_selected_token_name4").unwrap();
-                    token_name_node.set_property_str(atom, Role::App, "text", token_name).unwrap();
+                if let Some(amount_token_node) = sg_root.lookup_node("/window/content/wallet_send_step4_layer/send_amount_token_symbol4") {
+                    amount_token_node.set_property_str(atom, Role::App, "text", &data.token_symbol.clone().unwrap()).unwrap();
                 }
-                if let Some(recipient) = &data.recipient {
-                    let recipient_node = sg_root.lookup_node("/window/content/wallet_send_step4_layer/send_recipient_value4").unwrap();
-                    recipient_node.set_property_str(atom, Role::App, "text", recipient).unwrap();
+                if let Some(recipient_node) = sg_root.lookup_node("/window/content/wallet_send_step4_layer/send_recipient_value4") {
+                    recipient_node.set_property_str(atom, Role::App, "text", &data.recipient_str.clone().unwrap()).unwrap();
                 }
-                if let Some(amount) = &data.amount {
-                    let amount_node = sg_root.lookup_node("/window/content/wallet_send_step4_layer/send_amount_wrapper4/send_amount_text4").unwrap();
-                    amount_node.set_property_str(atom, Role::App, "text", amount).unwrap();
+                if let Some(amount_node) = sg_root.lookup_node("/window/content/wallet_send_step4_layer/send_amount_wrapper4/send_amount_text4") {
+                    amount_node.set_property_str(atom, Role::App, "text", &data.amount.clone().unwrap()).unwrap();
                 }
+
+                // Switch to step4 and set send button to "building tx..."
                 step3_is_visible2.set(atom, false);
                 step4_is_visible2.set(atom, true);
+                if let Some(send_label_node) = sg_root.lookup_node("/window/content/wallet_send_step4_layer/send_send_btn_label") {
+                    send_label_node.set_property_str(atom, Role::App, "text", "building tx...").unwrap();
+                    let prop = send_label_node.get_property("text_color").unwrap();
+                    prop.set_f32(atom, Role::App, 0, 0.5).unwrap();
+                    prop.set_f32(atom, Role::App, 1, 0.5).unwrap();
+                    prop.set_f32(atom, Role::App, 2, 0.5).unwrap();
+                    prop.set_f32(atom, Role::App, 3, 1.).unwrap();
+                }
+                if let Some(send_bg_grey_node) = sg_root.lookup_node("/window/content/wallet_send_step4_layer/send_send_btn_bg_grey") {
+                    send_bg_grey_node.set_property_bool(atom, Role::App, "is_visible", true).unwrap();
+                }
+                if let Some(send_bg_node) = sg_root.lookup_node("/window/content/wallet_send_step4_layer/send_send_btn_bg") {
+                    send_bg_node.set_property_bool(atom, Role::App, "is_visible", false).unwrap();
+                }
+
+                // Build the transaction via DrkPlugin (non-blocking, emits tx_built signal when done)
+                if let (Some(drk_node), Some(token_id), Some(recipient)) = (
+                    sg_root.lookup_node("/plugin/drk"),
+                    data.token_id,
+                    data.recipient,
+                ) {
+                    let mut encoded_data = vec![];
+                    data.amount.clone().unwrap().encode(&mut encoded_data).unwrap();
+                    token_id.encode(&mut encoded_data).unwrap();
+                    recipient.public_key().encode(&mut encoded_data).unwrap();
+
+                    // Call build_tx - returns immediately, emits tx_built signal when done
+                    let _ = smol::block_on(drk_node.call_method("build_tx", encoded_data));
+                }
             }
         }
     });
@@ -1835,6 +2273,7 @@ async fn wallet_send_layers(
     let step3_is_visible2 = step3_is_visible.clone();
     let step4_is_visible1 = step4_is_visible.clone();
     let renderer = app.renderer.clone();
+    let sg_root2 = app.sg_root.clone();
     let (slot, recvr) = Slot::new("send_back_clicked4");
     node.register("click", slot).unwrap();
     let listen_click = app.ex.spawn(async move {
@@ -1842,6 +2281,14 @@ async fn wallet_send_layers(
             let atom = &mut renderer.make_guard(gfxtag!("send step4 back button"));
             step4_is_visible1.set(atom, false);
             step3_is_visible2.set(atom, true);
+
+            // Reset button state when going back to Step 3
+            if let Some(btn_node) = sg_root2.lookup_node("/window/content/wallet_send_step3_layer/send_add_amount_btn") {
+                btn_node.set_property_bool(atom, Role::App, "is_active", true).unwrap();
+            }
+            if let Some(label_node) = sg_root2.lookup_node("/window/content/wallet_send_step3_layer/send_add_amount_btn_label") {
+                label_node.set_property_str(atom, Role::App, "text", "add amount").unwrap();
+            }
         }
     });
     app.tasks.lock().unwrap().push(listen_click);
@@ -1887,7 +2334,7 @@ async fn wallet_send_layers(
     prop.set_f32(atom, Role::App, 2, 1000.).unwrap();
     prop.set_f32(atom, Role::App, 3, BASE_FONTSIZE).unwrap();
     node.set_property_f32(atom, Role::App, "font_size", BASE_FONTSIZE).unwrap();
-    node.set_property_str(atom, Role::App, "text", "DRK").unwrap();
+    node.set_property_str(atom, Role::App, "text", "").unwrap();
     let prop = node.get_property("text_color").unwrap();
     if COLOR_SCHEME == ColorScheme::DarkMode {
         prop.set_f32(atom, Role::App, 0, 1.).unwrap();
@@ -1908,7 +2355,7 @@ async fn wallet_send_layers(
 
     y += PADDING_Y * 2. + BASE_FONTSIZE + 1.;
 
-    create_separator(app, atom, &send_step4_layer, "send_token_separator4", &mut y).await;
+    create_separator(&app.renderer, atom, &send_step4_layer, "send_token_separator4", &mut y).await;
 
     // Recipient label
     let node = create_text("send_recipient_label4");
@@ -1972,7 +2419,7 @@ async fn wallet_send_layers(
     // Separator line
     let mut y_ = y.clone();
     let y2 = format!("{y} + (PADDING_Y * 2. + addr_height) + 1");
-    let node = create_separator(app, atom, &send_step4_layer, "send_amount_label_separator4", &mut y_).await;
+    let node = create_separator(&app.renderer, atom, &send_step4_layer, "send_amount_label_separator4", &mut y_).await;
     let prop = node.get_property("rect").unwrap();
     let code = cc.compile(&y2).unwrap();
     prop.set_expr(atom, Role::App, 1, code).unwrap();
@@ -2065,6 +2512,12 @@ async fn wallet_send_layers(
         prop.set_f32(atom, Role::App, 3, 1.).unwrap();
     }
     tx_fee_label_node.set_property_u32(atom, Role::App, "z_index", 2).unwrap();
+    tx_fee_label_node.set_property_f32(atom, Role::App, "font_size", BASE_FONTSIZE).unwrap();
+    let prop = tx_fee_label_node.get_property("text_color").unwrap();
+    prop.set_f32(atom, Role::App, 0, 0.).unwrap();
+    prop.set_f32(atom, Role::App, 1, 0.).unwrap();
+    prop.set_f32(atom, Role::App, 2, 0.).unwrap();
+    prop.set_f32(atom, Role::App, 3, 0.).unwrap();
     let tx_fee_label_node = tx_fee_label_node.setup(|me| Text::new(me, window_scale.clone(), app.renderer.clone(), i18n_fish.clone())).await;
     send_step4_layer.link(tx_fee_label_node.clone());
 
@@ -2080,19 +2533,12 @@ async fn wallet_send_layers(
     tx_fee_value_node.set_property_f32(atom, Role::App, "font_size", BASE_FONTSIZE).unwrap();
     tx_fee_value_node.set_property_str(atom, Role::App, "text", MOCK_TX_FEE).unwrap();
     tx_fee_value_node.set_property_enum(atom, Role::App, "text_align", "end").unwrap();
-    let prop = tx_fee_value_node.get_property("text_color").unwrap();
-    if COLOR_SCHEME == ColorScheme::DarkMode {
-        prop.set_f32(atom, Role::App, 0, 1.).unwrap();
-        prop.set_f32(atom, Role::App, 1, 1.).unwrap();
-        prop.set_f32(atom, Role::App, 2, 1.).unwrap();
-        prop.set_f32(atom, Role::App, 3, 1.).unwrap();
-    } else {
-        prop.set_f32(atom, Role::App, 0, 0.).unwrap();
-        prop.set_f32(atom, Role::App, 1, 0.).unwrap();
-        prop.set_f32(atom, Role::App, 2, 0.).unwrap();
-        prop.set_f32(atom, Role::App, 3, 1.).unwrap();
-    }
     tx_fee_value_node.set_property_u32(atom, Role::App, "z_index", 2).unwrap();
+    let prop = tx_fee_value_node.get_property("text_color").unwrap();
+    prop.set_f32(atom, Role::App, 0, 0.).unwrap();
+    prop.set_f32(atom, Role::App, 1, 0.).unwrap();
+    prop.set_f32(atom, Role::App, 2, 0.).unwrap();
+    prop.set_f32(atom, Role::App, 3, 0.).unwrap();
     let tx_fee_value_node = tx_fee_value_node.setup(|me| Text::new(me, window_scale.clone(), app.renderer.clone(), i18n_fish.clone())).await;
     send_step4_layer.link(tx_fee_value_node.clone());
 
@@ -2109,44 +2555,115 @@ async fn wallet_send_layers(
     y += PADDING_Y * 2. + BUTTON_HEIGHT + 10.;
 
     // Send button (bottom button)
-    let node = create_bottom_button(
+    let (node, _bg_valid, _bg_invalid, _label) = create_bottom_button_with_states(
         app,
         atom,
         &send_step4_layer,
         "send_send_btn",
         &mut cc,
-        Some("send"),
+        "send",
         &window_scale,
         i18n_fish,
+        true, // initial_valid
     ).await;
 
     let renderer = app.renderer.clone();
     let sg_root = app.sg_root.clone();
     let step4_is_visible1 = step4_is_visible.clone();
-    let step5_is_visible1 = step5_is_visible.clone();
-    let send_tx_data_clone = send_tx_data.clone();
+    let tx_status_is_visible1 = tx_status_is_visible.clone();
+    let send_tx_data_for_send = send_tx_data.clone();
+    let tx_status = tx_status_layer.lookup_node("/status").unwrap();
     let (slot, recvr) = Slot::new("send_send_clicked");
     node.register("click", slot).unwrap();
     let listen_click = app.ex.spawn(async move {
         while let Ok(_) = recvr.recv().await {
+            // Skip if the button is disabled
+            if let Some(btn_node) = sg_root.lookup_node("/window/content/wallet_send_step4_layer/send_send_btn_bg") {
+                if !btn_node.get_property_bool("is_visible").unwrap() {
+                    continue;
+                }
+            }
             let atom = &mut renderer.make_guard(gfxtag!("send button"));
 
-            // Update step5 with transaction info
-            let data = send_tx_data_clone.lock().unwrap().clone();
-
-            if let Some(tx_info_node) = sg_root.lookup_node("/window/content/wallet_send_step5_layer/send_tx_info5") {
-                let amount = data.amount.as_deref().unwrap_or("0");
-                let token_symbol = data.token_symbol.as_deref().unwrap_or("DRK");
-                let recipient = data.recipient.as_deref().unwrap_or("recipient");
-                let tx_text = format!("Sending {} {} to {}", amount, token_symbol, recipient);
-                tx_info_node.set_property_str(atom, Role::App, "text", tx_text).unwrap();
-            }
-
             step4_is_visible1.set(atom, false);
-            step5_is_visible1.set(atom, true);
+            tx_status_is_visible1.set(atom, true);
+
+            // Broadcast
+            let tx = send_tx_data_for_send.lock().unwrap().tx.clone();
+            if let (Some(tx), Some(drk_node)) = (tx, sg_root.lookup_node("/plugin/drk")) {
+                let mut encoded_data = vec![];
+                tx.encode(&mut encoded_data).unwrap();
+                if let Ok(Some(response_data)) = drk_node.call_method("broadcast_tx", encoded_data).await {
+                    let mut cur = std::io::Cursor::new(response_data);
+                    if let Ok(tx_id) = String::decode(&mut cur) {
+                        d!("Transaction broadcasted: {tx_id}");
+                        let mut tx_id_data = vec![];
+                        tx_id.encode(&mut tx_id_data).unwrap();
+                        if let Ok(Some(data)) = drk_node.call_method("get_tx_status", tx_id_data).await {
+                            let mut cur = std::io::Cursor::new(data);
+                            let status_text = String::decode(&mut cur).unwrap();
+                            tx_status.set_property_str(atom, Role::App, "text", status_text).unwrap();
+                        }
+                    }
+                }
+            }
         }
     });
     app.tasks.lock().unwrap().push(listen_click);
+
+    // Add listener for tx built signal to update send button label and show fee
+    let set_built_tx_sub = tx_status_layer.subscribe_method_call("set_built_tx").unwrap();
+    let renderer_for_built = app.renderer.clone();
+    let sg_root_for_built = app.sg_root.clone();
+    app.tasks.lock().unwrap().push(app.ex.spawn(async move {
+        while let Ok(mcall) = set_built_tx_sub.receive().await {
+            let mut cur = std::io::Cursor::new(mcall.data);
+            let tx = Transaction::decode(&mut cur).unwrap();
+            let mut fees: u64 = 0;
+            for (i, call) in tx.calls.iter().enumerate() {
+                if call.data.is_money_fee() {
+                    if let Ok(fee) = deserialize(&call.data.data[1..9]) {
+                        fees = fees.checked_add(fee).unwrap_or(u64::MAX);
+                    }
+                }
+            }
+
+            let atom = &mut renderer_for_built.make_guard(gfxtag!("tx built - update send button"));
+
+            // Make send button active
+            if let Some(send_label_node) = sg_root_for_built.lookup_node("/window/content/wallet_send_step4_layer/send_send_btn_label") {
+                send_label_node.set_property_str(atom, Role::App, "text", "send").unwrap();
+                let prop = send_label_node.get_property("text_color").unwrap();
+                prop.set_f32(atom, Role::App, 0, COLOR_CYAN[0]).unwrap();
+                prop.set_f32(atom, Role::App, 1, COLOR_CYAN[1]).unwrap();
+                prop.set_f32(atom, Role::App, 2, COLOR_CYAN[2]).unwrap();
+                prop.set_f32(atom, Role::App, 3, COLOR_CYAN[3]).unwrap();
+            }
+            if let Some(send_bg_grey_node) = sg_root_for_built.lookup_node("/window/content/wallet_send_step4_layer/send_send_btn_bg_grey") {
+                send_bg_grey_node.set_property_bool(atom, Role::App, "is_visible", false).unwrap();
+            }
+            if let Some(send_bg_node) = sg_root_for_built.lookup_node("/window/content/wallet_send_step4_layer/send_send_btn_bg") {
+                send_bg_node.set_property_bool(atom, Role::App, "is_visible", true).unwrap();
+            }
+
+            // Show transaction fee
+            if let Some(tx_fee_label) = sg_root_for_built.lookup_node("/window/content/wallet_send_step4_layer/send_fee_label") {
+                let prop = tx_fee_label.get_property("text_color").unwrap();
+                prop.set_f32(atom, Role::App, 0, 1.).unwrap();
+                prop.set_f32(atom, Role::App, 1, 1.).unwrap();
+                prop.set_f32(atom, Role::App, 2, 1.).unwrap();
+                prop.set_f32(atom, Role::App, 3, 1.).unwrap();
+            }
+            if let Some(tx_fee_value) = sg_root_for_built.lookup_node("/window/content/wallet_send_step4_layer/send_fee_value") {
+                tx_fee_value.set_property_str(atom, Role::App, "text", encode_base10(fees, BALANCE_BASE10_DECIMALS)).unwrap();
+                let prop = tx_fee_value.get_property("text_color").unwrap();
+                prop.set_f32(atom, Role::App, 0, 1.).unwrap();
+                prop.set_f32(atom, Role::App, 1, 1.).unwrap();
+                prop.set_f32(atom, Role::App, 2, 1.).unwrap();
+                prop.set_f32(atom, Role::App, 3, 1.).unwrap();
+            }
+        }
+    }));
 
     // Add listener for step4 visibility to update amount positions
     let step4_is_visible_clone = step4_is_visible.clone();
@@ -2155,6 +2672,7 @@ async fn wallet_send_layers(
     let amount_text_node_clone = amount_text_node.clone();
     let token_symbol_node_clone = token_symbol_node.clone();
     let send_tx_data_clone2 = send_tx_data.clone();
+    let sg_root_clone_for_visibility = app.sg_root.clone();
     let step4_is_visible_sub = step4_is_visible.prop().subscribe_modify();
     let listen_step4_visible = app.ex.spawn(async move {
         while let Ok(_) = step4_is_visible_sub.receive().await {
@@ -2183,141 +2701,48 @@ async fn wallet_send_layers(
                     &token_symbol_node_clone,
                     None,
                 );
+
+                if data.tx_built {
+                    // Set send button label
+                    if let Some(send_label_node) = sg_root_clone_for_visibility.lookup_node("/window/content/wallet_send_step4_layer/send_send_btn_label") {
+                        send_label_node.set_property_str(atom, Role::App, "text", "send").unwrap();
+                    }
+                    // Show transaction fee
+                    if let Some(tx_fee_label) = sg_root_clone_for_visibility.lookup_node("/window/content/wallet_send_step4_layer/send_fee_label") {
+                        let prop = tx_fee_label.get_property("text_color").unwrap();
+                        prop.set_f32(atom, Role::App, 0, 1.).unwrap();
+                        prop.set_f32(atom, Role::App, 1, 1.).unwrap();
+                        prop.set_f32(atom, Role::App, 2, 1.).unwrap();
+                        prop.set_f32(atom, Role::App, 3, 1.).unwrap();
+                    }
+                    if let Some(tx_fee_value) = sg_root_clone_for_visibility.lookup_node("/window/content/wallet_send_step4_layer/send_fee_value") {
+                        let prop = tx_fee_value.get_property("text_color").unwrap();
+                        prop.set_f32(atom, Role::App, 0, 1.).unwrap();
+                        prop.set_f32(atom, Role::App, 1, 1.).unwrap();
+                        prop.set_f32(atom, Role::App, 2, 1.).unwrap();
+                        prop.set_f32(atom, Role::App, 3, 1.).unwrap();
+                    }
+                } else {
+                    // Hide transaction fee
+                    if let Some(tx_fee_label) = sg_root_clone_for_visibility.lookup_node("/window/content/wallet_send_step4_layer/send_fee_label") {
+                        let prop = tx_fee_label.get_property("text_color").unwrap();
+                        prop.set_f32(atom, Role::App, 0, 0.).unwrap();
+                        prop.set_f32(atom, Role::App, 1, 0.).unwrap();
+                        prop.set_f32(atom, Role::App, 2, 0.).unwrap();
+                        prop.set_f32(atom, Role::App, 3, 0.).unwrap();
+                    }
+                    if let Some(tx_fee_value) = sg_root_clone_for_visibility.lookup_node("/window/content/wallet_send_step4_layer/send_fee_value") {
+                        let prop = tx_fee_value.get_property("text_color").unwrap();
+                        prop.set_f32(atom, Role::App, 0, 0.).unwrap();
+                        prop.set_f32(atom, Role::App, 1, 0.).unwrap();
+                        prop.set_f32(atom, Role::App, 2, 0.).unwrap();
+                        prop.set_f32(atom, Role::App, 3, 0.).unwrap();
+                    }
+                }
             }
         }
     });
     app.tasks.lock().unwrap().push(listen_step4_visible);
-
-    // ============================================
-    // Step 5: Transaction in progress layer content
-    // ============================================
-    create_bg_mesh(app, atom, &send_step5_layer, "send_bg5").await;
-    create_header_bg(app, atom, &send_step5_layer, "send_header_bg5").await;
-
-    y = 0.;
-    y += HEADER_HEIGHT;
-
-    create_title(app, atom, &send_step5_layer, &window_scale, i18n_fish, "SEND", &mut y).await;
-
-    // Subtitle: "Transaction in progress..."
-    create_subtitle(app, atom, &send_step5_layer, &window_scale, i18n_fish, "Transaction in progress...", &mut y).await;
-
-    // Transaction info text: "Sending {amount} {token_symbol} to {recipient_address}"
-    let node = create_text("send_tx_info5");
-    let info_h_prop = node.get_property("height").unwrap();
-    let prop = node.get_property("rect").unwrap();
-    prop.set_f32(atom, Role::App, 0, PADDING_X).unwrap();
-    prop.set_f32(atom, Role::App, 1, y + PADDING_Y).unwrap();
-    let code = cc.compile("w - PADDING_X * 2").unwrap();
-    prop.set_expr(atom, Role::App, 2, code).unwrap();
-    prop.set_f32(atom, Role::App, 3, BASE_FONTSIZE).unwrap();
-    node.set_property_f32(atom, Role::App, "font_size", BASE_FONTSIZE).unwrap();
-    node.set_property_str(atom, Role::App, "text", "Sending 0 DRK to recipient").unwrap();
-    node.set_property_enum(atom, Role::App, "overflow_wrap", "anywhere").unwrap();
-    let prop = node.get_property("text_color").unwrap();
-    if COLOR_SCHEME == ColorScheme::DarkMode {
-        prop.set_f32(atom, Role::App, 0, 1.).unwrap();
-        prop.set_f32(atom, Role::App, 1, 1.).unwrap();
-        prop.set_f32(atom, Role::App, 2, 1.).unwrap();
-        prop.set_f32(atom, Role::App, 3, 1.).unwrap();
-    } else {
-        prop.set_f32(atom, Role::App, 0, 0.).unwrap();
-        prop.set_f32(atom, Role::App, 1, 0.).unwrap();
-        prop.set_f32(atom, Role::App, 2, 0.).unwrap();
-        prop.set_f32(atom, Role::App, 3, 1.).unwrap();
-    }
-    node.set_property_u32(atom, Role::App, "z_index", 2).unwrap();
-    let node = node
-        .setup(|me| Text::new(me, window_scale.clone(), app.renderer.clone(), i18n_fish.clone()))
-        .await;
-    send_step5_layer.link(node);
-
-    let sep = create_separator(app, atom, &send_step5_layer, "send_info_separator5", &mut 0.).await;
-    let prop = sep.get_property("rect").unwrap();
-    let code = cc.compile(format!("{y} + PADDING_Y * 2 + info_height + 1")).unwrap();
-    prop.set_expr(atom, Role::App, 1, code).unwrap();
-    prop.add_depend(&info_h_prop, 0, "info_height");
-
-    // Hint text
-    let hint_text_node = create_text("send_close_hint5");
-    let prop = hint_text_node.get_property("rect").unwrap();
-    let code = cc.compile("w / 2 - (HINT_FONTSIZE * 0.7 * 31) / 2").unwrap();
-    prop.set_expr(atom, Role::App, 0, code).unwrap();
-    let code = cc.compile("h - PADDING_X * 2 - BUTTON_HEIGHT - PADDING_Y - HINT_FONTSIZE * 2").unwrap();
-    prop.set_expr(atom, Role::App, 1, code).unwrap();
-    let code = cc.compile("HINT_FONTSIZE * 0.7 * 31").unwrap();
-    prop.set_expr(atom, Role::App, 2, code).unwrap();
-    prop.set_f32(atom, Role::App, 3, HINT_FONTSIZE/2.).unwrap();
-    hint_text_node.set_property_f32(atom, Role::App, "font_size", HINT_FONTSIZE).unwrap();
-    hint_text_node.set_property_enum(atom, Role::App, "text_align", "center").unwrap();
-    hint_text_node.set_property_str(atom, Role::App, "text", "You can close this screen while the transaction is confirming.").unwrap();
-    let prop = hint_text_node.get_property("text_color").unwrap();
-    if COLOR_SCHEME == ColorScheme::DarkMode {
-        prop.set_f32(atom, Role::App, 0, 1.).unwrap();
-        prop.set_f32(atom, Role::App, 1, 1.).unwrap();
-        prop.set_f32(atom, Role::App, 2, 1.).unwrap();
-        prop.set_f32(atom, Role::App, 3, 0.7).unwrap();
-    } else {
-        prop.set_f32(atom, Role::App, 0, 0.).unwrap();
-        prop.set_f32(atom, Role::App, 1, 0.).unwrap();
-        prop.set_f32(atom, Role::App, 2, 0.).unwrap();
-        prop.set_f32(atom, Role::App, 3, 0.7).unwrap();
-    }
-    hint_text_node.set_property_u32(atom, Role::App, "z_index", 2).unwrap();
-
-    let node = hint_text_node
-        .setup(|me| Text::new(me, window_scale.clone(), app.renderer.clone(), i18n_fish.clone()))
-        .await;
-    send_step5_layer.link(node);
-
-    // Close label (bottom button)
-    let close_label_node = create_text("send_close_label");
-    let prop = close_label_node.get_property("rect").unwrap();
-    prop.set_f32(atom, Role::App, 0, PADDING_X).unwrap();
-    let code = cc.compile("h - PADDING_X - BUTTON_HEIGHT + BUTTON_HEIGHT / 2 - BUTTON_FONTSIZE / 1.8").unwrap();
-    prop.set_expr(atom, Role::App, 1, code).unwrap();
-    let code = cc.compile("w - PADDING_X * 2.").unwrap();
-    prop.set_expr(atom, Role::App, 2, code).unwrap();
-    prop.set_f32(atom, Role::App, 3, BUTTON_HEIGHT).unwrap();
-    close_label_node.set_property_f32(atom, Role::App, "font_size", BUTTON_FONTSIZE).unwrap();
-    close_label_node.set_property_enum(atom, Role::App, "text_align", "center").unwrap();
-    close_label_node.set_property_str(atom, Role::App, "text", "close").unwrap();
-    let prop = close_label_node.get_property("text_color").unwrap();
-    prop.set_f32(atom, Role::App, 0, COLOR_CYAN[0]).unwrap();
-    prop.set_f32(atom, Role::App, 1, COLOR_CYAN[1]).unwrap();
-    prop.set_f32(atom, Role::App, 2, COLOR_CYAN[2]).unwrap();
-    prop.set_f32(atom, Role::App, 3, COLOR_CYAN[3]).unwrap();
-    close_label_node.set_property_u32(atom, Role::App, "z_index", 3).unwrap();
-    let close_label_node = close_label_node
-        .setup(|me| Text::new(me, window_scale.clone(), app.renderer.clone(), i18n_fish.clone()))
-        .await;
-
-    // Close button
-    let node = create_bottom_button(
-        app,
-        atom,
-        &send_step5_layer,
-        "send_close_btn",
-        &mut cc,
-        Some("close"),
-        &window_scale,
-        i18n_fish,
-    ).await;
-
-    // Click handler
-    let wallet_is_visible = wallet_is_visible.clone();
-    let step5_is_visible = step5_is_visible.clone();
-    let renderer = app.renderer.clone();
-    let (slot, recvr) = Slot::new("send_close_clicked");
-    node.register("click", slot).unwrap();
-    let listen_click = app.ex.spawn(async move {
-        while let Ok(_) = recvr.recv().await {
-            let atom = &mut renderer.make_guard(gfxtag!("close button"));
-            step5_is_visible.set(atom, false);
-            wallet_is_visible.set(atom, true);
-        }
-    });
-    app.tasks.lock().unwrap().push(listen_click);
 
     send_step1_layer
 }
@@ -2359,7 +2784,7 @@ async fn create_title(
 
     *y += TITLE_PADDING * 2. + TITLE_FONTSIZE + 1.;
 
-    create_separator(app, atom, layer, &format!("{}_separator", name), y).await;
+    create_separator(&app.renderer, atom, layer, &format!("{}_separator", name), y).await;
     node
 }
 
@@ -2371,10 +2796,11 @@ async fn create_subtitle(
     layer: &SceneNodePtr,
     window_scale: &PropertyFloat32,
     i18n_fish: &I18nBabelFish,
+    name: &str,
     text: &str,
     y: &mut f32,
 ) -> SceneNodePtr {
-    let node = create_text(text);
+    let node = create_text(name);
     let prop = node.get_property("rect").unwrap();
     prop.set_f32(atom, Role::App, 0, PADDING_X).unwrap();
     prop.set_f32(atom, Role::App, 1, *y + PADDING_Y).unwrap();
@@ -2400,7 +2826,7 @@ async fn create_subtitle(
 
     *y += PADDING_Y * 2. + TITLE_FONTSIZE + 1.;
 
-    create_separator(app, atom, layer, &format!("{}_separator", text), y).await;
+    create_separator(&app.renderer, atom, layer, &format!("{}_separator", text), y).await;
 
     node
 }
@@ -2504,7 +2930,7 @@ async fn create_separator_expr(
 /// Creates a separator line at the current y position and increments y.
 /// Returns the separator node after setup, linked to the layer
 async fn create_separator(
-    app: &App,
+    renderer: &Renderer,
     atom: &mut PropertyAtomicGuard,
     layer: &SceneNodePtr,
     name: &str,
@@ -2525,150 +2951,11 @@ async fn create_separator(
         expr::const_f32(1.),
         [0.2, 0.2745, 0.2784, 1.],
     );
-    let sep_node = sep_node.setup(|me| VectorArt::new(me, shape, app.renderer.clone())).await;
+    let sep_node = sep_node.setup(|me| VectorArt::new(me, shape, renderer.clone())).await;
     layer.link(sep_node.clone());
 
     *y += 1.;
     sep_node
-}
-
-async fn create_tokens_table(
-    app: &App,
-    atom: &mut PropertyAtomicGuard,
-    window_scale: &PropertyFloat32,
-    i18n_fish: &I18nBabelFish,
-    layer: &SceneNodePtr,
-    tokens: &[(&str, &str, f32)],
-    y: &mut f32,
-    on_click: impl Fn(&SceneNodePtr, &str, &str, &f32) + Clone + Send + Sync + 'static,
-) {
-    use crate::prop::Role;
-    use crate::scene::Slot;
-
-    let mut cc = expr::Compiler::new();
-    cc.add_const_f32("PADDING_X", PADDING_X);
-
-    for (i, (token, full_name, balance)) in tokens.iter().enumerate() {
-        let row_y = *y;
-        let row_height = PADDING_Y * 2. + BASE_FONTSIZE + 1.;
-
-        // Token row button
-        let node = create_button(&format!("token_row_btn_{}", i));
-        node.set_property_bool(atom, Role::App, "is_active", true).unwrap();
-        let prop = node.get_property("rect").unwrap();
-        prop.set_f32(atom, Role::App, 0, 0.).unwrap();
-        prop.set_f32(atom, Role::App, 1, row_y).unwrap();
-        let code = cc.compile("w").unwrap();
-        prop.set_expr(atom, Role::App, 2, code).unwrap();
-        prop.set_f32(atom, Role::App, 3, row_height).unwrap();
-
-        let callback = on_click.clone();
-        let token_str = token.to_string();
-        let name_str = full_name.to_string();
-        let balance2 = *balance;
-        let sg_root = app.sg_root.clone();
-        let (slot, recvr) = Slot::new(&format!("token_row_clicked_{}", i));
-        node.register("click", slot).unwrap();
-        let listen_click = app.ex.spawn(async move {
-            while let Ok(_) = recvr.recv().await {
-                callback(&sg_root, &token_str, &name_str, &balance2);
-            }
-        });
-        app.tasks.lock().unwrap().push(listen_click);
-
-        let node = node.setup(|me| Button::new(me, app.renderer.clone())).await;
-        layer.link(node);
-
-        // Token symbol
-        let node = create_text(&format!("token_{}", i));
-        let prop = node.get_property("rect").unwrap();
-        prop.set_f32(atom, Role::App, 0, PADDING_X).unwrap();
-        prop.set_f32(atom, Role::App, 1, *y + PADDING_Y).unwrap();
-        prop.set_f32(atom, Role::App, 2, 1000.).unwrap();
-        prop.set_f32(atom, Role::App, 3, BASE_FONTSIZE).unwrap();
-        node.set_property_f32(atom, Role::App, "font_size", BASE_FONTSIZE).unwrap();
-        node.set_property_str(atom, Role::App, "text", *token).unwrap();
-        let prop = node.get_property("text_color").unwrap();
-        if COLOR_SCHEME == ColorScheme::DarkMode {
-            prop.set_f32(atom, Role::App, 0, 1.).unwrap();
-            prop.set_f32(atom, Role::App, 1, 1.).unwrap();
-            prop.set_f32(atom, Role::App, 2, 1.).unwrap();
-            prop.set_f32(atom, Role::App, 3, 1.).unwrap();
-        } else {
-            prop.set_f32(atom, Role::App, 0, 0.).unwrap();
-            prop.set_f32(atom, Role::App, 1, 0.).unwrap();
-            prop.set_f32(atom, Role::App, 2, 0.).unwrap();
-            prop.set_f32(atom, Role::App, 3, 1.).unwrap();
-        }
-        node.set_property_u32(atom, Role::App, "z_index", 2).unwrap();
-        let node = node
-            .setup(|me| Text::new(me, window_scale.clone(), app.renderer.clone(), i18n_fish.clone()))
-            .await;
-        layer.link(node);
-
-        // Token name
-        let node = create_text(&format!("token_name_{}", i));
-        let prop = node.get_property("rect").unwrap();
-        prop.set_f32(atom, Role::App, 0, PADDING_X + TOKEN_NAME_OFFSET).unwrap();
-        prop.set_f32(atom, Role::App, 1, *y + PADDING_Y).unwrap();
-        prop.set_f32(atom, Role::App, 2, 1000.).unwrap();
-        prop.set_f32(atom, Role::App, 3, BASE_FONTSIZE).unwrap();
-        node.set_property_f32(atom, Role::App, "font_size", BASE_FONTSIZE).unwrap();
-        node.set_property_str(atom, Role::App, "text", *full_name).unwrap();
-        let prop = node.get_property("text_color").unwrap();
-        if COLOR_SCHEME == ColorScheme::DarkMode {
-            prop.set_f32(atom, Role::App, 0, 1.).unwrap();
-            prop.set_f32(atom, Role::App, 1, 1.).unwrap();
-            prop.set_f32(atom, Role::App, 2, 1.).unwrap();
-            prop.set_f32(atom, Role::App, 3, 1.).unwrap();
-        } else {
-            prop.set_f32(atom, Role::App, 0, 0.).unwrap();
-            prop.set_f32(atom, Role::App, 1, 0.).unwrap();
-            prop.set_f32(atom, Role::App, 2, 0.).unwrap();
-            prop.set_f32(atom, Role::App, 3, 1.).unwrap();
-        }
-        node.set_property_u32(atom, Role::App, "z_index", 2).unwrap();
-        let node = node
-            .setup(|me| Text::new(me, window_scale.clone(), app.renderer.clone(), i18n_fish.clone()))
-            .await;
-        layer.link(node);
-
-        // Balance
-        let node = create_text(&format!("token_balance_{}", i));
-        let prop = node.get_property("rect").unwrap();
-        let code = cc.compile("PADDING_X").unwrap();
-        prop.set_expr(atom, Role::App, 0, code).unwrap();
-        prop.set_f32(atom, Role::App, 1, *y + PADDING_Y).unwrap();
-        let code = cc.compile("w - PADDING_X * 2").unwrap();
-        prop.set_expr(atom, Role::App, 2, code).unwrap();
-        prop.set_f32(atom, Role::App, 3, BASE_FONTSIZE).unwrap();
-        node.set_property_enum(atom, Role::App, "text_align", "end").unwrap();
-        node.set_property_f32(atom, Role::App, "font_size", BASE_FONTSIZE).unwrap();
-        node.set_property_str(atom, Role::App, "text", balance.to_string()).unwrap();
-        let prop = node.get_property("text_color").unwrap();
-        if COLOR_SCHEME == ColorScheme::DarkMode {
-            prop.set_f32(atom, Role::App, 0, 1.).unwrap();
-            prop.set_f32(atom, Role::App, 1, 1.).unwrap();
-            prop.set_f32(atom, Role::App, 2, 1.).unwrap();
-            prop.set_f32(atom, Role::App, 3, 1.).unwrap();
-        } else {
-            prop.set_f32(atom, Role::App, 0, 0.).unwrap();
-            prop.set_f32(atom, Role::App, 1, 0.).unwrap();
-            prop.set_f32(atom, Role::App, 2, 0.).unwrap();
-            prop.set_f32(atom, Role::App, 3, 1.).unwrap();
-        }
-        node.set_property_u32(atom, Role::App, "z_index", 2).unwrap();
-        let node = node
-            .setup(|me| {
-                Text::new(me, window_scale.clone(), app.renderer.clone(), i18n_fish.clone())
-            })
-            .await;
-        layer.link(node);
-
-        *y += PADDING_Y * 2. + BASE_FONTSIZE;
-
-        create_separator(app, atom, layer, &format!("token_separator_{}", i), y).await;
-    }
 }
 
 /// Creates a bottom button with teal outline and click handler.

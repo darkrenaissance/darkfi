@@ -33,6 +33,8 @@ mod button;
 pub use button::{Button, ButtonPtr};
 pub mod chatview;
 pub use chatview::{ChatView, ChatViewPtr};
+pub mod tokentable;
+pub use tokentable::{TokenRow, TokenTable, TokenTablePtr};
 mod edit;
 pub use edit::{BaseEdit, BaseEditPtr, BaseEditType};
 pub mod emoji_picker;
@@ -226,6 +228,7 @@ pub fn get_ui_object_ptr(node: &SceneNode3) -> Arc<dyn UIObject + Send> {
         Pimpl::Shortcut(obj) => obj.clone(),
         Pimpl::Gesture(obj) => obj.clone(),
         Pimpl::Menu(obj) => obj.clone(),
+        Pimpl::TokenTable(obj) => obj.clone(),
         _ => panic!("unhandled type for get_ui_object: {node:?}"),
     }
 }
@@ -244,6 +247,7 @@ pub fn get_ui_object3<'a>(node: &'a SceneNode3) -> &'a dyn UIObject {
         Pimpl::Shortcut(obj) => obj.as_ref(),
         Pimpl::Gesture(obj) => obj.as_ref(),
         Pimpl::Menu(obj) => obj.as_ref(),
+        Pimpl::TokenTable(obj) => obj.as_ref(),
         _ => panic!("unhandled type for get_ui_object: {node:?}"),
     }
 }
