@@ -142,14 +142,8 @@ impl Darkfid {
 
         // Grab blockchain network configured transactions batch size for garbage collection
         let txs_batch_size = match txs_batch_size {
-            Some(b) => {
-                if *b > 0 {
-                    *b
-                } else {
-                    50
-                }
-            }
-            None => 50,
+            Some(b) if *b > 0 => *b,
+            _ => 50,
         };
 
         // Here we initialize various subscribers that can export live blockchain/consensus data.

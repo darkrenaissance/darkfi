@@ -116,21 +116,25 @@ pub fn millis_until_next_rotation(next_rotation: u64) -> u64 {
 
 /// Generate a deterministic genesis event corresponding to the DAG's configuration.
 pub fn generate_genesis(hours_rotation: u64) -> Event {
+    let parents = [NULL_ID; N_EVENT_PARENTS];
+    let layer = 0;
+    let content = GENESIS_CONTENTS.to_vec();
+
     // Hours rotation is u64 except zero
-    let timestamp = if hours_rotation == 0 {
-        INITIAL_GENESIS
-    } else {
-        // First check how many hours passed since initial genesis.
-        let hours_passed = hours_since(INITIAL_GENESIS);
+    if hours_rotation == 0 {
+        return Event { header: Header { timestamp: INITIAL_GENESIS, parents, layer }, content }
+    }
 
-        // Calculate the number of hours_rotation intervals since INITIAL_GENESIS
-        let rotations_since_genesis = hours_passed / hours_rotation;
+    // First check how many hours passed since initial genesis.
+    let hours_passed = hours_since(INITIAL_GENESIS);
 
-        // Calculate the timestamp of the most recent event
-        INITIAL_GENESIS + (rotations_since_genesis * hours_rotation * HOUR as u64)
-    };
-    let header = Header { timestamp, parents: [NULL_ID; N_EVENT_PARENTS], layer: 0 };
-    Event { header, content: GENESIS_CONTENTS.to_vec() }
+    // Calculate the number of hours_rotation intervals since INITIAL_GENESIS
+    let rotations_since_genesis = hours_passed / hours_rotation;
+
+    // Calculate the timestamp of the most recent event
+    let timestamp = INITIAL_GENESIS + (rotations_since_genesis * hours_rotation * HOUR as u64);
+
+    Event { header: Header { timestamp, parents, layer }, content }
 }
 
 pub(super) fn replayer_log(datastore: &Path, cmd: String, value: Vec<u8>) -> Result<()> {

@@ -164,18 +164,13 @@ impl Consensus {
         // If a fork index was found, replace fork with the mutated
         // one, otherwise try to push the new fork.
         match index {
-            Some(i) => {
+            Some(i)
                 if i < self.forks.len() &&
-                    self.forks[i].proposals == fork.proposals[..fork.proposals.len() - 1]
-                {
-                    self.forks[i] = fork;
-                } else {
-                    self.push_fork(fork);
-                }
+                    self.forks[i].proposals == fork.proposals[..fork.proposals.len() - 1] =>
+            {
+                self.forks[i] = fork
             }
-            None => {
-                self.push_fork(fork);
-            }
+            _ => self.push_fork(fork),
         }
 
         info!(target: "validator::consensus::append_proposal", "Appended proposal {} - {}", proposal.hash, proposal.block.header.height);

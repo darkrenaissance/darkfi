@@ -631,7 +631,7 @@ impl EventGraph {
                     header_sorted.push(val);
                 }
             }
-            header_sorted.sort_by(|x, y| x.layer.cmp(&y.layer));
+            header_sorted.sort_by_key(|x| x.layer);
 
             info!(target: "event_graph::dag_sync", "[EVENTGRAPH] Retrieving {} Events", header_sorted.len());
             // Implement parallel download of events with a batch size
@@ -945,7 +945,7 @@ impl EventGraph {
         let mut overlay = SledTreeOverlay::new(&header_dag);
 
         let mut hdrs = headers;
-        hdrs.sort_by(|x, y| x.layer.cmp(&y.layer));
+        hdrs.sort_by_key(|x| x.layer);
 
         // Iterate over given events to validate them and
         // write them to the overlay
@@ -1127,7 +1127,7 @@ impl EventGraph {
 
         let mut ord_events_vec = ordered_events.make_contiguous().to_vec();
         // Order events by timestamp.
-        ord_events_vec.sort_unstable_by(|a, b| a.1.header.timestamp.cmp(&b.1.header.timestamp));
+        ord_events_vec.sort_unstable_by_key(|a| a.1.header.timestamp);
 
         ord_events_vec.iter().map(|a| a.1.clone()).collect::<Vec<Event>>()
     }
@@ -1248,7 +1248,7 @@ impl EventGraph {
             }
         }
 
-        result.sort_unstable_by(|a, b| a.layer.cmp(&b.layer));
+        result.sort_unstable_by_key(|a| a.layer);
 
         Ok(result)
     }
@@ -1311,7 +1311,7 @@ impl EventGraph {
             }
         }
 
-        result.sort_by(|a, b| a.header.layer.cmp(&b.header.layer));
+        result.sort_by_key(|a| a.header.layer);
 
         Ok(result)
     }

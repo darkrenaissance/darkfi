@@ -132,7 +132,7 @@ impl PathChip {
 
                 let mut witness_bits = vec![];
                 let mut witness_path = vec![];
-                for (i, (bit, sibling)) in bits.into_iter().zip(path.into_iter()).enumerate() {
+                for (i, (bit, sibling)) in bits.into_iter().zip(path).enumerate() {
                     let bit = region.assign_advice(
                         || "witness pos bit",
                         self.config.advices[0],

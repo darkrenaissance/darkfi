@@ -280,7 +280,7 @@ pub fn sss_recover(shares: &[(pallas::Base, pallas::Base)]) -> pallas::Base {
 }
 
 /// Helper function to read or build register verifying key
-pub(super) fn build_register_vk(sled_db: &sled::Db) -> Result<()> {
+pub(super) fn _build_register_vk(sled_db: &sled::Db) -> Result<()> {
     // sanity check
     if sled_db.get("rlnv2-diff-register-vk")?.is_some() {
         return Ok(())
@@ -311,7 +311,7 @@ pub(super) fn read_register_vk(sled_db: &sled::Db) -> Result<VerifyingKey> {
 }
 
 /// Helper function to build signal verifying key
-pub(super) fn build_signal_vk(sled_db: &sled::Db) -> Result<()> {
+pub(super) fn _build_signal_vk(sled_db: &sled::Db) -> Result<()> {
     // sanity check
     if sled_db.get("rlnv2-diff-signal-vk")?.is_some() {
         return Ok(())
@@ -342,7 +342,7 @@ pub(super) fn read_signal_vk(sled_db: &sled::Db) -> Result<VerifyingKey> {
 }
 
 /// Helper function to build slash proving key
-pub(super) fn build_slash_pk(sled_db: &sled::Db) -> Result<()> {
+pub(super) fn _build_slash_pk(sled_db: &sled::Db) -> Result<()> {
     // sanity check
     if sled_db.get("rlnv2-diff-slash-pk")?.is_some() {
         return Ok(())
@@ -372,7 +372,7 @@ pub(super) fn read_slash_pk(sled_db: &sled::Db) -> Result<ProvingKey> {
 }
 
 /// Helper function to build slash verifying key
-pub(super) fn build_slash_vk(sled_db: &sled::Db) -> Result<()> {
+pub(super) fn _build_slash_vk(sled_db: &sled::Db) -> Result<()> {
     // sanity check
     if sled_db.get("rlnv2-diff-slash-vk")?.is_some() {
         return Ok(())

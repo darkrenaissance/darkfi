@@ -162,7 +162,7 @@ impl TxStore {
     pub fn insert_batch_pending_order(&self, tx_hashes: &[TransactionHash]) -> Result<sled::Batch> {
         let mut batch = sled::Batch::default();
 
-        let mut next_index = match self.pending_order.last()? {
+        let next_index = match self.pending_order.last()? {
             Some(n) => {
                 let prev_bytes: [u8; 8] = n.0.as_ref().try_into().unwrap();
                 let prev = u64::from_be_bytes(prev_bytes);
@@ -171,9 +171,8 @@ impl TxStore {
             None => 0,
         };
 
-        for tx_hash in tx_hashes {
+        for (next_index, tx_hash) in (next_index..).zip(tx_hashes.iter()) {
             batch.insert(&next_index.to_be_bytes(), tx_hash.inner());
-            next_index += 1;
         }
 
         Ok(batch)

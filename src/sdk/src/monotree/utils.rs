@@ -87,14 +87,13 @@ where
     T: Clone + cmp::Ord,
 {
     let mut t: Vec<_> = slice.iter().enumerate().collect();
+    t.sort_unstable_by_key(|(_, a)| *a);
 
     if reverse {
-        t.sort_unstable_by(|(_, a), (_, b)| b.cmp(a));
+        t.iter().rev().map(|(i, _)| *i).collect()
     } else {
-        t.sort_unstable_by(|(_, a), (_, b)| a.cmp(b));
+        t.iter().map(|(i, _)| *i).collect()
     }
-
-    t.iter().map(|(i, _)| *i).collect()
 }
 
 /// Get length of the longest common prefix bits for the given two slices.

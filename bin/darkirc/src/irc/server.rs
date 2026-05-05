@@ -178,7 +178,7 @@ impl IrcServer {
         // Construct SMT from static DAG
         let mut identity_tree = darkirc.event_graph.rln_identity_tree.write().await;
         let mut events = darkirc.event_graph.static_fetch_all().await?;
-        events.sort_by(|a, b| a.header.timestamp.cmp(&b.header.timestamp));
+        events.sort_by_key(|a| a.header.timestamp);
 
         for event in events.iter() {
             // info!("event: {}", event.id());
