@@ -845,6 +845,28 @@ impl ProtocolEventGraph {
                 }
             }
             let hdrs = self.event_graph.fetch_headers_with_tips(dag_name, tips).await?;
+
+            // Register every header ID we are about to reveal as
+            // "broadcasted." A peer that just received these headers
+            // via HeaderRep will follow up with EventReq for the
+            // bodies. `handle_event_req` strikes any peer that asks
+            // for an ID not present in `broadcasted_ids` (the check
+            // exists to prevent arbitrary DAG enumeration). Without
+            // this insert the legitimate header-then-body sync flow
+            // racks up MALICIOUS_THRESHOLD strikes per batch and the
+            // peer gets dropped.
+            //
+            // `handle_tip_req` already does the analogous insert for
+            // the tip IDs it ships, and `handle_event_req` does it
+            // for the parents of events it serves. This fills the
+            // missing third side of the same pattern.
+            {
+                let mut b = self.event_graph.broadcasted_ids.write().await;
+                for h in &hdrs {
+                    b.insert(h.id());
+                }
+            }
+
             self.channel.send(&HeaderRep(hdrs)).await?;
         }
     }
