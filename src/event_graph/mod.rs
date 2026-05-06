@@ -641,6 +641,14 @@ impl EventGraph {
         let counts_consistent = recorded_count == static_count;
         let leaves_consistent = actual_leaves == expected_leaves;
 
+        info!(
+            target: "event_graph::new",
+            "[EVENTGRAPH] RLN state audit: static_count={} recorded_count={} \
+             actual_leaves={} expected_leaves={} consistent={}",
+            static_count, recorded_count, actual_leaves, expected_leaves,
+            counts_consistent && leaves_consistent,
+        );
+
         if counts_consistent && leaves_consistent {
             // Already consistent across all three sources (static
             // DAG, historical-roots table, leaves tree).
@@ -947,12 +955,17 @@ impl EventGraph {
         // network-side static DAG is a valid state (brand new app
         // deployment), so we return Ok rather than error.
         if responded == 0 {
+            info!(
+                target: "event_graph::static_sync",
+                "[STATIC_SYNC] no peer responded to TipReq; nothing to sync"
+            );
             return Ok(())
         }
 
         // Step 2: take tips at 2/3 quorum. This matches the
         // threshold used in `sync_impl`.
         let threshold = (responded * 2).div_ceil(3);
+        let total_distinct_tips = tip_counts.len();
         let tip_ids: HashSet<blake3::Hash> = tip_counts
             .into_iter()
             .filter(|(h, n)| *h != NULL_ID && *n >= threshold)
@@ -967,6 +980,13 @@ impl EventGraph {
                 known.insert(blake3::Hash::from_bytes(bytes));
             }
         }
+
+        info!(
+            target: "event_graph::static_sync",
+            "[STATIC_SYNC] peers_responded={} threshold={} distinct_tips_seen={} \
+             tip_ids_quorum={} known_local={}",
+            responded, threshold, total_distinct_tips, tip_ids.len(), known.len(),
+        );
 
         // Step 3: BFS from the quorum tips, fetching events we
         // don't have. Any event we pull in may reference ancestors
@@ -1067,19 +1087,37 @@ impl EventGraph {
                 .then_with(|| a.id().as_bytes().cmp(b.id().as_bytes()))
         });
 
+        // Track the apply-loop outcome for the summary log.
+        let mut applied = 0usize;
+        let mut already_present = 0usize;
+        let mut blob_missing = 0usize;
+        let mut rejected = 0usize;
+        let mut structural_invalid = 0usize;
+        let mut content_unparseable = 0usize;
+        let total_to_consider = fetched.len();
+
         for (ev, blob) in fetched {
             // Skip if someone else inserted it concurrently.
             if self.static_dag.contains_key(ev.id().as_bytes())? {
+                already_present += 1;
                 continue
             }
 
-            // Structural validation always runs.
-            if !ev.validate_new() {
+            // Structural validation always runs. Static-DAG events
+            // are persistent and may be far older than the 60s drift
+            // window allowed by `validate_new`; use the static
+            // sibling that omits the freshness check while keeping
+            // the structural ones.
+            if !ev.validate_new_static() {
+                structural_invalid += 1;
                 continue
             }
             let rln_node: rln::RLNNode = match deserialize_async_partial(ev.content()).await {
                 Ok((v, _)) => v,
-                Err(_) => continue,
+                Err(_) => {
+                    content_unparseable += 1;
+                    continue
+                }
             };
 
             // RLN verification is mandatory. A non-genesis static
@@ -1091,6 +1129,7 @@ impl EventGraph {
             // doesn't have a single peer to attribute the failure
             // to (the quorum collected blobs from multiple peers).
             if blob.is_empty() {
+                blob_missing += 1;
                 error!(
                     target: "event_graph::static_sync",
                     "[STATIC_SYNC] no blob available for static event {}; skipping. \
@@ -1111,6 +1150,7 @@ impl EventGraph {
                     let _ = self.apply_rln_static_event(&ev, &rln_node).await;
                     self.static_blob_store(&ev.id(), &blob)?;
                     self.static_insert(&ev).await?;
+                    applied += 1;
                 }
                 rln::StaticEventCheck::Rejected | rln::StaticEventCheck::Malicious => {
                     // A historical event whose blob fails
@@ -1119,6 +1159,7 @@ impl EventGraph {
                     // was tampered with, the quorum was compromised,
                     // or our verifying keys diverged. Log loudly and
                     // skip.
+                    rejected += 1;
                     error!(
                         target: "event_graph::static_sync",
                         "[STATIC_SYNC] historical blob FAILED re-verification for event {}: {:?}; \
@@ -1129,6 +1170,15 @@ impl EventGraph {
                 }
             }
         }
+
+        info!(
+            target: "event_graph::static_sync",
+            "[STATIC_SYNC] complete: fetched={} applied={} already_present={} \
+             blob_missing={} verification_rejected={} structural_invalid={} \
+             unparseable={}",
+            total_to_consider, applied, already_present, blob_missing, rejected,
+            structural_invalid, content_unparseable,
+        );
 
         Ok(())
     }

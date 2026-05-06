@@ -199,11 +199,7 @@ impl Event {
 
     /// Quick validation (no DAG lookup).
     pub fn validate_new(&self) -> bool {
-        if self.content.is_empty() {
-            return false
-        }
-
-        if !self.content_matches_header() {
+        if !self.validate_new_common() {
             return false
         }
 
@@ -212,6 +208,42 @@ impl Event {
         if self.header.timestamp < now - EVENT_TIME_DRIFT ||
             self.header.timestamp > now + EVENT_TIME_DRIFT
         {
+            return false
+        }
+
+        true
+    }
+
+    /// Quick validation for static-DAG events.
+    ///
+    /// Static-DAG events (RLN registrations and slashes) are
+    /// persistent across rotation windows by design - they form
+    /// the consensus identity tree and a node syncing for the
+    /// first time may legitimately receive registrations that are
+    /// hours, days, or longer old. Rejecting them on a 60-second
+    /// time-drift window (as `validate_new` does for rotating
+    /// events, where freshness IS part of the threat model)
+    /// would prevent any late-joining node from ever syncing
+    /// historical RLN state.
+    ///
+    /// This method runs the same structural checks as
+    /// `validate_new` (non-empty content, content matches header,
+    /// well-formed parent set) but omits the drift-window check.
+    /// RLN proof verification of the static event itself happens
+    /// separately in `EventGraph::rln_verify_static_event`.
+    pub fn validate_new_static(&self) -> bool {
+        self.validate_new_common()
+    }
+
+    /// Shared validation between `validate_new` and
+    /// `validate_new_static`. Returns false if the event is
+    /// structurally malformed in any time-independent way.
+    fn validate_new_common(&self) -> bool {
+        if self.content.is_empty() {
+            return false
+        }
+
+        if !self.content_matches_header() {
             return false
         }
 
