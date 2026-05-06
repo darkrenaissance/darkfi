@@ -30,7 +30,7 @@ use std::{
 };
 
 use darkfi_sdk::{crypto::pasta_prelude::PrimeField, pasta::pallas};
-use darkfi_serial::{deserialize_async, serialize_async};
+use darkfi_serial::{deserialize_async, deserialize_async_partial, serialize_async};
 use futures::{stream::FuturesUnordered, StreamExt};
 use sled_overlay::{sled, SledTreeOverlay};
 use smol::{
@@ -602,29 +602,56 @@ impl EventGraph {
     /// during rebuild because we want to honor any slashes in the
     /// static DAG even if the leaves tree is stale.
     async fn rebuild_historical_roots_if_needed(self: &Arc<Self>) -> Result<()> {
-        // Count static-DAG events (excluding the genesis, which has
-        // NULL_PARENTS and isn't a registration/slash).
+        // Walk the static DAG once, computing both:
+        //   * static_count: total non-genesis events
+        //   * expected_leaves: registrations - slashes (the number
+        //     of identities that should currently be in the SMT)
+        // We need the second one to detect a state where leaves and
+        // historical-roots happen to share counts but the leaves
+        // don't actually correspond to the static-DAG events. That
+        // can happen across schema changes or when older code paths
+        // wrote to leaves without going through `apply_rln_static_event`.
         let mut static_count: u64 = 0;
+        let mut registrations: i64 = 0;
+        let mut slashes: i64 = 0;
         for item in self.static_dag.iter() {
             let (_, val) = item?;
             let ev: Event = deserialize_async(&val).await?;
-            if ev.header.parents != NULL_PARENTS {
-                static_count += 1;
+            if ev.header.parents == NULL_PARENTS {
+                continue
+            }
+            static_count += 1;
+            // Try to classify this event. We tolerate failed parses
+            // here because the rebuild path is best-effort: if an
+            // event's content is unparseable, we just don't count it
+            // toward expected_leaves. The replay loop below skips
+            // it for the same reason.
+            if let Ok((node, _)) = deserialize_async_partial::<rln::RLNNode>(ev.content()).await {
+                match node {
+                    rln::RLNNode::Registration(_) => registrations += 1,
+                    rln::RLNNode::Slashing(_) => slashes += 1,
+                }
             }
         }
+        let expected_leaves = (registrations - slashes).max(0) as usize;
 
         let recorded_count = self.rln_historical_roots_ordered.len() as u64;
+        let actual_leaves = self.identity_state.read().await.leaves_count();
 
-        if recorded_count == static_count {
-            // Already consistent. Either both are zero (fresh node)
-            // or both match (warm restart).
+        let counts_consistent = recorded_count == static_count;
+        let leaves_consistent = actual_leaves == expected_leaves;
+
+        if counts_consistent && leaves_consistent {
+            // Already consistent across all three sources (static
+            // DAG, historical-roots table, leaves tree).
             return Ok(())
         }
 
         info!(
             target: "event_graph::new",
-            "[EVENTGRAPH] Rebuilding historical-roots: {} static events, {} recorded roots",
-            static_count, recorded_count,
+            "[EVENTGRAPH] Rebuilding historical-roots: {} static events, \
+             {} recorded roots, {} leaves (expected {})",
+            static_count, recorded_count, actual_leaves, expected_leaves,
         );
 
         // Reset the historical-roots tables to a known-empty state.
@@ -657,11 +684,10 @@ impl EventGraph {
 
         // Replay each event through the canonical apply path.
         for ev in events {
-            let rln_node: rln::RLNNode =
-                match darkfi_serial::deserialize_async_partial(ev.content()).await {
-                    Ok((v, _)) => v,
-                    Err(_) => continue,
-                };
+            let rln_node: rln::RLNNode = match deserialize_async_partial(ev.content()).await {
+                Ok((v, _)) => v,
+                Err(_) => continue,
+            };
             let _ = self.apply_rln_static_event(&ev, &rln_node).await?;
         }
 
@@ -693,7 +719,8 @@ impl EventGraph {
     async fn sync_impl(&self, dag_ts: u64, fetch_content: bool) -> Result<()> {
         let dag_name = dag_ts.to_string();
         let channels = self.p2p.hosts().peers();
-        if channels.len() < 2 {
+        // We need at least one peer to ask
+        if channels.is_empty() {
             return Err(Error::DagSyncFailed)
         }
         let timeout = self.p2p.settings().read().await.outbound_connect_timeout_max();
@@ -975,7 +1002,7 @@ impl EventGraph {
             // Race the batch against all peers; first to respond
             // with valid events wins. A peer that returns events we
             // didn't ask for is striked via its protocol handler,
-            // not here -- this is a best-effort pull.
+            // not here - this is a best-effort pull.
             let mut req_futs = FuturesUnordered::new();
             for (i, ch) in channels.iter().enumerate() {
                 req_futs.push(request_event(ch.clone(), batch.clone(), i, timeout));
@@ -1050,11 +1077,10 @@ impl EventGraph {
             if !ev.validate_new() {
                 continue
             }
-            let rln_node: rln::RLNNode =
-                match darkfi_serial::deserialize_async_partial(ev.content()).await {
-                    Ok((v, _)) => v,
-                    Err(_) => continue,
-                };
+            let rln_node: rln::RLNNode = match deserialize_async_partial(ev.content()).await {
+                Ok((v, _)) => v,
+                Err(_) => continue,
+            };
 
             // RLN verification is mandatory. A non-genesis static
             // event without a blob during sync is treated as
@@ -1089,7 +1115,7 @@ impl EventGraph {
                 rln::StaticEventCheck::Rejected | rln::StaticEventCheck::Malicious => {
                     // A historical event whose blob fails
                     // re-verification despite being held by the 2/3
-                    // quorum is a serious finding -- either the blob
+                    // quorum is a serious finding - either the blob
                     // was tampered with, the quorum was compromised,
                     // or our verifying keys diverged. Log loudly and
                     // skip.
@@ -1201,7 +1227,7 @@ impl EventGraph {
         // dag_insert_with_blobs reaches the same shared inner code
         // when called with a `skip_verify=true` shortcut, which is
         // what an empty `blobs` slice now means after the strictness
-        // tightening below -- but only via this private wrapper.
+        // tightening below - but only via this private wrapper.
         self.dag_insert_inner(events, &[], /* require_blobs */ false, dag_name).await
     }
 
@@ -1398,6 +1424,42 @@ impl EventGraph {
 
     pub async fn header_dag_insert(&self, headers: Vec<Header>, dag_name: &str) -> Result<()> {
         let dag_ts = u64::from_str(dag_name)?;
+
+        // The genesis ID we expect any layer-1 header in this slot
+        // to reference. Computed locally from config - two networks
+        // with different `genesis_contents` (or any other config
+        // mismatch) produce different genesis ids, so a peer whose
+        // layer-1 headers reference something else is on a different
+        // network. Catching this explicitly here is strictly a
+        // defense-in-depth and diagnostics improvement: the existing
+        // parent-existence check in `Header::validate` already
+        // rejects these (genesis headers are filtered from
+        // `header_tree` on insert, so a foreign genesis id never
+        // lands in the local tree). The explicit boundary check just
+        // turns "HeaderIsInvalid" into a logged, named condition, so
+        // an operator debugging a misconfigured deployment sees
+        // "peer is on a different network" instead of a generic
+        // header rejection.
+        //
+        // Why layer 1 is sufficient: `select_parents_from_tips` puts
+        // an event at layer N+1 where N is the highest layer with
+        // tips. For layer = 1, the highest tip layer must be 0, and
+        // the only layer-0 entry in any slot is the genesis (the
+        // single event placed by `DagStore::create_slot`). So every
+        // layer-1 event's non-NULL parents are equal to that slot's
+        // genesis id. Higher layers don't need the check because
+        // their parent chains transitively pass through layer 1; if
+        // the layer-1 events get rejected, layer-2+ events lose
+        // their referenced parents and fail the existing parent-
+        // existence check.
+        let local_genesis_id = Header {
+            timestamp: dag_ts,
+            parents: NULL_PARENTS,
+            layer: 0,
+            content_hash: blake3::hash(&self.config.genesis_contents),
+        }
+        .id();
+
         let mut store = self.dag_store.write().await;
         let slot = store.get_slot_mut(&dag_ts).ok_or(Error::DagSyncFailed)?;
         let mut overlay = SledTreeOverlay::new(&slot.header_tree);
@@ -1407,6 +1469,22 @@ impl EventGraph {
         for hdr in &hdrs {
             if hdr.parents == NULL_PARENTS {
                 continue
+            }
+
+            // Cross-network detection at the layer-1 boundary.
+            if hdr.layer == 1 {
+                for pid in hdr.parents.iter() {
+                    if *pid != NULL_ID && *pid != local_genesis_id {
+                        error!(
+                            target: "event_graph::header_dag_insert",
+                            "[HEADER_DAG_INSERT] layer-1 header for dag {dag_ts} \
+                             references foreign genesis: claimed parent {pid:?}, \
+                             local genesis is {local_genesis_id:?}. Peer is on a \
+                             different network.",
+                        );
+                        return Err(Error::HeaderIsInvalid)
+                    }
+                }
             }
 
             let hid = hdr.id();
@@ -1652,7 +1730,7 @@ impl EventGraph {
     /// SMT mutation itself fails. A duplicate-registration or
     /// slash-of-nonexistent are both treated as soft no-ops at the
     /// SMT layer, but we still record the root (which equals the
-    /// pre-call root in that case) -- this preserves the invariant
+    /// pre-call root in that case) - this preserves the invariant
     /// that "every static-DAG event has a corresponding entry in
     /// rln-historical-roots-ordered" without complicating the
     /// caller's logic.
@@ -1967,7 +2045,6 @@ impl EventGraph {
     /// share against it.
     pub async fn rln_verify_signal(&self, event: &Event, blob: &[u8]) -> rln::SignalCheck {
         use darkfi_sdk::{crypto::poseidon_hash, pasta::pallas};
-        use darkfi_serial::deserialize_async_partial;
         use rln::{epoch_of, hash_event, Blob, SignalCheck, MAX_MSG_LIMIT};
 
         let rcvd: Blob = match deserialize_async_partial(blob).await {
@@ -2023,16 +2100,21 @@ impl EventGraph {
                         // misbehavior, useful for operators
                         // debugging "why are my messages being
                         // rejected" or investigating peer abuse.
+                        let local_root = self.identity_state.read().await.root();
+                        let historical_count = self.rln_historical_roots_ordered.len();
                         warn!(
                             target: "event_graph::rln_verify_signal",
                             "[RLN] Signal rejected: merkle_root not valid at signal \
                              timestamp {}. Possible causes: (1) forged or out-of-sync \
                              root, (2) slashed identity replaying against a pre-slash \
                              root after the propagation window expired. event_id={}, \
-                             root={:?}",
+                             received_root={:?}, local_current_root={:?}, \
+                             historical_root_count={}",
                             event.header.timestamp,
                             event.id(),
                             rcvd.merkle_root,
+                            local_root,
+                            historical_count,
                         );
                         return SignalCheck::Rejected
                     }
@@ -2114,7 +2196,7 @@ impl EventGraph {
     /// This is the testable core of the protocol-layer
     /// `handle_static_put`. It performs all checks that the
     /// protocol layer does - bounds, attestation, proof, root
-    /// recency -- and returns a [`rln::StaticEventCheck`] outcome
+    /// recency - and returns a [`rln::StaticEventCheck`] outcome
     /// telling the caller what to do next.
     ///
     /// **This method does NOT mutate state.** The caller is
@@ -2130,7 +2212,6 @@ impl EventGraph {
         event_timestamp: u64,
     ) -> rln::StaticEventCheck {
         use darkfi_sdk::{crypto::poseidon_hash, pasta::pallas};
-        use darkfi_serial::deserialize_async_partial;
         use rln::{RLNNode, RegistrationBlob, SlashBlob, StaticEventCheck, MAX_MSG_LIMIT};
 
         match rln_node {

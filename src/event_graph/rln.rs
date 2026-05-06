@@ -142,10 +142,10 @@ impl RegistrationAttestation {
     }
 }
 
-/// The complete blob attached to a registration `EventPut` / `StaticPut`.
-/// The proof's public inputs commit to the `(commitment, user_message_limit,
-/// max_message_limit)` tuple, and `attestation` carries the (eventual)
-/// staking proof.
+/// The complete blob attached to a registration `EventPut` /
+/// `StaticPut`. The proof's public inputs commit to the
+/// `(commitment, user_message_limit, max_message_limit)` tuple,
+/// and `attestation` carries the (eventual) staking proof.
 #[derive(Clone, SerialEncodable, SerialDecodable)]
 pub struct RegistrationBlob {
     pub proof: Proof,
@@ -386,6 +386,15 @@ impl IdentityState {
 
     pub fn root(&self) -> pallas::Base {
         self.smt.root()
+    }
+
+    /// Number of leaves currently in the persistent identity tree.
+    /// Used by [`EventGraph::rebuild_historical_roots_if_needed`] to
+    /// detect a leaves-vs-events mismatch that bypasses the simpler
+    /// recorded-count check (e.g. stale leaves left over from an
+    /// older code path that bypassed `apply_rln_static_event`).
+    pub(crate) fn leaves_count(&self) -> usize {
+        self.leaves.len()
     }
 
     /// Check whether `root` matches the current root or any recent
