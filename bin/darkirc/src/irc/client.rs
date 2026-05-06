@@ -193,105 +193,108 @@ impl Client {
                                 *self.last_sent.write().await = event_id;
                                 let current_genesis = self.server.darkirc.event_graph.current_genesis.read().await;
                                 let dag_name = current_genesis.header.timestamp.to_string();
+                                drop(current_genesis);
 
-                                // If it fails for some reason, for now, we just note it and pass.
+                                // Build the RLN signal blob FIRST,
+                                // BEFORE touching the local DAG. The
+                                // contract for any rotating-DAG event
+                                // is that it carries a valid signal
+                                // proof. If we can't produce one
+                                // (no identity, exhausted budget,
+                                // proof-construction failure) we
+                                // refuse to admit the event into the
+                                // local DAG at all. Letting it land
+                                // locally with an empty blob would
+                                // leave a no-blob event in our
+                                // dag_main_tree that we can't serve
+                                // honestly to syncing peers and that
+                                // peers would strict-reject anyway.
+                                let blob = {
+                                    let mut id_guard = self.server.rln_identity.write().await;
+                                    let Some(rln_identity) = id_guard.as_mut() else {
+                                        warn!(
+                                            "[IRC CLIENT] No RLN identity registered; \
+                                             refusing to send. Use \
+                                             `/msg NickServ REGISTER ...` to register."
+                                        );
+                                        continue
+                                    };
+                                    let mid = match rln_identity
+                                        .next_message_id(event.header.timestamp)
+                                    {
+                                        Some(v) => v,
+                                        None => {
+                                            warn!(
+                                                "[IRC CLIENT] RLN message budget \
+                                                 exhausted for this epoch; dropping \
+                                                 message to avoid slash"
+                                            );
+                                            continue
+                                        }
+                                    };
+                                    match rln_identity
+                                        .create_signal(
+                                            &event,
+                                            mid,
+                                            &self.server.darkirc.event_graph,
+                                        )
+                                        .await
+                                    {
+                                        Ok(blob) => serialize_async(&blob).await,
+                                        Err(e) => {
+                                            error!(
+                                                "[IRC CLIENT] Failed creating RLN \
+                                                 signal proof: {e}"
+                                            );
+                                            return Err(e)
+                                        }
+                                    }
+                                };
+
+                                // Only now do we insert the header
+                                // and event into our local DAG. If
+                                // either insert fails we still log
+                                // and pass - the broadcast is a
+                                // best-effort fan-out anyway, and
+                                // the receiving peers' own validation
+                                // doesn't depend on our successful
+                                // local insert.
                                 if let Err(e) = self.server.darkirc.event_graph.header_dag_insert(vec![event.header.clone()], &dag_name).await {
                                     error!("[IRC CLIENT] Failed inserting new header to Header DAG: {}", e);
                                 }
                                 if let Err(e) = self.server.darkirc.event_graph.dag_insert(slice::from_ref(&event), &dag_name).await {
                                     error!("[IRC CLIENT] Failed inserting new event to DAG: {e}");
-                                } else {
-                                    // We sent this, so it should be considered seen.
-                                    if let Err(e) = self.mark_seen(&event_id).await {
-                                        error!("[IRC CLIENT] (multiplex_connection) self.mark_seen({event_id}) failed: {e}");
-                                        return Err(e)
-                                    }
-
-                                    let blob = {
-                                        // If we have a configured RLN identity,
-                                        // produce a signal blob through the
-                                        // EventGraph's canonical RLN path. The
-                                        // EG owns the SMT root, the proving key,
-                                        // and the slot bookkeeping; we just
-                                        // hand it the (event, message_id) pair
-                                        // and get back a fully-formed `Blob`.
-                                        //
-                                        // If the per-epoch budget is exhausted,
-                                        // `next_message_id` returns None and we
-                                        // drop the message rather than emit a
-                                        // signal that would cause a slash.
-                                        if let Some(ref mut rln_identity) =
-                                            *self.server.rln_identity.write().await
-                                        {
-                                            match rln_identity
-                                                .next_message_id(event.header.timestamp)
-                                            {
-                                                Some(mid) => match rln_identity
-                                                    .create_signal(
-                                                        &event,
-                                                        mid,
-                                                        &self.server.darkirc.event_graph,
-                                                    )
-                                                    .await
-                                                {
-                                                    Ok(blob) => serialize_async(&blob).await,
-                                                    Err(e) => {
-                                                        error!(
-                                                            "[IRC CLIENT] Failed creating RLN \
-                                                             signal proof: {e}"
-                                                        );
-                                                        return Err(e)
-                                                    }
-                                                },
-                                                None => {
-                                                    warn!(
-                                                        "[IRC CLIENT] RLN message budget \
-                                                         exhausted for this epoch; dropping \
-                                                         message to avoid slash"
-                                                    );
-                                                    continue
-                                                }
-                                            }
-                                        } else {
-                                            vec![]
-                                        }
-                                    };
-
-                                    // Persist the blob locally before
-                                    // broadcasting. Sync-time re-verification
-                                    // on a late-joining peer requires the
-                                    // originator to have the blob in its
-                                    // dag_blobs side-table: when that peer
-                                    // EventReqs us for this event,
-                                    // `proto::handle_event_req` does
-                                    // `dag_blob_fetch` and ships whatever
-                                    // it finds. Without this store, we'd
-                                    // ship an empty blob, and the peer's
-                                    // strict `dag_insert_with_blobs` would
-                                    // reject the event with "arrived
-                                    // without an RLN blob".
-                                    //
-                                    // The receive-side path
-                                    // (proto::handle_event_put) does the
-                                    // analogous store after RLN
-                                    // verification; this is the matching
-                                    // step on the originator side.
-                                    if !blob.is_empty() {
-                                        if let Err(e) = self
-                                            .server
-                                            .darkirc
-                                            .event_graph
-                                            .dag_blob_store(&event_id, &blob)
-                                        {
-                                            error!(
-                                                "[IRC CLIENT] Failed persisting outbound \
-                                                 RLN blob for {event_id}: {e}"
-                                            );
-                                        }
-                                    }
-
-                                    self.server.darkirc.p2p.broadcast(&EventPut(event, blob)).await;
+                                    continue
                                 }
+
+                                // We sent this, so it should be considered seen.
+                                if let Err(e) = self.mark_seen(&event_id).await {
+                                    error!("[IRC CLIENT] (multiplex_connection) self.mark_seen({event_id}) failed: {e}");
+                                    return Err(e)
+                                }
+
+                                // Persist the blob locally so that a
+                                // late-joining peer EventReq-ing us
+                                // for this event gets a real blob in
+                                // the EventRep, not an empty one.
+                                // The receive-side path
+                                // (proto::handle_event_put) does the
+                                // analogous store after RLN
+                                // verification; this is the matching
+                                // step on the originator side.
+                                if let Err(e) = self
+                                    .server
+                                    .darkirc
+                                    .event_graph
+                                    .dag_blob_store(&event_id, &blob)
+                                {
+                                    error!(
+                                        "[IRC CLIENT] Failed persisting outbound \
+                                         RLN blob for {event_id}: {e}"
+                                    );
+                                }
+
+                                self.server.darkirc.p2p.broadcast(&EventPut(event, blob)).await;
                             }
                         }
 
