@@ -800,12 +800,22 @@ impl ProtocolEventGraph {
                     continue
                 }
                 if let Some(ev) = self.event_graph.fetch_event_from_dags(id).await? {
-                    // Best effort blob lookup - missing is not an error.
                     let blob = if in_static {
                         self.event_graph.static_blob_fetch(id).unwrap_or(None).unwrap_or_default()
                     } else {
                         self.event_graph.dag_blob_fetch(id).unwrap_or(None).unwrap_or_default()
                     };
+                    if !in_static && blob.is_empty() {
+                        // Rotating-DAG event without a blob. Don't ship
+                        // it, just log loudly.
+                        warn!(
+                            target: "event_graph::handle_event_req",
+                            "[EVENTGRAPH] declining to serve event {} - missing blob in \
+                            local dag_blobs",
+                            id,
+                        );
+                        continue
+                    }
                     events.push(ev);
                     blobs.push(blob);
                 }
