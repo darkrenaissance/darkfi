@@ -273,10 +273,22 @@ async fn realmain(args: Args, ex: Arc<Executor<'static>>) -> Result<()> {
         let identity = RlnIdentity::new(&mut OsRng);
         let nullifier = bs58::encode(identity.nullifier.to_repr()).into_string();
         let trapdoor = bs58::encode(identity.trapdoor.to_repr()).into_string();
-        println!("Place this in your config file:\n");
-        println!("[rln]");
-        println!("nullifier = \"{nullifier}\"");
-        println!("trapdoor = \"{trapdoor}\"");
+        // Default per-epoch budget for fresh identities.
+        let user_msg_limit: u64 = 10;
+
+        println!("Generated a fresh RLN identity.\n");
+        println!("To register on the network, paste this into your IRC client:\n");
+        println!(
+            "  /msg NickServ REGISTER <account_name> {nullifier} {trapdoor} {user_msg_limit}\n"
+        );
+        println!(
+            "Replace <account_name> with any local label you like (\"alice\", \"throwaway\", etc)."
+        );
+        println!(
+            "Keep the nullifier and trapdoor secret - they ARE the identity. \
+             A `darkirc --gen-rln-identity` run is NOT idempotent; treat the \
+             output like a freshly-minted password."
+        );
         return Ok(());
     }
 
@@ -613,6 +625,49 @@ async fn realmain(args: Args, ex: Arc<Executor<'static>>) -> Result<()> {
         ex.clone(),
     );
 
+    // Drain pending static broadcasts whenever the EG transitions
+    // from unsynced to synced.
+    //
+    // NickServ REGISTER while the local DAG is unsynced will queue
+    // the (event, blob) pair on `IrcServer::pending_static_broadcasts`
+    // instead of broadcasting (a pre-sync broadcast goes nowhere -
+    // peers gate `handle_static_put` AND `handle_tip_req` on their
+    // own is_synced state). This task watches for the rising edge
+    // of `is_synced()` and re-issues the queued broadcasts.
+    let drain_task = StoppableTask::new();
+    let irc_server_for_drain = irc_server.clone();
+    let event_graph_for_drain = event_graph.clone();
+    drain_task.clone().start(
+        async move {
+            let mut last_state = event_graph_for_drain.is_synced();
+            loop {
+                sleep(1).await;
+                let now_state = event_graph_for_drain.is_synced();
+                // Rising edge: unsynced -> synced.
+                if now_state && !last_state {
+                    match irc_server_for_drain.drain_pending_static_broadcasts().await {
+                        Ok(0) => { /* nothing pending; common case */ }
+                        Ok(n) => {
+                            info!("Drained {n} pending static broadcasts after sync");
+                        }
+                        Err(e) => {
+                            error!("Failed to drain pending broadcasts: {e}");
+                        }
+                    }
+                }
+                last_state = now_state;
+            }
+        },
+        |res| async move {
+            match res {
+                Ok(()) | Err(Error::DetachedTaskStopped) => { /* normal shutdown */ }
+                Err(e) => error!("Drain task failed: {e}"),
+            }
+        },
+        Error::DetachedTaskStopped,
+        ex.clone(),
+    );
+
     // Signal handling for graceful termination.
     let (signals_handler, signals_task) = SignalHandler::new(ex)?;
     signals_handler.wait_termination(signals_task).await?;
@@ -629,6 +684,7 @@ async fn realmain(args: Args, ex: Arc<Executor<'static>>) -> Result<()> {
 
     info!("Stopping IRC server");
     irc_task.stop().await;
+    drain_task.stop().await;
     prune_task.stop().await;
 
     info!("Flushing sled database...");
@@ -652,46 +708,54 @@ async fn sync_task(
     fast_mode: bool,
     dags_count: usize,
 ) -> Result<()> {
+    // skip_dag_sync means "this node opts out of syncing entirely".
+    if skip_dag_sync {
+        event_graph.synced.store(true, Ordering::Release);
+        info!("DAG sync skipped; marking synced immediately");
+        return Ok(())
+    }
+
     let comms_timeout = p2p.settings().read_arc().await.outbound_connect_timeout_max();
 
     loop {
         if p2p.is_connected() {
             info!("Got peer connection");
-            // We'll attempt to sync for ever
-            if !skip_dag_sync {
-                info!("Syncing static DAG");
-                match event_graph.static_sync().await {
-                    Ok(()) => {
-                        info!("Static synced successfully")
-                    }
-                    Err(e) => {
-                        error!("Failed syncing static graph: {e}");
-                        p2p.stop().await;
-                        return Err(Error::DagSyncFailed)
-                    }
+            info!("Syncing static DAG");
+            match event_graph.static_sync().await {
+                Ok(()) => {
+                    info!("Static synced successfully")
                 }
-                info!("Syncing event DAG");
-                // Sync mode is per-call: full sync replays
-                // every event (heavy, used by archival nodes), fast
-                // sync only fetches headers (light, used by clients
-                // that don't need to re-verify history).
-                let sync_result = if fast_mode {
-                    event_graph.sync_selected_headers(dags_count).await
-                } else {
-                    event_graph.sync_selected(dags_count).await
-                };
-                match sync_result {
-                    Ok(()) => break,
-                    Err(e) => {
-                        // TODO: Maybe at this point we should prune or something?
-                        // TODO: Or maybe just tell the user to delete the DAG from FS.
-                        error!("Failed syncing DAG ({e}), retrying in {comms_timeout}s...");
-                        sleep(comms_timeout).await;
-                    }
+                Err(e) => {
+                    error!("Failed syncing static graph: {e}");
+                    p2p.stop().await;
+                    return Err(Error::DagSyncFailed)
                 }
+            }
+            info!("Syncing event DAG");
+            // Sync mode is now per-call: full sync replays
+            // every event (heavy, used by archival nodes), fast
+            // sync only fetches headers (light, used by clients
+            // that don't need to re-verify history).
+            let sync_result = if fast_mode {
+                event_graph.sync_selected_headers(dags_count).await
             } else {
-                event_graph.synced.store(true, Ordering::Release);
-                break;
+                event_graph.sync_selected(dags_count).await
+            };
+            match sync_result {
+                Ok(()) => {
+                    info!(
+                        "Event DAG synced successfully ({} mode, {} dag(s))",
+                        if fast_mode { "fast" } else { "full" },
+                        dags_count,
+                    );
+                    break
+                }
+                Err(e) => {
+                    // TODO: Maybe at this point we should prune or something?
+                    // TODO: Or maybe just tell the user to delete the DAG from FS.
+                    error!("Failed syncing DAG ({e}), retrying in {comms_timeout}s...");
+                    sleep(comms_timeout).await;
+                }
             }
         } else {
             info!("Waiting for some P2P connections...");
@@ -710,6 +774,11 @@ async fn sync_and_monitor(
     fast_mode: bool,
     dags_count: usize,
 ) -> Result<()> {
+    // If sync is skipped entirely there's nothing to monitor.
+    if skip_dag_sync {
+        return Ok(())
+    }
+
     loop {
         let net_subscription = p2p.hosts().subscribe_disconnect().await;
         let result = monitor_network(&net_subscription).await;

@@ -47,10 +47,7 @@ use super::{
 };
 use crate::{
     crypto::{rln::RlnIdentity, saltbox},
-    settings::{
-        parse_autojoin_channels, parse_configured_channels, parse_configured_contacts,
-        parse_rln_identity,
-    },
+    settings::{parse_autojoin_channels, parse_configured_channels, parse_configured_contacts},
     DarkIrc,
 };
 
@@ -78,6 +75,9 @@ pub struct IrcServer {
     pub contacts: RwLock<HashMap<String, IrcContact>>,
     /// Configured RLN identity
     pub rln_identity: RwLock<Option<RlnIdentity>>,
+    /// Static-DAG events whose broadcast is deferred until the
+    /// EventGraph is synced.
+    pub pending_static_broadcasts: Mutex<Vec<(Event, Vec<u8>)>>,
     /// Active client connections
     clients: Mutex<HashMap<u16, StoppableTaskPtr>>,
     /// IRC server Password
@@ -161,6 +161,7 @@ impl IrcServer {
             channels: RwLock::new(HashMap::new()),
             contacts: RwLock::new(HashMap::new()),
             rln_identity: RwLock::new(rln_identity),
+            pending_static_broadcasts: Mutex::new(Vec::new()),
             clients: Mutex::new(HashMap::new()),
             password,
             server_store,
@@ -170,6 +171,19 @@ impl IrcServer {
         self_.rehash().await?;
 
         Ok(self_)
+    }
+
+    /// Drain `pending_static_broadcasts` and broadcast each entry.
+    pub async fn drain_pending_static_broadcasts(&self) -> Result<usize> {
+        let drained: Vec<(Event, Vec<u8>)> = {
+            let mut guard = self.pending_static_broadcasts.lock().await;
+            std::mem::take(&mut *guard)
+        };
+        let n = drained.len();
+        for (event, blob) in drained {
+            self.darkirc.event_graph.static_broadcast(event, blob).await?;
+        }
+        Ok(n)
     }
 
     /// Reload the darkirc configuration file and reconfigure channels and contacts.
@@ -192,9 +206,6 @@ impl IrcServer {
         // Parse configured contacts
         let contacts = parse_configured_contacts(&contents)?;
 
-        // Parse RLN identity
-        let _rln_identity = parse_rln_identity(&contents)?;
-
         // Persist unconfigured channels (joined from client, or autojoined without config)
         let channels = {
             let old_channels = self.channels.read().await.clone();
@@ -209,7 +220,6 @@ impl IrcServer {
         *self.autojoin.write().await = autojoin;
         *self.channels.write().await = channels;
         *self.contacts.write().await = contacts;
-        // *self.rln_identity.write().await = rln_identity;
 
         Ok(())
     }

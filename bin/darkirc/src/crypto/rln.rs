@@ -212,14 +212,15 @@ impl RlnIdentity {
 
         let zkbin = ZkBinary::decode(RLN2_SIGNAL_ZKBIN, false)?;
 
-        // Witness order MUST match rlnv2-diff-signal.zk.
+        // Witness order MUST match `witness` declarations in
         let witnesses = vec![
             Witness::Base(Value::known(self.nullifier)),
             Witness::Base(Value::known(self.trapdoor)),
-            Witness::Base(Value::known(pallas::Base::from(self.user_message_limit))),
+            Witness::Base(Value::known(mid)),
             Witness::SparseMerklePath(Value::known(path.path)),
             Witness::Base(Value::known(x)),
-            Witness::Base(Value::known(mid)),
+            Witness::Base(Value::known(pallas::Base::from(self.user_message_limit))),
+            Witness::Base(Value::known(app_id)),
             Witness::Base(Value::known(epoch)),
         ];
         // PI order MUST match `constrain_instance` in the .zk file.

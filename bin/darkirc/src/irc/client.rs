@@ -257,6 +257,39 @@ impl Client {
                                         }
                                     };
 
+                                    // Persist the blob locally before
+                                    // broadcasting. Sync-time re-verification
+                                    // on a late-joining peer requires the
+                                    // originator to have the blob in its
+                                    // dag_blobs side-table: when that peer
+                                    // EventReqs us for this event,
+                                    // `proto::handle_event_req` does
+                                    // `dag_blob_fetch` and ships whatever
+                                    // it finds. Without this store, we'd
+                                    // ship an empty blob, and the peer's
+                                    // strict `dag_insert_with_blobs` would
+                                    // reject the event with "arrived
+                                    // without an RLN blob".
+                                    //
+                                    // The receive-side path
+                                    // (proto::handle_event_put) does the
+                                    // analogous store after RLN
+                                    // verification; this is the matching
+                                    // step on the originator side.
+                                    if !blob.is_empty() {
+                                        if let Err(e) = self
+                                            .server
+                                            .darkirc
+                                            .event_graph
+                                            .dag_blob_store(&event_id, &blob)
+                                        {
+                                            error!(
+                                                "[IRC CLIENT] Failed persisting outbound \
+                                                 RLN blob for {event_id}: {e}"
+                                            );
+                                        }
+                                    }
+
                                     self.server.darkirc.p2p.broadcast(&EventPut(event, blob)).await;
                                 }
                             }
