@@ -412,17 +412,6 @@ pub async fn make_send_step3_layer(
         .await;
     send_step3_layer.link(token_symbol_node.clone());
 
-    let token_symbol_initial = send_tx_data.lock().unwrap().token_symbol.clone().unwrap_or_else(|| "".to_string());
-    update_amount_screen(
-        atom,
-        "0",
-        &token_symbol_initial,
-        &amount_wrapper,
-        &input_node,
-        &token_symbol_node,
-        Some(&available_balance_node),
-    );
-
     y += PADDING_Y * 2. + BUTTON_HEIGHT + 10.;
 
     // Add amount button with states
@@ -447,6 +436,7 @@ pub async fn make_send_step3_layer(
     let amount_text = amount_input2.get_property("text").unwrap();
     let amount_text_sub = amount_text.subscribe_modify();
     let renderer = app.renderer.clone();
+    let sg_root = app.sg_root.clone();
     let btn_bg_valid_clone = btn_bg_valid.clone();
     let btn_bg_invalid_clone = btn_bg_invalid.clone();
     let add_amount_label_node_for_validation = add_amount_label_node.clone();
@@ -511,29 +501,6 @@ pub async fn make_send_step3_layer(
                 }
             }
 
-            old_amount_text = sanitized_amount.clone();
-
-            // Update positions to center amount and token symbol
-            let token_symbol = send_tx_data5.lock().unwrap().token_symbol.clone().unwrap_or_else(|| "".to_string());
-            update_amount_screen(
-                atom,
-                &sanitized_amount,
-                &token_symbol,
-                &amount_wrapper2,
-                &amount_input2,
-                &token_symbol_node2,
-                Some(&available_balance_node2),
-            );
-            let available_balance = get_balance(&token_symbol);
-            let is_valid = if sanitized_amount == "0" {
-                false
-            } else {
-                match sanitized_amount.parse::<f32>() {
-                    Ok(v) if v > 0. && v <= available_balance => true,
-                    _ => false,
-                }
-            };
-
             // Set amount input text color: grey if "0", white otherwise
             if sanitized_amount == "0" {
                 amount_input_text_color.set_f32(atom, Role::App, 0, 0.5).unwrap();
@@ -547,20 +514,49 @@ pub async fn make_send_step3_layer(
                 amount_input_text_color.set_f32(atom, Role::App, 3, 1.).unwrap();
             }
 
-            if is_valid {
-                label_text_color.set_f32(atom, Role::App, 0, COLOR_CYAN[0]).unwrap();
-                label_text_color.set_f32(atom, Role::App, 1, COLOR_CYAN[1]).unwrap();
-                label_text_color.set_f32(atom, Role::App, 2, COLOR_CYAN[2]).unwrap();
-                label_text_color.set_f32(atom, Role::App, 3, COLOR_CYAN[3]).unwrap();
-                btn_bg_valid_visible.set_bool(atom, Role::App, 0, true).unwrap();
-                btn_bg_invalid_visible.set_bool(atom, Role::App, 0, false).unwrap();
-            } else {
-                label_text_color.set_f32(atom, Role::App, 0, 0.5).unwrap();
-                label_text_color.set_f32(atom, Role::App, 1, 0.5).unwrap();
-                label_text_color.set_f32(atom, Role::App, 2, 0.5).unwrap();
-                label_text_color.set_f32(atom, Role::App, 3, 1.).unwrap();
-                btn_bg_valid_visible.set_bool(atom, Role::App, 0, false).unwrap();
-                btn_bg_invalid_visible.set_bool(atom, Role::App, 0, true).unwrap();
+            old_amount_text = sanitized_amount.clone();
+
+            let (token_id, token_symbol) = {
+                let data = send_tx_data5.lock().unwrap();
+                (data.token_id, data.token_symbol.clone().unwrap_or_default())
+            };
+            if let Some(token_id) = token_id {
+                update_amount_screen(
+                    atom,
+                    &sg_root,
+                    &sanitized_amount,
+                    &token_id,
+                    &token_symbol,
+                    &amount_wrapper2,
+                    &amount_input2,
+                    &token_symbol_node2,
+                    Some(&available_balance_node2),
+                ).await;
+                let available_balance = get_balance(&sg_root, &token_id).await;
+                let is_valid = if sanitized_amount == "0" {
+                    false
+                } else {
+                    match sanitized_amount.parse::<f32>() {
+                        Ok(v) if v > 0. && v <= available_balance => true,
+                        _ => false,
+                    }
+                };
+
+                if is_valid {
+                    label_text_color.set_f32(atom, Role::App, 0, COLOR_CYAN[0]).unwrap();
+                    label_text_color.set_f32(atom, Role::App, 1, COLOR_CYAN[1]).unwrap();
+                    label_text_color.set_f32(atom, Role::App, 2, COLOR_CYAN[2]).unwrap();
+                    label_text_color.set_f32(atom, Role::App, 3, COLOR_CYAN[3]).unwrap();
+                    btn_bg_valid_visible.set_bool(atom, Role::App, 0, true).unwrap();
+                    btn_bg_invalid_visible.set_bool(atom, Role::App, 0, false).unwrap();
+                } else {
+                    label_text_color.set_f32(atom, Role::App, 0, 0.5).unwrap();
+                    label_text_color.set_f32(atom, Role::App, 1, 0.5).unwrap();
+                    label_text_color.set_f32(atom, Role::App, 2, 0.5).unwrap();
+                    label_text_color.set_f32(atom, Role::App, 3, 1.).unwrap();
+                    btn_bg_valid_visible.set_bool(atom, Role::App, 0, false).unwrap();
+                    btn_bg_invalid_visible.set_bool(atom, Role::App, 0, true).unwrap();
+                }
             }
         }
     });
@@ -578,8 +574,8 @@ pub async fn make_send_step3_layer(
     let listen_click = app.ex.spawn(async move {
         while let Ok(_) = recvr.recv().await {
             let text = amount_input2.get_property_str("text").unwrap();
-            let token_symbol = send_tx_data4.lock().unwrap().token_symbol.clone().unwrap_or_else(|| "".to_string());
-            let available_balance = get_balance(&token_symbol);
+            let token_id = send_tx_data4.lock().unwrap().token_id.clone().unwrap();
+            let available_balance = get_balance(&sg_root, &token_id).await;
             let is_valid = if text.is_empty() {
                 false
             } else {
@@ -651,6 +647,7 @@ pub async fn make_send_step3_layer(
     // Add listener for step3 visibility to focus/unfocus amount input
     let step3_is_visible_clone = step3_is_visible.clone();
     let renderer_clone = app.renderer.clone();
+    let sg_root = app.sg_root.clone();
     let amount_wrapper_clone = amount_wrapper.clone();
     let input_node_clone = input_node.clone();
     let token_symbol_node_clone = token_symbol_node.clone();
@@ -670,20 +667,26 @@ pub async fn make_send_step3_layer(
                 // Focus the amount input
                 input_node_clone.call_method("focus", vec![]).await.unwrap();
 
-                // Get the current token symbol and update positions
-                let token_symbol = send_tx_data_clone.lock().unwrap().token_symbol.clone().unwrap_or_default();
-                if !token_symbol.is_empty() {
-                    let atom = &mut renderer_clone.make_guard(gfxtag!("update amount positions on visible"));
-                    let current_amount = input_node_clone.get_property_str("text").unwrap();
-                    update_amount_screen(
-                        atom,
-                        &current_amount,
-                        &token_symbol,
-                        &amount_wrapper_clone,
-                        &input_node_clone,
-                        &token_symbol_node_clone,
-                        Some(&available_balance_node),
-                    );
+                let (token_id, token_symbol) = {
+                    let data = send_tx_data_clone.lock().unwrap();
+                    (data.token_id.clone(), data.token_symbol.clone().unwrap_or_else(|| "".to_string()))
+                };
+                if let Some(token_id) = token_id {
+                    if !token_symbol.is_empty() {
+                        let atom = &mut renderer_clone.make_guard(gfxtag!("update amount positions on visible"));
+                        let current_amount = input_node_clone.get_property_str("text").unwrap();
+                        update_amount_screen(
+                            atom,
+                            &sg_root,
+                            &current_amount,
+                            &token_id,
+                            &token_symbol,
+                            &amount_wrapper_clone,
+                            &input_node_clone,
+                            &token_symbol_node_clone,
+                            Some(&available_balance_node),
+                        ).await;
+                    }
                 }
             } else {
                 // Unfocus when becoming hidden

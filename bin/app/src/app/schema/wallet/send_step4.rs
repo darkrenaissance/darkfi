@@ -361,7 +361,7 @@ pub async fn make_send_step4_layer(
     prop.set_expr(atom, Role::App, 2, code).unwrap();
     prop.set_f32(atom, Role::App, 3, BASE_FONTSIZE).unwrap();
     tx_fee_value_node.set_property_f32(atom, Role::App, "font_size", BASE_FONTSIZE).unwrap();
-    tx_fee_value_node.set_property_str(atom, Role::App, "text", MOCK_TX_FEE).unwrap();
+    tx_fee_value_node.set_property_str(atom, Role::App, "text", "0 DRK").unwrap();
     tx_fee_value_node.set_property_enum(atom, Role::App, "text_align", "end").unwrap();
     tx_fee_value_node.set_property_u32(atom, Role::App, "z_index", 2).unwrap();
     let prop = tx_fee_value_node.get_property("text_color").unwrap();
@@ -451,7 +451,7 @@ pub async fn make_send_step4_layer(
     let amount_text_node_clone = amount_text_node.clone();
     let token_symbol_node_clone = token_symbol_node.clone();
     let send_tx_data_clone2 = send_tx_data.clone();
-    let sg_root_clone_for_visibility = app.sg_root.clone();
+    let sg_root = app.sg_root.clone();
     let step4_is_visible_sub = step4_is_visible.prop().subscribe_modify();
     let listen_step4_visible = app.ex.spawn(async move {
         while let Ok(_) = step4_is_visible_sub.receive().await {
@@ -469,32 +469,35 @@ pub async fn make_send_step4_layer(
 
                 let amount_text = data.amount.unwrap_or_else(|| "0".to_string());
                 let token_symbol = data.token_symbol.unwrap_or_else(|| "".to_string());
+                let token_id = data.token_id.unwrap();
 
                 // Update positions to center amount and token symbol
                 update_amount_screen(
                     atom,
+                    &sg_root,
                     &amount_text,
+                    &token_id,
                     &token_symbol,
                     &amount_wrapper_clone,
                     &amount_text_node_clone,
                     &token_symbol_node_clone,
                     None,
-                );
+                ).await;
 
                 if data.tx_built {
                     // Set send button label
-                    if let Some(send_label_node) = sg_root_clone_for_visibility.lookup_node("/window/content/wallet_send_step4_layer/send_send_btn_label") {
+                    if let Some(send_label_node) = sg_root.lookup_node("/window/content/wallet_send_step4_layer/send_send_btn_label") {
                         send_label_node.set_property_str(atom, Role::App, "text", "send").unwrap();
                     }
                     // Show transaction fee
-                    if let Some(tx_fee_label) = sg_root_clone_for_visibility.lookup_node("/window/content/wallet_send_step4_layer/send_fee_label") {
+                    if let Some(tx_fee_label) = sg_root.lookup_node("/window/content/wallet_send_step4_layer/send_fee_label") {
                         let prop = tx_fee_label.get_property("text_color").unwrap();
                         prop.set_f32(atom, Role::App, 0, 1.).unwrap();
                         prop.set_f32(atom, Role::App, 1, 1.).unwrap();
                         prop.set_f32(atom, Role::App, 2, 1.).unwrap();
                         prop.set_f32(atom, Role::App, 3, 1.).unwrap();
                     }
-                    if let Some(tx_fee_value) = sg_root_clone_for_visibility.lookup_node("/window/content/wallet_send_step4_layer/send_fee_value") {
+                    if let Some(tx_fee_value) = sg_root.lookup_node("/window/content/wallet_send_step4_layer/send_fee_value") {
                         let prop = tx_fee_value.get_property("text_color").unwrap();
                         prop.set_f32(atom, Role::App, 0, 1.).unwrap();
                         prop.set_f32(atom, Role::App, 1, 1.).unwrap();
@@ -503,14 +506,14 @@ pub async fn make_send_step4_layer(
                     }
                 } else {
                     // Hide transaction fee
-                    if let Some(tx_fee_label) = sg_root_clone_for_visibility.lookup_node("/window/content/wallet_send_step4_layer/send_fee_label") {
+                    if let Some(tx_fee_label) = sg_root.lookup_node("/window/content/wallet_send_step4_layer/send_fee_label") {
                         let prop = tx_fee_label.get_property("text_color").unwrap();
                         prop.set_f32(atom, Role::App, 0, 0.).unwrap();
                         prop.set_f32(atom, Role::App, 1, 0.).unwrap();
                         prop.set_f32(atom, Role::App, 2, 0.).unwrap();
                         prop.set_f32(atom, Role::App, 3, 0.).unwrap();
                     }
-                    if let Some(tx_fee_value) = sg_root_clone_for_visibility.lookup_node("/window/content/wallet_send_step4_layer/send_fee_value") {
+                    if let Some(tx_fee_value) = sg_root.lookup_node("/window/content/wallet_send_step4_layer/send_fee_value") {
                         let prop = tx_fee_value.get_property("text_color").unwrap();
                         prop.set_f32(atom, Role::App, 0, 0.).unwrap();
                         prop.set_f32(atom, Role::App, 1, 0.).unwrap();

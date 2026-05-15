@@ -18,7 +18,6 @@
 
 use std::sync::Arc;
 use darkfi_sdk::crypto::keypair::Address;
-use darkfi_serial::{Decodable, Encodable};
 
 use crate::{
     app::{
@@ -377,15 +376,15 @@ pub async fn make_send_step2_layer(
 
             let atom = &mut renderer.make_guard(gfxtag!("add recipient button"));
 
-            let mut tx_data = send_tx_data3.lock().unwrap();
-            tx_data.recipient_str = Some(text.clone());
-            // unwrap is okay here, recipient string is already verified by is_valid_address()
-            tx_data.recipient = Some(text.clone().parse::<Address>().unwrap());
-            drop(tx_data);
+            let data = {
+                let mut tx_data = send_tx_data3.lock().unwrap();
+                tx_data.recipient_str = Some(text.clone());
+                // unwrap is okay here, recipient string is already verified by is_valid_address()
+                tx_data.recipient = Some(text.clone().parse::<Address>().unwrap());
+                tx_data.clone()
+            };
 
-            // Update step3 display with token and recipient
-            let data = send_tx_data3.lock().unwrap().clone();
-
+            // Update step3
             if let Some(token_symbol) = &data.token_symbol {
                 let token_symbol_node = sg_root.lookup_node("/window/content/wallet_send_step3_layer/send_selected_token_symbol3").unwrap();
                 token_symbol_node.set_property_str(atom, Role::App, "text", token_symbol).unwrap();
@@ -395,7 +394,7 @@ pub async fn make_send_step2_layer(
                     amount_token_node.set_property_str(atom, Role::App, "text", token_symbol).unwrap();
 
                     // Update available balance
-                    let available_balance = get_balance(token_symbol);
+                    let available_balance = get_balance(&sg_root, &data.token_id.unwrap()).await;
                     if let Some(available_balance_node) = sg_root.lookup_node("/window/content/wallet_send_step3_layer/send_available_balance") {
                         available_balance_node.set_property_str(atom, Role::App, "text", format!("{available_balance} available")).unwrap();
                     }

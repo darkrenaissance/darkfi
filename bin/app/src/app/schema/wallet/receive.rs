@@ -118,7 +118,7 @@ pub async fn make_receive_layer(
     prop.set_expr(atom, Role::App, 2, code).unwrap();
     prop.set_f32(atom, Role::App, 3, BASE_FONTSIZE * 2.).unwrap();
     node.set_property_f32(atom, Role::App, "font_size", BUTTON_FONTSIZE).unwrap();
-    node.set_property_str(atom, Role::App, "text", MOCK_RECEIVE_ADDRESS).unwrap();
+    node.set_property_str(atom, Role::App, "text", "").unwrap();
     node.set_property_enum(atom, Role::App, "overflow_wrap", "anywhere").unwrap();
     let prop = node.get_property("text_color").unwrap();
     if COLOR_SCHEME == ColorScheme::DarkMode {

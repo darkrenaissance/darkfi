@@ -206,21 +206,12 @@ pub async fn make_main_wallet_layer(
                         }
                     } else {
                         e!("Failed to decode default address response");
-                        if let Some(receive_address_node) = receive_layer.lookup_node("/receive_address") {
-                            receive_address_node.set_property_str(atom, Role::App, "text", MOCK_RECEIVE_ADDRESS).unwrap();
-                        }
                     }
                 } else {
                     e!("Failed to call get_default_address method");
-                    if let Some(receive_address_node) = receive_layer.lookup_node("/receive_address") {
-                        receive_address_node.set_property_str(atom, Role::App, "text", MOCK_RECEIVE_ADDRESS).unwrap();
-                    }
                 }
             } else {
                 e!("Failed to lookup drk plugin node");
-                if let Some(receive_address_node) = receive_layer.lookup_node("/receive_address") {
-                    receive_address_node.set_property_str(atom, Role::App, "text", MOCK_RECEIVE_ADDRESS).unwrap();
-                }
             }
         }
     });

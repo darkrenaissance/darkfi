@@ -20,8 +20,6 @@ use darkfi::tx::Transaction;
 use darkfi_money_contract::model::TokenId;
 use darkfi_sdk::crypto::keypair::Address;
 
-use super::super::ColorScheme;
-
 #[cfg(any(target_os = "android", feature = "emulate-android"))]
 mod android_ui_consts {
     pub const BACKARROW_SCALE: f32 = 30.;
@@ -96,32 +94,6 @@ mod ui_consts {
 pub use ui_consts::*;
 
 pub const BALANCE_BASE10_DECIMALS: usize = 8;
-
-pub const MOCK_TOKENS: &[(&str, &str, f32)] = &[
-    ("DRK", "Dark", 100.24),
-    ("wXMR", "wrapped Monero", 5.56487),
-    ("wBTC", "wrapped Bitcoin", 0.78956413),
-    ("RNDM", "Random", 0.78956413),
-    ("OTHER", "Other token", 0.78956413),
-    ("OTHER", "Other token", 0.78956413),
-    ("OTHER", "Other token", 0.78956413),
-    ("OTHER", "Other token", 0.78956413),
-];
-
-pub const MOCK_RECEIVE_ADDRESS: &str = "8siycy4q5rsf3rwxa9ptw5v7syfj1m1ov27tt78rj7kprth1ux41lqpvut6cht7w";
-pub const MOCK_TX_FEE: &str = "0.001 DRK";
-
-pub fn is_valid_address(address: &str) -> bool {
-    address.len() > 3 // TODO
-}
-
-pub fn get_balance(token_symbol: &str) -> f32 {
-    MOCK_TOKENS
-        .iter()
-        .find(|(symbol, _, _)| *symbol == token_symbol)
-        .map(|(_, _, balance)| *balance)
-        .unwrap_or(0.0)
-}
 
 // Send transaction data shared across all send pages
 #[derive(Debug, Clone)]

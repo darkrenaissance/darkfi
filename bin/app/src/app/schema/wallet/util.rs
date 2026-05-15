@@ -16,6 +16,9 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+use darkfi_money_contract::model::TokenId;
+use darkfi_serial::Decodable;
+
 use crate::{
     app::App,
     app::node::{create_button, create_text, create_vector_art},
@@ -32,10 +35,35 @@ use crate::{
 
 use super::{super::ColorScheme, data::*};
 
+pub fn is_valid_address(address: &str) -> bool {
+    address.len() > 3 // TODO
+}
+
+pub async fn get_balance(sg_root: &SceneNodePtr, token_id: &TokenId) -> f32 {
+    let Some(drk_node) = sg_root.lookup_node("/plugin/drk") else {
+        return 0.
+    };
+    let Ok(Some(response_data)) = drk_node.call_method("get_balances", vec![]).await else {
+        return 0.
+    };
+    let mut cur = std::io::Cursor::new(response_data);
+    let Ok(balances) = Vec::<(String, TokenId, f32)>::decode(&mut cur) else {
+        return 0.
+    };
+
+    balances
+        .iter()
+        .find(|(_, tid, _)| *tid == *token_id)
+        .map(|(_, _, balance)| *balance)
+        .unwrap_or(0.)
+}
+
 /// Update positions for amount input wrapper and token symbol to center them together.
-pub fn update_amount_screen(
+pub async fn update_amount_screen(
     atom: &mut PropertyAtomicGuard,
+    sg_root: &SceneNodePtr,
     amount_text: &str,
+    token_id: &TokenId,
     token_symbol: &str,
     amount_wrapper_node: &SceneNodePtr,
     amount_input_node: &SceneNodePtr,
@@ -74,7 +102,7 @@ pub fn update_amount_screen(
 
     // Set available balance
     if let Some(available_balance_node) = available_balance_node {
-        let available_balance = get_balance(token_symbol);
+        let available_balance = get_balance(sg_root, token_id).await;
         available_balance_node.set_property_str(atom, Role::App, "text", format!("{available_balance} available")).unwrap();
     }
 }

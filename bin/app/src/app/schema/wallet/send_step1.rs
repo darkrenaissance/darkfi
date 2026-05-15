@@ -174,7 +174,7 @@ pub async fn make_send_step1_layer(
             if let Ok(row) = TokenRow::decode(&mut cur) {
                 let mut data = send_tx_data2.lock().unwrap();
                 data.token_symbol = Some(row.symbol.clone());
-                data.token_id = Some(row.id.clone());
+                data.token_id = Some(row.id);
                 drop(data);
 
                 let atom = &mut renderer.make_guard(gfxtag!("token selection"));
