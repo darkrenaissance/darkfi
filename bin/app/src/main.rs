@@ -23,6 +23,7 @@
 use clap::Parser;
 use darkfi::system::CondVar;
 use darkfi::tx::Transaction;
+use darkfi::util::parse::encode_base10;
 use darkfi_money_contract::model::DARK_TOKEN_ID;
 use darkfi_serial::{Decodable, Encodable, deserialize};
 use std::sync::{Arc, OnceLock};
@@ -474,7 +475,7 @@ async fn load_plugins(
                 let atom = &mut renderer2.make_guard(gfxtag!("wallet - refresh tokens"));
 
                 let mut cur = std::io::Cursor::new(response_data);
-                if let Ok(balances) = Vec::<(String, TokenId, f32)>::decode(&mut cur) {
+                if let Ok(balances) = Vec::<(String, TokenId, u64)>::decode(&mut cur) {
                     let token_rows: Vec<TokenRow> = balances
                         .iter()
                         .enumerate()
@@ -482,7 +483,7 @@ async fn load_plugins(
                             TokenRow {
                                 id: *token_id,
                                 symbol: symbol.clone(),
-                                balance: balance.to_string(),
+                                balance: encode_base10(*balance, 8),
                             }
                         })
                         .collect();
@@ -501,9 +502,9 @@ async fn load_plugins(
                     }
 
                     // Update main wallet balance
-                    if let Some(drk_balance) = balances.iter().find(|(_, token_id, _)| *token_id == *DARK_TOKEN_ID) {
+                    if let Some(drk_row) = token_rows.iter().find(|row| row.id == *DARK_TOKEN_ID) {
                         if let Some(balance_node) = sg_root2.lookup_node("/window/content/wallet_main_layer/wallet_balance") {
-                            balance_node.set_property_str(atom, Role::App, "text", format!("DRK {}", drk_balance.2)).unwrap();
+                            balance_node.set_property_str(atom, Role::App, "text", format!("DRK {}", drk_row.balance)).unwrap();
                         }
                     }
 

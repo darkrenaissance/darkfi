@@ -19,8 +19,6 @@
 use std::sync::Arc;
 
 use darkfi_serial::{Decodable, Encodable};
-use darkfi::util::parse::encode_base10;
-use darkfi::tx::Transaction;
 
 use crate::{
     app::{
@@ -30,7 +28,6 @@ use crate::{
     },
     expr,
     gfx::gfxtag,
-    mesh::COLOR_CYAN,
     prop::{PropertyAtomicGuard, PropertyBool, PropertyFloat32, Role},
     scene::{SceneNodePtr, Slot},
     shape,

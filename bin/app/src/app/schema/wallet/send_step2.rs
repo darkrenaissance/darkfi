@@ -17,6 +17,7 @@
  */
 
 use std::sync::Arc;
+use darkfi::util::parse::encode_base10;
 use darkfi_sdk::crypto::keypair::Address;
 
 use crate::{
@@ -29,7 +30,7 @@ use crate::{
     gfx::gfxtag,
     mesh::COLOR_CYAN,
     prop::{PropertyAtomicGuard, PropertyBool, PropertyFloat32, Role},
-    scene::{Pimpl, SceneNodePtr, Slot},
+    scene::{SceneNodePtr, Slot},
     shape,
     ui::{BaseEdit, BaseEditType, Button, Layer, Text, VectorArt, VectorShape},
     util::i18n::I18nBabelFish,
@@ -338,7 +339,7 @@ pub async fn make_send_step2_layer(
             } else {
                 text_color.set_f32(atom, Role::App, 3, 0.).unwrap();
                 // Cyan color for valid
-                if is_valid_address(&addr) {
+                if addr.clone().parse::<Address>().is_ok() {
                     label_text_color.set_f32(atom, Role::App, 0, COLOR_CYAN[0]).unwrap();
                     label_text_color.set_f32(atom, Role::App, 1, COLOR_CYAN[1]).unwrap();
                     label_text_color.set_f32(atom, Role::App, 2, COLOR_CYAN[2]).unwrap();
@@ -370,17 +371,16 @@ pub async fn make_send_step2_layer(
         while let Ok(_) = recvr.recv().await {
             let text = recipient_input2.get_property_str("text").unwrap();
             // Only proceed if address is valid
-            if !is_valid_address(&text) {
+            let Ok(addr) = text.clone().parse::<Address>() else {
                 continue;
-            }
+            };
 
             let atom = &mut renderer.make_guard(gfxtag!("add recipient button"));
 
             let data = {
                 let mut tx_data = send_tx_data3.lock().unwrap();
                 tx_data.recipient_str = Some(text.clone());
-                // unwrap is okay here, recipient string is already verified by is_valid_address()
-                tx_data.recipient = Some(text.clone().parse::<Address>().unwrap());
+                tx_data.recipient = Some(addr);
                 tx_data.clone()
             };
 
@@ -394,7 +394,7 @@ pub async fn make_send_step2_layer(
                     amount_token_node.set_property_str(atom, Role::App, "text", token_symbol).unwrap();
 
                     // Update available balance
-                    let available_balance = get_balance(&sg_root, &data.token_id.unwrap()).await;
+                    let available_balance = encode_base10(get_balance(&sg_root, &data.token_id.unwrap()).await, BALANCE_BASE10_DECIMALS);
                     if let Some(available_balance_node) = sg_root.lookup_node("/window/content/wallet_send_step3_layer/send_available_balance") {
                         available_balance_node.set_property_str(atom, Role::App, "text", format!("{available_balance} available")).unwrap();
                     }

@@ -24,7 +24,7 @@ use crate::{
     app::App,
     gfx::gfxtag,
     mesh::COLOR_CYAN,
-    prop::{PropertyAtomicGuard, PropertyBool, PropertyFloat32, Role},
+    prop::{PropertyBool, PropertyFloat32, Role},
     scene::SceneNodePtr,
     util::i18n::I18nBabelFish,
 };

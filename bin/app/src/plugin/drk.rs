@@ -117,9 +117,9 @@ impl TxStatus {
 struct TxState {
     id: Option<String>,
     status: TxStatus,
-    amount: String,
-    token_symbol: String,
-    recipient: Address,
+    amount: Option<String>,
+    token_symbol: Option<String>,
+    recipient: Option<Address>,
 }
 
 pub type DrkPluginPtr = Arc<DrkPlugin>;
@@ -294,7 +294,7 @@ impl DrkPlugin {
         Ok(address.to_string())
     }
 
-    pub async fn get_balances(&self) -> Result<Vec<(String, TokenId, f32)>> {
+    pub async fn get_balances(&self) -> Result<Vec<(String, TokenId, u64)>> {
         let drk = self.drk.read().await;
 
         let balances = drk.money_balance().await.map_err(|e| {
@@ -307,14 +307,13 @@ impl DrkPlugin {
             Error::ServiceFailed
         })?;
 
-        let mut result: Vec<(String, TokenId, f32)> = Vec::new();
+        let mut result: Vec<(String, TokenId, u64)> = Vec::new();
         for (token_id_str, balance) in balances {
             let encoded = encode_base10(balance, BALANCE_BASE10_DECIMALS);
-            let float_balance: f32 = encoded.parse().unwrap_or(0.0);
             let alias = aliases.get(&token_id_str).cloned().unwrap_or_else(|| "UNKN".to_string());
             let token_id = token_id_str.parse::<TokenId>().unwrap();
 
-            result.push((alias, token_id, float_balance));
+            result.push((alias, token_id, balance));
         }
 
         // Sort by balance
@@ -336,9 +335,9 @@ impl DrkPlugin {
             let mut data = vec![];
             state.id.clone().encode(&mut data).unwrap();
             Some(state.status.text()).encode(&mut data).unwrap();
-            Some(state.amount.to_string()).encode(&mut data).unwrap();
-            Some(state.token_symbol.clone()).encode(&mut data).unwrap();
-            Some(state.recipient.to_string()).encode(&mut data).unwrap();
+            state.amount.encode(&mut data).unwrap();
+            state.token_symbol.clone().encode(&mut data).unwrap();
+            state.recipient.map(|r| r.to_string()).encode(&mut data).unwrap();
             let _ = node.trigger("tx_updated", data).await;
         }
     }
@@ -467,7 +466,7 @@ impl DrkPlugin {
             return false
         };
 
-        t!("method called: get_tx_history()");
+        t!("method called: get_tx_status()");
 
         fn decode_data(data: &[u8]) -> std::io::Result<String> {
             let mut cur = Cursor::new(&data);
@@ -476,12 +475,12 @@ impl DrkPlugin {
         }
 
         let Ok(tx_id) = decode_data(&method_call.data) else {
-            d!("get_tx_history() method invalid arg data");
+            d!("get_tx_status() method invalid arg data");
             return true
         };
 
         let Some(self_) = me.upgrade() else {
-            e!("drk plugin destroyed before get_tx_history task was stopped!");
+            e!("drk plugin destroyed before get_tx_status task was stopped!");
             if let Some(send_res) = method_call.send_res {
                 let _ = send_res.send(vec![]).await;
             }
@@ -613,7 +612,14 @@ impl DrkPlugin {
 
         match result {
             Ok(tx_id) => {
-                self_.emit_tx_status_updated(&TxStatus::Confirming).await;
+                let state = TxState {
+                    id: Some(tx_id),
+                    status: TxStatus::Confirming,
+                    amount: None,
+                    token_symbol: None,
+                    recipient: None,
+                };
+                self_.emit_tx_updated(&state).await;
             }
             Err(_) => {
                 e!("Failed to broadcast transaction");

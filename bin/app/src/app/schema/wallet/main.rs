@@ -16,6 +16,7 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+use darkfi::util::parse::encode_base10;
 use darkfi_serial::{Decodable, Encodable};
 
 use crate::{
@@ -391,14 +392,14 @@ pub async fn make_main_wallet_layer(
                 if let Some(drk_node) = sg_root2.lookup_node("/plugin/drk") {
                     if let Ok(Some(response_data)) = drk_node.call_method("get_balances", vec![]).await {
                         let mut cur = std::io::Cursor::new(response_data);
-                        if let Ok(balances) = Vec::<(String, darkfi_money_contract::model::TokenId, f32)>::decode(&mut cur) {
+                        if let Ok(balances) = Vec::<(String, darkfi_money_contract::model::TokenId, u64)>::decode(&mut cur) {
                             let token_rows: Vec<TokenRow> = balances
                                 .iter()
                                 .enumerate()
                                 .map(|(i, (symbol, token_id, balance))| TokenRow {
                                     id: *token_id,
                                     symbol: symbol.clone(),
-                                    balance: balance.to_string(),
+                                    balance: encode_base10(*balance, BALANCE_BASE10_DECIMALS),
                                 })
                                 .collect();
 
@@ -411,9 +412,9 @@ pub async fn make_main_wallet_layer(
 
                             // Update main wallet balance
                             use darkfi_money_contract::model::DARK_TOKEN_ID;
-                            if let Some(drk_balance) = balances.iter().find(|(_, token_id, _)| *token_id == *DARK_TOKEN_ID) {
+                            if let Some(drk_row) = token_rows.iter().find(|row| row.id == *DARK_TOKEN_ID) {
                                 if let Some(balance_node) = sg_root2.lookup_node("/window/content/wallet_main_layer/wallet_balance") {
-                                    balance_node.set_property_str(atom, Role::App, "text", format!("DRK {}", drk_balance.2)).unwrap();
+                                    balance_node.set_property_str(atom, Role::App, "text", format!("DRK {}", drk_row.balance)).unwrap();
                                 }
                             }
                         }

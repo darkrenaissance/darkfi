@@ -18,8 +18,8 @@
 
 use std::sync::Arc;
 
-use darkfi_money_contract::model::TokenId;
-use darkfi_serial::{Decodable, Encodable};
+use darkfi::util::parse::decode_base10;
+use darkfi_serial::Encodable;
 
 use crate::{
     app::{
@@ -536,8 +536,8 @@ pub async fn make_send_step3_layer(
                 let is_valid = if sanitized_amount == "0" {
                     false
                 } else {
-                    match sanitized_amount.parse::<f32>() {
-                        Ok(v) if v > 0. && v <= available_balance => true,
+                    match decode_base10(&sanitized_amount, BALANCE_BASE10_DECIMALS, false) {
+                        Ok(v) if v > 0 && v <= available_balance => true, // TODO: fees
                         _ => false,
                     }
                 };
@@ -579,8 +579,8 @@ pub async fn make_send_step3_layer(
             let is_valid = if text.is_empty() {
                 false
             } else {
-                match text.parse::<f32>() {
-                    Ok(v) if v > 0. && v <= available_balance => true,
+                match decode_base10(&text, BALANCE_BASE10_DECIMALS, false) {
+                    Ok(v) if v > 0 && v <= available_balance => true,
                     _ => false,
                 }
             };

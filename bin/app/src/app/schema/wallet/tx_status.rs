@@ -18,22 +18,20 @@
 
 use std::sync::Arc;
 
-use darkfi_serial::{Decodable, Encodable};
+use darkfi_serial::Decodable;
 use darkfi::tx::Transaction;
 
 use crate::{
     app::{
         App,
-        node::{create_button, create_layer, create_text, create_vector_art},
+        node::{create_layer, create_text},
         schema::COLOR_SCHEME,
     },
     expr,
     gfx::gfxtag,
-    mesh::COLOR_CYAN,
-    prop::{Property, PropertyAtomicGuard, PropertyBool, PropertyFloat32, PropertyStr, PropertySubType, PropertyType, Role},
+    prop::{Property, PropertyAtomicGuard, PropertyBool, PropertyFloat32, PropertySubType, PropertyType, Role},
     scene::{SceneNodePtr, Slot},
-    shape,
-    ui::{Button, Layer, Text, VectorArt},
+    ui::{Layer, Text},
     util::i18n::I18nBabelFish,
 };
 
