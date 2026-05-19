@@ -17,7 +17,7 @@
  */
 
 use async_trait::async_trait;
-use darkfi_money_contract::model::TokenId;
+use darkfi_money_contract::model::{DARK_TOKEN_ID, TokenId};
 use darkfi_serial::{Decodable, Encodable, SerialEncodable};
 use miniquad::MouseButton;
 use parking_lot::Mutex as SyncMutex;
@@ -146,7 +146,41 @@ impl TokenTable {
         true
     }
 
+    /// Replace all rows in the token table
     pub async fn set_tokens(&self, rows: Vec<TokenRow>) {
+        // Ensure DRK token is always shown first (balance is set to 0 if not present)
+        let rows = if rows.iter().any(|row| row.id == *DARK_TOKEN_ID) {
+            let mut drk_row = None;
+            let mut other_rows = vec![];
+            for row in rows {
+                if row.id == *DARK_TOKEN_ID {
+                    drk_row = Some(row);
+                } else {
+                    other_rows.push(row);
+                }
+            }
+            match drk_row {
+                Some(drk) => {
+                    let mut result = vec![drk];
+                    result.extend(other_rows);
+                    result
+                },
+                None => vec![TokenRow {
+                    id: *DARK_TOKEN_ID,
+                    symbol: "DRK".to_string(),
+                    balance: "0".to_string(),
+                }],
+            }
+        } else {
+            let mut result = vec![TokenRow {
+                id: *DARK_TOKEN_ID,
+                symbol: "DRK".to_string(),
+                balance: "0".to_string(),
+            }];
+            result.extend(rows);
+            result
+        };
+
         *self.rows.lock() = rows;
 
         let atom = self.renderer.make_guard(gfxtag!("TokenTable::set_tokens"));
