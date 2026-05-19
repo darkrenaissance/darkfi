@@ -12,7 +12,7 @@ darkfi = {path = "../../../../", features = ["zk"]}
 darkfi-sdk = {path = "../../../../src/sdk"}
 halo2_proofs = "0.3.2"
 halo2_gadgets = "0.4.0"
-rand = "0.8.5"
+rand = "0.8.6"
 hex = "0.4.3"
 
 [patch.crates-io]

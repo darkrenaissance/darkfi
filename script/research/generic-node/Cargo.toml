@@ -12,15 +12,15 @@ edition = "2021"
 [dependencies]
 darkfi = {path = "../../../", features = ["async-daemonize", "net"]}
 darkfi-serial = {path = "../../../src/serial", features = ["async"]}
-rand = "0.8.5"
+rand = "0.8.6"
 
 # Daemon
 easy-parallel = "3.3.1"
 tracing = "0.1.44"
-tracing-subscriber = { version = "0.3.22", default-features = false, features = ["fmt"] }
-tracing-appender = "0.2.4"
+tracing-subscriber = { version = "0.3.23", default-features = false, features = ["fmt"] }
+tracing-appender = "0.2.5"
 signal-hook-async-std = "0.4.0"
-signal-hook = "0.4.1"
+signal-hook = "0.4.4"
 smol = "2.0.2"
 
 # Argument parsing

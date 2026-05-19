@@ -23,29 +23,29 @@ darkfi-serial = {path = "../../../src/serial", features = ["hash"]}
 
 # Encoding
 bs58 = "0.5.1"
-sha2 = "0.10.9"
+sha2 = "0.11.0"
 
 # Misc
 async-trait = "0.1.89"
-blake3 = "1.8.2"
-rand = "0.8.5"
+blake3 = "1.8.5"
+rand = "0.8.6"
 tracing = "0.1.44"
 tinyjson = "2.5.1"
-url = "2.5.7"
+url = "2.5.8"
 num-bigint = "0.4.6"
 
 # Daemon
 easy-parallel = "3.3.1"
-futures = "0.3.31"
+futures = "0.3.32"
 signal-hook-async-std = "0.4.0"
-signal-hook = "0.4.1"
-tracing-subscriber = { version = "0.3.22", default-features = false, features = ["fmt"] }
-tracing-appender = "0.2.4"
+signal-hook = "0.4.4"
+tracing-subscriber = { version = "0.3.23", default-features = false, features = ["fmt"] }
+tracing-appender = "0.2.5"
 smol = "2.0.2"
 
 # Equi-X
 blake2 = "0.10.6"
-equix = "0.5.1"
+equix = "0.6.1"
 
 # Database
 sled-overlay = "0.1.20"

@@ -18,9 +18,9 @@ darkfi-serial = {path = "../../../src/serial"}
 # daemon
 easy-parallel = "3.3.1"
 signal-hook-async-std = "0.4.0"
-signal-hook = "0.4.1"
-tracing-subscriber = { version = "0.3.22", default-features = false, features = ["fmt"] }
-tracing-appender = "0.2.4"
+signal-hook = "0.4.4"
+tracing-subscriber = { version = "0.3.23", default-features = false, features = ["fmt"] }
+tracing-appender = "0.2.5"
 smol = "2.0.2"
 
 # arg parsing
@@ -31,7 +31,7 @@ structopt-toml = "0.5.1"
 # misc
 async-trait = "0.1.89"
 tracing = "0.1.44"
-url = "2.5.7"
+url = "2.5.8"
 # ANCHOR_END: dependencies
 
 [lints]

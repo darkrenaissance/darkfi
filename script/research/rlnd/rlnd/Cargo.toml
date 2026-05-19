@@ -23,15 +23,15 @@ tracing = "0.1.44"
 # JSON-RPC
 async-trait = "0.1.89"
 tinyjson = "2.5.1"
-url = "2.5.7"
+url = "2.5.8"
 
 # Daemon
 async-std = {version = "1.13.2", features = ["attributes"]}
 easy-parallel = "3.3.1"
 signal-hook-async-std = "0.4.0"
-signal-hook = "0.4.1"
-tracing-subscriber = { version = "0.3.22", default-features = false, features = ["fmt"] }
-tracing-appender = "0.2.4"
+signal-hook = "0.4.4"
+tracing-subscriber = { version = "0.3.23", default-features = false, features = ["fmt"] }
+tracing-appender = "0.2.5"
 smol = "2.0.2"
 
 # Argument parsing

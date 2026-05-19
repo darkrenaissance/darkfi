@@ -21,12 +21,12 @@ smol = "2.0.2"
 
 tracing = "0.1.44"
 
-url = "2.5.7"
+url = "2.5.8"
 tinyjson = "2.5.1"
 hex = "0.4.3"
 
 sled = "0.34.7"
 tapes = {git = "https://github.com/Cuprate/Tapes"}
-bytemuck = {version = "1.24.0", features = ["derive"]}
+bytemuck = {version = "1.25.0", features = ["derive"]}
 
 arg = {git = "https://github.com/parazyd/arg"}

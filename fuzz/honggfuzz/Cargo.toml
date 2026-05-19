@@ -8,8 +8,8 @@ edition = "2021"
 cargo-fuzz = true
 
 [dependencies]
-honggfuzz = "0.5.58"
-bitcoin = "0.32.8"
+honggfuzz = "0.5.60"
+bitcoin = "0.32.9"
 
 [dependencies.darkfi]
 path = "../.."

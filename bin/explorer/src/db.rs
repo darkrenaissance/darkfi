@@ -33,7 +33,10 @@ use darkfi_serial::{
     SerialEncodable,
 };
 use sled::{transaction::TransactionError, Transactional};
-use tapes::{BlobTape, FixedSizedTape, Persistence, TapeOpenOptions, Tapes};
+use tapes::{
+    BlobTape, FixedSizedTape, Persistence, TapeOpenOptions, Tapes, TapesAppend, TapesRead,
+    TapesTruncate,
+};
 use tracing::info;
 
 use super::Explorer;
@@ -293,14 +296,14 @@ impl Explorer {
         drop(reader);
 
         let mut truncate_tx = self.tapes_db.truncate();
-        truncate_tx.drop_from_fixed_sized_tape(&self.database.block_index, count);
-        truncate_tx.drop_from_fixed_sized_tape(&self.database.difficulty_index, count);
+        truncate_tx.drop_fixed_sized_tape(&self.database.block_index, count);
+        truncate_tx.drop_fixed_sized_tape(&self.database.difficulty_index, count);
 
         let tx_idx_to_remove = current_tx_idx_len - new_tx_idx_len;
-        truncate_tx.drop_from_fixed_sized_tape(&self.database.tx_index, tx_idx_to_remove);
+        truncate_tx.drop_fixed_sized_tape(&self.database.tx_index, tx_idx_to_remove);
 
-        truncate_tx.set_blob_tape_len(&self.database.blocks, new_block_blob_len);
-        truncate_tx.set_blob_tape_len(&self.database.transactions, new_tx_blob_len);
+        truncate_tx.truncate_blob_tape(&self.database.blocks, new_block_blob_len);
+        truncate_tx.truncate_blob_tape(&self.database.transactions, new_tx_blob_len);
 
         truncate_tx.commit(Persistence::SyncData)?;
 

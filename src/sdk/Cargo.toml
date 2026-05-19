@@ -18,7 +18,7 @@ wasm = []
 
 [dependencies]
 # Error handling
-thiserror = "2.0.17"
+thiserror = "2.0.18"
 
 # Serialization
 darkfi-serial = {path = "../serial", features = ["crypto"]}
@@ -26,11 +26,11 @@ darkfi-serial = {path = "../serial", features = ["crypto"]}
 # Encoding
 bs58 = {version = "0.5.1", features = ["check"]}
 num = "0.4.3"
-sha2 = "0.10.9"
+sha2 = "0.11.0"
 
 # Cryptography
-blake2b_simd = "1.0.3"
-blake3 = "1.8.2"
+blake2b_simd = "1.0.4"
+blake3 = "1.8.5"
 chacha20poly1305 = "0.10.1"
 halo2_gadgets = "0.4.0"
 bridgetree = "0.7.0"
@@ -38,12 +38,12 @@ num-bigint = "0.4.6"
 num-traits = "0.2.19"
 pasta_curves = "0.5.1"
 rand_core = "0.6.4"
-rand = "0.8.5"
+rand = "0.8.6"
 
 # Misc
 lazy_static = "1.5.0"
 subtle = "2.6.1"
-hashbrown = "0.16.1"
+hashbrown = "0.17.1"
 
 # Storage
 sled-overlay = "0.1.20"

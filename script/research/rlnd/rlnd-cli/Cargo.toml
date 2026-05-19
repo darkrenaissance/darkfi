@@ -20,6 +20,6 @@ rlnd = {path = "../rlnd"}
 bs58 = "0.5.1"
 clap = {version = "4.4.11", features = ["derive"]}
 prettytable-rs = "0.10.0"
-rand = "0.8.5"
+rand = "0.8.6"
 smol = "2.0.2"
-url = "2.5.7"
+url = "2.5.8"

@@ -11,7 +11,7 @@ edition = "2021"
 [dependencies]
 darkfi = {path = "../../", features = ["net"]}
 darkfi-serial = {path = "../../src/serial"}
-url = {version = "2.5.7", features = ["serde"]}
+url = {version = "2.5.8", features = ["serde"]}
 smol = "2.0.2"
 
 [workspace]

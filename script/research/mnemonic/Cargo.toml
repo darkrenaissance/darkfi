@@ -9,11 +9,11 @@ edition = "2021"
 
 [dependencies]
 pasta_curves = "0.5.1"
-anyhow = "1.0.100"
-rand = "0.8.5"
-pbkdf2 = "0.12.2"
-hmac = "0.12.1"
-sha2 = "0.10.9"
+anyhow = "1.0.102"
+rand = "0.8.6"
+pbkdf2 = "0.13.0"
+hmac = "0.13.0"
+sha2 = "0.11.0"
 num-bigint = {version = "0.4.6", features = ["rand"]}
 num-traits = "0.2.19"
 unicode-normalization = "0.1.25"

@@ -26,36 +26,36 @@ darkfi_money_contract = { path = "../../src/contract/money/" }
 fud = { path = "../fud/fud/" }
 drk = { path = "../drk/" }
 bs58 = "0.5.1"
-thiserror = "2.0.17"
+thiserror = "2.0.18"
 smol = "2.0.2"
 atomic_float = "1.1.0"
 async-channel = "2.5.0"
 easy-parallel = "3.3.1"
-rand = "0.8.5"
+rand = "0.8.6"
 async-lock = "3.4.2"
 async-broadcast = "0.7.2"
-futures = "0.3.31"
+futures = "0.3.32"
 async-recursion = "1.1.1"
-colored = "3.0.0"
+colored = "3.1.1"
 #rustpython-vm = "0.3.1"
 sled-overlay = "0.1.20"
-url = "2.5.7"
-semver = "1.0.27"
-chrono = "0.4.42"
+url = "2.5.8"
+semver = "1.0.28"
+chrono = "0.4.44"
 async-gen = "0.2.3"
 async-trait = "0.1.89"
-blake3 = "1.8.2"
-clap = { version = "4.5.53", features = ["derive"] }
-tracing-subscriber = { version = "0.3.22", default-features = false, features = ["fmt"] }
-tracing-appender = "0.2.4"
+blake3 = "1.8.5"
+clap = { version = "4.6.1", features = ["derive"] }
+tracing-subscriber = { version = "0.3.23", default-features = false, features = ["fmt"] }
+tracing-appender = "0.2.5"
 # For log files
 file-rotate = "0.8.0"
 parking_lot = { version = "0.12.5", features = ["nightly"] }
-regex = "1.12.2"
+regex = "1.12.3"
 parley = { git = "https://github.com/linebender/parley.git" }
-swash = "0.2.6"
+swash = "0.2.7"
 zeno = "0.3.3"
-peniko = "0.5.0"
+peniko = "0.6.1"
 
 fluent = "0.17.0"
 unic-langid = { version = "0.9.6", features = ["unic-langid-macros"] }

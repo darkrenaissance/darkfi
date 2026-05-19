@@ -15,10 +15,10 @@ darkfi_money_contract = {path = "../money", features = ["client", "no-entrypoint
 darkfi_deployooor_contract = {path = "../deployooor", features = ["client", "no-entrypoint"]}
 
 num-bigint = "0.4.6"
-blake3 = "1.8.2"
+blake3 = "1.8.5"
 tracing = "0.1.44"
-tracing-subscriber = { version = "0.3.22", default-features = false, features = ["fmt"] }
-rand = "0.8.5"
+tracing-subscriber = { version = "0.3.23", default-features = false, features = ["fmt"] }
+rand = "0.8.6"
 sled-overlay = "0.1.20"
 parking_lot = "0.12.5"
 

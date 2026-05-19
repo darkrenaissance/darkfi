@@ -22,28 +22,28 @@ darkfi-sdk = {path = "../../src/sdk", features = ["async"]}
 darkfi-serial = {path = "../../src/serial"}
 
 # Misc
-blake3 = "1.8.2"
+blake3 = "1.8.5"
 bs58 = "0.5.1"
-futures = "0.3.31"
+futures = "0.3.32"
 lazy_static = "1.5.0"
 libc = "0.2"
 linenoise-rs = "0.1.1"
 num-bigint = "0.4.6"
 prettytable-rs = "0.10.0"
-rand = "0.8.5"
+rand = "0.8.6"
 rodio = {version = "0.21.1", default-features = false, features = ["playback", "mp3"]}
 rusqlite = {version = "0.37.0", features = ["sqlcipher"]}
 sled-overlay = "0.1.20"
 toml = "0.9.8"
 tracing = "0.1.44"
-url = "2.5.7"
+url = "2.5.8"
 
 # Daemon
 easy-parallel = "3.3.1"
 signal-hook-async-std = "0.4.0"
-signal-hook = "0.4.1"
-tracing-subscriber = { version = "0.3.22", default-features = false, features = ["fmt"] }
-tracing-appender = "0.2.4"
+signal-hook = "0.4.4"
+tracing-subscriber = { version = "0.3.23", default-features = false, features = ["fmt"] }
+tracing-appender = "0.2.5"
 smol = "2.0.2"
 
 # Argument parsing

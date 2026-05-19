@@ -24,7 +24,7 @@ halo2_proofs = {version = "0.3.2", features = ["circuit-params", "dev-graph", "s
 halo2_gadgets = {version = "0.4.0", features = ["circuit-params"]}
 plotters = "0.3.7"
 pyo3 = "0.27.2"
-rand = "0.8.5"
+rand = "0.8.6"
 
 [lints]
 workspace = true

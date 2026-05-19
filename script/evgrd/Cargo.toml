@@ -29,24 +29,24 @@ darkfi-serial = {path = "../../src/serial", features = ["async"]}
 sled-overlay = "0.1.20"
 
 # Crypto
-blake3 = "1.8.2"
+blake3 = "1.8.5"
 
 # Misc
 tracing = "0.1.44"
-url = "2.5.7"
+url = "2.5.8"
 
 # Daemon
 smol = "2.0.2"
 
 # evgrd deps
 async-trait = {version = "0.1.89", optional = true}
-futures = {version = "0.3.31", optional = true}
-semver = {version = "1.0.27", optional = true}
+futures = {version = "0.3.32", optional = true}
+semver = {version = "1.0.28", optional = true}
 easy-parallel = {version = "3.3.1", optional = true}
 signal-hook-async-std = {version = "0.4.0", optional = true}
-signal-hook = {version = "0.4.1", optional = true}
-tracing-subscriber = { version = "0.3.22", default-features = false, features = ["fmt"], optional = true }
-tracing-appender = { version = "0.2.4", optional = true }
+signal-hook = {version = "0.4.4", optional = true}
+tracing-subscriber = { version = "0.3.23", default-features = false, features = ["fmt"], optional = true }
+tracing-appender = { version = "0.2.5", optional = true }
 serde = {version = "1.0.228", features = ["derive"], optional = true}
 structopt = {version = "0.3.26", optional = true}
 structopt-toml = {version = "0.5.1", optional = true}
