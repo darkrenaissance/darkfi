@@ -95,13 +95,13 @@ rav1d = { git = "https://github.com/leo030303/rav1d", branch = "add-rust-api", f
 [target.'cfg(target_os = "android")'.dependencies]
 tracing-android = "0.2.0"
 # Required by Arti: tor-dirmgr
-tor-dirmgr = { version="0.37.0", features=["static"] }
+tor-dirmgr = { version="0.42.0", features=["static"] }
 # Android uses MediaCodec for hardware-accelerated H.264 decoding instead of rav1d
 
 [target.'cfg(target_os = "windows")'.dependencies]
 # Used by tor-dirmgr
 #rusqlite = {version = "0.37.0", features = ["bundled"]}
-tor-dirmgr = { version="0.37.0", features=["static"] }
+tor-dirmgr = { version="0.42.0", features=["static"] }
 
 [package.metadata.android.activity_attributes]
 "android:exported" = "true"
