@@ -31,7 +31,7 @@ use std::{
         atomic::{AtomicU32, Ordering},
         Arc, Weak,
     },
-    time::{Duration, Instant},
+    time::Duration,
 };
 
 use async_trait::async_trait;
@@ -524,7 +524,7 @@ pub trait PeerDiscoveryBase {
 
     async fn run(self: Arc<Self>);
 
-    async fn wait(&self) -> bool;
+    async fn wait(&self);
 
     fn notify(&self);
 
@@ -583,20 +583,18 @@ impl PeerDiscoveryBase for PeerDiscovery {
     /// seconds after broadcasting in order to let the P2P stack receive and
     /// work through the addresses it is expecting.
     async fn run(self: Arc<Self>) {
-        let mut current_attempt = 0;
+        let mut getaddr_failures = 0;
         loop {
             dnetev!(self, OutboundPeerDiscovery, {
-                attempt: current_attempt,
+                attempt: getaddr_failures,
                 state: "wait",
             });
 
-            // wait to be woken up by notify()
-            let sleep_was_instant = self.wait().await;
+            // Wait to be woken up by notify()
+            self.wait().await;
 
             // Read the current P2P settings
             let settings = self.p2p().settings().read_arc().await;
-            let outbound_peer_discovery_cooloff_time =
-                settings.outbound_peer_discovery_cooloff_time;
             let outbound_peer_discovery_attempt_time =
                 settings.outbound_peer_discovery_attempt_time;
             let outbound_connections = settings.outbound_connections;
@@ -605,41 +603,38 @@ impl PeerDiscoveryBase for PeerDiscovery {
             let seeds = settings.seeds.clone();
             drop(settings);
 
-            if sleep_was_instant {
-                // Try again
-                current_attempt += 1;
-            } else {
-                // reset back to start
-                current_attempt = 1;
-            }
+            let is_connected = self.p2p().is_connected();
 
-            if current_attempt >= 4 {
+            // After 2 GetAddrs failures, do seed sync
+            if getaddr_failures >= 2 {
                 verbose!(
                     target: "net::outbound_session::peer_discovery",
-                    "[P2P] [PEER DISCOVERY] Sleeping and trying again. Attempt {current_attempt}"
+                    "[P2P] [PEER DISCOVERY] GetAddrs failed {getaddr_failures} times,
+                    doing seed sync"
                 );
 
-                dnetev!(self, OutboundPeerDiscovery, {
-                    attempt: current_attempt,
-                    state: "sleep",
-                });
+                if !seeds.is_empty() {
+                    dnetev!(self, OutboundPeerDiscovery, {
+                        attempt: getaddr_failures,
+                        state: "seed",
+                    });
 
-                sleep(outbound_peer_discovery_cooloff_time).await;
-                current_attempt = 1;
-            }
+                    self.p2p().seed().await;
+                }
 
-            // First 2 times try sending GetAddr to the network.
-            // 3rd time do a seed sync (providing we have seeds
-            // configured).
-            if self.p2p().is_connected() && current_attempt <= 2 {
-                // Broadcast the GetAddrs message to all active peers.
+                // Reset failure counter. We do this even if seeds are not configured,
+                // to avoid getting stuck at failure count >= 2 with no way to retry.
+                getaddr_failures = 0;
+            } else if is_connected {
+                // Try GetAddrs from connected peers
                 // If we have no active peers, we will perform a SeedSyncSession instead.
                 verbose!(
                     target: "net::outbound_session::peer_discovery",
-                    "[P2P] [PEER DISCOVERY] Asking peers for new peers to connect to...");
+                    "[P2P] [PEER DISCOVERY] Asking peers for new peers to connect to..."
+                );
 
                 dnetev!(self, OutboundPeerDiscovery, {
-                    attempt: current_attempt,
+                    attempt: getaddr_failures,
                     state: "getaddr",
                 });
 
@@ -665,14 +660,15 @@ impl PeerDiscoveryBase for PeerDiscovery {
                             target: "net::outbound_session::peer_discovery",
                             "[P2P] [PEER DISCOVERY] Discovered {addrs_len} peers"
                         );
+                        // Reset on success
+                        getaddr_failures = 0;
                     }
                     Err(_) => {
                         verbose!(
                             target: "net::outbound_session::peer_discovery",
                             "[P2P] [PEER DISCOVERY] Waiting for addrs timed out."
                         );
-                        // Just do seed next time
-                        current_attempt = 3;
+                        getaddr_failures += 1;
                     }
                 }
 
@@ -682,12 +678,14 @@ impl PeerDiscoveryBase for PeerDiscovery {
                 // de-allocated when the Session completes.
                 store_sub.unsubscribe().await;
             } else if !seeds.is_empty() {
+                // Not connected, do seed sync
                 verbose!(
                     target: "net::outbound_session::peer_discovery",
-                    "[P2P] [PEER DISCOVERY] Asking seeds for new peers to connect to...");
+                    "[P2P] [PEER DISCOVERY] Not connected, asking seeds for new peers to connect to..."
+                );
 
                 dnetev!(self, OutboundPeerDiscovery, {
-                    attempt: current_attempt,
+                    attempt: getaddr_failures,
                     state: "seed",
                 });
 
@@ -695,24 +693,21 @@ impl PeerDiscoveryBase for PeerDiscovery {
             }
 
             self.wakeup_self.reset();
+
             self.session().wakeup_slots().await;
 
             // Give some time for new connections to be established
+            verbose!(
+                target: "net::outbound_session::peer_discovery",
+                "[P2P] [PEER DISCOVERY] Sleeping for {outbound_peer_discovery_attempt_time}s"
+            );
             sleep(outbound_peer_discovery_attempt_time).await;
         }
     }
 
     /// Blocks execution until we receive a notification from notify().
-    /// `wakeup_self.wait()` resets the condition variable (`CondVar`) and waits
-    /// for a call from `notify()`. Returns `true` if the function completed
-    /// instantly (i.e. no wait occured). Returns false otherwise.
-    async fn wait(&self) -> bool {
-        let wakeup_start = Instant::now();
+    async fn wait(&self) {
         self.wakeup_self.wait().await;
-        let wakeup_end = Instant::now();
-
-        let epsilon = Duration::from_millis(200);
-        wakeup_end - wakeup_start <= epsilon
     }
 
     /// Wakeup peer discovery by sending a notification to `wakeup_self`.
