@@ -199,7 +199,7 @@ impl P2p {
     /// Broadcast a message concurrently to all given peers.
     pub async fn broadcast_to<M: Message>(&self, message: &M, channel_list: &[ChannelPtr]) {
         if channel_list.is_empty() {
-            warn!(target: "net::p2p::broadcast", "[P2P] No connected channels found for broadcast");
+            verbose!(target: "net::p2p::broadcast", "[P2P] No connected channels found for broadcast");
             return
         }
 
