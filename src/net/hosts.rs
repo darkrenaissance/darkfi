@@ -889,16 +889,19 @@ impl Hosts {
         'addr_loop: for (addr, last_seen) in addrs {
             // Validate format
             if addr.host_str().is_none() || addr.port().is_none() || addr.cannot_be_a_base() {
+                verbose!(target: "net::hosts::filter_addresses", "Filtered {addr}: invalid format");
                 continue;
             }
 
             // Skip configured seeds and peers
             if settings.seeds.contains(addr) || settings.peers.contains(addr) {
+                verbose!(target: "net::hosts::filter_addresses", "Filtered {addr}: seed or peer");
                 continue;
             }
 
             // Skip blacklisted
             if self.container.contains(HostColor::Black, addr) || self.block_all_ports(addr) {
+                verbose!(target: "net::hosts::filter_addresses", "Filtered {addr}: blacklisted");
                 continue;
             }
 
@@ -908,12 +911,14 @@ impl Hosts {
             if !settings.localnet {
                 for ext in &external_addrs {
                     if host == ext.host().unwrap() {
+                        verbose!(target: "net::hosts::filter_addresses", "Filtered {addr}: own address");
                         continue 'addr_loop;
                     }
                 }
             } else {
                 for ext in &settings.external_addrs {
                     if addr.port() == ext.port() {
+                        verbose!(target: "net::hosts::filter_addresses", "Filtered {addr}: own address (localnet)");
                         continue 'addr_loop;
                     }
                 }
@@ -921,11 +926,13 @@ impl Hosts {
 
             // Skip local addresses in production
             if !settings.localnet && self.is_local_host(addr) {
+                verbose!(target: "net::hosts::filter_addresses", "Filtered {addr}: local address");
                 continue;
             }
 
             // Validate transport-specific formats
             if !self.validate_transport(addr) {
+                verbose!(target: "net::hosts::filter_addresses", "Filtered {addr}: invalid transport");
                 continue;
             }
 
@@ -933,6 +940,7 @@ impl Hosts {
             if !settings.active_profiles.contains(&addr.scheme().to_string()) ||
                 (!self.ipv6_available.load(Ordering::SeqCst) && self.is_ipv6(addr))
             {
+                verbose!(target: "net::hosts::filter_addresses", "Filtered {addr}: unsupported transport (darklist)");
                 self.container.store_and_trim(HostColor::Dark, addr.clone(), *last_seen);
                 self.container.refresh(HostColor::Dark, 86400);
 
@@ -946,6 +954,7 @@ impl Hosts {
                 .container
                 .contains_any(&[HostColor::Gold, HostColor::White, HostColor::Grey], addr)
             {
+                verbose!(target: "net::hosts::filter_addresses", "Filtered {addr}: already in active lists");
                 continue;
             }
 
