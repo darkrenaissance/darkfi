@@ -17,40 +17,30 @@
  */
 
 use darkfi::{
-    net::{
-        P2p, P2pPtr, session::{SESSION_DIRECT, SESSION_INBOUND}, settings::{MagicBytes, NetworkProfile, Settings as NetSettings}
-    },
-    system::{Publisher, PublisherPtr, StoppableTask, sleep},
+    system::{StoppableTask, sleep},
     tx::Transaction,
     util::parse::encode_base10,
 };
 use darkfi_money_contract::model::TokenId;
 use darkfi_serial::{serialize, Decodable, Encodable};
-use darkfi_sdk::crypto::{FuncId, keypair::{Address, Network, PublicKey, StandardAddress}};
+use darkfi_sdk::crypto::{keypair::{Address, Network, PublicKey, StandardAddress}};
 use drk::{Drk, money::BALANCE_BASE10_DECIMALS, rpc::subscribe_blocks};
-use sled_overlay::sled;
-use smol::lock::{Mutex, RwLock};
+use smol::lock::RwLock;
 use smol::channel::unbounded;
 use std::{
-    collections::HashSet,
     io::Cursor,
-    path::PathBuf,
-    str::FromStr,
     sync::{Arc, OnceLock, Weak},
 };
 use url::Url;
 
 use crate::{
     error::{Error, Result},
-    prop::{BatchGuardPtr, PropertyAtomicGuard, PropertyBool, Role},
+    prop::BatchGuardPtr,
     scene::{
-        MethodCall, MethodCallSub, Pimpl, SceneNode, SceneNodePtr, SceneNodeType, SceneNodeWeak,
+        MethodCallSub, Pimpl, SceneNode, SceneNodePtr, SceneNodeType, SceneNodeWeak,
     },
-    ui::{chatview::FileMessageStatus, OnModify},
     ExecutorPtr,
 };
-
-use super::PluginSettings;
 
 const DARKFID_RETRY_TIME: u64 = 20;
 
@@ -151,9 +141,9 @@ impl DrkPlugin {
         let setting_root = Arc::new(SceneNode::new("setting", SceneNodeType::SettingRoot));
         node_ref.clone().link(setting_root.clone());
 
-        let endpoint = Url::parse("tcp://127.0.0.1:28345").unwrap();
+        let endpoint = Url::parse("tcp://127.0.0.1:18345").unwrap();
 
-        let drk = match Drk::new(Network::Mainnet, get_cache_path().to_string_lossy().to_string(), get_wallet_path().to_string_lossy().to_string(), "changeme".to_string(), Some(endpoint), &ex, false).await {
+        let drk = match Drk::new(Network::Testnet, get_cache_path().to_string_lossy().to_string(), get_wallet_path().to_string_lossy().to_string(), "changeme".to_string(), Some(endpoint), &ex, false).await {
             Ok(wallet) => wallet,
             Err(e) => {
                 eprintln!("Error initializing wallet: {e}");
@@ -271,12 +261,13 @@ impl DrkPlugin {
             while Self::process_broadcast_tx(&me2, &method_sub_broadcast_tx).await {}
         });
 
-        self_.clone().start(ex.clone(), local_ex.clone(), get_address_task, get_balances_task, get_tx_status_task, build_tx_task, broadcast_tx_task, build_tx_processor).await;
+        let tasks = vec![get_address_task, get_balances_task, get_tx_status_task, build_tx_task, broadcast_tx_task, build_tx_processor];
+        self_.clone().start(ex.clone(), local_ex.clone(), tasks).await;
 
         Ok((Pimpl::Drk(self_), local_ex))
     }
 
-    async fn apply_settings(self_: Arc<Self>, _batch: BatchGuardPtr) {
+    async fn apply_settings(_self: Arc<Self>, _batch: BatchGuardPtr) {
         // TODO
     }
 
@@ -488,7 +479,7 @@ impl DrkPlugin {
         };
 
         let drk = self_.drk.read().await;
-        let Ok((_, status, block_height, tx)) = drk.get_tx_history_record(&tx_id).await else {
+        let Ok((_, status, _block_height, _tx)) = drk.get_tx_history_record(&tx_id).await else {
             d!("get_tx_history() method failed to get tx history record");
             return true
         };
@@ -631,11 +622,8 @@ impl DrkPlugin {
         true
     }
 
-    async fn start(self: Arc<Self>, ex: ExecutorPtr, local_ex: Arc<smol::LocalExecutor<'_>>, get_address_task: smol::Task<()>, get_balances_task: smol::Task<()>, get_tx_status_task: smol::Task<()>, build_tx_task: smol::Task<()>, broadcast_tx_task: smol::Task<()>, build_tx_processor: smol::Task<()>) {
-        let endpoint = Url::parse("tcp://127.0.0.1:28345").unwrap();
-
-        let me = Arc::downgrade(&self);
-        let node = &self.node.upgrade().unwrap();
+    async fn start(self: Arc<Self>, ex: ExecutorPtr, local_ex: Arc<smol::LocalExecutor<'_>>, tasks: Vec<smol::Task<()>>) {
+        let endpoint = Url::parse("tcp://127.0.0.1:18345").unwrap();
 
         let self2 = self.clone();
         let drk = self.drk.clone();
@@ -698,7 +686,8 @@ impl DrkPlugin {
             }
         });
 
-        let tasks = vec![subscribe_task, subscribe_recv_task, get_address_task, get_balances_task, get_tx_status_task, build_tx_task, broadcast_tx_task, build_tx_processor];
-        self.tasks.set(tasks).unwrap();
+        let mut all_tasks = vec![subscribe_task, subscribe_recv_task];
+        all_tasks.extend(tasks);
+        self.tasks.set(all_tasks).unwrap();
     }
 }
