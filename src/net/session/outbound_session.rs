@@ -277,27 +277,30 @@ impl Slot {
         // Acquire Settings read lock
         let settings = self.p2p().settings().read_arc().await;
 
-        let white_count = (settings.white_connect_percent * settings.outbound_connections) / 100;
-        let gold_count = settings.gold_connect_count;
-
         let transports = settings.active_profiles.clone();
-        let preference_strict = settings.slot_preference_strict;
+        let outbound_connections = settings.outbound_connections;
+        let known_peer_percent = settings.known_peer_percent;
+        let disable_greys = settings.disable_greys;
 
         // Drop Settings read lock
         drop(settings);
 
-        let grey_only = hosts.container.is_empty(HostColor::White) &&
-            hosts.container.is_empty(HostColor::Gold) &&
-            !hosts.container.is_empty(HostColor::Grey);
+        // Calculate the number of slots for known peers (gold or white)
+        let max_known_percent = if disable_greys { 100 } else { 80 };
+        let bounded_percent = known_peer_percent.min(max_known_percent);
+        let known_count = (bounded_percent * outbound_connections) / 100;
 
-        // If we only have grey entries, select from the greylist. Otherwise,
-        // use the preference defined in settings.
-        let addrs = if grey_only && !preference_strict {
-            container.fetch_with_schemes(HostColor::Grey, &transports, None)
-        } else if slot < gold_count {
-            container.fetch_with_schemes(HostColor::Gold, &transports, None)
-        } else if slot < white_count {
-            container.fetch_with_schemes(HostColor::White, &transports, None)
+        // For known peer slots, prefer gold then white. Otherwise use grey.
+        let addrs = if slot < known_count {
+            // Try gold first, then white for known peers.
+            // NOTE: We might want to force white connections, otherwise we may
+            // end up connecting to gold hosts only.
+            let gold = container.fetch_with_schemes(HostColor::Gold, &transports, None);
+            if gold.is_empty() {
+                container.fetch_with_schemes(HostColor::White, &transports, None)
+            } else {
+                gold
+            }
         } else {
             container.fetch_with_schemes(HostColor::Grey, &transports, None)
         };

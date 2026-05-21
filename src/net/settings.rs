@@ -110,14 +110,12 @@ pub struct Settings {
     pub hostlist: Option<String>,
     /// Pause interval within greylist refinery process
     pub greylist_refinery_interval: u64,
-    /// Percent of connections to come from the whitelist
-    pub white_connect_percent: usize,
-    /// Number of goldlist connections
-    pub gold_connect_count: usize,
-    /// If this is true, strictly follow the gold_connect_count and
-    /// white_connect_percent settings. Otherwise, connect to greylist
-    /// entries if we have no white or gold connections.
-    pub slot_preference_strict: bool,
+    /// Percent of connections to prefer known peers (gold or white).
+    /// Capped at 80% (better for network health).
+    pub known_peer_percent: usize,
+    /// If true, disable greylist connections entirely.
+    /// When set, known_peer_percent is effectively 100%.
+    pub disable_greys: bool,
     /// Number of seconds with no connections after which refinery
     /// process is paused.
     pub time_with_no_connections: u64,
@@ -162,9 +160,8 @@ impl Default for Settings {
             p2p_datastore: None,
             hostlist: None,
             greylist_refinery_interval: 15,
-            white_connect_percent: 70,
-            gold_connect_count: 2,
-            slot_preference_strict: false,
+            known_peer_percent: 70,
+            disable_greys: false,
             time_with_no_connections: 30,
             blacklist: vec![],
             ban_policy: BanPolicy::Strict,
@@ -333,18 +330,14 @@ pub struct SettingsOpt {
     #[structopt(skip)]
     pub greylist_refinery_interval: Option<u64>,
 
-    /// Number of whitelist connections
+    /// Percent of connections to prefer known peers (gold or white)
     #[structopt(skip)]
-    pub white_connect_percent: Option<usize>,
+    pub known_peer_percent: Option<usize>,
 
-    /// Number of goldlist connections
-    #[structopt(skip)]
-    pub gold_connect_count: Option<usize>,
-
-    /// Allow localnet hosts
+    /// If true, disable greylist connections entirely
     #[serde(default)]
     #[structopt(long)]
-    pub slot_preference_strict: bool,
+    pub disable_greys: bool,
 
     /// Number of seconds with no connections after which refinery
     /// process is paused.
@@ -437,9 +430,8 @@ impl TryFrom<(&str, &str, SettingsOpt)> for Settings {
             greylist_refinery_interval: opt
                 .greylist_refinery_interval
                 .unwrap_or(def.greylist_refinery_interval),
-            white_connect_percent: opt.white_connect_percent.unwrap_or(def.white_connect_percent),
-            gold_connect_count: opt.gold_connect_count.unwrap_or(def.gold_connect_count),
-            slot_preference_strict: opt.slot_preference_strict,
+            known_peer_percent: opt.known_peer_percent.unwrap_or(def.known_peer_percent),
+            disable_greys: opt.disable_greys,
             time_with_no_connections: opt
                 .time_with_no_connections
                 .unwrap_or(def.time_with_no_connections),
