@@ -69,37 +69,39 @@ state transition is pending to be applied on top of the canonical
 
 1. User creates a transaction $tx$
 2. User broadcasts $tx$ to `S`
-3. `S` validates $tx$ state transition against canonical chain state
+3. `S` validates $tx$ state transition against best fork state
 4. $tx$ enters `S` `mempool`
 5. `S` broadcasts $tx$ to `P`
-6. `M` validates $tx$ state transition against all known fork states
+6. `M` validates $tx$ state transition against best fork state
 7. $tx$ enters `M` `mempool`
 8. `M` broadcasts $tx$ to rest `M` nodes
 9. Block producer `SM` finds which fork to extend
 10. `SM` validates all unproposed transactions in its `mempool` in
-  sequence, extended fork state, discarding invalid
+sequence, against extended fork state, discarding invalid
 11. `SM` creates a block proposal containing $tx$ extending the fork
-12. `M` receives block proposal and validates its transactions against
+12. `SM` removes $tx$ from their `mempool`
+13. `M` receives block proposal and validates its transactions against
 the extended fork state
-13. `SM` proposes more block proposals extending a fork state
-14. When a fork can be confirmed, `M` validates all its proposals
+14. `M` removes $tx$ from their `mempool`
+15. `SM` proposes more block proposals extending a fork state
+16. When a fork can be confirmed, `M` validates all its proposals
 transactions in sequence, against canonical state
-15. `M` writes the state transition update of $tx$ to their chain
-16. `M` removes $tx$ from their `mempool`
-17. `M` drop rest forks and keeps only the confirmed one
-18. `M` broadcasts the confirmed proposals sequence
-19. `S` receives the proposals sequence and validates transactions
-20. `S` writes the state updates to their chain
-21. `S` removes $tx$ from their `mempool`
+17. `M` writes the state transition update of $tx$ to their chain
+18. `M` drop rest forks and keeps only the confirmed one
+19. `M` broadcasts the confirmed proposals sequence
+20. `S` receives the proposals sequence and validates transactions
+21. `S` writes the state updates to their chain
+22. `S` removes $tx$ from their `mempool`
 
 `M` will keep $tx$ in its `mempool` as long as it is a valid state
-transition for any fork(including canonical) or it get confirmed.
+transition against current best fork state or it gets included into a
+proposal.
 
 Unproposed transactions refers to all $tx$ not included in a proposal
 of any fork.
 
 If a fork that can be confirmed fails to validate all its
-transactions(14), it should be dropped.
+transactions(16), it should be dropped.
 
 ## The `Transaction` object
 

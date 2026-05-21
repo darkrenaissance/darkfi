@@ -66,7 +66,6 @@ you haven't already done it:
 ```shell
 % git clone https://codeberg.org/darkrenaissance/darkfi
 % cd darkfi
-% git checkout a05956d412a091e8b54c1cd4f4264c33b941203d
 ```
 
 This project requires the Rust compiler to be installed. 
@@ -120,9 +119,19 @@ package manager, please consider adding support for it into the script
 and sending a patch.
 
 Lastly, we can build the necessary binaries using the provided
-Makefile, to build the project. If you want to build specific ones,
-like `darkfid` or `darkirc`, skip this step, as it will build
-everything, and use their specific targets instead.
+Makefile, to build the project.
+
+> Note:
+>
+> If you want to build specific binaries, like [darkfid][darkfid-build]
+> or [darkirc][darkirc-build], skip this step and refer to their build
+> instructions to use the correct release tag/branch and their specific
+> target.
+>
+> The following command will build everything using `master` branch.
+
+[darkfid-build]: https://dark.fi/book/testnet/node.html#compiling
+[darkirc-build]: https://dark.fi/book/misc/darkirc/darkirc.html#building
 
 ```shell
 % make

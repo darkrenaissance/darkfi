@@ -28,6 +28,7 @@ Follow the instructions in the [README](../../index.html#build) to ensure
 you have all the necessary dependencies. After that, in repo root folder:
 
 ```shell
+% git checkout a05956d412a091e8b54c1cd4f4264c33b941203d
 % make darkirc
 ```
 

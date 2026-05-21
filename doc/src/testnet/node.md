@@ -2,12 +2,12 @@ Compiling and Running a Node
 =========================
 
 **DISCLAIMER: This is a work in progress and functionalities may not be
-available on the current deployed testnet as of 22-May-2025.**
+available on the current deployed alpha testnet as of 21-May-2026.**
 
 Please read the whole document first before executing commands, to
 understand all the steps required and how each component operates.
-Unless instructed otherwise, each daemon runs on its own shell, so don't
-stop a running one to start another.
+Unless instructed otherwise, each daemon runs on its own shell, so
+don't stop a running one to start another.
 
 Each command to execute will be inside a codeblock, on its first line,
 marked by the user `$` symbol, followed by the expected output. For
@@ -60,7 +60,13 @@ updates.
 
 Refer to the main [DarkFi](../index.html#build) page for instructions
 on how to install Rust and necessary deps. Skip last step of the build
-process, as you don't need to compile all binaries of the project.
+process, as you don't need to compile all binaries of the project, and
+ensure you are on latest `master` branch:
+
+```shell
+$ git checkout master
+$ git pull
+```
 
 Once you have the repository in place, and everything is installed, we
 can compile the `darkfid` node and the `drk` wallet CLI:

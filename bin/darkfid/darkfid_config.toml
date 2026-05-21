@@ -102,7 +102,7 @@ localnet = false
 #outbound_peer_discovery_attempt_time = 5
 
 # Whitelisted network transports for outbound connections
-active_profiles = ["tor"]
+active_profiles = ["tcp+tls"]
 
 # Transports you want to be mixed (e.g. Tor would be allowed to connect to `tcp://`
 # if tcp is added to mixed_profiles and tor is added to active_profiles)
@@ -146,8 +146,8 @@ seeds = ["tcp+tls://lilith0.dark.fi:18340", "tcp+tls://lilith1.dark.fi:18340"]
 # Seed nodes to connect to for peer discovery and/or adversising our
 # own external addresses
 seeds = [
-    "tor://g7fxelebievvpr27w7gt24lflptpw3jeeuvafovgliq5utdst6xyruyd.onion:18341",
-    "tor://yvklzjnfmwxhyodhrkpomawjcdvcaushsj6torjz2gyd7e25f3gfunyd.onion:18341",
+    "tor://wgxxaifz5gv4iggcflyl67lgmsihffs6bbwobqah4np52t3y3olrnpid.onion:18341",
+    "tor://eu7b6sqsxvyfgmufquwr622fbbaqut7qwvpedzlste3b66bv7jvxlpyd.onion:18341",
 ]
 
 # Peer nodes to manually connect to
@@ -175,8 +175,8 @@ seeds = [
 # Seed nodes to connect to for peer discovery and/or adversising our
 # own external addresses
 seeds = [
-    "socks5://127.0.0.1:9050/g7fxelebievvpr27w7gt24lflptpw3jeeuvafovgliq5utdst6xyruyd.onion:18341",
-    "socks5://127.0.0.1:9050/yvklzjnfmwxhyodhrkpomawjcdvcaushsj6torjz2gyd7e25f3gfunyd.onion:18341",
+    "socks5://127.0.0.1:9050/wgxxaifz5gv4iggcflyl67lgmsihffs6bbwobqah4np52t3y3olrnpid.onion:18341",
+    "socks5://127.0.0.1:9050/eu7b6sqsxvyfgmufquwr622fbbaqut7qwvpedzlste3b66bv7jvxlpyd.onion:18341",
 ]
 
 # Peer nodes to manually connect to
@@ -303,7 +303,7 @@ localnet = false
 #blacklist = [["example.com", ["tcp"], [8551, 23331]]]
 
 # Whitelisted network transports for outbound connections
-active_profiles = ["tor"]
+active_profiles = ["tcp+tls"]
 
 # Transports you want to be mixed (e.g. Tor would be allowed to connect to `tcp://`
 # if tcp is added to mixed_profiles and tor is added to active_profiles)
