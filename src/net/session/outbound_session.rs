@@ -259,11 +259,11 @@ impl Slot {
         self.process.stop().await;
     }
 
-    /// Address selection algorithm that works as follows: up to
-    /// gold_count, select from the goldlist. Up to white_count,
-    /// select from the whitelist. For all other slots, select from
-    /// the greylist. If none of these preferences are satisfied, do
-    /// peer discovery.
+    /// Address selection algorithm that builds an ordered vector of addresses:
+    /// gold peers first (up to known_peer_percent), then white peers (filling
+    /// remaining known slots), then grey peers (filling remaining slots).
+    /// All slots use this same ordered vector, and check_addrs coordinates
+    /// which slot gets which address via try_register.
     ///
     /// Selecting from the greylist for some % of the slots is necessary
     /// and healthy since we require the network retains some unreliable
@@ -271,7 +271,6 @@ impl Slot {
     /// connections may be vulnerable to sybil by attackers with good uptime.
     async fn fetch_addrs(&self) -> Option<(Url, u64)> {
         let hosts = self.p2p().hosts();
-        let slot = self.slot as usize;
         let container = &self.p2p().hosts().container;
 
         // Acquire Settings read lock
@@ -285,25 +284,42 @@ impl Slot {
         // Drop Settings read lock
         drop(settings);
 
-        // Calculate the number of slots for known peers (gold or white)
+        let mut addrs = Vec::with_capacity(outbound_connections);
+
+        // Known peers (gold + white) up to known_peer_percent.
+        // NOTE: if we don't have enough gold or white peers, we select from the greylist.
+        // This prioritizes max slot utilization over strictly respecting user preference.
+        // However disable_greys cancels this out.
         let max_known_percent = if disable_greys { 100 } else { 80 };
         let bounded_percent = known_peer_percent.min(max_known_percent);
         let known_count = (bounded_percent * outbound_connections) / 100;
 
-        // For known peer slots, prefer gold then white. Otherwise use grey.
-        let addrs = if slot < known_count {
-            // Try gold first, then white for known peers.
-            // NOTE: We might want to force white connections, otherwise we may
-            // end up connecting to gold hosts only.
-            let gold = container.fetch_with_schemes(HostColor::Gold, &transports, None);
-            if gold.is_empty() {
-                container.fetch_with_schemes(HostColor::White, &transports, None)
-            } else {
-                gold
+        // Add gold up to known_count
+        while let Some(addr) = container.fetch_random_with_schemes(HostColor::Gold, &transports) {
+            if addrs.len() >= known_count {
+                break;
             }
-        } else {
-            container.fetch_with_schemes(HostColor::Grey, &transports, None)
-        };
+            addrs.push(addr);
+        }
+
+        // Add white to fill remaining known slots
+        while let Some(addr) = container.fetch_random_with_schemes(HostColor::White, &transports) {
+            if addrs.len() >= known_count {
+                break;
+            }
+            addrs.push(addr);
+        }
+
+        // Add grey to fill remaining slots
+        if !disable_greys {
+            while let Some(addr) = container.fetch_random_with_schemes(HostColor::Grey, &transports)
+            {
+                if addrs.len() >= outbound_connections {
+                    break;
+                }
+                addrs.push(addr);
+            }
+        }
 
         hosts.check_addrs(addrs).await
     }
