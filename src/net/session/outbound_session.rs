@@ -295,28 +295,25 @@ impl Slot {
         let known_count = (bounded_percent * outbound_connections) / 100;
 
         // Add gold up to known_count
-        while let Some(addr) = container.fetch_random_with_schemes(HostColor::Gold, &transports) {
-            if addrs.len() >= known_count {
-                break;
-            }
+        for addr in container.fetch_n_random_with_schemes(HostColor::Gold, &transports, known_count)
+        {
             addrs.push(addr);
         }
 
         // Add white to fill remaining known slots
-        while let Some(addr) = container.fetch_random_with_schemes(HostColor::White, &transports) {
-            if addrs.len() >= known_count {
-                break;
-            }
+        let remaining_known = known_count - addrs.len();
+        for addr in
+            container.fetch_n_random_with_schemes(HostColor::White, &transports, remaining_known)
+        {
             addrs.push(addr);
         }
 
         // Add grey to fill remaining slots
         if !disable_greys {
-            while let Some(addr) = container.fetch_random_with_schemes(HostColor::Grey, &transports)
+            let remaining = outbound_connections - addrs.len();
+            for addr in
+                container.fetch_n_random_with_schemes(HostColor::Grey, &transports, remaining)
             {
-                if addrs.len() >= outbound_connections {
-                    break;
-                }
                 addrs.push(addr);
             }
         }
