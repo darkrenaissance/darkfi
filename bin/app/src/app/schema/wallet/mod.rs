@@ -31,10 +31,12 @@ pub mod send_step4;
 pub mod tx_status;
 
 use crate::{
-    app::App,
+    app::{App, node::create_layer},
+    expr,
     gfx::gfxtag,
     prop::{PropertyAtomicGuard, PropertyFloat32, Role},
     scene::SceneNodePtr,
+    ui::Layer,
     util::i18n::I18nBabelFish,
 };
 
@@ -51,13 +53,24 @@ pub async fn make(app: &App, content: SceneNodePtr, i18n_fish: &I18nBabelFish) {
     )
     .unwrap();
 
+    let atom = &mut PropertyAtomicGuard::none();
+    let wallet_layer = create_layer("wallet");
+    let prop = wallet_layer.get_property("rect").unwrap();
+    prop.set_f32(atom, Role::App, 0, 0.).unwrap();
+    prop.set_f32(atom, Role::App, 1, 0.).unwrap();
+    prop.set_expr(atom, Role::App, 2, expr::load_var("w")).unwrap();
+    prop.set_expr(atom, Role::App, 3, expr::load_var("h")).unwrap();
+    wallet_layer.set_property_bool(atom, Role::App, "is_visible", false).unwrap();
+    wallet_layer.set_property_u32(atom, Role::App, "z_index", 19).unwrap();
+    let wallet_layer = wallet_layer.setup(|me| Layer::new(me, app.renderer.clone())).await;
+    content.link(wallet_layer.clone());
+
     // Create main wallet layer
-    let wallet_layer = make_main_wallet_layer(app, content.clone(), i18n_fish, window_scale.clone()).await;
+    let _ = make_main_wallet_layer(app, wallet_layer.clone(), i18n_fish, window_scale.clone()).await;
 
     // Create receive layer
     let _ = make_receive_layer(
         app,
-        content.clone(),
         wallet_layer.clone(),
         i18n_fish,
         window_scale.clone(),
@@ -66,7 +79,6 @@ pub async fn make(app: &App, content: SceneNodePtr, i18n_fish: &I18nBabelFish) {
     // Create send layer
     let _ = make_send_layer(
         app,
-        content.clone(),
         wallet_layer.clone(),
         i18n_fish,
         window_scale.clone(),

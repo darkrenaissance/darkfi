@@ -41,7 +41,6 @@ use super::{super::ColorScheme, data::*, util::*};
 
 pub async fn make_send_step1_layer(
     app: &App,
-    content: SceneNodePtr,
     wallet_layer: SceneNodePtr,
     i18n_fish: &I18nBabelFish,
     window_scale: PropertyFloat32,
@@ -61,10 +60,12 @@ pub async fn make_send_step1_layer(
     cc.add_const_f32("RECIPIENT_INPUT_MARGIN", RECIPIENT_INPUT_MARGIN);
     cc.add_const_f32("RECIPIENT_INPUT_PADDING_X", RECIPIENT_INPUT_PADDING_X);
 
+    let main_layer = wallet_layer.lookup_node("/main_layer").unwrap();
+
     // ============================================
     // Step 1: Pick token layer
     // ============================================
-    let send_step1_layer = create_layer("wallet_send_step1_layer");
+    let send_step1_layer = create_layer("send_step1_layer");
     let prop = send_step1_layer.get_property("rect").unwrap();
     prop.set_f32(atom, Role::App, 0, 0.).unwrap();
     prop.set_f32(atom, Role::App, 1, 0.).unwrap();
@@ -73,7 +74,7 @@ pub async fn make_send_step1_layer(
     send_step1_layer.set_property_bool(atom, Role::App, "is_visible", false).unwrap();
     send_step1_layer.set_property_u32(atom, Role::App, "z_index", 2).unwrap();
     let send_step1_layer = send_step1_layer.setup(|me| Layer::new(me, app.renderer.clone())).await;
-    content.link(send_step1_layer.clone());
+    wallet_layer.link(send_step1_layer.clone());
     let step1_is_visible = PropertyBool::wrap(&send_step1_layer, Role::App, "is_visible", 0).unwrap();
 
     create_bg_mesh(app, atom, &send_step1_layer, "send_bg").await;
@@ -101,16 +102,16 @@ pub async fn make_send_step1_layer(
     prop.set_f32(atom, Role::App, 2, WALLET_BTN_SIZE * 2.).unwrap();
     prop.set_f32(atom, Role::App, 3, HEADER_HEIGHT).unwrap();
 
-    let wallet_is_visible = PropertyBool::wrap(&wallet_layer, Role::App, "is_visible", 0).unwrap();
+    let main_is_visible = PropertyBool::wrap(&main_layer, Role::App, "is_visible", 0).unwrap();
     let renderer = app.renderer.clone();
-    let wallet_is_visible1 = wallet_is_visible.clone();
+    let main_is_visible1 = main_is_visible.clone();
     let step1_is_visible1 = step1_is_visible.clone();
     let (slot, recvr) = Slot::new("send_back_clicked");
     node.register("click", slot).unwrap();
     let listen_click = app.ex.spawn(async move {
         while let Ok(_) = recvr.recv().await {
             let atom = &mut renderer.make_guard(gfxtag!("send back button"));
-            wallet_is_visible1.set(atom, true);
+            main_is_visible1.set(atom, true);
             step1_is_visible1.set(atom, false);
         }
     });
@@ -178,12 +179,12 @@ pub async fn make_send_step1_layer(
                 drop(data);
 
                 let atom = &mut renderer.make_guard(gfxtag!("token selection"));
-                if let Some(selected_token_symbol) = sg_root.lookup_node("/window/content/wallet_send_step2_layer/send_selected_token_symbol") {
+                if let Some(selected_token_symbol) = sg_root.lookup_node("/window/content/wallet/send_step2_layer/send_selected_token_symbol") {
                     selected_token_symbol.set_property_str(atom, Role::App, "text", &row.symbol).unwrap();
                 }
 
                 step1_is_visible3.set(atom, false);
-                if let Some(step2) = sg_root.lookup_node("/window/content/wallet_send_step2_layer") {
+                if let Some(step2) = sg_root.lookup_node("/window/content/wallet/send_step2_layer") {
                     step2.set_property_bool(atom, Role::App, "is_visible", true).unwrap();
                 }
             }
@@ -224,7 +225,7 @@ pub async fn make_send_step1_layer(
 
                             // Update main wallet balance
                             if let Some(drk_row) = token_rows.iter().find(|row| row.id == *DARK_TOKEN_ID) {
-                                if let Some(balance_node) = sg_root2.lookup_node("/window/content/wallet_main_layer/wallet_balance") {
+                                if let Some(balance_node) = sg_root2.lookup_node("/window/content/wallet/main_layer/wallet_balance") {
                                     balance_node.set_property_str(atom, Role::App, "text", format!("DRK {}", drk_row.balance)).unwrap();
                                 }
                             }

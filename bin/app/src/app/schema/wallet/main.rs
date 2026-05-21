@@ -39,7 +39,7 @@ use super::{super::ColorScheme, data::*, util::*};
 
 pub async fn make_main_wallet_layer(
     app: &App,
-    content: SceneNodePtr,
+    wallet_layer: SceneNodePtr,
     i18n_fish: &I18nBabelFish,
     window_scale: PropertyFloat32,
 ) -> SceneNodePtr {
@@ -55,24 +55,26 @@ pub async fn make_main_wallet_layer(
     cc.add_const_f32("BUTTON_FONTSIZE", BUTTON_FONTSIZE);
     cc.add_const_f32("ROW_HEIGHT", ROW_HEIGHT);
 
+    let wallet_is_visible = PropertyBool::wrap(&wallet_layer, Role::App, "is_visible", 0).unwrap();
+
     // ============================================
     // Main Wallet Layer
     // ============================================
-    let wallet_layer = create_layer("wallet_main_layer");
-    let prop = wallet_layer.get_property("rect").unwrap();
+    let main_layer = create_layer("main_layer");
+    let prop = main_layer.get_property("rect").unwrap();
     prop.set_f32(atom, Role::App, 0, 0.).unwrap();
     prop.set_f32(atom, Role::App, 1, 0.).unwrap();
     prop.set_expr(atom, Role::App, 2, expr::load_var("w")).unwrap();
     prop.set_expr(atom, Role::App, 3, expr::load_var("h")).unwrap();
-    wallet_layer.set_property_bool(atom, Role::App, "is_visible", false).unwrap();
-    wallet_layer.set_property_u32(atom, Role::App, "z_index", 1).unwrap();
-    let wallet_layer = wallet_layer.setup(|me| Layer::new(me, app.renderer.clone())).await;
-    content.link(wallet_layer.clone());
+    main_layer.set_property_bool(atom, Role::App, "is_visible", true).unwrap();
+    main_layer.set_property_u32(atom, Role::App, "z_index", 19).unwrap();
+    let main_layer = main_layer.setup(|me| Layer::new(me, app.renderer.clone())).await;
+    wallet_layer.link(main_layer.clone());
 
-    let wallet_is_visible = PropertyBool::wrap(&wallet_layer, Role::App, "is_visible", 0).unwrap();
+    let main_is_visible = PropertyBool::wrap(&main_layer, Role::App, "is_visible", 0).unwrap();
 
-    create_bg_mesh(app, atom, &wallet_layer, "wallet_bg").await;
-    create_header_bg(app, atom, &wallet_layer, "wallet_header_bg").await;
+    create_bg_mesh(app, atom, &main_layer, "wallet_bg").await;
+    create_header_bg(app, atom, &main_layer, "wallet_header_bg").await;
 
     // Back button
     let node = create_vector_art("wallet_back_btn_bg");
@@ -84,7 +86,7 @@ pub async fn make_main_wallet_layer(
     node.set_property_u32(atom, Role::App, "z_index", 2).unwrap();
     let shape = shape::create_back_arrow().scaled(BACKARROW_SCALE);
     let node = node.setup(|me| VectorArt::new(me, shape, app.renderer.clone())).await;
-    wallet_layer.link(node);
+    main_layer.link(node);
 
     let node = create_button("wallet_back_btn");
     node.set_property_bool(atom, Role::App, "is_active", true).unwrap();
@@ -117,7 +119,7 @@ pub async fn make_main_wallet_layer(
     app.tasks.lock().unwrap().push(listen_click);
 
     let node = node.setup(|me| Button::new(me, app.renderer.clone())).await;
-    wallet_layer.link(node);
+    main_layer.link(node);
 
     let mut y = HEADER_HEIGHT;
 
@@ -146,14 +148,14 @@ pub async fn make_main_wallet_layer(
     let node = node
         .setup(|me| Text::new(me, window_scale.clone(), app.renderer.clone(), i18n_fish.clone()))
         .await;
-    wallet_layer.link(node);
+    main_layer.link(node);
 
     y += TITLE_PADDING * 2. + TITLE_FONTSIZE + 1.;
 
-    create_separator(&app.renderer, atom, &wallet_layer, "wallet_balance_separator", &mut y).await;
+    create_separator(&app.renderer, atom, &main_layer, "wallet_balance_separator", &mut y).await;
 
     // Receive button bg
-    let node = create_vector_art("wallet_receive_btn_bg");
+    let node = create_vector_art("receive_btn_bg");
     let prop = node.get_property("rect").unwrap();
     prop.set_f32(atom, Role::App, 0, PADDING_X).unwrap();
     prop.set_f32(atom, Role::App, 1, y + PADDING_X).unwrap();
@@ -171,10 +173,10 @@ pub async fn make_main_wallet_layer(
         COLOR_TEAL,
     );
     let node = node.setup(|me| VectorArt::new(me, shape, app.renderer.clone())).await;
-    wallet_layer.link(node);
+    main_layer.link(node);
 
     // Receive button click handler
-    let node = create_button("wallet_receive_btn");
+    let node = create_button("receive_btn");
     node.set_property_bool(atom, Role::App, "is_active", true).unwrap();
     let prop = node.get_property("rect").unwrap();
     prop.set_f32(atom, Role::App, 0, PADDING_X).unwrap();
@@ -184,16 +186,16 @@ pub async fn make_main_wallet_layer(
     prop.set_f32(atom, Role::App, 3, BUTTON_HEIGHT).unwrap();
 
     let renderer = app.renderer.clone();
-    let wallet_is_visible2 = wallet_is_visible.clone();
+    let main_is_visible2 = main_is_visible.clone();
     let sg_root = app.sg_root.clone();
     let (slot, recvr) = Slot::new("receive_clicked");
     node.register("click", slot).unwrap();
     let listen_click = app.ex.spawn(async move {
         while recvr.recv().await.is_ok() {
             let atom = &mut renderer.make_guard(gfxtag!("receive button click"));
-            wallet_is_visible2.set(atom, false);
+            main_is_visible2.set(atom, false);
 
-            let receive_layer = sg_root.lookup_node("/window/content/wallet_receive_layer").unwrap();
+            let receive_layer = sg_root.lookup_node("/window/content/wallet/receive_layer").unwrap();
             receive_layer.set_property_bool(atom, Role::App, "is_visible", true).unwrap();
 
             // Get the default address from drk plugin and update the UI
@@ -219,10 +221,10 @@ pub async fn make_main_wallet_layer(
     app.tasks.lock().unwrap().push(listen_click);
 
     let node = node.setup(|me| Button::new(me, app.renderer.clone())).await;
-    wallet_layer.link(node);
+    main_layer.link(node);
 
     // Receive label
-    let node = create_text("wallet_receive_label");
+    let node = create_text("receive_label");
     let prop = node.get_property("rect").unwrap();
     let code = cc.compile("PADDING_X + (w / 2 - PADDING_X * 1.5) / 2 - (BUTTON_FONTSIZE * 0.6 * 7) / 2").unwrap();
     prop.set_expr(atom, Role::App, 0, code).unwrap();
@@ -248,7 +250,7 @@ pub async fn make_main_wallet_layer(
     let node = node
         .setup(|me| Text::new(me, window_scale.clone(), app.renderer.clone(), i18n_fish.clone()))
         .await;
-    wallet_layer.link(node);
+    main_layer.link(node);
 
     // Send button bg
     let node = create_vector_art("wallet_send_btn_bg");
@@ -270,7 +272,7 @@ pub async fn make_main_wallet_layer(
         COLOR_TEAL,
     );
     let node = node.setup(|me| VectorArt::new(me, shape, app.renderer.clone())).await;
-    wallet_layer.link(node);
+    main_layer.link(node);
 
     // Send button click handler
     let node = create_button("wallet_send_btn");
@@ -285,21 +287,21 @@ pub async fn make_main_wallet_layer(
 
     let renderer = app.renderer.clone();
     let sg_root = app.sg_root.clone();
-    let wallet_is_visible3 = wallet_is_visible.clone();
+    let main_is_visible3 = main_is_visible.clone();
     let (slot, recvr) = Slot::new("send_clicked");
     node.register("click", slot).unwrap();
     let listen_click = app.ex.spawn(async move {
         while let Ok(_) = recvr.recv().await {
             let atom = &mut renderer.make_guard(gfxtag!("send button click"));
-            wallet_is_visible3.set(atom, false);
-            let send_layer = sg_root.lookup_node("/window/content/wallet_send_step1_layer").unwrap();
+            main_is_visible3.set(atom, false);
+            let send_layer = sg_root.lookup_node("/window/content/wallet/send_step1_layer").unwrap();
             send_layer.set_property_bool(atom, Role::App, "is_visible", true).unwrap();
         }
     });
     app.tasks.lock().unwrap().push(listen_click);
 
     let node = node.setup(|me| Button::new(me, app.renderer.clone())).await;
-    wallet_layer.link(node);
+    main_layer.link(node);
 
     // Send label
     let node = create_text("wallet_send_label");
@@ -328,13 +330,13 @@ pub async fn make_main_wallet_layer(
     let node = node
         .setup(|me| Text::new(me, window_scale.clone(), app.renderer.clone(), i18n_fish.clone()))
         .await;
-    wallet_layer.link(node);
+    main_layer.link(node);
 
     y += PADDING_X * 2. + BUTTON_HEIGHT + 1.;
 
-    create_separator(&app.renderer, atom, &wallet_layer, "wallet_buttons_separator", &mut y).await;
+    create_separator(&app.renderer, atom, &main_layer, "wallet_buttons_separator", &mut y).await;
 
-    create_title(app, atom, &wallet_layer, &window_scale, i18n_fish, "TOKENS", &mut y).await;
+    create_title(app, atom, &main_layer, &window_scale, i18n_fish, "TOKENS", &mut y).await;
 
     let mut cc = expr::Compiler::new();
     cc.add_const_f32("PADDING_X", PADDING_X);
@@ -376,9 +378,9 @@ pub async fn make_main_wallet_layer(
     let tokens_table = tokens_table
         .setup(|me| TokenTable::new(me, app.renderer.clone(), app.sg_root.clone()))
         .await;
-    wallet_layer.link(tokens_table.clone());
+    main_layer.link(tokens_table.clone());
 
-    let wallet_layer = wallet_layer.clone();
+    let wallet_layer = main_layer.clone();
     let wallet_is_visible2 = wallet_is_visible.clone();
     let tokens_table2 = tokens_table.clone();
     let sg_root2 = app.sg_root.clone();
@@ -413,7 +415,7 @@ pub async fn make_main_wallet_layer(
                             // Update main wallet balance
                             use darkfi_money_contract::model::DARK_TOKEN_ID;
                             if let Some(drk_row) = token_rows.iter().find(|row| row.id == *DARK_TOKEN_ID) {
-                                if let Some(balance_node) = sg_root2.lookup_node("/window/content/wallet_main_layer/wallet_balance") {
+                                if let Some(balance_node) = sg_root2.lookup_node("/window/content/wallet/main_layer/wallet_balance") {
                                     balance_node.set_property_str(atom, Role::App, "text", format!("DRK {}", drk_row.balance)).unwrap();
                                 }
                             }

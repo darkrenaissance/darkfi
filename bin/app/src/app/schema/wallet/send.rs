@@ -33,7 +33,6 @@ use super::{data::SendTxData, data::BALANCE_BASE10_DECIMALS, send_step1::*, send
 
 pub async fn make_send_layer(
     app: &App,
-    content: SceneNodePtr,
     wallet_layer: SceneNodePtr,
     i18n_fish: &I18nBabelFish,
     window_scale: PropertyFloat32,
@@ -42,7 +41,6 @@ pub async fn make_send_layer(
 
     let send_step1_layer = make_send_step1_layer(
         app,
-        content.clone(),
         wallet_layer.clone(),
         i18n_fish,
         window_scale.clone(),
@@ -53,7 +51,6 @@ pub async fn make_send_layer(
 
     let send_step2_layer = make_send_step2_layer(
         app,
-        content.clone(),
         wallet_layer.clone(),
         i18n_fish,
         window_scale.clone(),
@@ -65,7 +62,6 @@ pub async fn make_send_layer(
 
     let send_step3_layer = make_send_step3_layer(
         app,
-        content.clone(),
         wallet_layer.clone(),
         i18n_fish,
         window_scale.clone(),
@@ -78,7 +74,6 @@ pub async fn make_send_layer(
 
     let send_step4_layer = make_send_step4_layer(
         app,
-        content.clone(),
         wallet_layer.clone(),
         i18n_fish,
         window_scale.clone(),
@@ -92,7 +87,6 @@ pub async fn make_send_layer(
 
     let tx_status_layer = make_tx_status_layer(
         app,
-        content.clone(),
         wallet_layer.clone(),
         i18n_fish,
         window_scale.clone(),
@@ -121,7 +115,7 @@ pub async fn make_send_layer(
             let atom = &mut renderer_for_built.make_guard(gfxtag!("tx built - update send button"));
 
             // Make send button active
-            if let Some(send_label_node) = sg_root_for_built.lookup_node("/window/content/wallet_send_step4_layer/send_send_btn_label") {
+            if let Some(send_label_node) = sg_root_for_built.lookup_node("/window/content/wallet/send_step4_layer/send_send_btn_label") {
                 send_label_node.set_property_str(atom, Role::App, "text", "send").unwrap();
                 let prop = send_label_node.get_property("text_color").unwrap();
                 prop.set_f32(atom, Role::App, 0, COLOR_CYAN[0]).unwrap();
@@ -129,22 +123,22 @@ pub async fn make_send_layer(
                 prop.set_f32(atom, Role::App, 2, COLOR_CYAN[2]).unwrap();
                 prop.set_f32(atom, Role::App, 3, COLOR_CYAN[3]).unwrap();
             }
-            if let Some(send_bg_grey_node) = sg_root_for_built.lookup_node("/window/content/wallet_send_step4_layer/send_send_btn_bg_grey") {
+            if let Some(send_bg_grey_node) = sg_root_for_built.lookup_node("/window/content/wallet/send_step4_layer/send_send_btn_bg_grey") {
                 send_bg_grey_node.set_property_bool(atom, Role::App, "is_visible", false).unwrap();
             }
-            if let Some(send_bg_node) = sg_root_for_built.lookup_node("/window/content/wallet_send_step4_layer/send_send_btn_bg") {
+            if let Some(send_bg_node) = sg_root_for_built.lookup_node("/window/content/wallet/send_step4_layer/send_send_btn_bg") {
                 send_bg_node.set_property_bool(atom, Role::App, "is_visible", true).unwrap();
             }
 
             // Show transaction fee
-            if let Some(tx_fee_label) = sg_root_for_built.lookup_node("/window/content/wallet_send_step4_layer/send_fee_label") {
+            if let Some(tx_fee_label) = sg_root_for_built.lookup_node("/window/content/wallet/send_step4_layer/send_fee_label") {
                 let prop = tx_fee_label.get_property("text_color").unwrap();
                 prop.set_f32(atom, Role::App, 0, 1.).unwrap();
                 prop.set_f32(atom, Role::App, 1, 1.).unwrap();
                 prop.set_f32(atom, Role::App, 2, 1.).unwrap();
                 prop.set_f32(atom, Role::App, 3, 1.).unwrap();
             }
-            if let Some(tx_fee_value) = sg_root_for_built.lookup_node("/window/content/wallet_send_step4_layer/send_fee_value") {
+            if let Some(tx_fee_value) = sg_root_for_built.lookup_node("/window/content/wallet/send_step4_layer/send_fee_value") {
                 tx_fee_value.set_property_str(atom, Role::App, "text", encode_base10(fees, BALANCE_BASE10_DECIMALS)).unwrap();
                 let prop = tx_fee_value.get_property("text_color").unwrap();
                 prop.set_f32(atom, Role::App, 0, 1.).unwrap();
@@ -161,7 +155,7 @@ pub async fn make_send_layer(
     let step2_is_visible_sub = step2_is_visible.prop().subscribe_modify();
     let listen_step2_visible = app.ex.spawn(async move {
         while let Ok(_) = step2_is_visible_sub.receive().await {
-            let recipient_input_node = sg_root_for_focus.lookup_node("/window/content/wallet_send_step2_layer/send_recipient_input").unwrap();
+            let recipient_input_node = sg_root_for_focus.lookup_node("/window/content/wallet/send_step2_layer/send_recipient_input").unwrap();
             if step2_is_visible_for_focus.get() {
                 // Focus when becoming visible
                 loop {

@@ -41,7 +41,6 @@ use super::{super::ColorScheme, data::*, util::*};
 
 pub async fn make_send_step3_layer(
     app: &App,
-    content: SceneNodePtr,
     wallet_layer: SceneNodePtr,
     i18n_fish: &I18nBabelFish,
     window_scale: PropertyFloat32,
@@ -66,7 +65,7 @@ pub async fn make_send_step3_layer(
     // ============================================
     // Step 3: Amount layer
     // ============================================
-    let send_step3_layer = create_layer("wallet_send_step3_layer");
+    let send_step3_layer = create_layer("send_step3_layer");
     let prop = send_step3_layer.get_property("rect").unwrap();
     prop.set_f32(atom, Role::App, 0, 0.).unwrap();
     prop.set_f32(atom, Role::App, 1, 0.).unwrap();
@@ -75,10 +74,10 @@ pub async fn make_send_step3_layer(
     send_step3_layer.set_property_bool(atom, Role::App, "is_visible", false).unwrap();
     send_step3_layer.set_property_u32(atom, Role::App, "z_index", 2).unwrap();
     let send_step3_layer = send_step3_layer.setup(|me| Layer::new(me, app.renderer.clone())).await;
-    content.link(send_step3_layer.clone());
+    wallet_layer.link(send_step3_layer.clone());
     let step3_is_visible = PropertyBool::wrap(&send_step3_layer, Role::App, "is_visible", 0).unwrap();
 
-    let step4_is_visible = app.sg_root.lookup_node("/window/content/wallet_send_step4_layer")
+    let step4_is_visible = app.sg_root.lookup_node("/window/content/wallet/send_step4_layer")
         .and_then(|l| PropertyBool::wrap(&l, Role::App, "is_visible", 0).ok());
 
     create_bg_mesh(app, atom, &send_step3_layer, "send_bg3").await;
@@ -592,25 +591,25 @@ pub async fn make_send_step3_layer(
                 data.amount = Some(text.clone());
 
                 // Update step4 display with transaction data
-                if let Some(token_symbol_node) = sg_root.lookup_node("/window/content/wallet_send_step4_layer/send_selected_token_symbol4") {
+                if let Some(token_symbol_node) = sg_root.lookup_node("/window/content/wallet/send_step4_layer/send_selected_token_symbol4") {
                     token_symbol_node.set_property_str(atom, Role::App, "text", &data.token_symbol.clone().unwrap()).unwrap();
                 }
-                if let Some(amount_token_node) = sg_root.lookup_node("/window/content/wallet_send_step4_layer/send_amount_token_symbol4") {
+                if let Some(amount_token_node) = sg_root.lookup_node("/window/content/wallet/send_step4_layer/send_amount_token_symbol4") {
                     amount_token_node.set_property_str(atom, Role::App, "text", &data.token_symbol.clone().unwrap()).unwrap();
                 }
-                if let Some(recipient_node) = sg_root.lookup_node("/window/content/wallet_send_step4_layer/send_recipient_value4") {
+                if let Some(recipient_node) = sg_root.lookup_node("/window/content/wallet/send_step4_layer/send_recipient_value4") {
                     recipient_node.set_property_str(atom, Role::App, "text", &data.recipient_str.clone().unwrap()).unwrap();
                 }
-                if let Some(amount_node) = sg_root.lookup_node("/window/content/wallet_send_step4_layer/send_amount_wrapper4/send_amount_text4") {
+                if let Some(amount_node) = sg_root.lookup_node("/window/content/wallet/send_step4_layer/send_amount_wrapper4/send_amount_text4") {
                     amount_node.set_property_str(atom, Role::App, "text", &data.amount.clone().unwrap()).unwrap();
                 }
 
                 // Switch to step4 and set send button to "building tx..."
                 step3_is_visible2.set(atom, false);
-                if let Some(step4) = sg_root.lookup_node("/window/content/wallet_send_step4_layer") {
+                if let Some(step4) = sg_root.lookup_node("/window/content/wallet/send_step4_layer") {
                     step4.set_property_bool(atom, Role::App, "is_visible", true).unwrap();
                 }
-                if let Some(send_label_node) = sg_root.lookup_node("/window/content/wallet_send_step4_layer/send_send_btn_label") {
+                if let Some(send_label_node) = sg_root.lookup_node("/window/content/wallet/send_step4_layer/send_send_btn_label") {
                     send_label_node.set_property_str(atom, Role::App, "text", "building tx...").unwrap();
                     let prop = send_label_node.get_property("text_color").unwrap();
                     prop.set_f32(atom, Role::App, 0, 0.5).unwrap();
@@ -618,10 +617,10 @@ pub async fn make_send_step3_layer(
                     prop.set_f32(atom, Role::App, 2, 0.5).unwrap();
                     prop.set_f32(atom, Role::App, 3, 1.).unwrap();
                 }
-                if let Some(send_bg_grey_node) = sg_root.lookup_node("/window/content/wallet_send_step4_layer/send_send_btn_bg_grey") {
+                if let Some(send_bg_grey_node) = sg_root.lookup_node("/window/content/wallet/send_step4_layer/send_send_btn_bg_grey") {
                     send_bg_grey_node.set_property_bool(atom, Role::App, "is_visible", true).unwrap();
                 }
-                if let Some(send_bg_node) = sg_root.lookup_node("/window/content/wallet_send_step4_layer/send_send_btn_bg") {
+                if let Some(send_bg_node) = sg_root.lookup_node("/window/content/wallet/send_step4_layer/send_send_btn_bg") {
                     send_bg_node.set_property_bool(atom, Role::App, "is_visible", false).unwrap();
                 }
 

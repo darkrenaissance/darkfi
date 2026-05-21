@@ -582,7 +582,7 @@ pub async fn setup_wallet_button(app: &App, menu_layer: SceneNodePtr, i18n_fish:
     node.register("click", slot).unwrap();
     let sg_root = app.sg_root.clone();
     let wallet_is_visible =
-        PropertyBool::wrap(&sg_root.lookup_node("/window/content/wallet_main_layer").unwrap(), Role::App, "is_visible", 0).unwrap();
+        PropertyBool::wrap(&sg_root.lookup_node("/window/content/wallet").unwrap(), Role::App, "is_visible", 0).unwrap();
     let renderer = app.renderer.clone();
     let menulayer_is_visible2 = menulayer_is_visible.clone();
     let listen_click = app.ex.spawn(async move {

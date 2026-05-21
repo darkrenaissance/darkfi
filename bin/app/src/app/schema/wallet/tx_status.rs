@@ -39,7 +39,6 @@ use super::{super::ColorScheme, data::*, util::*};
 
 pub async fn make_tx_status_layer(
     app: &App,
-    content: SceneNodePtr,
     wallet_layer: SceneNodePtr,
     i18n_fish: &I18nBabelFish,
     window_scale: PropertyFloat32,
@@ -61,10 +60,12 @@ pub async fn make_tx_status_layer(
     cc.add_const_f32("RECIPIENT_INPUT_MARGIN", RECIPIENT_INPUT_MARGIN);
     cc.add_const_f32("RECIPIENT_INPUT_PADDING_X", RECIPIENT_INPUT_PADDING_X);
 
+    let main_layer = wallet_layer.lookup_node("/main_layer").unwrap();
+
     // ============================================
     // Transaction status layer
     // ============================================
-    let mut tx_status_layer = create_layer("wallet_tx_status_layer");
+    let mut tx_status_layer = create_layer("tx_status_layer");
 
     // Add methods for plugin calls
     tx_status_layer
@@ -102,7 +103,7 @@ pub async fn make_tx_status_layer(
     tx_status_layer.set_property_bool(atom, Role::App, "is_visible", false).unwrap();
     tx_status_layer.set_property_u32(atom, Role::App, "z_index", 3).unwrap();
     let tx_status_layer = tx_status_layer.setup(|me| Layer::new(me, app.renderer.clone())).await;
-    content.link(tx_status_layer.clone());
+    wallet_layer.link(tx_status_layer.clone());
     let tx_status_is_visible = PropertyBool::wrap(&tx_status_layer, Role::App, "is_visible", 0).unwrap();
 
     create_bg_mesh(app, atom, &tx_status_layer, "tx_status_bg").await;
@@ -225,7 +226,7 @@ pub async fn make_tx_status_layer(
         i18n_fish,
     ).await;
 
-    let wallet_is_visible = PropertyBool::wrap(&wallet_layer, Role::App, "is_visible", 0).unwrap();
+    let main_is_visible = PropertyBool::wrap(&main_layer, Role::App, "is_visible", 0).unwrap();
     let renderer = app.renderer.clone();
     let tx_status_is_visible1 = tx_status_is_visible.clone();
     let send_tx_data2 = send_tx_data.clone();
@@ -235,7 +236,7 @@ pub async fn make_tx_status_layer(
         while let Ok(_) = recvr.recv().await {
             let atom = &mut renderer.make_guard(gfxtag!("tx status close button"));
             tx_status_is_visible1.set(atom, false);
-            wallet_is_visible.set(atom, true);
+            main_is_visible.set(atom, true);
 
             // Reset send_tx_data
             *send_tx_data2.lock().unwrap() = SendTxData::new();
@@ -269,14 +270,14 @@ pub async fn make_tx_status_layer(
 
             // Update status text
             if let Some(text) = status_text {
-                if let Some(status_node) = sg_root.lookup_node("/window/content/wallet_tx_status_layer/status") {
+                if let Some(status_node) = sg_root.lookup_node("/window/content/wallet/tx_status_layer/status") {
                     status_node.set_property_str(atom, Role::App, "text", &text).unwrap();
                 }
             }
 
             // Update transaction info display
             if let (Some(amount), Some(token_symbol), Some(recipient_str)) = (amount, token_symbol, recipient_str) {
-                if let Some(tx_info) = sg_root.lookup_node("/window/content/wallet_tx_status_layer/tx_info") {
+                if let Some(tx_info) = sg_root.lookup_node("/window/content/wallet/tx_status_layer/tx_info") {
                     let tx_text = format!("Sending {} {} to {}", amount, token_symbol, recipient_str);
                     tx_info.set_property_str(atom, Role::App, "text", tx_text).unwrap();
                 }

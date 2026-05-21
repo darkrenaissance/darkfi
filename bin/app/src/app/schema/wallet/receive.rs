@@ -36,7 +36,6 @@ use super::{super::ColorScheme, data::*, util::*};
 
 pub async fn make_receive_layer(
     app: &App,
-    content: SceneNodePtr,
     wallet_layer: SceneNodePtr,
     i18n_fish: &I18nBabelFish,
     window_scale: PropertyFloat32,
@@ -47,8 +46,10 @@ pub async fn make_receive_layer(
     cc.add_const_f32("PADDING_Y", PADDING_Y);
     cc.add_const_f32("COPY_WIDTH", COPY_WIDTH);
 
+    let main_layer = wallet_layer.lookup_node("/main_layer").unwrap();
+
     // Receive layer
-    let receive_layer = create_layer("wallet_receive_layer");
+    let receive_layer = create_layer("receive_layer");
     let prop = receive_layer.get_property("rect").unwrap();
     prop.set_f32(atom, Role::App, 0, 0.).unwrap();
     prop.set_f32(atom, Role::App, 1, 0.).unwrap();
@@ -57,7 +58,7 @@ pub async fn make_receive_layer(
     receive_layer.set_property_bool(atom, Role::App, "is_visible", false).unwrap();
     receive_layer.set_property_u32(atom, Role::App, "z_index", 2).unwrap();
     let receive_layer = receive_layer.setup(|me| Layer::new(me, app.renderer.clone())).await;
-    content.link(receive_layer.clone());
+    wallet_layer.link(receive_layer.clone());
 
     create_bg_mesh(app, atom, &receive_layer, "receive_bg").await;
     create_header_bg(app, atom, &receive_layer, "receive_header_bg").await;
@@ -84,7 +85,7 @@ pub async fn make_receive_layer(
     prop.set_f32(atom, Role::App, 2, WALLET_BTN_SIZE * 2.).unwrap();
     prop.set_f32(atom, Role::App, 3, HEADER_HEIGHT).unwrap();
 
-    let wallet_is_visible = PropertyBool::wrap(&wallet_layer, Role::App, "is_visible", 0).unwrap();
+    let main_is_visible = PropertyBool::wrap(&main_layer, Role::App, "is_visible", 0).unwrap();
     let receive_is_visible = PropertyBool::wrap(&receive_layer, Role::App, "is_visible", 0).unwrap();
     let renderer = app.renderer.clone();
     let (slot, recvr) = Slot::new("receive_back_clicked");
@@ -93,7 +94,7 @@ pub async fn make_receive_layer(
         while let Ok(_) = recvr.recv().await {
             let atom = &mut renderer.make_guard(gfxtag!("receive back button"));
             receive_is_visible.set(atom, false);
-            wallet_is_visible.set(atom, true);
+            main_is_visible.set(atom, true);
         }
     });
     app.tasks.lock().unwrap().push(listen_click);

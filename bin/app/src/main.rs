@@ -493,22 +493,22 @@ async fn load_plugins(
                         let _ = TokenRow::encode(row, &mut data);
                     }
 
-                    if let Some(tokens_table) = sg_root2.lookup_node("/window/content/wallet_main_layer/tokens_table") {
+                    if let Some(tokens_table) = sg_root2.lookup_node("/window/content/wallet/main_layer/tokens_table") {
                         let _ = tokens_table.call_method("set_tokens", data.clone()).await;
                     }
 
-                    if let Some(send_tokens_table) = sg_root2.lookup_node("/window/content/wallet_send_step1_layer/tokens_table") {
+                    if let Some(send_tokens_table) = sg_root2.lookup_node("/window/content/wallet/send_step1_layer/tokens_table") {
                         let _ = send_tokens_table.call_method("set_tokens", data).await;
                     }
 
                     // Update main wallet balance
                     if let Some(drk_row) = token_rows.iter().find(|row| row.id == *DARK_TOKEN_ID) {
-                        if let Some(balance_node) = sg_root2.lookup_node("/window/content/wallet_main_layer/wallet_balance") {
+                        if let Some(balance_node) = sg_root2.lookup_node("/window/content/wallet/main_layer/wallet_balance") {
                             balance_node.set_property_str(atom, Role::App, "text", format!("DRK {}", drk_row.balance)).unwrap();
                         }
                     }
 
-                    if let Some(tx_status_layer) = sg_root2.lookup_node("/window/content/wallet_tx_status_layer") {
+                    if let Some(tx_status_layer) = sg_root2.lookup_node("/window/content/wallet/tx_status_layer") {
                         let tx_id = tx_status_layer.get_property_str("tx_id").unwrap();
                         if !tx_id.is_empty() {
                             let mut tx_id_data = vec![];
@@ -532,7 +532,7 @@ async fn load_plugins(
     let sg_root2 = sg_root.clone();
     let listen_tx = ex.spawn(async move {
         while let Ok(data) = recv.recv().await {
-            if let Some(tx_status_layer) = sg_root2.lookup_node("/window/content/wallet_tx_status_layer") {
+            if let Some(tx_status_layer) = sg_root2.lookup_node("/window/content/wallet/tx_status_layer") {
                 let _ = tx_status_layer.call_method("set_tx_status", data).await;
             }
         }
@@ -555,7 +555,7 @@ async fn load_plugins(
 
             // Update tx_status_layer with built transaction
             let atom = &mut renderer2.make_guard(gfxtag!("tx built"));
-            if let Some(tx_status) = sg_root2.lookup_node("/window/content/wallet_tx_status_layer") {
+            if let Some(tx_status) = sg_root2.lookup_node("/window/content/wallet/tx_status_layer") {
                 let mut tx_status_data = vec![];
                 None::<String>.encode(&mut tx_status_data).unwrap();
                 Some("Broadcasting transaction...".to_string()).encode(&mut tx_status_data).unwrap();
@@ -571,12 +571,12 @@ async fn load_plugins(
             }
 
             // Hide step3 layer
-            if let Some(step4_layer) = sg_root2.lookup_node("/window/content/wallet_send_step3_layer") {
+            if let Some(step4_layer) = sg_root2.lookup_node("/window/content/wallet/send_step3_layer") {
                 step4_layer.set_property_bool(atom, Role::App, "is_visible", false).unwrap();
             }
 
             // Show step4 layer
-            if let Some(step4_layer) = sg_root2.lookup_node("/window/content/wallet_send_step4_layer") {
+            if let Some(step4_layer) = sg_root2.lookup_node("/window/content/wallet/send_step4_layer") {
                 step4_layer.set_property_bool(atom, Role::App, "is_visible", true).unwrap();
             }
         }
@@ -596,9 +596,9 @@ async fn load_plugins(
             // TODO: display error somewhere
 
             // Reset button state
-            if let Some(btn_node) = sg_root2.lookup_node("/window/content/wallet_send_step3_layer/send_amount_button") {
+            if let Some(btn_node) = sg_root2.lookup_node("/window/content/wallet/send_step3_layer/send_amount_button") {
                 btn_node.set_property_bool(atom, Role::App, "is_active", true).unwrap();
-                if let Some(label_node) = sg_root2.lookup_node("/window/content/wallet_send_step3_layer/send_amount_button_label") {
+                if let Some(label_node) = sg_root2.lookup_node("/window/content/wallet/send_step3_layer/send_amount_button_label") {
                     label_node.set_property_str(atom, Role::App, "text", "add amount").unwrap();
                 }
             }
