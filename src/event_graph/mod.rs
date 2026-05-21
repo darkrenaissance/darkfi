@@ -41,6 +41,7 @@ use tracing::{error, info, warn};
 use url::Url;
 
 use crate::{
+    event_graph::rln::genesis_commitments,
     net::{channel::Channel, P2pPtr},
     system::{msleep, Publisher, PublisherPtr, StoppableTask, StoppableTaskPtr, Subscription},
     Error, Result,
@@ -54,6 +55,9 @@ use proto::{EventRep, EventReq, HeaderRep, HeaderReq, StaticPut, SyncDirection, 
 
 pub mod rln;
 use rln::{IdentityState, RlnState, ZkKeys};
+
+pub mod genesis_commits;
+use genesis_commits::GENESIS_COMMITMENTS_REPR;
 
 pub mod util;
 use util::{
@@ -548,6 +552,9 @@ impl EventGraph {
             rln_state: RwLock::new(RlnState::new()),
             rln_app_id,
         });
+
+        // Init genesis registration events
+        self_.bootstrap_genesis_identities().await?;
 
         if need_prune {
             info!(
@@ -1703,8 +1710,6 @@ impl EventGraph {
 
     /// Persist the original RLN blob for a static-DAG event. The
     /// blob is the wire payload from the originating `StaticPut` -
-    /// Persist the original RLN blob for a static-DAG event. The
-    /// blob is the wire payload from the originating `StaticPut` -
     /// proof + public inputs + attestation - needed to re-verify
     /// the proof at sync time by late-joining peers.
     ///
@@ -2266,6 +2271,22 @@ impl EventGraph {
 
         match rln_node {
             RLNNode::Registration(commitment) => {
+                // No ZK proofs, only commitments in the hardcoded genesis set
+                // are accepted this way, anything else falls through to
+                // normal proof verification.
+                if blob == rln::GENESIS_BLOB_GUARD {
+                    let repr = commitment.to_repr();
+                    if GENESIS_COMMITMENTS_REPR.contains(&repr) {
+                        if self.identity_state.read().await.contains(commitment) {
+                            return StaticEventCheck::Rejected
+                        }
+                        return StaticEventCheck::AcceptedRegistration(*commitment)
+                    } else {
+                        // Guard blob with unknown commitment = malicious
+                        return StaticEventCheck::Malicious
+                    }
+                }
+
                 let reg: RegistrationBlob = match deserialize_async_partial(blob).await {
                     Ok((v, _)) => v,
                     Err(_) => return StaticEventCheck::Rejected,
@@ -2343,6 +2364,48 @@ impl EventGraph {
                 StaticEventCheck::AcceptedSlash(rebuilt)
             }
         }
+    }
+
+    /// Insert proof-less genesis registration events commitments into
+    /// the static DAG, called once at startup after the genesis event
+    /// itself is inserted. Idempotent - skips any commitment already
+    /// present in the identity tree.
+    pub async fn bootstrap_genesis_identities(&self) -> Result<()> {
+        let genesis_event = generate_genesis(&self.config);
+        let genesis_id = genesis_event.id();
+
+        let genesis_commitments = genesis_commitments();
+        for commitment in genesis_commitments.iter() {
+            if self.identity_state.read().await.contains(commitment) {
+                continue
+            }
+
+            let rln_node = rln::RLNNode::Registration(*commitment);
+            let content = serialize_async(&rln_node).await;
+
+            // Inserted at layer 1
+            let mut parents = [NULL_ID; N_EVENT_PARENTS];
+            parents[0] = genesis_id;
+
+            let header = Header {
+                timestamp: genesis_event.header.timestamp + 1,
+                parents,
+                layer: 1,
+                content_hash: blake3::hash(&content),
+            };
+            let event = Event { header, content };
+
+            if self.static_dag.contains_key(event.id().as_bytes())? {
+                continue
+            }
+
+            let blob = rln::GENESIS_BLOB_GUARD.to_vec();
+            self.static_blob_store(&event.id(), &blob)?;
+            self.apply_rln_static_event(&event, &rln_node).await?;
+            self.static_insert(&event).await?;
+        }
+
+        Ok(())
     }
 }
 

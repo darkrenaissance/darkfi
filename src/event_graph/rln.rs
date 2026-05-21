@@ -46,6 +46,7 @@ use tracing::info;
 
 use super::Event;
 use crate::{
+    event_graph::genesis_commits::GENESIS_COMMITMENTS_REPR,
     zk::{empty_witnesses, Proof, ProvingKey, VerifyingKey, Witness, ZkCircuit},
     zkas::ZkBinary,
     Error, Result,
@@ -54,6 +55,9 @@ use crate::{
 pub const RLN2_REGISTER_ZKBIN: &[u8] = include_bytes!("proof/rlnv2-diff-register.zk.bin");
 pub const RLN2_SIGNAL_ZKBIN: &[u8] = include_bytes!("proof/rlnv2-diff-signal.zk.bin");
 pub const RLN2_SLASH_ZKBIN: &[u8] = include_bytes!("proof/rlnv2-diff-slash.zk.bin");
+
+pub const GENESIS_BLOB_GUARD: &[u8] = b"darkfi-rln-genesis-v1";
+pub const GENESIS_USER_MSG_LIMIT: u64 = MAX_MSG_LIMIT;
 
 /// RLN epoch genesis in millis.
 /// Used as the time-zero reference for epoch numbering.
@@ -123,6 +127,7 @@ pub enum RegistrationAttestation {
     /// No external attestation. The user_message_limit must be
     /// at most [`Self::FREE_TIER_LIMIT`].
     Free,
+    SPECIAL,
     /// Reserved for the future staking integration.
     Staked(Vec<u8>),
 }
@@ -130,11 +135,14 @@ pub enum RegistrationAttestation {
 impl RegistrationAttestation {
     /// In free-tier mode, hard cap on `user_message_limit`.
     pub const FREE_TIER_LIMIT: u64 = 10;
+    /// In special-tier mode.
+    pub const SPECIAL_TIER_LIMIT: u64 = 100;
 
     /// Validate the attestation against a claimed limit.
     pub fn permits(&self, user_message_limit: u64) -> bool {
         match self {
             Self::Free => user_message_limit <= Self::FREE_TIER_LIMIT,
+            Self::SPECIAL => user_message_limit <= Self::SPECIAL_TIER_LIMIT,
             // Until staking is implemented, refuse to honor any
             // "Staked" attestation
             Self::Staked(_) => false,
@@ -699,4 +707,11 @@ fn read_pk(sled_db: &sled::Db, key: &str, zkbin_bytes: &[u8]) -> Result<ProvingK
     let zkbin = ZkBinary::decode(zkbin_bytes, false)?;
     let circuit = ZkCircuit::new(empty_witnesses(&zkbin)?, &zkbin);
     Ok(ProvingKey::read(&mut Cursor::new(bytes), circuit)?)
+}
+
+pub fn genesis_commitments() -> Vec<pallas::Base> {
+    GENESIS_COMMITMENTS_REPR
+        .iter()
+        .filter_map(|repr| pallas::Base::from_repr(*repr).into())
+        .collect()
 }

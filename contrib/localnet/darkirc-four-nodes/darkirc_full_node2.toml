@@ -52,9 +52,9 @@ active_profiles = ["tcp"]
 ## Seed nodes to connect to
 seeds = ["tcp://127.0.0.1:25551"]
 
-# inbound = ["tcp://127.0.0.1:25553"]
+inbound = ["tcp://127.0.0.1:25553"]
 
-# external_addrs = ["tcp://127.0.0.1:25553"]
+external_addrs = ["tcp://127.0.0.1:25553"]
 
 # peers = ["tcp://127.0.0.1:25552"]
 
