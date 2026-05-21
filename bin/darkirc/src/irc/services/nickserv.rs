@@ -60,7 +60,8 @@ use std::{str::SplitAsciiWhitespace, sync::Arc};
 
 use darkfi::{
     event_graph::{
-        rln::{create_slash_proof, RLNNode, SlashBlob},
+        genesis_commits::GENESIS_COMMITMENTS_REPR,
+        rln::{create_slash_proof, RLNNode, SlashBlob, GENESIS_USER_MSG_LIMIT},
         Event,
     },
     Result,
@@ -504,6 +505,34 @@ impl NickServ {
             db_default
                 .insert(ACCOUNTS_KEY_RLN_IDENTITY, serialize_async(&new_rln_identity).await)?;
             *self.server.rln_identity.write().await = Some(new_rln_identity);
+        }
+
+        let is_genesis =
+            GENESIS_COMMITMENTS_REPR.contains(&new_rln_identity.commitment().to_repr());
+
+        if is_genesis {
+            if user_msg_limit != GENESIS_USER_MSG_LIMIT {
+                let mut replies = vec![notice(
+                    nick,
+                    format!("Genesis account must use user_msg_limit={}", GENESIS_USER_MSG_LIMIT),
+                )];
+                replies.push(notice(
+                    nick,
+                    format!("Use `DEREGISTER {account_name}` to remove this account."),
+                ));
+            }
+            let mut replies =
+                vec![notice(nick, format!("Successfully registered account \"{account_name}\""))];
+            if became_active {
+                replies
+                    .push(notice(nick, format!("\"{account_name}\" is now the active identity.")));
+            } else {
+                replies.push(notice(
+                    nick,
+                    format!("Use `SET {account_name}` to make this the active identity."),
+                ));
+            }
+            return Ok(replies)
         }
 
         // Build the static-DAG event and the registration blob.
