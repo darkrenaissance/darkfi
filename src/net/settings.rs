@@ -295,9 +295,7 @@ pub struct SettingsOpt {
     #[structopt(long)]
     pub i2p_socks5_proxy: Option<Url>,
 
-    /// If this is true, strictly follow the gold_connect_count and
-    /// white_connect_percent settings. Otherwise, connect to greylist
-    /// entries if we have no white or gold connections.
+    /// Allow localnet hosts
     #[serde(default)]
     #[structopt(long)]
     pub localnet: bool,
