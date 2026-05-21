@@ -268,18 +268,6 @@ impl PluginSettings {
             PropertyValue::Uint32(p2p_settings.greylist_refinery_interval as u32),
         );
         self.add_setting(
-            "net.white_connect_percent",
-            PropertyValue::Uint32(p2p_settings.white_connect_percent as u32),
-        );
-        self.add_setting(
-            "net.gold_connect_count",
-            PropertyValue::Uint32(p2p_settings.gold_connect_count as u32),
-        );
-        self.add_setting(
-            "net.slot_preference_strict",
-            PropertyValue::Bool(p2p_settings.slot_preference_strict),
-        );
-        self.add_setting(
             "net.time_with_no_connections",
             PropertyValue::Uint32(p2p_settings.time_with_no_connections as u32),
         );
@@ -327,19 +315,6 @@ impl PluginSettings {
             .unwrap()
             .get_property_u32("value")
             .unwrap() as u64;
-        p2p_settings.white_connect_percent = self
-            .get_setting("net.white_connect_percent")
-            .unwrap()
-            .get_property_u32("value")
-            .unwrap() as usize;
-        p2p_settings.gold_connect_count =
-            self.get_setting("net.gold_connect_count").unwrap().get_property_u32("value").unwrap()
-                as usize;
-        p2p_settings.slot_preference_strict = self
-            .get_setting("net.slot_preference_strict")
-            .unwrap()
-            .get_property_bool("value")
-            .unwrap();
         p2p_settings.time_with_no_connections = self
             .get_setting("net.time_with_no_connections")
             .unwrap()
