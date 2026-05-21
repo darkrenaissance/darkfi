@@ -229,12 +229,12 @@ impl DarkIrc {
     }
 }
 
-// #[global_allocator]
-// static GLOBAL: tikv_jemallocator::Jemalloc = tikv_jemallocator::Jemalloc;
+#[global_allocator]
+static GLOBAL: tikv_jemallocator::Jemalloc = tikv_jemallocator::Jemalloc;
 
-// #[allow(non_upper_case_globals)]
-// #[export_name = "malloc_conf"]
-// pub static malloc_conf: &[u8] = b"dirty_decay_ms:1000,muzzy_decay_ms:1000\0";
+#[allow(non_upper_case_globals)]
+#[export_name = "malloc_conf"]
+pub static malloc_conf: &[u8] = b"dirty_decay_ms:1000,muzzy_decay_ms:1000\0";
 
 async_daemonize!(realmain);
 async fn realmain(args: Args, ex: Arc<Executor<'static>>) -> Result<()> {
@@ -728,7 +728,7 @@ async fn sync_task(
                 Err(e) => {
                     error!("Failed syncing static graph: {e}");
                     p2p.stop().await;
-                    return Err(Error::DagSyncFailed)
+                    return Err(Error::StaticDagSyncFailed)
                 }
             }
             info!("Syncing event DAG");

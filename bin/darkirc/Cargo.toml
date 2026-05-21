@@ -27,6 +27,8 @@ darkfi-sdk = {path = "../../src/sdk", features = ["async"]}
 darkfi-serial = {path = "../../src/serial", features = ["async"]}
 libc = "0.2.178"
 
+tikv-jemallocator = "0.5.4"
+
 # Event Graph DB
 sled-overlay = "0.1.20"
 
