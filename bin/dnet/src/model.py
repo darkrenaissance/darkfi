@@ -55,10 +55,9 @@ class Model:
             self.nodes[name]['inbound'][f'{id}'] = url
 
         for i, id in enumerate(info['outbound_slots']):
-            if id == 0:
+            if id == 0 or id not in channel_lookup:
                 outbounds = self.nodes[name]['outbound'][f'{i}'] = ['none', 0]
                 continue
-            assert id in channel_lookup
             url = channel_lookup[id]['url']
             outbounds = self.nodes[name]['outbound'][f'{i}'] = [url, id]
 
