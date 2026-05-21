@@ -47,6 +47,11 @@ mod android_ui_consts {
     pub const WALLET_BTN_SIZE: f32 = 50.;
     pub const COPY_WIDTH: f32 = 200.;
     pub const COPY_SCALE: f32 = 30.;
+
+    pub const NETSTATUS_ICON_SIZE: f32 = 140.;
+    pub const SETTINGS_ICON_SIZE: f32 = 140.;
+    pub const NETLOGO_SCALE: f32 = 7.;
+    pub const EMOJI_PICKER_ICON_SIZE: f32 = 120.;
 }
 
 #[cfg(target_os = "android")]
@@ -89,6 +94,11 @@ mod ui_consts {
     pub const WALLET_BTN_SIZE: f32 = 50.;
     pub const COPY_WIDTH: f32 = 100.;
     pub const COPY_SCALE: f32 = 15.;
+
+    pub const NETSTATUS_ICON_SIZE: f32 = 60.;
+    pub const SETTINGS_ICON_SIZE: f32 = 60.;
+    pub const NETLOGO_SCALE: f32 = 3.5;
+    pub const EMOJI_PICKER_ICON_SIZE: f32 = 50.;
 }
 
 pub use ui_consts::*;

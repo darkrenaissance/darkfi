@@ -23,15 +23,15 @@ use crate::{
     app::{
         App,
         node::{create_button, create_layer, create_text, create_tokentable, create_vector_art},
-        schema::COLOR_SCHEME,
+        schema::{COLOR_SCHEME, wallet::netstatus},
     },
     expr,
-    gfx::{gfxtag},
+    gfx::gfxtag,
     mesh::{COLOR_CYAN, COLOR_TEAL},
     prop::{PropertyAtomicGuard, PropertyBool, PropertyFloat32, Role},
     scene::{SceneNodePtr, Slot},
     shape,
-    ui::{Button, Layer, Text, TokenTable, TokenRow, VectorArt, VectorShape},
+    ui::{Button, Layer, Text, TokenRow, TokenTable, VectorArt, VectorShape},
     util::i18n::I18nBabelFish,
 };
 
@@ -67,7 +67,7 @@ pub async fn make_main_wallet_layer(
     prop.set_expr(atom, Role::App, 2, expr::load_var("w")).unwrap();
     prop.set_expr(atom, Role::App, 3, expr::load_var("h")).unwrap();
     main_layer.set_property_bool(atom, Role::App, "is_visible", true).unwrap();
-    main_layer.set_property_u32(atom, Role::App, "z_index", 19).unwrap();
+    main_layer.set_property_u32(atom, Role::App, "z_index", 2).unwrap();
     let main_layer = main_layer.setup(|me| Layer::new(me, app.renderer.clone())).await;
     wallet_layer.link(main_layer.clone());
 

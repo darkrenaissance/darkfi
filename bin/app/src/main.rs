@@ -457,6 +457,43 @@ async fn load_plugins(
         })
         .await;
 
+    let (slot, recvr) = Slot::new("connect");
+    drk.register("connect", slot).unwrap();
+    let sg_root2 = sg_root.clone();
+    let renderer2 = renderer.clone();
+    let listen_connect = ex.spawn(async move {
+        let net0 = sg_root2.lookup_node("/window/content/wallet/netstatus_layer/net0").unwrap();
+        let net1 = sg_root2.lookup_node("/window/content/wallet/netstatus_layer/net1").unwrap();
+        let net2 = sg_root2.lookup_node("/window/content/wallet/netstatus_layer/net2").unwrap();
+
+        let net0_is_visible = PropertyBool::wrap(&net0, Role::App, "is_visible", 0).unwrap();
+        let net1_is_visible = PropertyBool::wrap(&net1, Role::App, "is_visible", 0).unwrap();
+        let net2_is_visible = PropertyBool::wrap(&net2, Role::App, "is_visible", 0).unwrap();
+
+        while let Ok(data) = recvr.recv().await {
+            let status: u8 = deserialize(&data).unwrap();
+            let atom = &mut renderer2.make_guard(gfxtag!("blockchain netstatus change"));
+
+            match status {
+                1 => {
+                    net0_is_visible.set(atom, false);
+                    net1_is_visible.set(atom, true);
+                    net2_is_visible.set(atom, false);
+                },
+                2 => {
+                    net0_is_visible.set(atom, false);
+                    net1_is_visible.set(atom, false);
+                    net2_is_visible.set(atom, true);
+                },
+                _ => {
+                    net0_is_visible.set(atom, true);
+                    net1_is_visible.set(atom, false);
+                    net2_is_visible.set(atom, false);
+                }
+            }
+        }
+    });
+
     let (slot, recv) = Slot::new("balances_update");
     let _ = drk.register("balances_updated", slot);
     let sg_root2 = sg_root.clone();
@@ -679,6 +716,15 @@ pub fn create_fud(name: &str) -> SceneNode {
 pub fn create_drk(name: &str) -> SceneNode {
     t!("create_drk({name})");
     let mut node = SceneNode::new(name, SceneNodeType::Plugin);
+
+    node.add_signal(
+        "connect",
+        "Connections and disconnects",
+        vec![
+            ("connected", "Is darkfid connected", CallArgType::Bool),
+        ],
+    )
+    .unwrap();
 
     node.add_method(
         "get_default_address",

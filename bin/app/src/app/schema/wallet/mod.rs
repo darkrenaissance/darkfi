@@ -29,6 +29,7 @@ pub mod send_step2;
 pub mod send_step3;
 pub mod send_step4;
 pub mod tx_status;
+pub mod netstatus;
 
 use crate::{
     app::{App, node::create_layer},
@@ -67,6 +68,9 @@ pub async fn make(app: &App, content: SceneNodePtr, i18n_fish: &I18nBabelFish) {
 
     // Create main wallet layer
     let _ = make_main_wallet_layer(app, wallet_layer.clone(), i18n_fish, window_scale.clone()).await;
+
+    // Create blockchain network status indicator layer
+    let _ = netstatus::make(app, wallet_layer.clone(), i18n_fish, window_scale.clone()).await;
 
     // Create receive layer
     let _ = make_receive_layer(

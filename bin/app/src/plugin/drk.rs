@@ -25,7 +25,7 @@ use darkfi::{
     util::parse::encode_base10,
 };
 use darkfi_money_contract::model::TokenId;
-use darkfi_serial::{Decodable, Encodable};
+use darkfi_serial::{serialize, Decodable, Encodable};
 use darkfi_sdk::crypto::{FuncId, keypair::{Address, Network, PublicKey, StandardAddress}};
 use drk::{Drk, money::BALANCE_BASE10_DECIMALS, rpc::subscribe_blocks};
 use sled_overlay::sled;
@@ -637,6 +637,7 @@ impl DrkPlugin {
         let me = Arc::downgrade(&self);
         let node = &self.node.upgrade().unwrap();
 
+        let self2 = self.clone();
         let drk = self.drk.clone();
         let (shell_sender, shell_receiver) = unbounded();
         let ex_ = ex.clone();
@@ -651,6 +652,20 @@ impl DrkPlugin {
                 let endpoint = endpoint.clone();
                 let ex = ex_.clone();
 
+                let _ = self2.node.upgrade().unwrap().trigger("connect", serialize(&1u8)).await;
+
+                if let Err(e) = drk.read().await.scan_blocks(&mut vec![], Some(&shell_sender), &false).await {
+                    e!("Failed during drk scanning: {e}");
+                    let _ = self2.node.upgrade().unwrap().trigger("connect", serialize(&0u8)).await;
+
+                    // Wait before retrying
+                    i!("Retrying connection to darkfid in {} seconds...", DARKFID_RETRY_TIME);
+                    sleep(DARKFID_RETRY_TIME).await;
+                    continue
+                }
+
+                let _ = self2.node.upgrade().unwrap().trigger("connect", serialize(&2u8)).await;
+
                 match subscribe_blocks(&drk, subscribe_rpc_task, shell_sender.clone(), endpoint, &ex).await {
                     Ok(()) => {
                         i!("darkfid subscription closed normally (detached task stopped)");
@@ -659,6 +674,8 @@ impl DrkPlugin {
                         e!("darkfid connection failed: {e}");
                     }
                 }
+
+                let _ = self2.node.upgrade().unwrap().trigger("connect", serialize(&0u8)).await;
 
                 // Wait before retrying
                 i!("Retrying connection to darkfid in {} seconds...", DARKFID_RETRY_TIME);
