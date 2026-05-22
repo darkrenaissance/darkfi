@@ -2600,7 +2600,7 @@ async fn handle_scan(
         append_or_print(output, None, print, buf).await;
     }
 
-    if let Err(e) = lock.scan_blocks(output, None, print).await {
+    if let Err(e) = lock.scan_blocks(output, None, print, None).await {
         append_or_print(output, None, print, vec![format!("Failed during scanning: {e}")]).await;
         return
     }

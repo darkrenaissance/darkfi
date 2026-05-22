@@ -2117,7 +2117,7 @@ async fn realmain(args: Args, ex: ExecutorPtr) -> Result<()> {
                 print_output(&buf);
             }
 
-            if let Err(e) = drk.scan_blocks(&mut vec![], None, &true).await {
+            if let Err(e) = drk.scan_blocks(&mut vec![], None, &true, None).await {
                 eprintln!("Failed during scanning: {e}");
                 exit(2);
             }

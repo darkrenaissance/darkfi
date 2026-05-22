@@ -32,7 +32,7 @@ use darkfi::{
         jsonrpc::{ErrorCode, JsonError, JsonRequest, JsonResult},
         util::JsonValue,
     },
-    system::{ExecutorPtr, Publisher, StoppableTaskPtr},
+    system::{ExecutorPtr, Publisher, PublisherPtr, StoppableTaskPtr},
     tx::Transaction,
     util::encoding::base64,
     Error, Result,
@@ -305,6 +305,7 @@ impl Drk {
         output: &mut Vec<String>,
         sender: Option<&Sender<Vec<String>>>,
         print: &bool,
+        progress_pub: Option<PublisherPtr<(u32, u32)>>,
     ) -> WalletDbResult<()> {
         // Grab last scanned block height
         let (mut height, hash) = self.get_last_scanned_block()?;
@@ -428,6 +429,9 @@ impl Drk {
                     buf.push(msg);
                 }
                 append_or_print(output, sender, print, buf).await;
+                if let Some(ref progress) = progress_pub {
+                    progress.notify((height, last_height)).await;
+                }
                 height += 1;
             }
         }
@@ -632,7 +636,7 @@ pub async fn subscribe_blocks(
 ) -> Result<()> {
     // First we do a clean scan
     let lock = drk.read().await;
-    if let Err(e) = lock.scan_blocks(&mut vec![], Some(&shell_sender), &false).await {
+    if let Err(e) = lock.scan_blocks(&mut vec![], Some(&shell_sender), &false, None).await {
         let err_msg = format!("Failed during scanning: {e}");
         shell_sender.send(vec![err_msg.clone()]).await?;
         return Err(Error::Custom(err_msg))
@@ -644,7 +648,7 @@ pub async fn subscribe_blocks(
 
     // Handle genesis(0) block
     if last_confirmed_height == 0 {
-        if let Err(e) = lock.scan_blocks(&mut vec![], Some(&shell_sender), &false).await {
+        if let Err(e) = lock.scan_blocks(&mut vec![], Some(&shell_sender), &false, None).await {
             let err_msg = format!("[subscribe_blocks] Scanning from genesis block failed: {e}");
             shell_sender.send(vec![err_msg.clone()]).await?;
             return Err(Error::Custom(err_msg))
