@@ -290,8 +290,7 @@ impl Slot {
         // NOTE: if we don't have enough gold or white peers, we select from the greylist.
         // This prioritizes max slot utilization over strictly respecting user preference.
         // However disable_greys cancels this out.
-        let max_known_percent = if disable_greys { 100 } else { 80 };
-        let bounded_percent = known_peer_percent.min(max_known_percent);
+        let bounded_percent = if disable_greys { 100 } else { known_peer_percent.min(80) };
         let known_count = (bounded_percent * outbound_connections) / 100;
 
         // Add gold up to known_count
