@@ -202,11 +202,11 @@ impl Slot {
             self.wait().await;
 
             debug!(
-                target: "net::session::seedsync_session", "SeedSyncSession::start_seed() [START]",
+                target: "net::seedsync_session", "SeedSyncSession::start_seed() [START]",
             );
 
             if let Err(e) = hosts.try_register(self.addr.clone(), HostState::Connect) {
-                debug!(target: "net::session::seedsync_session",
+                debug!(target: "net::seedsync_session",
                     "Cannot connect to seed={}, err={e}", &self.addr);
 
                 // Reset the CondVar for future use.
@@ -218,7 +218,7 @@ impl Slot {
             match self.connector.connect(&self.addr).await {
                 Ok((_, ch)) => {
                     verbose!(
-                        target: "net::session::seedsync_session",
+                        target: "net::seedsync_session",
                         "[P2P] Connected seed [{}]",
                         ch.display_address()
                     );
@@ -228,7 +228,7 @@ impl Slot {
                             self.failed.store(false, SeqCst);
 
                             verbose!(
-                                target: "net::session::seedsync_session",
+                                target: "net::seedsync_session",
                                 "[P2P] Disconnecting from seed [{}]",
                                 ch.display_address()
                             );
@@ -236,7 +236,7 @@ impl Slot {
 
                             // Seed process complete
                             if hosts.container.is_empty(HostColor::Grey) {
-                                verbose!(target: "net::session::seedsync_session",
+                                verbose!(target: "net::seedsync_session",
                                 "[P2P] Greylist empty after seeding");
                             }
 
@@ -246,7 +246,7 @@ impl Slot {
 
                         Err(e) => {
                             warn!(
-                                target: "net::session::seedsync_session",
+                                target: "net::seedsync_session",
                                 "[P2P] Unable to connect to seed [{}]: {e}",
                                 ch.display_address()
                             );
@@ -259,7 +259,7 @@ impl Slot {
 
                 Err(e) => {
                     warn!(
-                        target: "net::session::seedsync_session",
+                        target: "net::seedsync_session",
                         "[P2P] Unable to connect to seed: {e}",
                     );
                     self.handle_failure(&self.addr);
@@ -268,7 +268,7 @@ impl Slot {
                 }
             }
             debug!(
-                target: "net::session::seedsync_session",
+                target: "net::seedsync_session",
                 "SeedSyncSession::start_seed() [END]",
             );
         }
@@ -279,7 +279,7 @@ impl Slot {
 
         // Free up this addr for future operations.
         if let Err(e) = self.p2p().hosts().unregister(addr) {
-            warn!(target: "net::session::seedsync_session", "[P2P] Error while unregistering addr={addr}, err={e}");
+            verbose!(target: "net::seedsync_session", "[P2P] Error while unregistering addr={addr}, err={e}");
         }
 
         // Reset the CondVar for future use.

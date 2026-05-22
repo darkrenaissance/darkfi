@@ -30,11 +30,12 @@ use futures_rustls::{
     TlsAcceptor, TlsConnector, TlsStream,
 };
 use rcgen::string::Ia5String;
-use tracing::error;
 use x509_parser::{
     parse_x509_certificate,
     prelude::{GeneralName, ParsedExtension, X509Certificate},
 };
+
+use crate::util::logger::verbose;
 
 /// The DNS name used for certificate validation across all transports
 pub(crate) const TLS_DNS_NAME: &str = "dark.fi";
@@ -83,22 +84,22 @@ fn verify_ed25519_signature(
 
     // Parse the cert and extract the public key
     let Ok((_, cert)) = parse_x509_certificate(&buf) else {
-        error!(target: "net::tls::verify_ed25519_signature", "[net::tls] Failed parsing TLS certificate");
+        verbose!(target: "net::tls::verify_ed25519_signature", "[net::tls] Failed parsing TLS certificate");
         return Err(rustls::CertificateError::BadEncoding.into())
     };
 
     let Ok(public_key) = ed25519_compact::PublicKey::from_der(cert.public_key().raw) else {
-        error!(target: "net::tls::verify_ed25519_signature", "[net::tls] Failed parsing public key");
+        verbose!(target: "net::tls::verify_ed25519_signature", "[net::tls] Failed parsing public key");
         return Err(rustls::CertificateError::BadEncoding.into())
     };
 
     let Ok(signature) = ed25519_compact::Signature::from_slice(dss.signature()) else {
-        error!(target: "net::tls::verify_ed25519_signature", "[net::tls] Failed verifying signature");
+        verbose!(target: "net::tls::verify_ed25519_signature", "[net::tls] Failed verifying signature");
         return Err(rustls::CertificateError::BadSignature.into())
     };
 
     if let Err(e) = public_key.verify(message, &signature) {
-        error!(target: "net::tls::verify_ed25519_signature", "[net::tls] Failed verifying signature: {e}");
+        verbose!(target: "net::tls::verify_ed25519_signature", "[net::tls] Failed verifying signature: {e}");
         return Err(rustls::CertificateError::BadSignature.into())
     }
 
@@ -122,7 +123,7 @@ impl ServerCertVerifier for ServerCertificateVerifier {
 
         // Parse the certificate
         let Ok((_, cert)) = parse_x509_certificate(&buf) else {
-            error!(target: "net::tls::verify_server_cert", "[net::tls] Failed parsing server TLS certificate");
+            verbose!(target: "net::tls::verify_server_cert", "[net::tls] Failed parsing server TLS certificate");
             return Err(rustls::CertificateError::BadEncoding.into())
         };
 
@@ -182,7 +183,7 @@ impl ClientCertVerifier for ClientCertificateVerifier {
 
         // Parse the certificate
         let Ok((_, cert)) = parse_x509_certificate(&buf) else {
-            error!(target: "net::tls::verify_server_cert", "[net::tls] Failed parsing server TLS certificate");
+            verbose!(target: "net::tls::verify_server_cert", "[net::tls] Failed parsing server TLS certificate");
             return Err(rustls::CertificateError::BadEncoding.into())
         };
 

@@ -24,7 +24,7 @@ use std::{
 use async_trait::async_trait;
 use rand::{rngs::OsRng, Rng};
 use smol::{lock::RwLock as AsyncRwLock, Executor};
-use tracing::{debug, error, warn};
+use tracing::debug;
 
 use super::{
     super::{
@@ -39,6 +39,7 @@ use super::{
 };
 use crate::{
     system::{sleep, timeout::timeout},
+    util::logger::verbose,
     Error, Result,
 };
 
@@ -116,7 +117,7 @@ impl ProtocolPing {
                 Err(_e) => {
                     // Pong timeout. We didn't receive any message back
                     // so close the connection.
-                    warn!(
+                    verbose!(
                         target: "net::protocol_ping::run_ping_pong",
                         "[P2P] Ping-Pong protocol timed out for {}", self.channel.display_address(),
                     );
@@ -126,7 +127,7 @@ impl ProtocolPing {
             };
 
             if pong_msg.nonce != nonce {
-                error!(
+                verbose!(
                     target: "net::protocol_ping::run_ping_pong",
                     "[P2P] Wrong nonce in pingpong, disconnecting {}",
                     self.channel.display_address(),

@@ -20,8 +20,9 @@ use std::{io, time::Duration};
 
 use async_trait::async_trait;
 use smol::io::{AsyncRead, AsyncWrite};
-use tracing::error;
 use url::Url;
+
+use crate::util::logger::verbose;
 
 #[cfg(feature = "p2p-unix")]
 use std::io::ErrorKind;
@@ -264,7 +265,7 @@ impl Dialer {
             }
 
             x => {
-                error!("[P2P] Requested unsupported transport: {x}");
+                verbose!("[P2P] Requested unsupported transport: {x}");
                 Err(io::Error::from_raw_os_error(libc::ENETUNREACH))
             }
         }
@@ -414,7 +415,7 @@ impl Listener {
             }
 
             x => {
-                error!("[P2P] Requested unsupported transport: {x}");
+                verbose!("[P2P] Requested unsupported transport: {x}");
                 Err(io::Error::from_raw_os_error(libc::ENETUNREACH))
             }
         }

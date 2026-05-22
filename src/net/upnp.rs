@@ -287,13 +287,13 @@ impl PortMapping for UpnpPortMapping {
                 match result {
                     Ok(()) => {
                         // Should never complete normally
-                        error!("[P2P] UPnP task completed unexpectedly");
+                        verbose!("[P2P] UPnP task completed unexpectedly");
                     }
                     Err(Error::NetworkServiceStopped) => {
                         // Expected when stopping
                     }
                     Err(e) => {
-                        error!("[P2P] UPnP task error: {e}");
+                        verbose!("[P2P] UPnP task error: {e}");
                     }
                 }
             },
@@ -400,7 +400,7 @@ pub fn setup_port_mappings(
     let Some(mapping) = create_upnp_from_url(actual_endpoint) else { return vec![] };
 
     if let Err(e) = Arc::clone(&mapping).start(settings.clone(), ex.clone()) {
-        error!(
+        verbose!(
             target: "net::upnp",
             "[P2P] UPnP port mapping: Failed to start for {}: {e}",
             actual_endpoint

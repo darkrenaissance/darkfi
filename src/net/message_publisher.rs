@@ -22,12 +22,13 @@ use async_trait::async_trait;
 use futures::stream::{FuturesUnordered, StreamExt};
 use rand::{rngs::OsRng, Rng};
 use smol::{io::AsyncReadExt, lock::Mutex};
-use tracing::{debug, error};
+use tracing::debug;
 
 use super::message::Message;
 use crate::{
     net::{metering::MeteringQueue, transport::PtStream},
     system::{msleep, timeout::timeout},
+    util::logger::verbose,
     Error, Result,
 };
 use darkfi_serial::{AsyncDecodable, VarInt};
@@ -250,7 +251,7 @@ impl<M: Message> MessageDispatcherInterface for MessageDispatcher<M> {
         let length = match VarInt::decode_async(stream).await {
             Ok(int) => int.0,
             Err(err) => {
-                error!(
+                verbose!(
                     target: "net::message_publisher::trigger",
                     "Unable to decode VarInt. Dropping...: {err}"
                 );
@@ -260,7 +261,7 @@ impl<M: Message> MessageDispatcherInterface for MessageDispatcher<M> {
 
         // Check the message length does not exceed set limit
         if M::MAX_BYTES > 0 && length > M::MAX_BYTES {
-            error!(
+            verbose!(
                 target: "net::message_publisher::trigger",
                 "Message length ({length}) exceeds configured limit ({}). Dropping...",
                 M::MAX_BYTES
@@ -273,7 +274,7 @@ impl<M: Message> MessageDispatcherInterface for MessageDispatcher<M> {
         let message = match M::decode_async(&mut take).await {
             Ok(payload) => Ok(Arc::new(payload)),
             Err(err) => {
-                error!(
+                verbose!(
                     target: "net::message_publisher::trigger",
                     "Unable to decode data. Dropping...: {err}"
                 );

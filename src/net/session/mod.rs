@@ -23,7 +23,7 @@ use std::{
 
 use async_trait::async_trait;
 use smol::Executor;
-use tracing::{debug, error, trace};
+use tracing::{debug, trace};
 
 use super::{
     channel::ChannelPtr,
@@ -95,12 +95,12 @@ pub async fn remove_sub_on_stop(
         match hosts.fetch_last_seen(addr) {
             Some(last_seen) => {
                 if let Err(e) = hosts.move_host(addr, last_seen, HostColor::Grey).await {
-                    error!(target: "net::session::remove_sub_on_stop",
+                    verbose!(target: "net::session::remove_sub_on_stop",
             "Failed to move host {} to Greylist! Err={e}", channel.display_address());
                 }
             }
             None => {
-                error!(target: "net::session::remove_sub_on_stop",
+                verbose!(target: "net::session::remove_sub_on_stop",
                "Failed to fetch last seen for {}", channel.display_address());
             }
         }
@@ -112,7 +112,7 @@ pub async fn remove_sub_on_stop(
     // happens in the refinery directly.
     if type_id & SESSION_REFINE == 0 {
         if let Err(e) = hosts.unregister(channel.address()) {
-            error!(target: "net::session::remove_sub_on_stop", "Error while unregistering addr={}, err={e}", channel.display_address());
+            verbose!(target: "net::session::remove_sub_on_stop", "Error while unregistering addr={}, err={e}", channel.display_address());
         }
     }
 

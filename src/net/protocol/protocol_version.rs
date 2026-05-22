@@ -25,7 +25,7 @@ use std::{
     sync::Arc,
     time::{Duration, UNIX_EPOCH},
 };
-use tracing::{debug, error};
+use tracing::debug;
 
 use super::super::{
     channel::ChannelPtr,
@@ -35,6 +35,7 @@ use super::super::{
 };
 use crate::{
     net::{session::SESSION_OUTBOUND, BanPolicy},
+    util::logger::verbose,
     Error, Result,
 };
 
@@ -89,7 +90,7 @@ impl ProtocolVersion {
                 Ok(())
             }
             Either::Left((Err(e), _)) => {
-                error!(
+                verbose!(
                     target: "net::protocol_version::run",
                     "[P2P] Version Exchange failed [{}]: {e}",
                     self.channel.display_address()
@@ -100,7 +101,7 @@ impl ProtocolVersion {
             }
 
             Either::Right((_, _)) => {
-                error!(
+                verbose!(
                     target: "net::protocol_version::run",
                     "[P2P] Version Exchange timed out [{}]",
                     self.channel.display_address(),
@@ -124,7 +125,7 @@ impl ProtocolVersion {
 
         let rets = join_all(vec![send, recv]).await;
         if let Err(e) = &rets[0] {
-            error!(
+            verbose!(
                 target: "net::protocol_version::exchange_versions",
                 "send_version() failed: {e}"
             );
@@ -132,7 +133,7 @@ impl ProtocolVersion {
         }
 
         if let Err(e) = &rets[1] {
-            error!(
+            verbose!(
                 target: "net::protocol_version::exchange_versions",
                 "recv_version() failed: {e}"
             );
@@ -192,7 +193,7 @@ impl ProtocolVersion {
             app_version.minor != verack_msg.app_version.minor ||
             app_name != verack_msg.app_name
         {
-            error!(
+            verbose!(
                 target: "net::protocol_version::send_version",
                 "[P2P] Version mismatch from {}. Disconnecting...",
                 self.channel.display_address(),

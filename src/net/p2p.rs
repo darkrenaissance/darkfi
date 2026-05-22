@@ -24,7 +24,7 @@ use std::sync::{
 use futures::{stream::FuturesUnordered, TryFutureExt};
 use futures_rustls::rustls::crypto::{ring, CryptoProvider};
 use smol::{fs, lock::RwLock as AsyncRwLock, stream::StreamExt};
-use tracing::{debug, error, warn};
+use tracing::{debug, error, info};
 use url::Url;
 
 use super::{
@@ -129,7 +129,7 @@ impl P2p {
     pub async fn start(self: Arc<Self>) -> Result<()> {
         debug!(target: "net::p2p::start", "P2P::start() [BEGIN] [magic_bytes={:?}]",
                self.settings.read().await.magic_bytes.0);
-        verbose!(target: "net::p2p::start", "[P2P] Starting P2P subsystem");
+        info!(target: "net::p2p::start", "[P2P] Starting P2P subsystem");
 
         // Start the inbound session
         if let Err(err) = self.session_inbound().start().await {
@@ -153,7 +153,7 @@ impl P2p {
         // Start the direct session
         self.session_direct().start().await;
 
-        verbose!(target: "net::p2p::start", "[P2P] P2P subsystem started successfully");
+        info!(target: "net::p2p::start", "[P2P] P2P subsystem started successfully");
         Ok(())
     }
 
@@ -296,13 +296,13 @@ impl P2p {
     /// Enable network debugging
     pub fn dnet_enable(&self) {
         self.dnet_enabled.store(true, Ordering::SeqCst);
-        warn!("[P2P] Network debugging enabled!");
+        verbose!("[P2P] Network debugging enabled!");
     }
 
     /// Disable network debugging
     pub fn dnet_disable(&self) {
         self.dnet_enabled.store(false, Ordering::SeqCst);
-        warn!("[P2P] Network debugging disabled!");
+        verbose!("[P2P] Network debugging disabled!");
     }
 
     /// Subscribe to dnet events
@@ -333,7 +333,7 @@ async fn broadcast_serialized_to<M: Message>(
             channel
                 .send_serialized(&message, &M::METERING_SCORE, &M::METERING_CONFIGURATION)
                 .map_err(|e| {
-                    error!(
+                    verbose!(
                         target: "net::p2p::broadcast",
                         "[P2P] Broadcasting message to {} failed: {e}",
                         channel.display_address()

@@ -35,7 +35,7 @@ use smol::{
     lock::{Mutex as AsyncMutex, OnceCell},
     Executor,
 };
-use tracing::{debug, error, trace, warn};
+use tracing::{debug, trace};
 use url::Url;
 
 use super::{
@@ -265,7 +265,7 @@ impl Channel {
         // Catch failure and stop channel, return a net error
         if let Err(e) = self.send_message(message).await {
             if self.session.upgrade().unwrap().type_id() & (SESSION_ALL & !SESSION_REFINE) != 0 {
-                error!(
+                verbose!(
                     target: "net::channel::send", "[P2P] Channel send error for [{self:?}]: {e}"
                 );
             }
@@ -337,7 +337,7 @@ impl Channel {
         trace!(target: "net::channel::read_command", "Read magic {magic:?}");
         let magic_bytes = self.p2p().settings().read().await.magic_bytes.0;
         if magic != magic_bytes {
-            error!(target: "net::channel::read_command", "Error: Magic bytes mismatch");
+            verbose!(target: "net::channel::read_command", "Error: Magic bytes mismatch");
 
             // If it is outbound, ban the host so we don't share it with other nodes
             if self.session_type_id() & SESSION_OUTBOUND != 0 {
@@ -352,7 +352,7 @@ impl Channel {
         // First extract the length from the stream
         let cmd_len = VarInt::decode_async(stream).await?.0;
         if cmd_len > (MAX_COMMAND_LENGTH as u64) {
-            error!(target: "net::channel::read_command",
+            verbose!(target: "net::channel::read_command",
                 "Error: Command length ({cmd_len}) exceeds configured limit ({MAX_COMMAND_LENGTH}). Dropping...");
             return Err(Error::MessageInvalid);
         }
@@ -432,7 +432,7 @@ impl Channel {
                         (SESSION_ALL & !SESSION_REFINE) !=
                         0
                     {
-                        error!(
+                        verbose!(
                             target: "net::channel::main_receive_loop",
                             "[P2P] Read error on channel {}: {err}",
                             self.display_address()
@@ -476,7 +476,7 @@ impl Channel {
                     // since it regularly forms connections with nodes sending
                     // messages it does not have dispatchers for.
                     if self.session.upgrade().unwrap().type_id() != SESSION_REFINE {
-                        warn!(
+                        verbose!(
                         target: "net::channel::main_receive_loop",
                         "MissingDispatcher|MessageInvalid|MeteringLimitExceeded for command={command}, channel={self:?}"
                         );
@@ -504,7 +504,7 @@ impl Channel {
         let peer = {
             if self.session_type_id() & SESSION_INBOUND != 0 {
                 if self.address().host().is_none() {
-                    error!("[P2P] ban() caught Url without host: {:?}", self.display_address());
+                    verbose!("[P2P] ban() caught Url without host: {:?}", self.display_address());
                     return
                 }
 
@@ -542,7 +542,7 @@ impl Channel {
                 verbose!(target: "net::channel::ban", "Peer={peer} blacklisted successfully");
             }
             Err(e) => {
-                warn!(target: "net::channel::ban", "Could not blacklisted peer={peer}, err={e}");
+                verbose!(target: "net::channel::ban", "Could not blacklist peer={peer}, err={e}");
             }
         }
         self.stop().await;

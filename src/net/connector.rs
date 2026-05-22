@@ -26,7 +26,6 @@ use futures::{
     pin_mut,
 };
 use smol::lock::RwLock as AsyncRwLock;
-use tracing::warn;
 use url::Url;
 
 use super::{
@@ -36,7 +35,7 @@ use super::{
     settings::Settings,
     transport::Dialer,
 };
-use crate::{net::hosts::HostContainer, system::CondVar, Error, Result};
+use crate::{net::hosts::HostContainer, system::CondVar, util::logger::verbose, Error, Result};
 
 /// Create outbound socket connections
 pub struct Connector {
@@ -58,7 +57,7 @@ impl Connector {
     pub async fn connect(&self, url: &Url) -> Result<(Url, ChannelPtr)> {
         let hosts = self.session.upgrade().unwrap().p2p().hosts();
         if hosts.container.contains(HostColor::Black, url) || hosts.block_all_ports(url) {
-            warn!(target: "net::connector::connect", "Peer {url} is blacklisted");
+            verbose!(target: "net::connector::connect", "Peer {url} is blacklisted");
             return Err(Error::ConnectFailed(format!("[{url}]: Peer is blacklisted")));
         }
 

@@ -51,10 +51,10 @@ use crate::{util::time::DateTime, Error, Result};
 #[macro_export]
 macro_rules! verbose {
     (target: $target:expr, $($arg:tt)*) => {
-        tracing::info!(target: $target, verbose=true, $($arg)*);
+        tracing::info!(target: $target, verbose=true, $($arg)*)
     };
     ($($arg:tt)*) => {
-        tracing::info!(verbose=true, $($arg)*);
+        tracing::info!(verbose=true, $($arg)*)
     };
 }
 

@@ -49,7 +49,7 @@ use std::{
     },
     time::{Instant, UNIX_EPOCH},
 };
-use tracing::{debug, error, warn};
+use tracing::debug;
 use url::{Host, Url};
 
 use super::{
@@ -484,7 +484,7 @@ impl HostContainer {
         let contents = match load_file(&path) {
             Ok(c) => c,
             Err(e) => {
-                warn!(target: "net::hosts::load_all", "[P2P] Failed retrieving saved hosts: {e}");
+                verbose!(target: "net::hosts::load_all", "[P2P] Failed retrieving saved hosts: {e}");
                 return Ok(())
             }
         };
@@ -542,7 +542,7 @@ impl HostContainer {
         if !tsv.is_empty() {
             verbose!(target: "net::hosts::save_all", "[P2P] Saving hosts to: {path:?}");
             if let Err(e) = save_file(&path, &tsv) {
-                error!(target: "net::hosts::save_all", "[P2P] Failed saving hosts: {e}");
+                verbose!(target: "net::hosts::save_all", "[P2P] Failed saving hosts: {e}");
             }
         }
 
@@ -782,7 +782,7 @@ impl Hosts {
         }
 
         if let Err(e) = self.try_register(address, HostState::Connected(channel.clone())) {
-            warn!(target: "net::hosts::register_channel", "[P2P] Error registering channel: {e:?}");
+            verbose!(target: "net::hosts::register_channel", "[P2P] Error registering channel: {e:?}");
             return
         }
 

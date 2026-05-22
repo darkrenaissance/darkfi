@@ -37,7 +37,7 @@ use std::{
 use async_trait::async_trait;
 use futures::stream::{FuturesUnordered, StreamExt};
 use smol::lock::Mutex;
-use tracing::{debug, error, info, warn};
+use tracing::{debug, info, trace};
 use url::Url;
 
 use super::{
@@ -82,7 +82,7 @@ impl OutboundSession {
     /// Start the outbound session. Runs the channel connect loop.
     pub(crate) async fn start(self: Arc<Self>) {
         let n_slots = self.p2p().settings().read().await.outbound_connections;
-        verbose!(target: "net::outbound_session", "[P2P] Starting {n_slots} outbound connection slots.");
+        info!(target: "net::outbound_session", "[P2P] Starting {n_slots} outbound connection slots.");
 
         // Activate mutex lock on connection slots.
         let mut slots = self.slots.lock().await;
@@ -161,7 +161,7 @@ impl OutboundSession {
             slot.clone().start().await;
             slots.push(slot);
         }
-        info!(target: "net::outbound_session",
+        verbose!(target: "net::outbound_session",
             "[P2P] Increased outbound slots from {slots_len} to {target}");
     }
 
@@ -193,7 +193,7 @@ impl OutboundSession {
             removed += 1;
         }
 
-        info!(target: "net::outbound_session",
+        verbose!(target: "net::outbound_session",
             "[P2P] Decreased outbound slots from {slots_len} to {target}");
     }
 }
@@ -246,7 +246,7 @@ impl Slot {
             |res| async {
                 match res {
                     Ok(()) | Err(Error::NetworkServiceStopped) => {}
-                    Err(e) => error!("net::outbound_session {e}"),
+                    Err(e) => verbose!("net::outbound_session {e}"),
                 }
             },
             Error::NetworkServiceStopped,
@@ -298,6 +298,7 @@ impl Slot {
         {
             addrs.push(addr);
         }
+        trace!(target: "net::outbound_session::fetch_addrs", "[P2P] fetch_addrs: collected {} gold addrs", addrs.len());
 
         // Add white to fill remaining known slots
         let remaining_known = known_count - addrs.len();
@@ -306,6 +307,7 @@ impl Slot {
         {
             addrs.push(addr);
         }
+        trace!(target: "net::outbound_session::fetch_addrs", "[P2P] fetch_addrs: collected {} white addrs (total: {})", remaining_known, addrs.len());
 
         // Add grey to fill remaining slots
         if !disable_greys {
@@ -315,6 +317,7 @@ impl Slot {
             {
                 addrs.push(addr);
             }
+            trace!(target: "net::outbound_session::fetch_addrs", "[P2P] fetch_addrs: collected {} grey addrs (total: {})", remaining, addrs.len());
         }
 
         hosts.check_addrs(addrs).await
@@ -436,7 +439,7 @@ impl Slot {
 
                 self.channel_id.store(0, Ordering::Relaxed);
 
-                warn!(
+                verbose!(
                     target: "net::outbound_session::try_connect",
                     "[P2P] Suspending addr=[{}] slot #{slot}",
                     channel.display_address()
@@ -449,7 +452,7 @@ impl Slot {
                     .move_host(channel.address(), last_seen, HostColor::Grey)
                     .await
                 {
-                    warn!(target: "net::outbound_session", "Error while moving addr={} to greylist: {e}", channel.display_address());
+                    verbose!(target: "net::outbound_session", "Error while moving addr={} to greylist: {e}", channel.display_address());
                     continue
                 }
 
@@ -457,7 +460,7 @@ impl Slot {
                 if let Err(e) =
                     self.p2p().hosts().try_register(channel.address().clone(), HostState::Suspend)
                 {
-                    warn!(target: "net::outbound_session", "Error while suspending addr={}: {e}", channel.display_address());
+                    verbose!(target: "net::outbound_session", "Error while suspending addr={}: {e}", channel.display_address());
                 }
 
                 continue
@@ -502,7 +505,7 @@ impl Slot {
 
                 // Mark its state as Suspend, which sends it to the Refinery for processing.
                 if let Err(e) = self.p2p().hosts().try_register(addr.clone(), HostState::Suspend) {
-                    warn!(target: "net::outbound_session::try_connect", "Error while suspending addr={addr}: {e}");
+                    verbose!(target: "net::outbound_session::try_connect", "Error while suspending addr={addr}: {e}");
                 }
 
                 // Notify that channel processing failed
@@ -694,7 +697,7 @@ impl PeerDiscoveryBase for PeerDiscovery {
                 store_sub.unsubscribe().await;
             } else if !seeds.is_empty() {
                 // Not connected, do seed sync
-                verbose!(
+                debug!(
                     target: "net::outbound_session::peer_discovery",
                     "[P2P] [PEER DISCOVERY] Not connected, asking seeds for new peers to connect to..."
                 );

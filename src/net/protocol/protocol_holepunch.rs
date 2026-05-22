@@ -35,7 +35,7 @@ use async_trait::async_trait;
 use darkfi_serial::{SerialDecodable, SerialEncodable};
 use rand::{rngs::OsRng, Rng};
 use smol::{lock::Mutex as AsyncMutex, Executor};
-use tracing::{debug, info, warn};
+use tracing::debug;
 use url::Url;
 
 use crate::{
@@ -45,7 +45,7 @@ use crate::{
         P2pPtr, ProtocolBase, ProtocolBasePtr, ProtocolJobsManager, ProtocolJobsManagerPtr,
     },
     system::{sleep, timeout::timeout},
-    util::time::NanoTimestamp,
+    util::{logger::verbose, time::NanoTimestamp},
     Error, Result,
 };
 
@@ -303,7 +303,7 @@ impl ProtocolHolepunch {
 
             // Replay protection
             if !self.check_nonce(req.nonce).await {
-                warn!(
+                verbose!(
                     target: "net::protocol_holepunch::handle_relay_requests",
                     "[QUIC-NAT-RELAY] Rejecting: nonce replay",
                 );
@@ -312,7 +312,7 @@ impl ProtocolHolepunch {
 
             // Address verification
             if !self.verify_claimed_addrs(&req.our_addrs) {
-                warn!(
+                verbose!(
                     target: "net::protocol_holepunch::handle_relay_requests",
                     "[QUIC-NAT-RELAY] Rejecting: addr verification failed",
                 );
@@ -322,7 +322,7 @@ impl ProtocolHolepunch {
             // Rate limiting
             let Some(peer_ip) = Self::get_ip(self.channel.address()) else { continue };
             if !self.check_rate_limit(peer_ip).await {
-                warn!(
+                verbose!(
                     target: "net::protocol_holepunch::handle_relay_requests",
                     "[QUIC-NAT-RELAY] Rejecting: ratelimit for {}", peer_ip,
                 );
@@ -382,7 +382,7 @@ impl ProtocolHolepunch {
                 continue
             }
 
-            info!(
+            verbose!(
                 target: "net::protocol_holepunch::handle_relay_requests",
                 "[QUIC-NAT-RELAY] Relayed punch {} <-> {}",
                 self.channel.display_address(),
@@ -438,7 +438,7 @@ impl ProtocolHolepunch {
                     // Connect
                     match p2p.session_direct().get_channel(&observed).await {
                         Ok(chan) => {
-                            info!(
+                            verbose!(
                                 target: "net::protocol_holepunch::handle_connect_instructions",
                                 "[QUIC-NAT-CONNECT] Punch succeeded: {}", chan.display_address(),
                             );

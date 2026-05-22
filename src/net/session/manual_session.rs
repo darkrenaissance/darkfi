@@ -36,7 +36,7 @@ use std::sync::{Arc, Weak};
 use async_trait::async_trait;
 use futures::stream::{FuturesUnordered, StreamExt};
 use smol::lock::{Mutex as AsyncMutex, RwLock as AsyncRwLock};
-use tracing::{debug, error, warn};
+use tracing::{debug, info, warn};
 use url::Url;
 
 use super::{
@@ -141,7 +141,7 @@ impl Slot {
             |res| async {
                 match res {
                     Ok(()) | Err(Error::NetworkServiceStopped) => {}
-                    Err(e) => error!("net::manual_session {e}"),
+                    Err(e) => verbose!("net::manual_session {e}"),
                 }
             },
             Error::NetworkServiceStopped,
@@ -171,7 +171,7 @@ impl Slot {
             // Do not establish a connection to a host that is also configured as a seed.
             // This indicates a user misconfiguration.
             if seeds.contains(&self.addr) {
-                error!(
+                verbose!(
                     target: "net::manual_session",
                     "[P2P] Suspending manual connection to seed [{}]", self.addr.clone(),
                 );
@@ -189,7 +189,7 @@ impl Slot {
 
             match self.connector.connect(&self.addr).await {
                 Ok((_, channel)) => {
-                    verbose!(
+                    info!(
                         target: "net::manual_session",
                         "[P2P] Manual outbound connected [{}]",
                         channel.display_address()
@@ -220,7 +220,7 @@ impl Slot {
 
                             // Free up this addr for future operations.
                             if let Err(e) = self.p2p().hosts().unregister(channel.address()) {
-                                warn!(target: "net::manual_session", "[P2P] Error while unregistering addr={}, err={e}", channel.display_address());
+                                verbose!(target: "net::manual_session", "[P2P] Error while unregistering addr={}, err={e}", channel.display_address());
                             }
                         }
                     }
@@ -233,7 +233,7 @@ impl Slot {
 
                     // Free up this addr for future operations.
                     if let Err(e) = self.p2p().hosts().unregister(&self.addr) {
-                        warn!(target: "net::manual_session", "[P2P] Error while unregistering addr={}, err={e}", self.addr);
+                        verbose!(target: "net::manual_session", "[P2P] Error while unregistering addr={}, err={e}", self.addr);
                     }
                 }
             }

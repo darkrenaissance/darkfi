@@ -36,7 +36,7 @@ use std::{
 };
 
 use async_trait::async_trait;
-use tracing::{debug, error, warn};
+use tracing::debug;
 use url::Url;
 
 use super::super::p2p::{P2p, P2pPtr};
@@ -49,6 +49,7 @@ use crate::{
         session::{Session, SessionBitFlag, SESSION_REFINE},
     },
     system::{sleep, StoppableTask, StoppableTaskPtr},
+    util::logger::verbose,
     Error,
 };
 
@@ -75,7 +76,7 @@ impl RefineSession {
                     debug!(target: "net::refine_session::start", "Load hosts successful!");
                 }
                 Err(e) => {
-                    warn!(target: "net::refine_session::start", "Error loading hosts {e}");
+                    verbose!(target: "net::refine_session::start", "Error loading hosts {e}");
                 }
             }
         }
@@ -85,7 +86,7 @@ impl RefineSession {
                 debug!(target: "net::refine_session::start", "Import blacklist successful!");
             }
             Err(e) => {
-                warn!(target: "net::refine_session::start",
+                verbose!(target: "net::refine_session::start",
                     "Error importing blacklist from config file {e}");
             }
         }
@@ -105,7 +106,7 @@ impl RefineSession {
                     debug!(target: "net::refine_session::stop", "Save hosts successful!");
                 }
                 Err(e) => {
-                    warn!(target: "net::refine_session::stop", "Error saving hosts {e}");
+                    verbose!(target: "net::refine_session::stop", "Error saving hosts {e}");
                 }
             }
         }
@@ -254,7 +255,7 @@ impl GreylistRefinery {
             let offline_timer = { Instant::now().duration_since(*hosts.last_connection.lock()) };
 
             if !self.p2p().is_connected() && offline_timer >= offline_limit {
-                warn!(target: "net::refinery", "No connections for {}s. GreylistRefinery paused.",
+                verbose!(target: "net::refinery", "No connections for {}s. GreylistRefinery paused.",
                           offline_timer.as_secs());
 
                 // It is necessary to Free suspended hosts at this point, otherwise these
@@ -264,7 +265,7 @@ impl GreylistRefinery {
                 let suspended_hosts = hosts.suspended();
                 for host in suspended_hosts {
                     if let Err(e) = hosts.unregister(&host) {
-                        warn!(target: "net::refinery", "Error while unregistering addr={host}, err={e}");
+                        verbose!(target: "net::refinery", "Error while unregistering addr={host}, err={e}");
                     }
                 }
 
@@ -289,7 +290,7 @@ impl GreylistRefinery {
 
                         // Free up this addr for future operations.
                         if let Err(e) = hosts.unregister(&url) {
-                            warn!(target: "net::refinery", "Error while unregistering addr={url}, err={e}");
+                            verbose!(target: "net::refinery", "Error while unregistering addr={url}, err={e}");
                         }
 
                         continue
@@ -301,7 +302,7 @@ impl GreylistRefinery {
                     let last_seen = UNIX_EPOCH.elapsed().unwrap().as_secs();
 
                     if let Err(e) = hosts.whitelist_host(&url, last_seen).await {
-                        error!(target: "net::refinery", "Could not send {url} to the whitelist: {e}");
+                        verbose!(target: "net::refinery", "Could not send {url} to the whitelist: {e}");
                     }
 
                     debug!(target: "net::refinery", "GreylistRefinery complete!");

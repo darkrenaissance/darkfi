@@ -35,7 +35,7 @@ use std::{
 
 use async_trait::async_trait;
 use smol::lock::{Mutex as AsyncMutex, OnceCell};
-use tracing::{error, warn};
+use tracing::{info, warn};
 use url::Url;
 
 use super::{
@@ -242,7 +242,7 @@ impl DirectSession {
                 match res {
                     Ok(()) | Err(Error::DetachedTaskStopped) => { /* Do nothing */ }
                     Err(e) => {
-                        error!(target: "net::direct_session::get_channel_with_retries", "{e}")
+                        verbose!(target: "net::direct_session::get_channel_with_retries", "{e}")
                     }
                 }
             },
@@ -272,7 +272,7 @@ impl DirectSession {
         // Do not establish a connection to a host that is also configured as a seed.
         // This indicates a user misconfiguration.
         if seeds.contains(&addr) {
-            error!(
+            verbose!(
                 target: "net::direct_session",
                 "[P2P] Suspending direct connection to seed [{}]", addr.clone(),
             );
@@ -283,8 +283,8 @@ impl DirectSession {
         let hosts = self.p2p().hosts();
         let external_addrs = hosts.external_addrs().await;
         if external_addrs.contains(&addr) {
-            warn!(
-                target: "net::hosts::check_addrs",
+            verbose!(
+                target: "net::direct_session",
                 "[P2P] Suspending direct connection to external addr [{}]", addr.clone(),
             );
             return Err(Error::ConnectFailed(format!(
@@ -314,7 +314,7 @@ impl DirectSession {
                     }
                 }
 
-                error!(target: "net::direct_session",
+                verbose!(target: "net::direct_session",
                     "[P2P] Cannot connect to direct={addr}, err={e}");
                 return Err(e)
             }
@@ -328,7 +328,7 @@ impl DirectSession {
         // Attempt channel creation
         match self.connector.get().unwrap().connect(&addr).await {
             Ok((_, channel)) => {
-                verbose!(
+                info!(
                     target: "net::direct_session",
                     "[P2P] Direct outbound connected [{}]",
                     channel.display_address()
@@ -344,7 +344,7 @@ impl DirectSession {
                 match self.register_channel(channel.clone(), self.p2p().executor()).await {
                     Ok(()) => Ok(channel),
                     Err(e) => {
-                        warn!(
+                        verbose!(
                             target: "net::direct_session",
                             "[P2P] Unable to connect to direct outbound [{}]: {e}",
                             channel.display_address(),
@@ -357,7 +357,7 @@ impl DirectSession {
 
                         // Free up this addr for future operations.
                         if let Err(e) = self.p2p().hosts().unregister(channel.address()) {
-                            warn!(target: "net::direct_session", "[P2P] Error while unregistering addr={}, err={e}", channel.display_address());
+                            verbose!(target: "net::direct_session", "[P2P] Error while unregistering addr={}, err={e}", channel.display_address());
                         }
 
                         Err(e)
@@ -377,7 +377,7 @@ impl DirectSession {
 
                 // Free up this addr for future operations.
                 if let Err(e) = self.p2p().hosts().unregister(&addr) {
-                    warn!(target: "net::direct_session", "[P2P] Error while unregistering addr={addr}, err={e}");
+                    verbose!(target: "net::direct_session", "[P2P] Error while unregistering addr={addr}, err={e}");
                 }
 
                 Err(e)

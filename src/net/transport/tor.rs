@@ -45,7 +45,7 @@ use tor_error::ErrorReport;
 use tor_hsservice::{HsNickname, RendRequest, RunningOnionService};
 use tor_proto::client::stream::IncomingStreamRequest;
 use tor_rtcompat::PreferredRuntime;
-use tracing::{debug, error, warn};
+use tracing::debug;
 use url::Url;
 
 use super::{PtListener, PtStream};
@@ -101,7 +101,7 @@ impl TorDialer {
         {
             Ok(client) => client.isolated_client(),
             Err(e) => {
-                warn!(target: "net::tor::TorDialer", "{}", e.report());
+                verbose!(target: "net::tor::TorDialer", "{}", e.report());
                 return Err(io::Error::other("Internal Tor error, see logged warning"));
             }
         };
@@ -135,7 +135,7 @@ impl TorDialer {
                     Either::Left((Ok(stream), _)) => Ok(stream),
 
                     Either::Left((Err(e), _)) => {
-                        warn!(target: "net::tor::do_dial", "{}", e.report());
+                        verbose!(target: "net::tor::do_dial", "{}", e.report());
                         Err(io::Error::other("Internal Tor error, see logged warning"))
                     }
 
@@ -151,7 +151,7 @@ impl TorDialer {
                         // from arti-client in order to help debug Tor connections.
                         // https://docs.rs/arti-client/latest/arti_client/#reporting-arti-errors
                         // https://gitlab.torproject.org/tpo/core/arti/-/issues/1086
-                        warn!(target: "net::tor::do_dial", "{}", e.report());
+                        verbose!(target: "net::tor::do_dial", "{}", e.report());
                         Err(io::Error::other("Internal Tor error, see logged warning"))
                     }
                 }
@@ -207,7 +207,7 @@ impl TorListener {
         {
             Ok(client) => client.isolated_client(),
             Err(e) => {
-                warn!(target: "net::tor::do_listen", "{}", e.report());
+                verbose!(target: "net::tor::do_listen", "{}", e.report());
                 return Err(io::Error::other("Internal Tor error, see logged warning"));
             }
         };
@@ -217,7 +217,7 @@ impl TorListener {
         let hs_config = match OnionServiceConfigBuilder::default().nickname(hs_nick).build() {
             Ok(v) => v,
             Err(e) => {
-                error!(
+                verbose!(
                     target: "net::tor::do_listen",
                     "[P2P] Failed to create OnionServiceConfig: {e}"
                 );
@@ -228,14 +228,14 @@ impl TorListener {
         let (onion_service, rendreq_stream) = match client.launch_onion_service(hs_config) {
             Ok(Some(v)) => v,
             Ok(None) => {
-                error!(
+                verbose!(
                     target: "net::tor::do_listen",
                     "[P2P] Onion service disabled in config",
                 );
                 return Err(io::Error::other("Internal Tor error"));
             }
             Err(e) => {
-                error!(
+                verbose!(
                     target: "net::tor::do_listen",
                     "[P2P] Failed to launch Onion Service: {e}"
                 );
@@ -286,7 +286,7 @@ impl PtListener for TorListenerIntern {
         let mut streamreq_stream = match rendrequest.accept().await {
             Ok(v) => v,
             Err(e) => {
-                error!(
+                verbose!(
                     target: "net::tor::PtListener::next",
                     "[P2P] Failed accepting Tor RendRequest: {e}"
                 );
@@ -311,7 +311,7 @@ impl PtListener for TorListenerIntern {
         let stream = match streamrequest.accept(Connected::new_empty()).await {
             Ok(v) => v,
             Err(e) => {
-                error!(
+                verbose!(
                     target: "net::tor::PtListener::next",
                     "[P2P] Failed accepting Tor StreamRequest: {e}"
                 );
