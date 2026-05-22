@@ -96,9 +96,8 @@ pub(super) async fn http_read_from_stream_request(
     // Now we know the request body size. Read it into the buffer.
     buf.clear();
     buf.resize(content_length, 0_u8);
-    reader.read(buf).await?;
+    reader.read_exact(buf).await?;
 
-    assert!(buf.len() == content_length);
     Ok(content_length)
 }
 
@@ -170,9 +169,8 @@ pub(super) async fn http_read_from_stream_response(
     // Now we know the response body size. Read it into the buffer.
     buf.clear();
     buf.resize(content_length, 0_u8);
-    reader.read(buf).await?;
+    reader.read_exact(buf).await?;
 
-    assert!(buf.len() == content_length);
     Ok(content_length)
 }
 
