@@ -599,25 +599,30 @@ impl DrkPlugin {
             return true
         };
 
-        let result = self_.broadcast_tx(tx).await;
-
-        match result {
-            Ok(tx_id) => {
-                let state = TxState {
-                    id: Some(tx_id),
-                    status: TxStatus::Confirming,
-                    amount: None,
-                    token_symbol: None,
-                    recipient: None,
-                };
-                self_.emit_tx_updated(&state).await;
-            }
-            Err(_) => {
-                e!("Failed to broadcast transaction");
+        let drk = self_.drk.read().await;
+        if let Err(e) = drk.mark_tx_spend(&tx, &mut vec![]).await {
+            e!("Failed to mark transaction coins as spent: {e}");
+            self_.emit_tx_status_updated(&TxStatus::Error("failed to mark coins as spent".to_string())).await;
+            return true
+        };
+        let tx_id = match drk.broadcast_tx(&tx, &mut vec![]).await {
+            Ok(t) => t,
+            Err(e) => {
+                e!("Failed to broadcast transaction: {e}");
                 self_.emit_tx_status_updated(&TxStatus::Error("failed to broadcast".to_string())).await;
                 return true
             }
-        }
+        };
+        drop(drk);
+
+        let state = TxState {
+            id: Some(tx_id),
+            status: TxStatus::Confirming,
+            amount: None,
+            token_symbol: None,
+            recipient: None,
+        };
+        self_.emit_tx_updated(&state).await;
 
         true
     }
