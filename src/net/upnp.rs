@@ -31,7 +31,6 @@ use std::{
 use async_trait::async_trait;
 use oxy_upnp_igd::{add_port_mapping_lazy, Protocol, RenewalHandle};
 use smol::lock::{Mutex as AsyncMutex, RwLock as AsyncRwLock};
-use tracing::error;
 use url::Url;
 
 use crate::{
