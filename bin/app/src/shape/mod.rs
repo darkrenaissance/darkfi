@@ -45,6 +45,10 @@ mod blockchain_netlogo1;
 pub use blockchain_netlogo1::create_blockchain_netlogo1;
 mod blockchain_netlogo2;
 pub use blockchain_netlogo2::create_blockchain_netlogo2;
+mod blockchain_netlogo3;
+pub use blockchain_netlogo3::create_blockchain_netlogo3;
+mod blockchain_netlogo4;
+pub use blockchain_netlogo4::create_blockchain_netlogo4;
 
 //mod settings;
 //pub use settings::{create_right_border, create_settings};

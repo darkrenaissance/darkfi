@@ -465,10 +465,12 @@ async fn load_plugins(
         let net0 = sg_root2.lookup_node("/window/content/wallet/netstatus_layer/net0").unwrap();
         let net1 = sg_root2.lookup_node("/window/content/wallet/netstatus_layer/net1").unwrap();
         let net2 = sg_root2.lookup_node("/window/content/wallet/netstatus_layer/net2").unwrap();
+        let net3 = sg_root2.lookup_node("/window/content/wallet/netstatus_layer/net3").unwrap();
 
         let net0_is_visible = PropertyBool::wrap(&net0, Role::App, "is_visible", 0).unwrap();
         let net1_is_visible = PropertyBool::wrap(&net1, Role::App, "is_visible", 0).unwrap();
         let net2_is_visible = PropertyBool::wrap(&net2, Role::App, "is_visible", 0).unwrap();
+        let net3_is_visible = PropertyBool::wrap(&net3, Role::App, "is_visible", 0).unwrap();
 
         while let Ok(data) = recvr.recv().await {
             let status: u8 = deserialize(&data).unwrap();
@@ -479,16 +481,25 @@ async fn load_plugins(
                     net0_is_visible.set(atom, false);
                     net1_is_visible.set(atom, true);
                     net2_is_visible.set(atom, false);
+                    net3_is_visible.set(atom, false);
                 },
                 2 => {
                     net0_is_visible.set(atom, false);
                     net1_is_visible.set(atom, false);
                     net2_is_visible.set(atom, true);
+                    net3_is_visible.set(atom, false);
+                },
+                3 => {
+                    net0_is_visible.set(atom, false);
+                    net1_is_visible.set(atom, false);
+                    net2_is_visible.set(atom, false);
+                    net3_is_visible.set(atom, true);
                 },
                 _ => {
                     net0_is_visible.set(atom, true);
                     net1_is_visible.set(atom, false);
                     net2_is_visible.set(atom, false);
+                    net3_is_visible.set(atom, false);
                 }
             }
         }

@@ -17,7 +17,7 @@
  */
 
 use darkfi::{
-    system::{StoppableTask, sleep},
+    system::{Publisher, PublisherPtr, StoppableTask, sleep},
     tx::Transaction,
     util::parse::encode_base10,
 };
@@ -125,6 +125,7 @@ pub struct DrkPlugin {
     node: SceneNodeWeak,
     sg_root: SceneNodePtr,
     tasks: OnceLock<Vec<smol::Task<()>>>,
+    scan_progress_pub: PublisherPtr<(u32, u32)>,
 
     drk: Arc<RwLock<Drk>>,
     build_tx_channel: smol::channel::Sender<BuildTxRequest>,
@@ -203,6 +204,7 @@ impl DrkPlugin {
             tasks: OnceLock::new(),
             drk: drk.into_ptr(),
             build_tx_channel: build_tx_tx,
+            scan_progress_pub: Publisher::new(),
         });
 
         let local_ex = smol::LocalExecutor::new();
@@ -634,6 +636,31 @@ impl DrkPlugin {
         let drk = self.drk.clone();
         let (shell_sender, shell_receiver) = unbounded();
         let ex_ = ex.clone();
+        let progress_sub = self.scan_progress_pub.clone().subscribe().await;
+
+        let scan_progress_task = local_ex.spawn(async move {
+            let mut first_height = None;
+            loop {
+                let (height, final_height) = progress_sub.receive().await;
+                if first_height.is_none() {
+                    first_height = Some(height);
+                }
+                let progress: f64 = match final_height-first_height.unwrap() {
+                    0 => 0.,
+                    _ => (height-first_height.unwrap()) as f64 / (final_height-first_height.unwrap()) as f64,
+                };
+                let status: u8 = if progress > 0.5 {
+                    2
+                } else {
+                    1
+                };
+                if let Some(node) = self2.node.upgrade() {
+                    let _ = node.trigger("connect", serialize(&status)).await;
+                }
+            }
+        });
+
+        let self2 = self.clone();
 
         // Task that handles the RPC subscription with retry logic
         let subscribe_task = local_ex.spawn(async move {
@@ -644,10 +671,11 @@ impl DrkPlugin {
                 let drk = drk.clone();
                 let endpoint = endpoint.clone();
                 let ex = ex_.clone();
+                let progress_pub = self2.scan_progress_pub.clone();
 
-                let _ = self2.node.upgrade().unwrap().trigger("connect", serialize(&1u8)).await;
+                let _ = self2.node.upgrade().unwrap().trigger("connect", serialize(&0u8)).await;
 
-                if let Err(e) = drk.read().await.scan_blocks(&mut vec![], Some(&shell_sender), &false).await {
+                if let Err(e) = drk.read().await.scan_blocks(&mut vec![], Some(&shell_sender), &false, Some(progress_pub)).await {
                     e!("Failed during drk scanning: {e}");
                     let _ = self2.node.upgrade().unwrap().trigger("connect", serialize(&0u8)).await;
 
@@ -657,7 +685,7 @@ impl DrkPlugin {
                     continue
                 }
 
-                let _ = self2.node.upgrade().unwrap().trigger("connect", serialize(&2u8)).await;
+                let _ = self2.node.upgrade().unwrap().trigger("connect", serialize(&3u8)).await;
 
                 match subscribe_blocks(&drk, subscribe_rpc_task, shell_sender.clone(), endpoint, &ex).await {
                     Ok(()) => {
@@ -691,7 +719,7 @@ impl DrkPlugin {
             }
         });
 
-        let mut all_tasks = vec![subscribe_task, subscribe_recv_task];
+        let mut all_tasks = vec![scan_progress_task, subscribe_task, subscribe_recv_task];
         all_tasks.extend(tasks);
         self.tasks.set(all_tasks).unwrap();
     }
