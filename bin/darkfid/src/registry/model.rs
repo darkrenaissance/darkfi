@@ -190,6 +190,49 @@ impl BlockTemplate {
         }
         (block_hash, JsonValue::from(job))
     }
+
+    /// Return block full reward.
+    ///
+    /// Note: always check if block contains transactions before
+    /// calling this function.
+    pub async fn reward(&self) -> Result<u64> {
+        Ok(deserialize_async::<u64>(&self.block.txs.last().unwrap().calls[0].data.data[1..9])
+            .await?)
+    }
+
+    /// Return block fees.
+    ///
+    /// Note: always check if block contains transactions before
+    /// calling this function.
+    pub async fn fees(&self) -> Result<u64> {
+        let mut fees = 0;
+        'outer: for tx in &self.block.txs[..self.block.txs.len() - 1] {
+            for call in &tx.calls {
+                if !call.data.is_money_fee() {
+                    continue
+                }
+
+                fees += deserialize_async::<u64>(&call.data.data[1..9]).await?;
+                continue 'outer
+            }
+        }
+
+        Ok(fees)
+    }
+
+    /// Return block reward excluding fees and fees values.
+    pub async fn reward_excluding_fees_and_fees(&self) -> Result<(u64, u64)> {
+        if self.block.txs.is_empty() {
+            return Err(Error::BlockContainsNoTransactions(
+                self.block.header.template_hash().as_string(),
+            ))
+        }
+
+        let fees = self.fees().await?;
+        let reward = self.reward().await? - fees;
+
+        Ok((reward, fees))
+    }
 }
 
 /// Auxiliary structure representing a native miner client record.

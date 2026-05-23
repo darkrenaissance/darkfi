@@ -82,16 +82,26 @@ impl RequestHandler<MmRpcHandler> for DarkfiNode {
 impl DarkfiNode {
     // RPCAPI:
     // Gets a unique ID that identifies this merge mined chain and
-    // separates it from other chains.
+    // separates it from other chains, along with its coin information.
     //
     // * `chain_id`: A unique 32-byte hash that identifies this merge
-    //   mined chain.
-    //
-    // darkfid will send the hash:
-    //  H(genesis_hash || network || hard_fork_height)
+    //   mined chain. `darkfid` will send the hash:
+    //   `H(genesis_hash || network || hard_fork_height)`
+    // * `ticker`: A string that has a coin ticker name for this merge
+    //   mined chain (`DRK`).
+    // * `denomination`: A number that defines how many atomic units
+    //   are in one coin for this mined chain (`100000000`).
     //
     // --> {"jsonrpc": "2.0", "method": "merge_mining_get_chain_id", "id": 1}
-    // <-- {"jsonrpc": "2.0", "result": {"chain_id": "0f28c...7863"}, "id": 1}
+    // <-- {
+    //       "jsonrpc":"2.0",
+    //       "result": {
+    //         "chain_id": "0f28c...7863",
+    //         "ticker": "DRK",
+    //         "denomination": 100000000
+    //       },
+    //       "id": 1
+    //     }
     pub async fn xmr_merge_mining_get_chain_id(&self, id: u16, params: JsonValue) -> JsonResult {
         // Verify request params
         let Some(params) = params.get::<Vec<JsonValue>>() else {
@@ -123,42 +133,55 @@ impl DarkfiNode {
         hasher.update(&0u32.to_le_bytes());
         let chain_id = hasher.finalize().to_string();
 
-        let response = HashMap::from([("chain_id".to_string(), JsonValue::from(chain_id))]);
-        JsonResponse::new(JsonValue::from(response), id).into()
+        let response = JsonValue::from(HashMap::from([
+            ("chain_id".to_string(), JsonValue::from(chain_id)),
+            ("ticker".to_string(), JsonValue::from("DRK".to_string())),
+            ("denomination".to_string(), JsonValue::from(100000000_f64)),
+        ]));
+        JsonResponse::new(response, id).into()
     }
 
     // RPCAPI:
     // Gets a blob of data, the blocks hash and difficutly used for
-    // merge mining.
+    // merge mining, along with the block's height, reward and fees
+    // values.
     //
     // **Request:**
-    // * `address` : A wallet address or its base-64 encoded mining configuration on the merge mined chain
-    // * `aux_hash`: Merge mining job that is currently being polled
-    // * `height`  : Monero height
-    // * `prev_id` : Hash of the previous Monero block
+    // * `address` : A wallet address or its base-64 encoded mining
+    //   configuration on the merge mined chain.
+    // * `aux_hash`: Merge mining job that is currently being polled.
+    // * `height`  : Monero height.
+    // * `prev_id` : Hash of the previous Monero block.
     //
     // **Response:**
-    // * `aux_blob`: A hex-encoded blob of empty data
-    // * `aux_diff`: Mining difficulty (decimal number)
-    // * `aux_hash`: A 32-byte hex-encoded hash of merge mined block
+    // * `aux_blob`: A hex-encoded blob of empty data.
+    // * `aux_diff`: Mining difficulty (decimal number).
+    // * `aux_hash`: A 32-byte hex-encoded hash of merge mined block.
+    // * `aux_height`: Height number of merge mined block.
+    // * `aux_reward`: Merge mined block's reward (without fees) in
+    //   atomic units.
+    // * `aux_fees`: Merge mined block's fees in atomic units.
     //
     // --> {
     //       "jsonrpc": "2.0",
     //       "method": "merge_mining_get_aux_block",
     //       "params": {
     //         "address": "MERGE_MINED_CHAIN_ADDRESS",
-    //         "aux_hash": "f6952d6eef555ddd87aca66e56b91530222d6e318414816f3ba7cf5bf694bf0f",
+    //         "aux_hash": "f6952...4bf0f",
     //         "height": 3000000,
-    //         "prev_id":"ad505b0be8a49b89273e307106fa42133cbd804456724c5e7635bd953215d92a"
+    //         "prev_id": "ad505...5d92a"
     //       },
     //       "id": 1
     //     }
     // <-- {
     //       "jsonrpc":"2.0",
     //       "result": {
-    //         "aux_blob": "fad344115...3151531",
+    //         "aux_blob": "fad34...51531",
     //         "aux_diff": 123456,
-    //         "aux_hash":"f6952d6eef555ddd87aca66e56b91530222d6e318414816f3ba7cf5bf694bf0f"
+    //         "aux_hash": "f6952...4bf0f",
+    //         "aux_height": 1234,
+    //         "aux_reward": 123456,
+    //         "aux_fees": 123456
     //       },
     //       "id": 1
     //     }
@@ -226,7 +249,7 @@ impl DarkfiNode {
         let prev_id = monero::Hash::from_slice(&prev_id);
 
         // Register the new merge miner
-        let (job_id, difficulty) =
+        let (job_id, block_template) =
             match registry.register_merge_miner(&validator, wallet, &config).await {
                 Ok(p) => p,
                 Err(e) => {
@@ -238,6 +261,18 @@ impl DarkfiNode {
                 }
             };
 
+        // Extract block template reward excluding fees and fees values
+        let (reward, fees) = match block_template.reward_excluding_fees_and_fees().await {
+            Ok(p) => p,
+            Err(e) => {
+                error!(
+                    target: "darkfid::rpc::rpc_xmr::xmr_merge_mining_get_aux_block",
+                    "[RPC-XMR] Failed to retrieve block template reward excluding fees and fees values: {e}",
+                );
+                return JsonResponse::new(JsonValue::from(HashMap::new()), id).into()
+            }
+        };
+
         // Now we have the new job, we ship it to RPC
         info!(
             target: "darkfid::rpc::rpc_xmr::xmr_merge_mining_get_aux_block",
@@ -245,8 +280,11 @@ impl DarkfiNode {
         );
         let response = JsonValue::from(HashMap::from([
             ("aux_blob".to_string(), JsonValue::from(hex::encode(vec![]))),
-            ("aux_diff".to_string(), JsonValue::from(difficulty)),
+            ("aux_diff".to_string(), JsonValue::from(block_template.difficulty)),
             ("aux_hash".to_string(), JsonValue::from(job_id)),
+            ("aux_height".to_string(), JsonValue::from(block_template.block.header.height as f64)),
+            ("aux_reward".to_string(), JsonValue::from(reward as f64)),
+            ("aux_fees".to_string(), JsonValue::from(fees as f64)),
         ]));
         JsonResponse::new(response, id).into()
     }

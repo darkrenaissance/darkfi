@@ -165,17 +165,15 @@ impl DarkfiMinersRegistryState {
         validator: &Validator,
         wallet: &String,
         config: &MinerRewardsRecipientConfig,
-    ) -> Result<(String, f64)> {
+    ) -> Result<(String, BlockTemplate)> {
         // Create wallet template
         let block_template = self.create_template(validator, wallet, config).await?;
 
-        // Grab the block template hash and its difficulty, and then
-        // create the job record.
+        // Grab the block template hash and create the job record
         let block_template_hash = block_template.block.header.template_hash().as_string();
-        let difficulty = block_template.difficulty;
         self.mm_jobs.insert(block_template_hash.clone(), wallet.clone());
 
-        Ok((block_template_hash, difficulty))
+        Ok((block_template_hash, block_template))
     }
 
     /// Submit provided block to the provided node.
