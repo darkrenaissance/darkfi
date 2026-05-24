@@ -812,9 +812,11 @@ impl Drk {
                 // Grab the note from the child auth call
                 let child_idx = call.children_indexes[0];
                 let child_call = &calls[child_idx];
-                let child_params: MoneyAuthTokenMintParamsV1 =
-                    deserialize_async(&child_call.data.data[1..]).await?;
-                coins.push((params.coin, child_params.enc_note, false));
+                // TODO: Grab the encrypted note from custom auth calls
+                match deserialize_async::<MoneyAuthTokenMintParamsV1>(&child_call.data.data[1..]).await {
+                    Ok(child_params) => coins.push((params.coin, child_params.enc_note, false)),
+                    Err(_) => scan_cache.log(String::from("[parse_money_call] Found non-native contract Token mint authority, skipping.")),
+                }
             }
             MoneyFunction::BurnV1 => {
                 scan_cache.log(String::from("[parse_money_call] Found Money::BurnV1 call"));
