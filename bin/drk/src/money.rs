@@ -735,9 +735,9 @@ impl Drk {
         scan_cache: &mut ScanCache,
         call_idx: &usize,
         calls: &[DarkLeaf<ContractCall>],
-    ) -> Result<(Vec<Nullifier>, Vec<(Coin, AeadEncryptedNote, bool)>, Vec<TokenId>)> {
+    ) -> Result<(Vec<Nullifier>, Vec<(Coin, Option<AeadEncryptedNote>, bool)>, Vec<TokenId>)> {
         let mut nullifiers: Vec<Nullifier> = vec![];
-        let mut coins: Vec<(Coin, AeadEncryptedNote, bool)> = vec![];
+        let mut coins: Vec<(Coin, Option<AeadEncryptedNote>, bool)> = vec![];
         let mut freezes: Vec<TokenId> = vec![];
 
         let call = &calls[*call_idx];
@@ -748,7 +748,7 @@ impl Drk {
                 let params: MoneyFeeParamsV1 = deserialize_async(&data[9..]).await?;
                 nullifiers.push(params.input.nullifier);
                 if !params.output.tx_local {
-                    coins.push((params.output.coin, params.output.note, false));
+                    coins.push((params.output.coin, Some(params.output.note), false));
                 }
             }
             MoneyFunction::GenesisMintV1 => {
@@ -756,7 +756,7 @@ impl Drk {
                 let params: MoneyGenesisMintParamsV1 = deserialize_async(&data[1..]).await?;
                 for output in params.outputs {
                     if !output.tx_local {
-                        coins.push((output.coin, output.note, false));
+                        coins.push((output.coin, Some(output.note), false));
                     }
                 }
             }
@@ -764,7 +764,7 @@ impl Drk {
                 scan_cache.log(String::from("[parse_money_call] Found Money::PoWRewardV1 call"));
                 let params: MoneyPoWRewardParamsV1 = deserialize_async(&data[1..]).await?;
                 if !params.output.tx_local {
-                    coins.push((params.output.coin, params.output.note, true));
+                    coins.push((params.output.coin, Some(params.output.note), true));
                 }
             }
             MoneyFunction::TransferV1 => {
@@ -777,7 +777,7 @@ impl Drk {
 
                 for output in params.outputs {
                     if !output.tx_local {
-                        coins.push((output.coin, output.note, false));
+                        coins.push((output.coin, Some(output.note), false));
                     }
                 }
             }
@@ -791,7 +791,7 @@ impl Drk {
 
                 for output in params.outputs {
                     if !output.tx_local {
-                        coins.push((output.coin, output.note, false));
+                        coins.push((output.coin, Some(output.note), false));
                     }
                 }
             }
@@ -813,10 +813,18 @@ impl Drk {
                 let child_idx = call.children_indexes[0];
                 let child_call = &calls[child_idx];
                 // TODO: Grab the encrypted note from custom auth calls
-                match deserialize_async::<MoneyAuthTokenMintParamsV1>(&child_call.data.data[1..]).await {
-                    Ok(child_params) => coins.push((params.coin, child_params.enc_note, false)),
-                    Err(_) => scan_cache.log(String::from("[parse_money_call] Found non-native contract Token mint authority, skipping.")),
-                }
+                let note = match deserialize_async::<MoneyAuthTokenMintParamsV1>(
+                    &child_call.data.data[1..],
+                )
+                .await
+                {
+                    Ok(child_params) => Some(child_params.enc_note),
+                    Err(_) => {
+                        scan_cache.log(String::from("[parse_money_call] Found non-native contract Token mint authority, skipping its note."));
+                        None
+                    }
+                };
+                coins.push((params.coin, note, false))
             }
             MoneyFunction::BurnV1 => {
                 scan_cache.log(String::from("[parse_money_call] Found Money::BurnV1 call"));
@@ -839,7 +847,7 @@ impl Drk {
         tree: &mut MerkleTree,
         secrets: &[SecretKey],
         messages_buffer: &mut Vec<String>,
-        coins: &[(Coin, AeadEncryptedNote, bool)],
+        coins: &[(Coin, Option<AeadEncryptedNote>, bool)],
     ) -> Result<(Vec<OwnCoin>, Option<SecretKey>)> {
         // Keep track of our own coins found in the vec
         let mut owncoins = vec![];
@@ -861,6 +869,7 @@ impl Drk {
 
             // Attempt to decrypt the note
             for secret in secrets {
+                let Some(note) = note else { continue };
                 let Ok(note) = note.decrypt::<MoneyNote>(secret) else { continue };
                 messages_buffer.push(String::from(
                     "[handle_money_call_coins] Successfully decrypted a Money Note",
