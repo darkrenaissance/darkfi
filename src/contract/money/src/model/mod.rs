@@ -282,7 +282,7 @@ pub struct MoneyAuthTokenFreezeUpdateV1 {
 ///
 /// Burns (destroys) coins, removing value from circulation permanently.
 /// The call has inputs but no outputs; the value committed in the inputs
-/// is destroyed. All inputs must use the same token commitment.
+/// is destroyed.
 #[derive(Clone, Debug, SerialEncodable, SerialDecodable)]
 pub struct MoneyBurnParamsV1 {
     /// Anonymous inputs
