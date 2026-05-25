@@ -17,12 +17,13 @@
  */
 
 //! Clock sync module
-use std::{net::UdpSocket, time::Duration};
+use std::time::Duration;
 
+use smol::net::UdpSocket;
 use tracing::debug;
 use url::Url;
 
-use crate::{util::time::Timestamp, Error, Result};
+use crate::{system::io_timeout, util::time::Timestamp, Error, Result};
 
 /// Clock sync parameters
 const RETRIES: u8 = 10;
@@ -30,25 +31,35 @@ const RETRIES: u8 = 10;
 const NTP_ADDRESS: &str = "pool.ntp.org:123";
 const EPOCH: u32 = 2208988800; // 1900
 
+/// Per-request timeout for the NTP socket IO
+const NTP_TIMEOUT: Duration = Duration::from_secs(5);
+
+/// Maximum allowed difference between the system clock and reference
+/// clocks before we flag the system clock as invalid. `Timestamp` is
+/// whole seconds and round-trip latency is non-zero so exact equality
+/// is unachievable in practice.
+const CLOCK_TOLERANCE_SECS: u64 = 2;
+
 /// Raw NTP request execution
 pub async fn ntp_request() -> Result<Timestamp> {
     // Create socket
-    let sock = UdpSocket::bind("0.0.0.0:0")?;
-    sock.set_read_timeout(Some(Duration::from_secs(5)))?;
-    sock.set_write_timeout(Some(Duration::from_secs(5)))?;
+    let sock = UdpSocket::bind("0.0.0.0:0").await?;
 
     // Execute request
     let mut packet = [0u8; 48];
     packet[0] = (3 << 6) | (4 << 3) | 3;
-    sock.send_to(&packet, NTP_ADDRESS)?;
+    io_timeout(NTP_TIMEOUT, sock.send_to(&packet, NTP_ADDRESS)).await?;
 
     // Parse response
-    sock.recv(&mut packet[..])?;
-    let (bytes, _) = packet[40..44].split_at(core::mem::size_of::<u32>());
-    let num = u32::from_be_bytes(bytes.try_into().unwrap());
-    let timestamp = Timestamp::from_u64((num - EPOCH) as u64);
+    let n = io_timeout(NTP_TIMEOUT, sock.recv(&mut packet[..])).await?;
+    if n < 48 {
+        return Err(Error::InvalidClock)
+    }
 
-    Ok(timestamp)
+    let num = u32::from_be_bytes(packet[40..44].try_into().unwrap());
+    let secs = num.checked_sub(EPOCH).ok_or(Error::InvalidClock)?;
+
+    Ok(Timestamp::from_u64(secs as u64))
 }
 
 /// This is a very simple check to verify that the system time is correct.
@@ -106,14 +117,21 @@ async fn clock_check(_peers: &[Url]) -> Result<()> {
     debug!(target: "rpc::clock_sync", "ntp_time: {ntp_time:#?}");
     debug!(target: "rpc::clock_sync", "system_time: {system_time:#?}");
 
-    // We verify that system time is equal to peer (if exists) and ntp times
     let check = match peer_time {
-        Some(p) => (system_time == p) && (system_time == ntp_time),
-        None => system_time == ntp_time,
+        Some(p) => {
+            diff_secs(&system_time, &p) <= CLOCK_TOLERANCE_SECS &&
+                diff_secs(&system_time, &ntp_time) <= CLOCK_TOLERANCE_SECS
+        }
+        None => diff_secs(&system_time, &ntp_time) <= CLOCK_TOLERANCE_SECS,
     };
 
     match check {
         true => Ok(()),
         false => Err(Error::InvalidClock),
     }
+}
+
+/// Absolute difference between two timestamps, in whole seconds.
+fn diff_secs(a: &Timestamp, b: &Timestamp) -> u64 {
+    a.inner().abs_diff(b.inner())
 }
