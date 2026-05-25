@@ -104,7 +104,7 @@ impl JsonRpcInterface {
     //
     // --> {"jsonrpc": "2.0", "method": "dnet.subscribe_events", "params": [], "id": 1}
     // <-- {"jsonrpc": "2.0", "method": "dnet.subscribe_events", "params": [`event`]}
-    pub async fn dnet_subscribe_events(&self, id: u16, params: JsonValue) -> JsonResult {
+    pub async fn dnet_subscribe_events(&self, id: i64, params: JsonValue) -> JsonResult {
         let params = params.get::<Vec<JsonValue>>().unwrap();
         if !params.is_empty() {
             return JsonError::new(ErrorCode::InvalidParams, None, id).into()
@@ -120,7 +120,7 @@ impl JsonRpcInterface {
     //
     // --> {"jsonrpc": "2.0", "method": "dnet_switch", "params": [true], "id": 42}
     // <-- {"jsonrpc": "2.0", "result": true, "id": 42}
-    async fn dnet_switch(&self, id: u16, params: JsonValue) -> JsonResult {
+    async fn dnet_switch(&self, id: i64, params: JsonValue) -> JsonResult {
         let params = params.get::<Vec<JsonValue>>().unwrap();
         if params.len() != 1 || !params[0].is_bool() {
             return JsonError::new(ErrorCode::InvalidParams, None, id).into()
@@ -144,7 +144,7 @@ impl JsonRpcInterface {
     //
     // --> {"jsonrpc": "2.0", "method": "deg.subscribe_events", "params": [], "id": 1}
     // <-- {"jsonrpc": "2.0", "method": "deg.subscribe_events", "params": [`event`]}
-    pub async fn deg_subscribe_events(&self, id: u16, params: JsonValue) -> JsonResult {
+    pub async fn deg_subscribe_events(&self, id: i64, params: JsonValue) -> JsonResult {
         let params = params.get::<Vec<JsonValue>>().unwrap();
         if !params.is_empty() {
             return JsonError::new(ErrorCode::InvalidParams, None, id).into()
@@ -160,7 +160,7 @@ impl JsonRpcInterface {
     //
     // --> {"jsonrpc": "2.0", "method": "deg.switch", "params": [true], "id": 42}
     // <-- {"jsonrpc": "2.0", "result": true, "id": 42}
-    async fn deg_switch(&self, id: u16, params: JsonValue) -> JsonResult {
+    async fn deg_switch(&self, id: i64, params: JsonValue) -> JsonResult {
         let params = params.get::<Vec<JsonValue>>().unwrap();
         if params.len() != 1 || !params[0].is_bool() {
             return JsonError::new(ErrorCode::InvalidParams, None, id).into()
@@ -182,7 +182,7 @@ impl JsonRpcInterface {
     //
     // --> {"jsonrpc": "2.0", "method": "deg.switch", "params": [true], "id": 42}
     // <-- {"jsonrpc": "2.0", "result": true, "id": 42}
-    async fn eg_get_info(&self, id: u16, params: JsonValue) -> JsonResult {
+    async fn eg_get_info(&self, id: i64, params: JsonValue) -> JsonResult {
         let params_ = params.get::<Vec<JsonValue>>().unwrap();
         if !params_.is_empty() {
             return JsonError::new(ErrorCode::InvalidParams, None, id).into()
@@ -195,7 +195,7 @@ impl JsonRpcInterface {
     // Add a new event
     // --> {"jsonrpc": "2.0", "method": "add", "params": [], "id": 1}
     // <-- {"jsonrpc": "2.0", "result": [nickname, ...], "id": 1}
-    async fn add(&self, id: u16, params: JsonValue) -> JsonResult {
+    async fn add(&self, id: i64, params: JsonValue) -> JsonResult {
         let params = params.get::<Vec<JsonValue>>().unwrap();
         if params.len() != 1 || !params[0].is_string() {
             return JsonError::new(ErrorCode::InvalidParams, None, id).into()
@@ -230,7 +230,7 @@ impl JsonRpcInterface {
     // List events
     // --> {"jsonrpc": "2.0", "method": "list", "params": [], "id": 1}
     // <-- {"jsonrpc": "2.0", "result": [task_id, ...], "id": 1}
-    async fn list(&self, id: u16, _params: JsonValue) -> JsonResult {
+    async fn list(&self, id: i64, _params: JsonValue) -> JsonResult {
         debug!("Fetching all events");
         let mut seen_events = vec![];
         let dag_events = self.event_graph.order_events().await;

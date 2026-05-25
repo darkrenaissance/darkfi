@@ -53,7 +53,7 @@ impl DarkfiNode {
     //
     // --> {"jsonrpc": "2.0", "method": "blockchain.get_block", "params": [0], "id": 1}
     // <-- {"jsonrpc": "2.0", "result": "base64encodedblock", "id": 1}
-    pub async fn blockchain_get_block(&self, id: u16, params: JsonValue) -> JsonResult {
+    pub async fn blockchain_get_block(&self, id: i64, params: JsonValue) -> JsonResult {
         let Some(params) = params.get::<Vec<JsonValue>>() else {
             return JsonError::new(InvalidParams, None, id).into()
         };
@@ -101,7 +101,7 @@ impl DarkfiNode {
     //
     // --> {"jsonrpc": "2.0", "method": "blockchain.get_tx", "params": ["TxHash"], "id": 1}
     // <-- {"jsonrpc": "2.0", "result": "base64encodedtx", "id": 1}
-    pub async fn blockchain_get_tx(&self, id: u16, params: JsonValue) -> JsonResult {
+    pub async fn blockchain_get_tx(&self, id: i64, params: JsonValue) -> JsonResult {
         let Some(params) = params.get::<Vec<JsonValue>>() else {
             return JsonError::new(InvalidParams, None, id).into()
         };
@@ -144,7 +144,7 @@ impl DarkfiNode {
     //
     // --> {"jsonrpc": "2.0", "method": "blockchain.get_difficulty", "params": [1], "id": 1}
     // <-- {"jsonrpc": "2.0", "result": [123, 456], "id": 1}
-    pub async fn blockchain_get_difficulty(&self, id: u16, params: JsonValue) -> JsonResult {
+    pub async fn blockchain_get_difficulty(&self, id: i64, params: JsonValue) -> JsonResult {
         let Some(params) = params.get::<Vec<JsonValue>>() else {
             return JsonError::new(InvalidParams, None, id).into()
         };
@@ -184,7 +184,7 @@ impl DarkfiNode {
     //
     // --> {"jsonrpc": "2.0", "method": "blockchain.last_confirmed_block", "params": [], "id": 1}
     // <-- {"jsonrpc": "2.0", "result": [1234, "HeaderHash"], "id": 1}
-    pub async fn blockchain_last_confirmed_block(&self, id: u16, params: JsonValue) -> JsonResult {
+    pub async fn blockchain_last_confirmed_block(&self, id: i64, params: JsonValue) -> JsonResult {
         let Some(params) = params.get::<Vec<JsonValue>>() else {
             return JsonError::new(InvalidParams, None, id).into()
         };
@@ -219,7 +219,7 @@ impl DarkfiNode {
     // <-- {"jsonrpc": "2.0", "result": 1234, "id": 1}
     pub async fn blockchain_best_fork_next_block_height(
         &self,
-        id: u16,
+        id: i64,
         params: JsonValue,
     ) -> JsonResult {
         let Some(params) = params.get::<Vec<JsonValue>>() else {
@@ -248,7 +248,7 @@ impl DarkfiNode {
     //
     // --> {"jsonrpc": "2.0", "method": "blockchain.block_target", "params": [], "id": 1}
     // <-- {"jsonrpc": "2.0", "result": 120, "id": 1}
-    pub async fn blockchain_block_target(&self, id: u16, params: JsonValue) -> JsonResult {
+    pub async fn blockchain_block_target(&self, id: i64, params: JsonValue) -> JsonResult {
         let Some(params) = params.get::<Vec<JsonValue>>() else {
             return JsonError::new(InvalidParams, None, id).into()
         };
@@ -275,7 +275,7 @@ impl DarkfiNode {
     //
     // --> {"jsonrpc": "2.0", "method": "blockchain.subscribe_blocks", "params": [], "id": 1}
     // <-- {"jsonrpc": "2.0", "method": "blockchain.subscribe_blocks", "params": ["base64encodedblock"]}
-    pub async fn blockchain_subscribe_blocks(&self, id: u16, params: JsonValue) -> JsonResult {
+    pub async fn blockchain_subscribe_blocks(&self, id: i64, params: JsonValue) -> JsonResult {
         let Some(params) = params.get::<Vec<JsonValue>>() else {
             return JsonError::new(InvalidParams, None, id).into()
         };
@@ -296,7 +296,7 @@ impl DarkfiNode {
     //
     // --> {"jsonrpc": "2.0", "method": "blockchain.subscribe_txs", "params": [], "id": 1}
     // <-- {"jsonrpc": "2.0", "method": "blockchain.subscribe_txs", "params": ["tx_hash"]}
-    pub async fn blockchain_subscribe_txs(&self, id: u16, params: JsonValue) -> JsonResult {
+    pub async fn blockchain_subscribe_txs(&self, id: i64, params: JsonValue) -> JsonResult {
         let Some(params) = params.get::<Vec<JsonValue>>() else {
             return JsonError::new(InvalidParams, None, id).into()
         };
@@ -319,7 +319,7 @@ impl DarkfiNode {
     //
     // --> {"jsonrpc": "2.0", "method": "blockchain.subscribe_proposals", "params": [], "id": 1}
     // <-- {"jsonrpc": "2.0", "method": "blockchain.subscribe_proposals", "params": ["base64encodedblock"]}
-    pub async fn blockchain_subscribe_proposals(&self, id: u16, params: JsonValue) -> JsonResult {
+    pub async fn blockchain_subscribe_proposals(&self, id: i64, params: JsonValue) -> JsonResult {
         let Some(params) = params.get::<Vec<JsonValue>>() else {
             return JsonError::new(InvalidParams, None, id).into()
         };
@@ -347,7 +347,7 @@ impl DarkfiNode {
     //
     // --> {"jsonrpc": "2.0", "method": "blockchain.lookup_zkas", "params": ["BZHKGQ26bzmBithTQYTJtjo2QdCqpkR9tjSBopT4yf4o"], "id": 1}
     // <-- {"jsonrpc": "2.0", "result": [["Foo", "ABCD..."], ["Bar", "EFGH..."]], "id": 1}
-    pub async fn blockchain_lookup_zkas(&self, id: u16, params: JsonValue) -> JsonResult {
+    pub async fn blockchain_lookup_zkas(&self, id: i64, params: JsonValue) -> JsonResult {
         let Some(params) = params.get::<Vec<JsonValue>>() else {
             return JsonError::new(InvalidParams, None, id).into()
         };
@@ -415,7 +415,7 @@ impl DarkfiNode {
     //
     // --> {"jsonrpc": "2.0", "method": "blockchain.lookup_wasm", "params": ["BZHKGQ26bzmBithTQYTJtjo2QdCqpkR9tjSBopT4yf4o"], "id": 1}
     // <-- {"jsonrpc": "2.0", "result": "ABCD...", "id": 1}
-    pub async fn blockchain_lookup_wasm(&self, id: u16, params: JsonValue) -> JsonResult {
+    pub async fn blockchain_lookup_wasm(&self, id: i64, params: JsonValue) -> JsonResult {
         let Some(params) = params.get::<Vec<JsonValue>>() else {
             return JsonError::new(InvalidParams, None, id).into()
         };
@@ -449,7 +449,7 @@ impl DarkfiNode {
     //
     // --> {"jsonrpc": "2.0", "method": "blockchain.get_contract_state", "params": ["BZHK...", "tree"], "id": 1}
     // <-- {"jsonrpc": "2.0", "result": "ABCD...", "id": 1}
-    pub async fn blockchain_get_contract_state(&self, id: u16, params: JsonValue) -> JsonResult {
+    pub async fn blockchain_get_contract_state(&self, id: i64, params: JsonValue) -> JsonResult {
         let Some(params) = params.get::<Vec<JsonValue>>() else {
             return JsonError::new(InvalidParams, None, id).into()
         };
@@ -502,7 +502,7 @@ impl DarkfiNode {
     // <-- {"jsonrpc": "2.0", "result": "ABCD...", "id": 1}
     pub async fn blockchain_get_contract_state_key(
         &self,
-        id: u16,
+        id: i64,
         params: JsonValue,
     ) -> JsonResult {
         let Some(params) = params.get::<Vec<JsonValue>>() else {

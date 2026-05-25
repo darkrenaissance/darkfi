@@ -102,7 +102,7 @@ impl DarkfiNode {
     //       },
     //       "id": 1
     //     }
-    pub async fn xmr_merge_mining_get_chain_id(&self, id: u16, params: JsonValue) -> JsonResult {
+    pub async fn xmr_merge_mining_get_chain_id(&self, id: i64, params: JsonValue) -> JsonResult {
         // Verify request params
         let Some(params) = params.get::<Vec<JsonValue>>() else {
             return JsonError::new(InvalidParams, None, id).into()
@@ -185,7 +185,7 @@ impl DarkfiNode {
     //       },
     //       "id": 1
     //     }
-    pub async fn xmr_merge_mining_get_aux_block(&self, id: u16, params: JsonValue) -> JsonResult {
+    pub async fn xmr_merge_mining_get_aux_block(&self, id: i64, params: JsonValue) -> JsonResult {
         // Check if node is synced before responding to p2pool
         let validator = self.validator.read().await;
         if !validator.synced {
@@ -323,7 +323,7 @@ impl DarkfiNode {
     //       "id": 1
     //     }
     // <-- {"jsonrpc":"2.0", "result": {"status": "accepted"}, "id": 1}
-    pub async fn xmr_merge_mining_submit_solution(&self, id: u16, params: JsonValue) -> JsonResult {
+    pub async fn xmr_merge_mining_submit_solution(&self, id: i64, params: JsonValue) -> JsonResult {
         // Check if node is synced before responding to p2pool
         let mut validator = self.validator.write().await;
         if !validator.synced {

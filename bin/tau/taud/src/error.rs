@@ -53,7 +53,7 @@ impl From<std::io::Error> for TaudError {
     }
 }
 
-pub fn to_json_result(res: TaudResult<JsonValue>, id: u16) -> JsonResult {
+pub fn to_json_result(res: TaudResult<JsonValue>, id: i64) -> JsonResult {
     match res {
         Ok(v) => JsonResponse::new(v, id).into(),
         Err(err) => match err {

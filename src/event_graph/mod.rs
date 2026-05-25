@@ -1183,7 +1183,7 @@ impl EventGraph {
     }
 
     #[cfg(feature = "rpc")]
-    pub async fn eventgraph_info(&self, id: u16, _params: JsonValue) -> JsonResult {
+    pub async fn eventgraph_info(&self, id: i64, _params: JsonValue) -> JsonResult {
         let current_genesis = self.current_genesis.read().await;
         let dag_name = current_genesis.header.timestamp.to_string();
         let mut graph = HashMap::new();

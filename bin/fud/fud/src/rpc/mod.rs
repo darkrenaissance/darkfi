@@ -95,7 +95,7 @@ impl DefaultRpcInterface {
     //
     // --> {"jsonrpc": "2.0", "method": "put", "params": ["/foo.txt"], "id": 42}
     // <-- {"jsonrpc": "2.0", "result: "df4...3db7", "id": 42}
-    async fn put(&self, id: u16, params: JsonValue) -> JsonResult {
+    async fn put(&self, id: i64, params: JsonValue) -> JsonResult {
         let params = params.get::<Vec<JsonValue>>().unwrap();
         if params.len() != 1 || !params[0].is_string() {
             return JsonError::new(ErrorCode::InvalidParams, None, id).into()
@@ -124,7 +124,7 @@ impl DefaultRpcInterface {
     //
     // --> {"jsonrpc": "2.0", "method": "get", "params": ["1211...abfd", "~/myfile.jpg", null], "id": 42}
     // <-- {"jsonrpc": "2.0", "result": "/home/user/myfile.jpg", "id": 42}
-    async fn get(&self, id: u16, params: JsonValue) -> JsonResult {
+    async fn get(&self, id: i64, params: JsonValue) -> JsonResult {
         let params = params.get::<Vec<JsonValue>>().unwrap();
         if params.len() != 3 || !params[0].is_string() || !params[1].is_string() {
             return JsonError::new(ErrorCode::InvalidParams, None, id).into()
@@ -188,7 +188,7 @@ impl DefaultRpcInterface {
     //
     // --> {"jsonrpc": "2.0", "method": "get", "params": [], "id": 42}
     // <-- {"jsonrpc": "2.0", "result": `event`, "id": 42}
-    async fn subscribe(&self, _id: u16, _params: JsonValue) -> JsonResult {
+    async fn subscribe(&self, _id: i64, _params: JsonValue) -> JsonResult {
         self.event_sub.clone().into()
     }
 
@@ -197,7 +197,7 @@ impl DefaultRpcInterface {
     //
     // --> {"jsonrpc": "2.0", "method": "list_buckets", "params": [], "id": 1}
     // <-- {"jsonrpc": "2.0", "result": [[["abcdef", ["tcp://127.0.0.1:9700"]]]], "id": 1}
-    pub async fn list_resources(&self, id: u16, params: JsonValue) -> JsonResult {
+    pub async fn list_resources(&self, id: i64, params: JsonValue) -> JsonResult {
         let params = params.get::<Vec<JsonValue>>().unwrap();
         if !params.is_empty() {
             return JsonError::new(ErrorCode::InvalidParams, None, id).into()
@@ -217,7 +217,7 @@ impl DefaultRpcInterface {
     //
     // --> {"jsonrpc": "2.0", "method": "list_buckets", "params": [], "id": 1}
     // <-- {"jsonrpc": "2.0", "result": [["abcdef", ["tcp://127.0.0.1:9700"]]], "id": 1}
-    pub async fn list_buckets(&self, id: u16, params: JsonValue) -> JsonResult {
+    pub async fn list_buckets(&self, id: i64, params: JsonValue) -> JsonResult {
         let params = params.get::<Vec<JsonValue>>().unwrap();
         if !params.is_empty() {
             return JsonError::new(ErrorCode::InvalidParams, None, id).into()
@@ -246,7 +246,7 @@ impl DefaultRpcInterface {
     //
     // --> {"jsonrpc": "2.0", "method": "list_seeders", "params": [], "id": 1}
     // <-- {"jsonrpc": "2.0", "result": {"seeders": {"abcdefileid": [["abcdef", ["tcp://127.0.0.1:9700"]]]}}, "id": 1}
-    pub async fn list_seeders(&self, id: u16, params: JsonValue) -> JsonResult {
+    pub async fn list_seeders(&self, id: i64, params: JsonValue) -> JsonResult {
         let params = params.get::<Vec<JsonValue>>().unwrap();
         if !params.is_empty() {
             return JsonError::new(ErrorCode::InvalidParams, None, id).into()
@@ -277,7 +277,7 @@ impl DefaultRpcInterface {
     //
     // --> {"jsonrpc": "2.0", "method": "remove", "params": ["1211...abfd"], "id": 1}
     // <-- {"jsonrpc": "2.0", "result": [], "id": 1}
-    pub async fn remove(&self, id: u16, params: JsonValue) -> JsonResult {
+    pub async fn remove(&self, id: i64, params: JsonValue) -> JsonResult {
         let params = params.get::<Vec<JsonValue>>().unwrap();
         if params.len() != 1 || !params[0].is_string() {
             return JsonError::new(ErrorCode::InvalidParams, None, id).into()
@@ -300,7 +300,7 @@ impl DefaultRpcInterface {
     //
     // --> {"jsonrpc": "2.0", "method": "verify", "params": ["1211...abfd"], "id": 42}
     // <-- {"jsonrpc": "2.0", "result": [], "id": 1}
-    async fn verify(&self, id: u16, params: JsonValue) -> JsonResult {
+    async fn verify(&self, id: i64, params: JsonValue) -> JsonResult {
         let params = params.get::<Vec<JsonValue>>().unwrap();
         if !params.iter().all(|param| param.is_string()) {
             return JsonError::new(ErrorCode::InvalidParams, None, id).into()
@@ -337,7 +337,7 @@ impl DefaultRpcInterface {
     //
     // --> {"jsonrpc": "2.0", "method": "lookup", "params": ["1211...abfd"], "id": 1}
     // <-- {"jsonrpc": "2.0", "result": {"seeders": {"abcdefileid": [["abcdef", ["tcp://127.0.0.1:9701"]]]}}, "id": 1}
-    pub async fn lookup(&self, id: u16, params: JsonValue) -> JsonResult {
+    pub async fn lookup(&self, id: i64, params: JsonValue) -> JsonResult {
         let params = params.get::<Vec<JsonValue>>().unwrap();
         if params.len() != 1 || !params[0].is_string() {
             return JsonError::new(ErrorCode::InvalidParams, None, id).into()

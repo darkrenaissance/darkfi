@@ -172,7 +172,7 @@ fn to_tuple(e: RpcError) -> (i32, String) {
     (e as i32, msg.to_string())
 }
 
-pub fn server_error(e: RpcError, id: u16, msg: Option<&str>) -> JsonResult {
+pub fn server_error(e: RpcError, id: i64, msg: Option<&str>) -> JsonResult {
     let (code, default_msg) = to_tuple(e);
 
     if let Some(message) = msg {
@@ -182,7 +182,7 @@ pub fn server_error(e: RpcError, id: u16, msg: Option<&str>) -> JsonResult {
     JsonError::new(ServerError(code), Some(default_msg), id).into()
 }
 
-pub fn miner_status_response(id: u16, status: &str) -> JsonResult {
+pub fn miner_status_response(id: i64, status: &str) -> JsonResult {
     JsonResponse::new(
         JsonValue::from(HashMap::from([(
             "status".to_string(),

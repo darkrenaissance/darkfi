@@ -47,7 +47,7 @@ use crate::{
 pub trait RequestHandler<T>: Sync + Send {
     async fn handle_request(&self, req: JsonRequest) -> JsonResult;
 
-    async fn pong(&self, id: u16, _params: JsonValue) -> JsonResult {
+    async fn pong(&self, id: i64, _params: JsonValue) -> JsonResult {
         JsonResponse::new(JsonValue::String("pong".to_string()), id).into()
     }
 

@@ -31,7 +31,7 @@ impl DarkfiNode {
     //
     // --> {"jsonrpc": "2.0", "method": "clock", "params": [], "id": 1}
     // <-- {"jsonrpc": "2.0", "result": 1767015913, "id": 1}
-    pub async fn clock(&self, id: u16, _params: JsonValue) -> JsonResult {
+    pub async fn clock(&self, id: i64, _params: JsonValue) -> JsonResult {
         JsonResponse::new((Timestamp::current_time().inner() as f64).into(), id).into()
     }
 }
