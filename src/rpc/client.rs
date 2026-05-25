@@ -18,7 +18,7 @@
 
 use std::sync::Arc;
 
-use smol::{channel, io::BufReader, Executor};
+use smol::{channel, io::BufReader, lock::Mutex, Executor};
 use tinyjson::JsonValue;
 use tracing::{debug, error};
 use url::Url;
@@ -47,6 +47,8 @@ pub struct RpcClient {
     req_skip_send: channel::Sender<()>,
     /// The stoppable task pointer, used on [`RpcClient::stop()`]
     task: StoppableTaskPtr,
+    /// Serializes `request()` calls
+    request_lock: Mutex<()>,
 }
 
 impl RpcClient {
@@ -89,7 +91,7 @@ impl RpcClient {
             ex.clone(),
         );
 
-        Ok(Self { req_send, rep_recv, task, req_skip_send })
+        Ok(Self { req_send, rep_recv, task, req_skip_send, request_lock: Mutex::new(()) })
     }
 
     /// Stop the JSON-RPC client. This will trigger `stop()` on the inner
@@ -168,6 +170,8 @@ impl RpcClient {
     /// return a possible result. If the response is an error, returns
     /// a `JsonRpcError`.
     pub async fn request(&self, req: JsonRequest) -> Result<JsonValue> {
+        let _guard = self.request_lock.lock().await;
+
         let req_id = req.id;
         debug!(target: "rpc::client", "--> {}", req.stringify()?);
 
@@ -294,10 +298,10 @@ impl RpcClient {
 /// with each new request canceling waiting for the previous one. All requests are
 /// executed without a timeout.
 pub struct RpcChadClient {
-    /// The channel used to send JSON-RPC request objects
-    req_send: channel::Sender<JsonRequest>,
-    /// The channel used to read the JSON-RPC response object
-    rep_recv: channel::Receiver<JsonResult>,
+    /// Each outgoing request carries its own reply sender. The loop holds
+    /// at most one pending sender at a time; newer requests overwrite it,
+    /// causing the previous caller's recv to error with "channel closed".
+    req_send: channel::Sender<(JsonRequest, channel::Sender<JsonResult>)>,
     /// The stoppable task pointer, used on [`RpcChadClient::stop()`]
     task: StoppableTaskPtr,
 }
@@ -309,7 +313,6 @@ impl RpcChadClient {
     pub async fn new(endpoint: Url, ex: Arc<Executor<'_>>) -> Result<Self> {
         // Instantiate communication channels
         let (req_send, req_recv) = channel::unbounded();
-        let (rep_send, rep_recv) = channel::unbounded();
 
         // Figure out if we're using HTTP and rewrite the URL accordingly.
         let mut dialer_url = endpoint.clone();
@@ -330,7 +333,7 @@ impl RpcChadClient {
         // using `RpcChadClient::stop()`.
         let task = StoppableTask::new();
         task.clone().start(
-            Self::reqrep_loop(use_http, stream, rep_send, req_recv),
+            Self::reqrep_loop(use_http, stream, req_recv),
             |res| async move {
                 match res {
                     Ok(()) | Err(Error::RpcClientStopped) => {}
@@ -341,7 +344,7 @@ impl RpcChadClient {
             ex.clone(),
         );
 
-        Ok(Self { req_send, rep_recv, task })
+        Ok(Self { req_send, task })
     }
 
     /// Stop the JSON-RPC client. This will trigger `stop()` on the inner
@@ -355,28 +358,29 @@ impl RpcChadClient {
     async fn reqrep_loop(
         use_http: bool,
         stream: Box<dyn PtStream>,
-        rep_send: channel::Sender<JsonResult>,
-        req_recv: channel::Receiver<JsonRequest>,
+        req_recv: channel::Receiver<(JsonRequest, channel::Sender<JsonResult>)>,
     ) -> Result<()> {
         debug!(target: "rpc::chad_client::reqrep_loop", "Starting reqrep loop");
 
         let (reader, mut writer) = smol::io::split(stream);
         let mut reader = BufReader::new(reader);
 
+        // Reply sender of the currently-pending request, if any.
+        // Overwriting this drops the previous sender.
+        let mut pending: Option<channel::Sender<JsonResult>> = None;
+
+        enum Event {
+            NewReq(JsonRequest, channel::Sender<JsonResult>),
+            Reply(JsonResult),
+        }
+
         loop {
             let mut buf = Vec::with_capacity(INIT_BUF_SIZE);
 
-            // Read an incoming client request, or wait for a response
-            smol::future::or(
+            let event = smol::future::or(
                 async {
-                    let request = req_recv.recv().await?;
-                    let request = JsonResult::Request(request);
-                    if use_http {
-                        http_write_to_stream(&mut writer, &request).await?;
-                    } else {
-                        write_to_stream(&mut writer, &request).await?;
-                    }
-                    Ok::<(), crate::Error>(())
+                    let (req, tx) = req_recv.recv().await?;
+                    Ok::<Event, crate::Error>(Event::NewReq(req, tx))
                 },
                 async {
                     if use_http {
@@ -386,11 +390,30 @@ impl RpcChadClient {
                     }
                     let val: JsonValue = String::from_utf8(buf)?.parse()?;
                     let rep = JsonResult::try_from_value(&val)?;
-                    rep_send.send(rep).await?;
-                    Ok::<(), crate::Error>(())
+                    Ok::<Event, crate::Error>(Event::Reply(rep))
                 },
             )
             .await?;
+
+            match event {
+                Event::NewReq(req, tx) => {
+                    let frame = JsonResult::Request(req);
+                    if use_http {
+                        http_write_to_stream(&mut writer, &frame).await?;
+                    } else {
+                        write_to_stream(&mut writer, &frame).await?;
+                    }
+                    // Replace pending
+                    pending = Some(tx);
+                }
+                Event::Reply(rep) => {
+                    if let Some(tx) = pending.take() {
+                        // If receiver was dropped (caller gave up),
+                        // discard silently.
+                        let _ = tx.send(rep).await;
+                    }
+                }
+            }
         }
     }
 
@@ -402,59 +425,42 @@ impl RpcChadClient {
         let req_id = req.id;
         debug!(target: "rpc::chad_client", "--> {}", req.stringify()?);
 
+        let (tx, rx) = channel::bounded::<JsonResult>(1);
+
         // If the connection is closed, the sender will get an error
         // for sending to a closed channel.
-        self.req_send.send(req).await?;
+        self.req_send.send((req, tx)).await?;
 
-        // Now loop until we receive our response
-        loop {
-            // If the connection is closed, the receiver will get an error
-            // for waiting on a closed channel.
-            let reply = self.rep_recv.recv().await?;
+        // If a newer request preempts us, the loop drops our tx and this
+        // errors.
+        let reply = rx.recv().await.map_err(|_| Error::RpcClientStopped)?;
 
-            // Handle the response
-            match reply {
-                JsonResult::Response(rep) | JsonResult::SubscriberWithReply(_, rep) => {
-                    debug!(target: "rpc::chad_client", "<-- {}", rep.stringify()?);
-
-                    // Check if the IDs match
-                    if req_id != rep.id {
-                        debug!(target: "rpc::chad_client", "Skipping response for request {} as its not our latest({req_id})", rep.id);
-                        continue
-                    }
-
-                    return Ok(rep.result)
+        match reply {
+            JsonResult::Response(rep) | JsonResult::SubscriberWithReply(_, rep) => {
+                debug!(target: "rpc::chad_client", "<-- {}", rep.stringify()?);
+                if req_id != rep.id {
+                    let e = JsonError::new(ErrorCode::IdMismatch, None, rep.id);
+                    return Err(Error::JsonRpcError((e.error.code, e.error.message)));
                 }
-
-                JsonResult::Error(e) => {
-                    debug!(target: "rpc::chad_client", "<-- {}", e.stringify()?);
-
-                    // Check if the IDs match
-                    if req_id != e.id {
-                        debug!(target: "rpc::chad_client", "Skipping response for request {} as its not our latest({req_id})", e.id);
-                        continue
-                    }
-
-                    return Err(Error::JsonRpcError((e.error.code, e.error.message)))
-                }
-
-                JsonResult::Notification(n) => {
-                    debug!(target: "rpc::chad_client", "<-- {}", n.stringify()?);
-                    let e = JsonError::new(ErrorCode::InvalidReply, None, req_id);
-                    return Err(Error::JsonRpcError((e.error.code, e.error.message)))
-                }
-
-                JsonResult::Request(r) => {
-                    debug!(target: "rpc::chad_client", "<-- {}", r.stringify()?);
-                    let e = JsonError::new(ErrorCode::InvalidReply, None, req_id);
-                    return Err(Error::JsonRpcError((e.error.code, e.error.message)))
-                }
-
-                JsonResult::Subscriber(_) => {
-                    // When?
-                    let e = JsonError::new(ErrorCode::InvalidReply, None, req_id);
-                    return Err(Error::JsonRpcError((e.error.code, e.error.message)))
-                }
+                Ok(rep.result)
+            }
+            JsonResult::Error(e) => {
+                debug!(target: "rpc::chad_client", "<-- {}", e.stringify()?);
+                Err(Error::JsonRpcError((e.error.code, e.error.message)))
+            }
+            JsonResult::Notification(n) => {
+                debug!(target: "rpc::chad_client", "<-- {}", n.stringify()?);
+                let e = JsonError::new(ErrorCode::InvalidReply, None, req_id);
+                Err(Error::JsonRpcError((e.error.code, e.error.message)))
+            }
+            JsonResult::Request(r) => {
+                debug!(target: "rpc::chad_client", "<-- {}", r.stringify()?);
+                let e = JsonError::new(ErrorCode::InvalidReply, None, req_id);
+                Err(Error::JsonRpcError((e.error.code, e.error.message)))
+            }
+            JsonResult::Subscriber(_) => {
+                let e = JsonError::new(ErrorCode::InvalidReply, None, req_id);
+                Err(Error::JsonRpcError((e.error.code, e.error.message)))
             }
         }
     }
