@@ -285,6 +285,8 @@ pub struct DaoProposeParamsInput {
     pub merkle_coin_root: MerkleNode,
     /// SMT root for the input's nullifier exclusion proof
     pub smt_null_root: pallas::Base,
+    /// Input proposal specific nullifier
+    pub input_nullifier: Nullifier,
     /// Public key used for signing
     pub signature_public: PublicKey,
 }
