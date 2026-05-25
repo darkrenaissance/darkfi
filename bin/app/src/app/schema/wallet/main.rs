@@ -75,51 +75,7 @@ pub async fn make(
 
     create_bg_mesh(app, atom, &main_layer, "wallet_bg").await;
     create_header_bg(app, atom, &main_layer, "wallet_header_bg").await;
-
-    // Back button
-    let node = create_vector_art("wallet_back_btn_bg");
-    let prop = node.get_property("rect").unwrap();
-    prop.set_f32(atom, Role::App, 0, BACKARROW_X).unwrap();
-    prop.set_f32(atom, Role::App, 1, BACKARROW_Y).unwrap();
-    prop.set_f32(atom, Role::App, 2, 500.).unwrap();
-    prop.set_f32(atom, Role::App, 3, 500.).unwrap();
-    node.set_property_u32(atom, Role::App, "z_index", 2).unwrap();
-    let shape = shape::create_back_arrow().scaled(BACKARROW_SCALE);
-    let node = node.setup(|me| VectorArt::new(me, shape, app.renderer.clone())).await;
-    main_layer.link(node);
-
-    let node = create_button("wallet_back_btn");
-    node.set_property_bool(atom, Role::App, "is_active", true).unwrap();
-    let prop = node.get_property("rect").unwrap();
-    prop.set_f32(atom, Role::App, 0, 0.).unwrap();
-    prop.set_f32(atom, Role::App, 1, 0.).unwrap();
-    prop.set_f32(atom, Role::App, 2, WALLET_BTN_SIZE * 2.).unwrap();
-    prop.set_f32(atom, Role::App, 3, HEADER_HEIGHT).unwrap();
-
-    let sg_root = app.sg_root.clone();
-    let renderer = app.renderer.clone();
-    let menu_is_visible =
-        PropertyBool::wrap(&sg_root.lookup_node("/window/content/menu_layer").unwrap(), Role::App, "is_visible", 0).unwrap();
-    let wallet_is_visible1 = wallet_is_visible.clone();
-    let goback = async move || {
-        info!(target: "app::wallet", "clicked back from wallet");
-        let atom = &mut renderer.make_guard(gfxtag!("wallet goback action"));
-        wallet_is_visible1.set(atom, false);
-        menu_is_visible.set(atom, true);
-    };
-
-    let (slot, recvr) = Slot::new("wallet_back_clicked");
-    node.register("click", slot).unwrap();
-    let goback2 = goback.clone();
-    let listen_click = app.ex.spawn(async move {
-        while let Ok(_) = recvr.recv().await {
-            goback2().await;
-        }
-    });
-    app.tasks.lock().unwrap().push(listen_click);
-
-    let node = node.setup(|me| Button::new(me, app.renderer.clone())).await;
-    main_layer.link(node);
+    create_chat_btn(app, atom, &cc, &main_layer).await;
 
     let mut y = HEADER_HEIGHT;
 
@@ -428,4 +384,82 @@ pub async fn make(
     app.tasks.lock().unwrap().push(listen_wallet_visible);
 
     wallet_layer
+}
+
+async fn create_chat_btn(app: &App, atom: &mut PropertyAtomicGuard, cc: &expr::Compiler, parent: &SceneNodePtr) {
+    let node = create_vector_art("chat_btn_bg");
+    let prop = node.get_property("rect").unwrap();
+    let code = cc.compile(format!("w - {CHAT_BTN_SIZE} - {CHAT_BTN_MARGIN}")).unwrap();
+    prop.set_expr(atom, Role::App, 0, code).unwrap();
+    let code = cc.compile(format!("h - {CHAT_BTN_SIZE} - {CHAT_BTN_MARGIN}")).unwrap();
+    prop.set_expr(atom, Role::App, 1, code).unwrap();
+    prop.set_f32(atom, Role::App, 2, CHAT_BTN_SIZE).unwrap();
+    prop.set_f32(atom, Role::App, 3, CHAT_BTN_SIZE).unwrap();
+    node.set_property_u32(atom, Role::App, "z_index", 2).unwrap();
+    let mut shape = VectorShape::new();
+
+    shape.add_filled_box(
+        expr::const_f32(0.),
+        expr::const_f32(0.),
+        expr::load_var("w"),
+        expr::load_var("h"),
+        [0., 0.098, 0.098, 1.],
+    );
+    shape.add_outline(
+        expr::const_f32(0.),
+        expr::const_f32(0.),
+        expr::load_var("w"),
+        expr::load_var("h"),
+        1.,
+        [0.2, 0.2745, 0.2784, 1.],
+    );
+    let node = node.setup(|me| VectorArt::new(me, shape, app.renderer.clone())).await;
+    parent.link(node);
+
+    let node = create_vector_art("chat_btn_shape");
+    let prop = node.get_property("rect").unwrap();
+    let code = cc.compile(format!("w - {CHAT_BTN_SIZE}/2 - {CHAT_BTN_MARGIN}")).unwrap();
+    prop.set_expr(atom, Role::App, 0, code).unwrap();
+    let code = cc.compile(format!("h - {CHAT_BTN_SIZE}/2 - {CHAT_BTN_MARGIN}")).unwrap();
+    prop.set_expr(atom, Role::App, 1, code).unwrap();
+    prop.set_f32(atom, Role::App, 2, CHAT_BTN_SIZE).unwrap();
+    prop.set_f32(atom, Role::App, 3, CHAT_BTN_SIZE).unwrap();
+    node.set_property_u32(atom, Role::App, "z_index", 3).unwrap();
+    node.set_property_f32(atom, Role::App, "scale", CHAT_BTN_LOGO_SCALE).unwrap();
+    let mut shape = shape::create_netlogo1([0., 0.94, 1., 1.]);
+    shape.join(shape::create_netlogo2([0., 0.94, 1., 1.]));
+    shape.join(shape::create_netlogo3([0., 0.94, 1., 1.]));
+    let node = node.setup(|me| VectorArt::new(me, shape, app.renderer.clone())).await;
+    parent.link(node);
+
+    let node = create_button("chat_btn");
+    node.set_property_bool(atom, Role::App, "is_active", true).unwrap();
+    let prop = node.get_property("rect").unwrap();
+    let code = cc.compile(format!("w - {CHAT_BTN_SIZE} - {CHAT_BTN_MARGIN}")).unwrap();
+    prop.set_expr(atom, Role::App, 0, code).unwrap();
+    let code = cc.compile(format!("h - {CHAT_BTN_SIZE} - {CHAT_BTN_MARGIN}")).unwrap();
+    prop.set_expr(atom, Role::App, 1, code).unwrap();
+    prop.set_f32(atom, Role::App, 2, CHAT_BTN_SIZE).unwrap();
+    prop.set_f32(atom, Role::App, 3, CHAT_BTN_SIZE).unwrap();
+
+    let sg_root = app.sg_root.clone();
+    let renderer = app.renderer.clone();
+    let menu_is_visible =
+        PropertyBool::wrap(&sg_root.lookup_node("/window/content/menu_layer").unwrap(), Role::App, "is_visible", 0).unwrap();
+    let wallet_is_visible =
+        PropertyBool::wrap(&sg_root.lookup_node("/window/content/wallet").unwrap(), Role::App, "is_visible", 0).unwrap();
+    let (slot, recvr) = Slot::new("chat_btn_clicked");
+    node.register("click", slot).unwrap();
+    let listen_click = app.ex.spawn(async move {
+        while let Ok(_) = recvr.recv().await {
+            info!(target: "app::wallet", "clicked back from wallet");
+            let atom = &mut renderer.make_guard(gfxtag!("wallet goback action"));
+            wallet_is_visible.set(atom, false);
+            menu_is_visible.set(atom, true);
+        }
+    });
+    app.tasks.lock().unwrap().push(listen_click);
+
+    let node = node.setup(|me| Button::new(me, app.renderer.clone())).await;
+    parent.link(node);
 }
