@@ -109,7 +109,7 @@ pub async fn make(app: &App, content: SceneNodePtr, i18n_fish: &I18nBabelFish) {
     prop.set_f32(atom, Role::App, 1, 0.).unwrap();
     prop.set_expr(atom, Role::App, 2, expr::load_var("w")).unwrap();
     prop.set_expr(atom, Role::App, 3, expr::load_var("h")).unwrap();
-    layer_node.set_property_bool(atom, Role::App, "is_visible", true).unwrap();
+    layer_node.set_property_bool(atom, Role::App, "is_visible", false).unwrap();
     layer_node.set_property_u32(atom, Role::App, "z_index", 1).unwrap();
     let layer_node = layer_node.setup(|me| Layer::new(me, app.renderer.clone())).await;
     content.link(layer_node.clone());

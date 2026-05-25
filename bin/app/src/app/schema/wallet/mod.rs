@@ -57,8 +57,8 @@ pub async fn make(app: &App, content: SceneNodePtr, i18n_fish: &I18nBabelFish) {
     prop.set_f32(atom, Role::App, 1, 0.).unwrap();
     prop.set_expr(atom, Role::App, 2, expr::load_var("w")).unwrap();
     prop.set_expr(atom, Role::App, 3, expr::load_var("h")).unwrap();
-    wallet_layer.set_property_bool(atom, Role::App, "is_visible", false).unwrap();
     wallet_layer.set_property_u32(atom, Role::App, "z_index", 19).unwrap();
+    wallet_layer.set_property_bool(atom, Role::App, "is_visible", true).unwrap();
     let wallet_layer = wallet_layer.setup(|me| Layer::new(me, app.renderer.clone())).await;
     content.link(wallet_layer.clone());
 
