@@ -178,77 +178,78 @@ impl Explorer {
 
             match block_notification {
                 JsonResult::Notification(notification) => {
-                    // Deserialize base64 block
-                    let block_bytes =
-                        base64::decode(notification.params[0].get::<String>().unwrap()).unwrap();
-                    let block: BlockInfo = deserialize_async(&block_bytes).await.unwrap();
-                    let incoming_height = block.header.height as u64;
+                    for param in notification.params.get::<Vec<JsonValue>>().unwrap() {
+                        // Deserialize base64 block
+                        let block_bytes = base64::decode(param.get::<String>().unwrap()).unwrap();
+                        let block: BlockInfo = deserialize_async(&block_bytes).await.unwrap();
+                        let incoming_height = block.header.height as u64;
 
-                    info!(target: "explorer::handle_block_sub", "Height {}", incoming_height);
+                        info!(target: "explorer::handle_block_sub", "Height {}", incoming_height);
 
-                    // Check if we need to reorg or sync
-                    let current_height = self.get_height().ok().flatten().unwrap_or(0);
+                        // Check if we need to reorg or sync
+                        let current_height = self.get_height().ok().flatten().unwrap_or(0);
 
-                    if incoming_height > current_height + 1 {
-                        // Sync needed: we have at least one missing block
-                        info!(
-                            target: "explorer::handle_block_sub",
-                            "Sync needed! Incoming height {} > current_height {}.",
-                            incoming_height, current_height,
-                        );
-                        self.synced.store(false, Ordering::SeqCst);
-                        self.sync_blockchain(
-                            rpc_endpoint.clone(),
-                            current_height + 1,
-                            incoming_height - 1,
-                            ex.clone(),
-                        )
-                        .await?;
-                        self.synced.store(true, Ordering::SeqCst);
-                        info!(
-                            target: "explorer::handle_block_sub",
-                            "Synced to height {}", incoming_height - 1,
-                        );
-                    }
-
-                    if incoming_height <= current_height {
-                        // Reorg needed: incoming block is at or before our current height
-                        let blocks_to_revert = current_height - incoming_height + 1;
-                        info!(
-                            target: "explorer::handle_block_sub",
-                            "Reorg detected! Incoming height {} <= current height {}. Reverting {} blocks.",
-                            incoming_height, current_height, blocks_to_revert
-                        );
-
-                        if let Err(e) = self.revert_to_height(incoming_height - 1).await {
-                            error!(
+                        if incoming_height > current_height + 1 {
+                            // Sync needed: we have at least one missing block
+                            info!(
                                 target: "explorer::handle_block_sub",
-                                "Failed to revert blocks during reorg: {e}",
+                                "Sync needed! Incoming height {} > current_height {}.",
+                                incoming_height, current_height,
                             );
-                            // Exit from this task if there's an error.
-                            // It'll let us inspect the db and what happened.
-                            return Err(e.into())
+                            self.synced.store(false, Ordering::SeqCst);
+                            self.sync_blockchain(
+                                rpc_endpoint.clone(),
+                                current_height + 1,
+                                incoming_height - 1,
+                                ex.clone(),
+                            )
+                            .await?;
+                            self.synced.store(true, Ordering::SeqCst);
+                            info!(
+                                target: "explorer::handle_block_sub",
+                                "Synced to height {}", incoming_height - 1,
+                            );
                         }
+
+                        if incoming_height <= current_height {
+                            // Reorg needed: incoming block is at or before our current height
+                            let blocks_to_revert = current_height - incoming_height + 1;
+                            info!(
+                                target: "explorer::handle_block_sub",
+                                "Reorg detected! Incoming height {} <= current height {}. Reverting {} blocks.",
+                                incoming_height, current_height, blocks_to_revert
+                            );
+
+                            if let Err(e) = self.revert_to_height(incoming_height - 1).await {
+                                error!(
+                                    target: "explorer::handle_block_sub",
+                                    "Failed to revert blocks during reorg: {e}",
+                                );
+                                // Exit from this task if there's an error.
+                                // It'll let us inspect the db and what happened.
+                                return Err(e.into())
+                            }
+                        }
+
+                        // Get difficulty
+                        let rpc_client =
+                            RpcClient::new(rpc_endpoint.clone(), ex.clone()).await.unwrap();
+
+                        let req = JsonRequest::new(
+                            "blockchain.get_difficulty",
+                            JsonValue::Array(vec![(block.header.height as f64).into()]),
+                        );
+                        let rep = rpc_client.request(req).await?;
+                        rpc_client.stop().await;
+
+                        let params = rep.get::<Vec<JsonValue>>().unwrap();
+                        let difficulty = *params[0].get::<f64>().unwrap() as u64;
+                        let cumulative = *params[1].get::<f64>().unwrap() as u64;
+
+                        let diff = DifficultyIndex { difficulty, cumulative };
+
+                        self.append_block(&block, &diff).await.unwrap();
                     }
-
-                    // Get difficulty
-                    let rpc_client =
-                        RpcClient::new(rpc_endpoint.clone(), ex.clone()).await.unwrap();
-
-                    let req = JsonRequest::new(
-                        "blockchain.get_difficulty",
-                        JsonValue::Array(vec![(block.header.height as f64).into()]),
-                    );
-                    let rep = rpc_client.request(req).await?;
-                    rpc_client.stop().await;
-
-                    let params = rep.get::<Vec<JsonValue>>().unwrap();
-                    let difficulty = *params[0].get::<f64>().unwrap() as u64;
-                    let cumulative = *params[1].get::<f64>().unwrap() as u64;
-
-                    let diff = DifficultyIndex { difficulty, cumulative };
-
-                    self.append_block(&block, &diff).await.unwrap();
                 }
                 x => unreachable!("{:?}", x),
             }
