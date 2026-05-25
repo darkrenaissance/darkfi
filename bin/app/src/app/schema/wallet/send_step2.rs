@@ -38,7 +38,7 @@ use crate::{
 
 use super::{super::ColorScheme, data::*, util::*};
 
-pub async fn make_send_step2_layer(
+pub async fn make(
     app: &App,
     wallet_layer: SceneNodePtr,
     i18n_fish: &I18nBabelFish,

@@ -41,10 +41,6 @@ use crate::{
     util::i18n::I18nBabelFish,
 };
 
-use main::make_main_wallet_layer;
-use receive::make_receive_layer;
-use send::make_send_layer;
-
 pub async fn make(app: &App, content: SceneNodePtr, i18n_fish: &I18nBabelFish) {
     let window_scale = PropertyFloat32::wrap(
         &app.sg_root.lookup_node("/window").unwrap(),
@@ -67,13 +63,13 @@ pub async fn make(app: &App, content: SceneNodePtr, i18n_fish: &I18nBabelFish) {
     content.link(wallet_layer.clone());
 
     // Create main wallet layer
-    let _ = make_main_wallet_layer(app, wallet_layer.clone(), i18n_fish, window_scale.clone()).await;
+    let _ = main::make(app, wallet_layer.clone(), i18n_fish, window_scale.clone()).await;
 
     // Create blockchain network status indicator layer
     let _ = netstatus::make(app, wallet_layer.clone(), i18n_fish, window_scale.clone()).await;
 
     // Create receive layer
-    let _ = make_receive_layer(
+    let _ = receive::make(
         app,
         wallet_layer.clone(),
         i18n_fish,
@@ -81,7 +77,7 @@ pub async fn make(app: &App, content: SceneNodePtr, i18n_fish: &I18nBabelFish) {
     ).await;
 
     // Create send layer
-    let _ = make_send_layer(
+    let _ = send::make(
         app,
         wallet_layer.clone(),
         i18n_fish,

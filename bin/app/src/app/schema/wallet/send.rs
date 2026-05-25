@@ -29,9 +29,9 @@ use crate::{
     util::i18n::I18nBabelFish,
 };
 
-use super::{data::SendTxData, data::BALANCE_BASE10_DECIMALS, send_step1::*, send_step2::*, send_step3::*, send_step4::*, tx_status::*};
+use super::{data::SendTxData, data::BALANCE_BASE10_DECIMALS, send_step1, send_step2, send_step3, send_step4, tx_status};
 
-pub async fn make_send_layer(
+pub async fn make(
     app: &App,
     wallet_layer: SceneNodePtr,
     i18n_fish: &I18nBabelFish,
@@ -39,7 +39,7 @@ pub async fn make_send_layer(
 ) -> SceneNodePtr {
     let send_tx_data = std::sync::Arc::new(std::sync::Mutex::new(SendTxData::new()));
 
-    let send_step1_layer = make_send_step1_layer(
+    let send_step1_layer = send_step1::make(
         app,
         wallet_layer.clone(),
         i18n_fish,
@@ -49,7 +49,7 @@ pub async fn make_send_layer(
 
     let step1_is_visible = PropertyBool::wrap(&send_step1_layer, Role::App, "is_visible", 0).unwrap();
 
-    let send_step2_layer = make_send_step2_layer(
+    let send_step2_layer = send_step2::make(
         app,
         wallet_layer.clone(),
         i18n_fish,
@@ -60,7 +60,7 @@ pub async fn make_send_layer(
 
     let step2_is_visible = PropertyBool::wrap(&send_step2_layer, Role::App, "is_visible", 0).unwrap();
 
-    let send_step3_layer = make_send_step3_layer(
+    let send_step3_layer = send_step3::make(
         app,
         wallet_layer.clone(),
         i18n_fish,
@@ -72,7 +72,7 @@ pub async fn make_send_layer(
 
     let step3_is_visible = PropertyBool::wrap(&send_step3_layer, Role::App, "is_visible", 0).unwrap();
 
-    let send_step4_layer = make_send_step4_layer(
+    let send_step4_layer = send_step4::make(
         app,
         wallet_layer.clone(),
         i18n_fish,
@@ -85,7 +85,7 @@ pub async fn make_send_layer(
 
     let step4_is_visible = PropertyBool::wrap(&send_step4_layer, Role::App, "is_visible", 0).unwrap();
 
-    let tx_status_layer = make_tx_status_layer(
+    let tx_status_layer = tx_status::make(
         app,
         wallet_layer.clone(),
         i18n_fish,
