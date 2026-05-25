@@ -336,54 +336,7 @@ pub async fn make(
         .await;
     main_layer.link(tokens_table.clone());
 
-    let wallet_layer = main_layer.clone();
-    let wallet_is_visible2 = wallet_is_visible.clone();
-    let tokens_table2 = tokens_table.clone();
-    let sg_root2 = app.sg_root.clone();
-    let renderer2 = app.renderer.clone();
-    let wallet_is_visible_sub = wallet_is_visible.prop().subscribe_modify();
-    let listen_wallet_visible = app.ex.spawn(async move {
-        while let Ok(_) = wallet_is_visible_sub.receive().await {
-            if wallet_is_visible2.get() {
-                let atom = &mut renderer2.make_guard(gfxtag!("wallet - refresh tokens"));
-
-                if let Some(drk_node) = sg_root2.lookup_node("/plugin/drk") {
-                    if let Ok(Some(response_data)) = drk_node.call_method("get_balances", vec![]).await {
-                        let mut cur = std::io::Cursor::new(response_data);
-                        if let Ok(balances) = Vec::<(String, darkfi_money_contract::model::TokenId, u64)>::decode(&mut cur) {
-                            let token_rows: Vec<TokenRow> = balances
-                                .iter()
-                                .enumerate()
-                                .map(|(i, (symbol, token_id, balance))| TokenRow {
-                                    id: *token_id,
-                                    symbol: symbol.clone(),
-                                    balance: encode_base10(*balance, BALANCE_BASE10_DECIMALS),
-                                })
-                                .collect();
-
-                            let mut data: Vec<u8> = vec![];
-                            for row in &token_rows {
-                                let _ = TokenRow::encode(row, &mut data);
-                            }
-
-                            let _ = tokens_table2.call_method("set_tokens", data).await;
-
-                            // Update main wallet balance
-                            use darkfi_money_contract::model::DARK_TOKEN_ID;
-                            if let Some(drk_row) = token_rows.iter().find(|row| row.id == *DARK_TOKEN_ID) {
-                                if let Some(balance_node) = sg_root2.lookup_node("/window/content/wallet/main_layer/wallet_balance") {
-                                    balance_node.set_property_str(atom, Role::App, "text", format!("DRK {}", drk_row.balance)).unwrap();
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    });
-    app.tasks.lock().unwrap().push(listen_wallet_visible);
-
-    wallet_layer
+    main_layer
 }
 
 async fn create_chat_btn(app: &App, atom: &mut PropertyAtomicGuard, cc: &expr::Compiler, parent: &SceneNodePtr) {
