@@ -97,6 +97,9 @@ pub enum DaoError {
 
     #[error("Wrong output coin")]
     AuthXferWrongOutputCoin,
+
+    #[error("Transaction height higher than current height")]
+    FutureTransactionHeight,
 }
 
 impl From<DaoError> for ContractError {
@@ -128,6 +131,7 @@ impl From<DaoError> for ContractError {
             DaoError::AuthXferCallNotFoundInParent => Self::Custom(24),
             DaoError::AuthXferWrongNumberOutputs => Self::Custom(25),
             DaoError::AuthXferWrongOutputCoin => Self::Custom(26),
+            DaoError::FutureTransactionHeight => Self::Custom(27),
         }
     }
 }

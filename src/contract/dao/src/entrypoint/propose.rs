@@ -183,6 +183,14 @@ pub(crate) fn dao_propose_process_instruction(
 
         // Check snapshot age againts current height
         let current_height = wasm::util::get_verifying_block_height()?;
+        if tx_height > current_height {
+            msg!(
+                "[Dao::Propose] Error: Transaction height ({}) higher than current height ({})",
+                tx_height,
+                current_height
+            );
+            return Err(DaoError::FutureTransactionHeight.into())
+        }
         if current_height - tx_height > PROPOSAL_SNAPSHOT_CUTOFF_LIMIT {
             msg!("[Dao::Propose] Error: Snapshot is too old. Current height: {}, snapshot height: {}",
                  current_height, tx_height);
