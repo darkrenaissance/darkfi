@@ -47,13 +47,26 @@ pub(crate) fn dao_authxfer_get_metadata(
     let self_ = &calls[call_idx];
     let self_params: DaoAuthMoneyTransferParams = deserialize(&self_.data.data[1..])?;
 
+    // We expect the transfer call to be the next immediate call
     let sibling_idx = call_idx + 1;
+    if sibling_idx >= calls.len() {
+        msg!("[Dao::AuthXfer] Error: Sibling call is missing");
+        return Err(DaoError::AuthXferSiblingMissing.into())
+    }
     let xfer_call = &calls[sibling_idx].data;
     let xfer_params: MoneyTransferParamsV1 = deserialize(&xfer_call.data[1..])?;
 
-    let parent_idx = calls[call_idx].parent_index.unwrap();
-    let exec_callnode = &calls[parent_idx];
-    let exec_params: DaoExecParams = deserialize(&exec_callnode.data.data[1..])?;
+    // We expect our parent call to be a `DaoExec` one
+    let Some(parent_idx) = calls[call_idx].parent_index else {
+        msg!("[Dao::AuthXfer] Error: Parent call is missing");
+        return Err(DaoError::AuthXferParentMissing.into())
+    };
+    if parent_idx >= calls.len() {
+        msg!("[Dao::AuthXfer] Error: Parent call is missing");
+        return Err(DaoError::AuthXferParentMissing.into())
+    }
+    let exec_call = &calls[parent_idx].data;
+    let exec_params: DaoExecParams = deserialize(&exec_call.data[1..])?;
 
     if xfer_params.inputs.is_empty() {
         msg!("[Dao::AuthXfer] Error: Transfer inputs are missing");
