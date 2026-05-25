@@ -194,11 +194,12 @@ pub(super) async fn read_from_stream(
             Ok(_) => {
                 // When we reach '\n', pop a possible '\r' from the buffer and bail.
                 if tmpbuf[0] == b'\n' {
-                    if buf[total_read - 1] == b'\r' {
+                    if total_read > 0 && buf[total_read - 1] == b'\r' {
                         buf.pop();
                         total_read -= 1;
                     }
-                    break
+                    buf.truncate(total_read);
+                    return Ok(total_read)
                 }
 
                 // Copy the read byte to the destination buffer.
@@ -208,6 +209,14 @@ pub(super) async fn read_from_stream(
 
             Err(e) => return Err(e),
         }
+    }
+
+    // Loop exited without finding \n.
+    if total_read >= MAX_BUF_SIZE {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            "line exceeded maximum buf size without terminator",
+        ))
     }
 
     // Truncate buffer to actual data size
