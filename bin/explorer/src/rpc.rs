@@ -300,7 +300,7 @@ impl CoinbaseInfo {
 }
 
 impl Explorer {
-    pub async fn rpc_current_difficulty(&self, id: u16, _params: JsonValue) -> JsonResult {
+    pub async fn rpc_current_difficulty(&self, id: i64, _params: JsonValue) -> JsonResult {
         // Get latest height
         let Ok(Some(height)) = self.get_height() else {
             return JsonError::new(InternalError, None, id).into()
@@ -320,7 +320,7 @@ impl Explorer {
         .into()
     }
 
-    pub async fn rpc_current_height(&self, id: u16, _params: JsonValue) -> JsonResult {
+    pub async fn rpc_current_height(&self, id: i64, _params: JsonValue) -> JsonResult {
         let Ok(Some(height)) = self.get_height() else {
             return JsonError::new(InternalError, None, id).into()
         };
@@ -328,7 +328,7 @@ impl Explorer {
         JsonResponse::new(JsonValue::Number(height as f64), id).into()
     }
 
-    pub async fn rpc_latest_blocks(&self, id: u16, params: JsonValue) -> JsonResult {
+    pub async fn rpc_latest_blocks(&self, id: i64, params: JsonValue) -> JsonResult {
         let Some(params) = params.get::<Vec<JsonValue>>() else {
             return JsonError::new(InvalidParams, None, id).into()
         };
@@ -369,7 +369,7 @@ impl Explorer {
         JsonResponse::new(JsonValue::Array(blocks), id).into()
     }
 
-    pub async fn rpc_get_block(&self, id: u16, params: JsonValue) -> JsonResult {
+    pub async fn rpc_get_block(&self, id: i64, params: JsonValue) -> JsonResult {
         let Some(params) = params.get::<Vec<JsonValue>>() else {
             return JsonError::new(InvalidParams, None, id).into()
         };
@@ -406,7 +406,7 @@ impl Explorer {
         JsonResponse::new(info.to_json(), id).into()
     }
 
-    pub async fn rpc_get_tx(&self, id: u16, params: JsonValue) -> JsonResult {
+    pub async fn rpc_get_tx(&self, id: i64, params: JsonValue) -> JsonResult {
         let Some(params) = params.get::<Vec<JsonValue>>() else {
             return JsonError::new(InvalidParams, None, id).into()
         };
@@ -432,7 +432,7 @@ impl Explorer {
 
     /// Search for a block or transaction by hash.
     /// Returns `{"type": "block", "height": N}` or `{"type": "tx"}` depending on what was found.
-    pub async fn rpc_search(&self, id: u16, params: JsonValue) -> JsonResult {
+    pub async fn rpc_search(&self, id: i64, params: JsonValue) -> JsonResult {
         let Some(params) = params.get::<Vec<JsonValue>>() else {
             return JsonError::new(InvalidParams, None, id).into()
         };
@@ -483,7 +483,7 @@ impl Explorer {
     /// Calculate the current network hashrate.
     /// Hashrate = difficulty / average_block_time
     /// We use the last N blocks to smooth out variance.
-    pub async fn rpc_get_hashrate(&self, id: u16, _params: JsonValue) -> JsonResult {
+    pub async fn rpc_get_hashrate(&self, id: i64, _params: JsonValue) -> JsonResult {
         const BLOCKS_TO_AVERAGE: u64 = 30;
 
         let Ok(Some(height)) = self.get_height() else {
@@ -529,7 +529,7 @@ impl Explorer {
     /// Get contract information by ID.
     /// Params: `[contract_id: String]`
     /// Returns: `{ contract_id, locked, wasm_size, deploy_block, deploy_tx }`
-    pub async fn rpc_get_contract(&self, id: u16, params: JsonValue) -> JsonResult {
+    pub async fn rpc_get_contract(&self, id: i64, params: JsonValue) -> JsonResult {
         let Some(params) = params.get::<Vec<JsonValue>>() else {
             return JsonError::new(InvalidParams, None, id).into()
         };
@@ -559,7 +559,7 @@ impl Explorer {
     /// List all contracts.
     /// Params: `[locked_filter: bool | null] (optional)`
     /// Returns: Array of contract objects
-    pub async fn rpc_list_contracts(&self, id: u16, params: JsonValue) -> JsonResult {
+    pub async fn rpc_list_contracts(&self, id: i64, params: JsonValue) -> JsonResult {
         let locked_filter = if let Some(params) = params.get::<Vec<JsonValue>>() {
             if !params.is_empty() {
                 params[0].get::<bool>().copied()
@@ -592,7 +592,7 @@ impl Explorer {
 
     /// Get contract count.
     /// Returns: Number of contracts
-    pub async fn rpc_contract_count(&self, id: u16, _params: JsonValue) -> JsonResult {
+    pub async fn rpc_contract_count(&self, id: i64, _params: JsonValue) -> JsonResult {
         let Ok(count) = self.get_contract_count() else {
             return JsonError::new(InternalError, None, id).into()
         };
@@ -602,7 +602,7 @@ impl Explorer {
 
     /// Get blockchain statistics from stored data.
     /// Returns daily stats, monthly growth, and tx per block stats.
-    pub async fn rpc_get_stats(&self, id: u16, _params: JsonValue) -> JsonResult {
+    pub async fn rpc_get_stats(&self, id: i64, _params: JsonValue) -> JsonResult {
         // Get daily stats from sled
         let daily_stats = match self.get_all_daily_stats().await {
             Ok(stats) => stats,

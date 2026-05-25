@@ -239,7 +239,7 @@ impl Lilith {
     // Returns all spawned networks names with their node addresses.
     // --> {"jsonrpc": "2.0", "method": "spawns", "params": [], "id": 42}
     // <-- {"jsonrpc": "2.0", "result": {"spawns": spawns_info}, "id": 42}
-    async fn spawns(&self, id: u16, _params: JsonValue) -> JsonResult {
+    async fn spawns(&self, id: i64, _params: JsonValue) -> JsonResult {
         let mut spawns = vec![];
         for spawn in &self.networks {
             spawns.push(spawn.info().await);

@@ -28,6 +28,50 @@ use crate::{
     Result,
 };
 
+/// Parse a JSON field into i64. Accepts numeric values and numeric strings.
+/// Note this is not fully spec-compliant, but the vast majority of RPC
+/// clients use numeric IDs.
+fn parse_id_field(v: &JsonValue, accept_string: bool) -> std::result::Result<i64, RpcError> {
+    let n = if let Some(num) = v.get::<f64>() {
+        *num
+    } else if accept_string {
+        match v.get::<String>() {
+            Some(s) => s
+                .parse::<f64>()
+                .map_err(|_| RpcError::InvalidJson("id string is not numeric".to_string()))?,
+            None => return Err(RpcError::InvalidJson("id is not a number or string".to_string())),
+        }
+    } else {
+        return Err(RpcError::InvalidJson("id is not a number".to_string()))
+    };
+
+    if !n.is_finite() || n.fract() != 0.0 {
+        return Err(RpcError::InvalidJson("id must be a finite integer".to_string()))
+    }
+
+    if n < i64::MIN as f64 || n > i64::MAX as f64 {
+        return Err(RpcError::InvalidJson("id out of i64 range".to_string()))
+    }
+
+    Ok(n as i64)
+}
+
+/// Parse a JSON number into i32 with the same bounds-checking discipline
+fn parse_i32_field(v: &JsonValue, name: &str) -> std::result::Result<i32, RpcError> {
+    let n =
+        *v.get::<f64>().ok_or_else(|| RpcError::InvalidJson(format!("{name} is not a number")))?;
+
+    if !n.is_finite() || n.fract() != 0.0 {
+        return Err(RpcError::InvalidJson(format!("{name} must be a finite integer")))
+    }
+
+    if n < i32::MIN as f64 || n > i32::MAX as f64 {
+        return Err(RpcError::InvalidJson(format!("{name} out of i32 range")))
+    }
+
+    Ok(n as i32)
+}
+
 /// JSON-RPC error codes.
 /// The error codes `[-32768, -32000]` are reserved for predefined errors.
 #[derive(Copy, Clone, Debug)]
@@ -151,7 +195,7 @@ pub struct JsonRequest {
     /// JSON-RPC version
     pub jsonrpc: &'static str,
     /// Request ID
-    pub id: u16,
+    pub id: i64,
     /// Request method
     pub method: String,
     /// Request parameters
@@ -164,7 +208,8 @@ impl JsonRequest {
     /// The request ID is chosen randomly.
     pub fn new(method: &str, params: JsonValue) -> Self {
         assert!(params.is_object() || params.is_array());
-        Self { jsonrpc: "2.0", id: OsRng::gen(&mut OsRng), method: method.to_string(), params }
+        let id: i64 = OsRng::gen_range(&mut OsRng, 0..(1i64 << 53));
+        Self { jsonrpc: "2.0", id, method: method.to_string(), params }
     }
 
     /// Convert the object into a JSON string
@@ -178,7 +223,7 @@ impl From<&JsonRequest> for JsonValue {
     fn from(req: &JsonRequest) -> JsonValue {
         JsonValue::Object(HashMap::from([
             ("jsonrpc".to_string(), JsonValue::String(req.jsonrpc.to_string())),
-            ("id".to_string(), JsonValue::Number(req.id.into())),
+            ("id".to_string(), JsonValue::Number(req.id as f64)),
             ("method".to_string(), JsonValue::String(req.method.clone())),
             ("params".to_string(), req.params.clone()),
         ]))
@@ -233,25 +278,7 @@ impl TryFrom<&JsonValue> for JsonRequest {
             ))
         }
 
-        // HACK ALERT:
-        // Some RPC clients send string IDs. We assume they're numeric, so
-        // here we cast the strings to numbers.
-        let id = if map["id"].is_number() {
-            *map["id"].get::<f64>().unwrap() as u16
-        } else if map["id"].is_string() {
-            match map["id"].get::<String>().unwrap().parse::<f64>() {
-                Ok(v) => v as u16,
-                Err(_) => {
-                    return Err(RpcError::InvalidJson(
-                        "Request does not contain valid \"id\" field".to_string(),
-                    ))
-                }
-            }
-        } else {
-            return Err(RpcError::InvalidJson(
-                "Request does not contain valid \"id\" field".to_string(),
-            ))
-        };
+        let id = parse_id_field(&map["id"], true)?;
 
         Ok(Self {
             jsonrpc: "2.0",
@@ -348,7 +375,7 @@ pub struct JsonResponse {
     /// JSON-RPC version
     pub jsonrpc: &'static str,
     /// Request ID
-    pub id: u16,
+    pub id: i64,
     /// Response result
     pub result: JsonValue,
 }
@@ -356,7 +383,7 @@ pub struct JsonResponse {
 impl JsonResponse {
     /// Create a new [`JsonResponse`] object with the given ID and result value.
     /// Creating a `JsonResponse` implies that the method call was successful.
-    pub fn new(result: JsonValue, id: u16) -> Self {
+    pub fn new(result: JsonValue, id: i64) -> Self {
         Self { jsonrpc: "2.0", id, result }
     }
 
@@ -371,7 +398,7 @@ impl From<&JsonResponse> for JsonValue {
     fn from(rep: &JsonResponse) -> JsonValue {
         JsonValue::Object(HashMap::from([
             ("jsonrpc".to_string(), JsonValue::String(rep.jsonrpc.to_string())),
-            ("id".to_string(), JsonValue::Number(rep.id.into())),
+            ("id".to_string(), JsonValue::Number(rep.id as f64)),
             ("result".to_string(), rep.result.clone()),
         ]))
     }
@@ -410,7 +437,7 @@ impl TryFrom<&JsonValue> for JsonResponse {
 
         Ok(Self {
             jsonrpc: "2.0",
-            id: *map["id"].get::<f64>().unwrap() as u16,
+            id: parse_id_field(&map["id"], false)?,
             result: map["result"].clone(),
         })
     }
@@ -435,7 +462,7 @@ pub struct JsonError {
     /// JSON-RPC version
     pub jsonrpc: &'static str,
     /// Request ID
-    pub id: u16,
+    pub id: i64,
     /// JSON-RPC error (code and message)
     pub error: JsonErrorVal,
 }
@@ -453,7 +480,7 @@ impl JsonError {
     /// Create a new [`JsonError`] object with the given error code, optional
     /// message, and a response ID.
     /// Creating a `JsonError` implies that the method call was unsuccessful.
-    pub fn new(c: ErrorCode, message: Option<String>, id: u16) -> Self {
+    pub fn new(c: ErrorCode, message: Option<String>, id: i64) -> Self {
         let error = JsonErrorVal { code: c.code(), message: message.unwrap_or(c.message()) };
         Self { jsonrpc: "2.0", id, error }
     }
@@ -474,7 +501,7 @@ impl From<&JsonError> for JsonValue {
 
         JsonValue::Object(HashMap::from([
             ("jsonrpc".to_string(), JsonValue::String(err.jsonrpc.to_string())),
-            ("id".to_string(), JsonValue::Number(err.id.into())),
+            ("id".to_string(), JsonValue::Number(err.id as f64)),
             ("error".to_string(), errmap),
         ]))
     }
@@ -524,25 +551,26 @@ impl TryFrom<&JsonValue> for JsonError {
             ))
         }
 
-        if !map["error"]["code"].is_number() {
-            return Err(RpcError::InvalidJson(
-                "Error does not contain valid \"error.code\" field".to_string(),
-            ))
-        }
+        let err_map: &HashMap<String, JsonValue> = map["error"].get().unwrap();
 
-        if !map["error"]["message"].is_string() {
-            return Err(RpcError::InvalidJson(
-                "Error does not contain valid \"error.message\" field".to_string(),
-            ))
-        }
+        let code_val = err_map.get("code").ok_or_else(|| {
+            RpcError::InvalidJson("Error does not contain \"error.code\" field".to_string())
+        })?;
+
+        let message_val = err_map.get("message").ok_or_else(|| {
+            RpcError::InvalidJson("Error does not contain \"error.message\" field".to_string())
+        })?;
+
+        let code = parse_i32_field(code_val, "error.code")?;
+        let message = message_val
+            .get::<String>()
+            .ok_or_else(|| RpcError::InvalidJson("\"error.message\" is not a string".to_string()))?
+            .to_string();
 
         Ok(Self {
             jsonrpc: "2.0",
-            id: *map["id"].get::<f64>().unwrap() as u16,
-            error: JsonErrorVal {
-                code: *map["error"]["code"].get::<f64>().unwrap() as i32,
-                message: map["error"]["message"].get::<String>().unwrap().to_string(),
-            },
+            id: parse_id_field(&map["id"], false)?,
+            error: JsonErrorVal { code, message },
         })
     }
 }

@@ -59,7 +59,7 @@ impl Dchat {
     // TODO
     // --> {"jsonrpc": "2.0", "method": "send", "params": [true], "id": 42}
     // <-- {"jsonrpc": "2.0", "result": true, "id": 42}
-    async fn send(&self, id: u16, params: JsonValue) -> JsonResult {
+    async fn send(&self, id: i64, params: JsonValue) -> JsonResult {
         let msg = params[0].get::<String>().unwrap().to_string();
         let dchatmsg = DchatMsg { msg };
         self.p2p.broadcast(&dchatmsg).await;
@@ -70,7 +70,7 @@ impl Dchat {
     // TODO
     // --> {"jsonrpc": "2.0", "method": "inbox", "params": [true], "id": 42}
     // <-- {"jsonrpc": "2.0", "result": true, "id": 42}
-    async fn recv(&self, id: u16) -> JsonResult {
+    async fn recv(&self, id: i64) -> JsonResult {
         let buffer = self.recv_msgs.lock().await;
         let msgs: Vec<JsonValue> =
             buffer.iter().map(|x| JsonValue::String(x.msg.clone())).collect();
@@ -84,7 +84,7 @@ impl Dchat {
     //
     // --> {"jsonrpc": "2.0", "method": "dnet_switch", "params": [true], "id": 42}
     // <-- {"jsonrpc": "2.0", "result": true, "id": 42}
-    async fn dnet_switch(&self, id: u16, params: JsonValue) -> JsonResult {
+    async fn dnet_switch(&self, id: i64, params: JsonValue) -> JsonResult {
         let params = params.get::<Vec<JsonValue>>().unwrap();
         if params.len() != 1 || !params[0].is_bool() {
             return JsonError::new(ErrorCode::InvalidParams, None, id).into()
@@ -108,7 +108,7 @@ impl Dchat {
     //
     // --> {"jsonrpc": "2.0", "method": "dnet.subscribe_events", "params": [], "id": 1}
     // <-- {"jsonrpc": "2.0", "method": "dnet.subscribe_events", "params": [`event`]}
-    pub async fn dnet_subscribe_events(&self, id: u16, params: JsonValue) -> JsonResult {
+    pub async fn dnet_subscribe_events(&self, id: i64, params: JsonValue) -> JsonResult {
         let params = params.get::<Vec<JsonValue>>().unwrap();
         if !params.is_empty() {
             return JsonError::new(ErrorCode::InvalidParams, None, id).into()

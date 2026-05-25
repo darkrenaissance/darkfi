@@ -47,11 +47,11 @@ struct RpcSrv {
 }
 
 impl RpcSrv {
-    async fn pong(&self, id: u16, _params: JsonValue) -> JsonResult {
+    async fn pong(&self, id: i64, _params: JsonValue) -> JsonResult {
         JsonResponse::new(JsonValue::String("pong".to_string()), id).into()
     }
 
-    async fn kill(&self, id: u16, _params: JsonValue) -> JsonResult {
+    async fn kill(&self, id: i64, _params: JsonValue) -> JsonResult {
         self.stop_sub.0.send(()).await.unwrap();
         JsonResponse::new(JsonValue::String("bye".to_string()), id).into()
     }

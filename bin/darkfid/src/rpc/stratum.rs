@@ -120,7 +120,7 @@ impl DarkfiNode {
     //       },
     //       "id": 1
     //     }
-    pub async fn stratum_login(&self, id: u16, params: JsonValue) -> JsonResult {
+    pub async fn stratum_login(&self, id: i64, params: JsonValue) -> JsonResult {
         // Check if node is synced before responding
         let validator = self.validator.read().await;
         if !validator.synced {
@@ -245,7 +245,7 @@ impl DarkfiNode {
     //       "id": 1
     //     }
     // <-- {"jsonrpc": "2.0", "result": {"status": "OK"}, "id": 1}
-    pub async fn stratum_submit(&self, id: u16, params: JsonValue) -> JsonResult {
+    pub async fn stratum_submit(&self, id: i64, params: JsonValue) -> JsonResult {
         // Check if node is synced before responding
         let mut validator = self.validator.write().await;
         if !validator.synced {
@@ -373,7 +373,7 @@ impl DarkfiNode {
     //
     // --> {"jsonrpc": "2.0", "method": "keepalived", "params": {"id": "foo"}, "id": 1}
     // <-- {"jsonrpc": "2.0", "result": {"status": "KEEPALIVED"}, "id": 1}
-    pub async fn stratum_keepalived(&self, id: u16, params: JsonValue) -> JsonResult {
+    pub async fn stratum_keepalived(&self, id: i64, params: JsonValue) -> JsonResult {
         // Parse request params
         let Some(params) = params.get::<HashMap<String, JsonValue>>() else {
             return JsonError::new(InvalidParams, None, id).into()

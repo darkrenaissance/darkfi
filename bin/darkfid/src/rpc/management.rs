@@ -77,7 +77,7 @@ impl DarkfiNode {
     //
     // --> {"jsonrpc": "2.0", "method": "dnet.switch", "params": [true], "id": 1}
     // <-- {"jsonrpc": "2.0", "result": true, "id": 1}
-    pub async fn dnet_switch(&self, id: u16, params: JsonValue) -> JsonResult {
+    pub async fn dnet_switch(&self, id: i64, params: JsonValue) -> JsonResult {
         let Some(params) = params.get::<Vec<JsonValue>>() else {
             return JsonError::new(ErrorCode::InvalidParams, None, id).into()
         };
@@ -118,7 +118,7 @@ impl DarkfiNode {
     //         }
     //       ]
     //     }
-    pub async fn dnet_subscribe_events(&self, id: u16, params: JsonValue) -> JsonResult {
+    pub async fn dnet_subscribe_events(&self, id: i64, params: JsonValue) -> JsonResult {
         let Some(params) = params.get::<Vec<JsonValue>>() else {
             return JsonError::new(ErrorCode::InvalidParams, None, id).into()
         };
