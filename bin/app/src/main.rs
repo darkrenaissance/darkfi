@@ -515,7 +515,7 @@ async fn load_plugins(
         use darkfi_money_contract::model::TokenId;
         use darkfi_serial::Encodable;
 
-        while let Ok(_) = recv.recv().await {
+        let update = async || {
             d!("drk balances_updated signal received");
 
             // Fetch and update main wallet tokens table
@@ -572,6 +572,11 @@ async fn load_plugins(
                     }
                 }
             }
+        };
+
+        update().await;
+        while let Ok(_) = recv.recv().await {
+            update().await;
         }
     });
 
