@@ -103,5 +103,7 @@ pub const MONEY_CONTRACT_ZKAS_MINT_NS_V1: &str = "Mint_V1";
 pub const MONEY_CONTRACT_ZKAS_BURN_NS_V1: &str = "Burn_V1";
 /// zkas token auth mint circuit namespace
 pub const MONEY_CONTRACT_ZKAS_AUTH_TOKEN_MINT_NS_V1: &str = "AuthTokenMint_V1";
+/// zkas token auth freeze circuit namespace
+pub const MONEY_CONTRACT_ZKAS_AUTH_TOKEN_FREEZE_NS_V1: &str = "AuthTokenFreeze_V1";
 /// zkas token mint circuit namespace
 pub const MONEY_CONTRACT_ZKAS_TOKEN_MINT_NS_V1: &str = "TokenMint_V1";

@@ -36,11 +36,12 @@ pub struct AuthTokenFreezeCallDebris {
 pub struct AuthTokenFreezeCallBuilder {
     /// Mint authority keypair
     pub mint_keypair: Keypair,
+    /// Token attributes
     pub token_attrs: TokenAttributes,
-    /// `AuthTokenMint_V1` zkas circuit ZkBinary
-    pub auth_mint_zkbin: ZkBinary,
-    /// Proving key for the `AuthTokenMint_V1` zk circuit,
-    pub auth_mint_pk: ProvingKey,
+    /// `AuthTokenFreeze_V1` zkas circuit ZkBinary
+    pub auth_freeze_zkbin: ZkBinary,
+    /// Proving key for the `AuthTokenFreeze_V1` zk circuit,
+    pub auth_freeze_pk: ProvingKey,
 }
 
 impl AuthTokenFreezeCallBuilder {
@@ -50,23 +51,27 @@ impl AuthTokenFreezeCallBuilder {
         // For the AuthTokenFreeze call, we just need to produce a valid signature,
         // and enforce the correct derivation inside ZK.
         let prover_witnesses = vec![
+            // Secret key used by the mint authority
+            Witness::Base(Value::known(self.mint_keypair.secret.inner())),
             // Token attributes
             Witness::Base(Value::known(self.token_attrs.auth_parent.inner())),
             Witness::Base(Value::known(self.token_attrs.blind.inner())),
-            // Secret key used by mint
-            Witness::Base(Value::known(self.mint_keypair.secret.inner())),
         ];
 
-        let mint_pubkey = self.mint_keypair.public;
+        let mint_public = self.mint_keypair.public;
         let token_id = self.token_attrs.to_token_id();
 
-        let public_inputs = vec![mint_pubkey.x(), mint_pubkey.y(), token_id.inner()];
-        //darkfi::zk::export_witness_json("proof/witness/auth_token_mint_v1.json", &prover_witnesses, &public_inputs);
-        let circuit = ZkCircuit::new(prover_witnesses, &self.auth_mint_zkbin);
-        let proof = Proof::create(&self.auth_mint_pk, &[circuit], &public_inputs, &mut OsRng)?;
+        let public_inputs = vec![
+            mint_public.x(),
+            mint_public.y(),
+            self.token_attrs.auth_parent.inner(),
+            token_id.inner(),
+        ];
+        //darkfi::zk::export_witness_json("proof/witness/auth_token_freeze_v1.json", &prover_witnesses, &public_inputs);
+        let circuit = ZkCircuit::new(prover_witnesses, &self.auth_freeze_zkbin);
+        let proof = Proof::create(&self.auth_freeze_pk, &[circuit], &public_inputs, &mut OsRng)?;
 
-        let params =
-            MoneyAuthTokenFreezeParamsV1 { mint_public: self.mint_keypair.public, token_id };
+        let params = MoneyAuthTokenFreezeParamsV1 { mint_public, token_id };
         let debris = AuthTokenFreezeCallDebris { params, proofs: vec![proof] };
         Ok(debris)
     }

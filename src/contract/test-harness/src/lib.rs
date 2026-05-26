@@ -460,32 +460,12 @@ impl TestHarness {
         holder: &Holder,
         recipient: &Holder,
         block_height: u32,
-    ) -> Result<TokenId> {
+    ) -> Result<(TokenId, BaseBlind)> {
         let token_blind = BaseBlind::random(&mut OsRng);
-        let (tx, mint_params, auth_params, fee_params) = self
-            .token_mint(amount, holder, recipient, token_blind, None, None, block_height)
+        let token_id = self
+            .token_mint_with_blind_to_all(amount, holder, recipient, token_blind, block_height)
             .await?;
-
-        // Derive the Token ID
-        let token_id = self.derive_token_id(recipient, token_blind);
-
-        let holders = self.holder_keys.clone();
-        for h in &holders {
-            self.execute_token_mint_tx(
-                h,
-                tx.clone(),
-                &mint_params,
-                &auth_params,
-                &fee_params,
-                block_height,
-                true,
-            )
-            .await?;
-        }
-
-        self.assert_all_trees();
-
-        Ok(token_id)
+        Ok((token_id, token_blind))
     }
 
     /// Mint a token with a specific `token_blind` and execute on all
@@ -604,8 +584,14 @@ impl TestHarness {
 
     /// Freeze a token authority for `holder` and execute on all registered
     /// holders.
-    pub async fn token_freeze_to_all(&mut self, holder: &Holder, block_height: u32) -> Result<()> {
-        let (tx, freeze_params, fee_params) = self.token_freeze(holder, block_height).await?;
+    pub async fn token_freeze_to_all(
+        &mut self,
+        holder: &Holder,
+        token_blind: BaseBlind,
+        block_height: u32,
+    ) -> Result<()> {
+        let (tx, freeze_params, fee_params) =
+            self.token_freeze(holder, token_blind, block_height).await?;
 
         let holders = self.holder_keys.clone();
         for h in &holders {
@@ -619,7 +605,9 @@ impl TestHarness {
             )
             .await?;
         }
+
         self.assert_all_trees();
+
         Ok(())
     }
 

@@ -27,7 +27,7 @@ fn token_mint_burn() -> Result<()> {
 
         use Holder::{Alice, Bob};
 
-        const BOB_SUPPLY: u64 = 2000000000; // 10 BOB
+        const BOB_SUPPLY: u64 = 2000000000; // 20 BOB
 
         let block_height = 0;
 
@@ -35,14 +35,26 @@ fn token_mint_burn() -> Result<()> {
 
         // Mint BOB token
         info!("Minting BOB token");
-        let bob_token = th.token_mint_to_all(BOB_SUPPLY, &Bob, &Bob, block_height).await?;
+        let (bob_token, bob_token_blind) =
+            th.token_mint_to_all(BOB_SUPPLY, &Bob, &Bob, block_height).await?;
 
         assert_eq!(th.coins(&Bob).len(), 1);
         assert_eq!(th.balance(&Bob, bob_token), BOB_SUPPLY);
 
         // Freeze BOB token authority
         info!("Freezing BOB token authority");
-        th.token_freeze_to_all(&Bob, block_height).await?;
+        th.token_freeze_to_all(&Bob, bob_token_blind, block_height).await?;
+
+        // Malicious: verify token authority cannot freeze again
+        info!("Checking freezing BOB token authority again");
+        assert!(th.token_freeze_to_all(&Bob, bob_token_blind, block_height).await.is_err());
+
+        // Malicious: verify we cant mint new BOB tokens
+        info!("Checking minting BOB token after freeze");
+        assert!(th
+            .token_mint_with_blind_to_all(BOB_SUPPLY, &Bob, &Bob, bob_token_blind, block_height)
+            .await
+            .is_err());
 
         // Burn the BOB tokens (single coin supply)
         info!("Burning BOB token");

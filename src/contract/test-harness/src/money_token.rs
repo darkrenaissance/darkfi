@@ -31,7 +31,8 @@ use darkfi_money_contract::{
         CoinAttributes, MoneyAuthTokenFreezeParamsV1, MoneyAuthTokenMintParamsV1, MoneyFeeParamsV1,
         MoneyTokenMintParamsV1, TokenAttributes,
     },
-    MoneyFunction, MONEY_CONTRACT_ZKAS_AUTH_TOKEN_MINT_NS_V1, MONEY_CONTRACT_ZKAS_TOKEN_MINT_NS_V1,
+    MoneyFunction, MONEY_CONTRACT_ZKAS_AUTH_TOKEN_FREEZE_NS_V1,
+    MONEY_CONTRACT_ZKAS_AUTH_TOKEN_MINT_NS_V1, MONEY_CONTRACT_ZKAS_TOKEN_MINT_NS_V1,
 };
 use darkfi_sdk::{
     crypto::{poseidon_hash, BaseBlind, Blind, FuncId, FuncRef, MerkleNode, MONEY_CONTRACT_ID},
@@ -211,13 +212,14 @@ impl TestHarness {
     pub async fn token_freeze(
         &mut self,
         holder: &Holder,
+        token_blind: BaseBlind,
         block_height: u32,
     ) -> Result<(Transaction, MoneyAuthTokenFreezeParamsV1, Option<MoneyFeeParamsV1>)> {
         let wallet = self.wallet(holder);
         let mint_authority = wallet.token_mint_authority;
 
-        let (auth_mint_pk, auth_mint_zkbin) =
-            self.proving_keys.get(MONEY_CONTRACT_ZKAS_AUTH_TOKEN_MINT_NS_V1).unwrap();
+        let (auth_freeze_pk, auth_freeze_zkbin) =
+            self.proving_keys.get(MONEY_CONTRACT_ZKAS_AUTH_TOKEN_FREEZE_NS_V1).unwrap();
 
         let auth_func_id = FuncRef {
             contract_id: *MONEY_CONTRACT_ID,
@@ -226,7 +228,6 @@ impl TestHarness {
         .to_func_id();
 
         let (mint_auth_x, mint_auth_y) = mint_authority.public.xy();
-        let token_blind = BaseBlind::random(&mut OsRng);
 
         let token_attrs = TokenAttributes {
             auth_parent: auth_func_id,
@@ -238,8 +239,8 @@ impl TestHarness {
         let builder = AuthTokenFreezeCallBuilder {
             mint_keypair: mint_authority,
             token_attrs,
-            auth_mint_pk: auth_mint_pk.clone(),
-            auth_mint_zkbin: auth_mint_zkbin.clone(),
+            auth_freeze_zkbin: auth_freeze_zkbin.clone(),
+            auth_freeze_pk: auth_freeze_pk.clone(),
         };
         let freeze_debris = builder.build()?;
         let mut data = vec![MoneyFunction::AuthTokenFreezeV1 as u8];

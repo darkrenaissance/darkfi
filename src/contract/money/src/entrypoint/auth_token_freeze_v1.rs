@@ -17,7 +17,7 @@
  */
 
 use darkfi_sdk::{
-    crypto::{ContractId, PublicKey},
+    crypto::{ContractId, FuncRef, PublicKey},
     dark_tree::DarkLeaf,
     error::{ContractError, ContractResult},
     msg,
@@ -29,7 +29,8 @@ use darkfi_serial::{deserialize, serialize, Encodable};
 use crate::{
     error::MoneyError,
     model::{MoneyAuthTokenFreezeParamsV1, MoneyAuthTokenFreezeUpdateV1},
-    MONEY_CONTRACT_TOKEN_FREEZE_TREE, MONEY_CONTRACT_ZKAS_AUTH_TOKEN_MINT_NS_V1,
+    MoneyFunction::AuthTokenMintV1,
+    MONEY_CONTRACT_TOKEN_FREEZE_TREE, MONEY_CONTRACT_ZKAS_AUTH_TOKEN_FREEZE_NS_V1,
 };
 
 /// `get_metadata` function for `Money::AuthTokenFreezeV1`
@@ -46,13 +47,19 @@ pub(crate) fn money_auth_token_freeze_get_metadata_v1(
     // Public keys for the transaction signatures we have to verify
     let signature_pubkeys: Vec<PublicKey> = vec![params.mint_public];
 
-    // Derive the TokenId from the public key
+    // Grab the mint authority pubkey coords
     let (mint_x, mint_y) = params.mint_public.xy();
 
-    // In ZK we just verify that the token ID is properly derived from the authority.
+    // Derive the function ID corresponding to the money contract token
+    // mint auth function.
+    let func_id =
+        FuncRef { contract_id: self_.contract_id, func_code: AuthTokenMintV1 as u8 }.to_func_id();
+
+    // In ZK we just verify that the token ID nullifier is properly
+    // derived from the authority.
     zk_public_inputs.push((
-        MONEY_CONTRACT_ZKAS_AUTH_TOKEN_MINT_NS_V1.to_string(),
-        vec![mint_x, mint_y, params.token_id.inner()],
+        MONEY_CONTRACT_ZKAS_AUTH_TOKEN_FREEZE_NS_V1.to_string(),
+        vec![mint_x, mint_y, func_id.inner(), params.token_id.inner()],
     ));
 
     // Serialize everything gathered and return it
@@ -81,7 +88,7 @@ pub(crate) fn money_auth_token_freeze_process_instruction_v1(
         return Err(MoneyError::TokenMintFrozen.into())
     }
 
-    // Create a state update. We only need the new coin.
+    // Create a state update. We only need the frozen token ID.
     let update = MoneyAuthTokenFreezeUpdateV1 { token_id: params.token_id };
     Ok(serialize(&update))
 }
