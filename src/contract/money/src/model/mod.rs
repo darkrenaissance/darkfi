@@ -241,6 +241,7 @@ pub struct MoneyGenesisMintUpdateV1 {
 pub struct MoneyTokenMintParamsV1 {
     /// The newly minted coin
     pub coin: Coin,
+    pub enc_note: AeadEncryptedNote,
 }
 
 /// State update for `Money::TokenMint`
@@ -254,7 +255,6 @@ pub struct MoneyTokenMintUpdateV1 {
 #[derive(Clone, Debug, SerialEncodable, SerialDecodable)]
 pub struct MoneyAuthTokenMintParamsV1 {
     pub token_id: TokenId,
-    pub enc_note: AeadEncryptedNote,
     pub mint_pubkey: PublicKey,
 }
 

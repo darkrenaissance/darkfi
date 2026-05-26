@@ -32,12 +32,15 @@ impl FunctionParams for money_model::MoneyTokenMintParamsV1 {
     fn to_pydict(&self, py: Python) -> PyResult<Py<PyDict>> {
         let dict = PyDict::new(py);
         dict.set_item("coin", self.coin.to_string())?;
+        dict.set_item("enc_note", self.enc_note.to_pydict(py)?)?;
         Ok(dict.unbind())
     }
 
     fn fmt_pretty(&self, out: &mut String, depth: usize) -> PyResult<()> {
         let prefix = format!("{}├─ ", "   ".repeat(depth));
         writeln!(out, "{prefix}coin: {}", self.coin).unwrap();
+        writeln!(out, "{prefix}enc_note:").unwrap();
+        self.enc_note.fmt_pretty(out, depth + 2)?;
         Ok(())
     }
 }

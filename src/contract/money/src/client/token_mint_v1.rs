@@ -21,11 +21,17 @@ use darkfi::{
     zkas::ZkBinary,
     Result,
 };
-use darkfi_sdk::pasta::pallas;
+use darkfi_sdk::{
+    crypto::{note::AeadEncryptedNote, Blind},
+    pasta::pallas,
+};
 use rand::rngs::OsRng;
 use tracing::debug;
 
-use crate::model::{CoinAttributes, MoneyTokenMintParamsV1, TokenAttributes};
+use crate::{
+    client::MoneyNote,
+    model::{CoinAttributes, MoneyTokenMintParamsV1, TokenAttributes},
+};
 
 pub struct TokenMintCallDebris {
     pub params: MoneyTokenMintParamsV1,
@@ -49,6 +55,10 @@ impl TokenMintCallBuilder {
         let (public_x, public_y) = self.coin_attrs.public_key.xy();
 
         let prover_witnesses = vec![
+            // Token attributes
+            Witness::Base(Value::known(self.token_attrs.auth_parent.inner())),
+            Witness::Base(Value::known(self.token_attrs.user_data)),
+            Witness::Base(Value::known(self.token_attrs.blind.inner())),
             // Coin attributes
             Witness::Base(Value::known(public_x)),
             Witness::Base(Value::known(public_y)),
@@ -56,10 +66,6 @@ impl TokenMintCallBuilder {
             Witness::Base(Value::known(self.coin_attrs.spend_hook.inner())),
             Witness::Base(Value::known(self.coin_attrs.user_data)),
             Witness::Base(Value::known(self.coin_attrs.blind.inner())),
-            // Token attributes
-            Witness::Base(Value::known(self.token_attrs.auth_parent.inner())),
-            Witness::Base(Value::known(self.token_attrs.user_data)),
-            Witness::Base(Value::known(self.token_attrs.blind.inner())),
         ];
 
         let coin = self.coin_attrs.to_coin();
@@ -70,7 +76,21 @@ impl TokenMintCallBuilder {
         let circuit = ZkCircuit::new(prover_witnesses, &self.mint_zkbin);
         let proof = Proof::create(&self.mint_pk, &[circuit], &public_inputs, &mut OsRng)?;
 
-        let params = MoneyTokenMintParamsV1 { coin };
+        // Create the note
+        let note = MoneyNote {
+            value: self.coin_attrs.value,
+            token_id: self.coin_attrs.token_id,
+            spend_hook: self.coin_attrs.spend_hook,
+            user_data: self.coin_attrs.user_data,
+            coin_blind: self.coin_attrs.blind,
+            value_blind: Blind::random(&mut OsRng),
+            token_blind: Blind::ZERO,
+            memo: vec![],
+        };
+
+        let enc_note = AeadEncryptedNote::encrypt(&note, &self.coin_attrs.public_key, &mut OsRng)?;
+
+        let params = MoneyTokenMintParamsV1 { coin, enc_note };
         let debris = TokenMintCallDebris { params, proofs: vec![proof] };
         Ok(debris)
     }

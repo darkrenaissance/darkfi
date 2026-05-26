@@ -32,7 +32,6 @@ impl FunctionParams for money_model::MoneyAuthTokenMintParamsV1 {
     fn to_pydict(&self, py: Python) -> PyResult<Py<PyDict>> {
         let dict = PyDict::new(py);
         dict.set_item("token_id", self.token_id.to_string())?;
-        dict.set_item("enc_note", self.enc_note.to_pydict(py)?)?;
         dict.set_item("mint_pubkey", self.mint_pubkey.to_string())?;
         Ok(dict.unbind())
     }
@@ -41,8 +40,6 @@ impl FunctionParams for money_model::MoneyAuthTokenMintParamsV1 {
         let prefix = format!("{}├─ ", "   ".repeat(depth));
         writeln!(out, "{prefix}token_id: {}", self.token_id).unwrap();
         writeln!(out, "{prefix}mint_pubkey: {}", self.mint_pubkey).unwrap();
-        writeln!(out, "{prefix}enc_note:").unwrap();
-        self.enc_note.fmt_pretty(out, depth + 2)?;
         Ok(())
     }
 }
