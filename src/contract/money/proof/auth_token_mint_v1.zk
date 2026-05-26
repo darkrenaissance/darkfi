@@ -1,4 +1,4 @@
-# Circuit used to verify a token mint authority.
+# Circuit used to verify a token mint was executed by its authority.
 k = 11;
 field = "pallas";
 
@@ -7,25 +7,52 @@ constant "AuthTokenMint_V1" {
 }
 
 witness "AuthTokenMint_V1" {
+    # Secret key used by the mint authority
+    Base mint_secret,
+
     # TokenAttributes {
-    Base token_auth_parent,
+    Base token_auth_function,
     Base token_blind,
     # }
 
-    # Secret key used by the mint authority
-    Base mint_secret,
+    # CoinAttributes {
+    Base coin_public_x,
+    Base coin_public_y,
+    Base coin_value,
+    Base coin_spend_hook,
+    Base coin_user_data,
+    Base coin_blind,
+    # }
 }
 
 circuit "AuthTokenMint_V1" {
-    # Derive public key for the mint authority
+    # Derive and constrain the public key of the mint authority for the
+    # signature.
     mint_public = ec_mul_base(mint_secret, NULLIFIER_K);
     mint_x = ec_get_x(mint_public);
     mint_y = ec_get_y(mint_public);
     constrain_instance(mint_x);
     constrain_instance(mint_y);
 
-    # Derive the token ID
+    # Constrain the token authority function
+    constrain_instance(token_auth_function);
+
+    # Derive and constrain the token ID
     token_user_data = poseidon_hash(mint_x, mint_y);
-    token_id = poseidon_hash(token_auth_parent, token_user_data, token_blind);
+    token_id = poseidon_hash(token_auth_function, token_user_data, token_blind);
     constrain_instance(token_id);
+
+    # Derive and constrain the minted coin
+    coin = poseidon_hash(
+        coin_public_x,
+        coin_public_y,
+        coin_value,
+        token_id,
+        coin_spend_hook,
+        coin_user_data,
+        coin_blind,
+    );
+    constrain_instance(coin);
+
+    # At this point we've enforced all of our public inputs.
 }

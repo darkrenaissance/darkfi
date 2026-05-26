@@ -55,8 +55,8 @@ pub(crate) fn money_auth_token_freeze_get_metadata_v1(
     let func_id =
         FuncRef { contract_id: self_.contract_id, func_code: AuthTokenMintV1 as u8 }.to_func_id();
 
-    // In ZK we just verify that the token ID nullifier is properly
-    // derived from the authority.
+    // In ZK we just verify that the token ID is properly derived from
+    // the authority.
     zk_public_inputs.push((
         MONEY_CONTRACT_ZKAS_AUTH_TOKEN_FREEZE_NS_V1.to_string(),
         vec![mint_x, mint_y, func_id.inner(), params.token_id.inner()],
