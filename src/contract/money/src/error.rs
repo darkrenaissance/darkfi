@@ -58,9 +58,6 @@ pub enum MoneyError {
     #[error("Spend hook is not zero")]
     SpendHookNonZero,
 
-    #[error("Merkle root not found in previous state")]
-    SwapMerkleRootNotFound,
-
     #[error("Token ID does not derive from mint authority")]
     TokenIdDoesNotDeriveFromMint,
 
@@ -103,7 +100,6 @@ pub enum MoneyError {
     #[error("Insufficient fee paid")]
     InsufficientFee,
 
-    // TODO: This should catch-all (TransferMerkle../SwapMerkle...)
     #[error("Coin merkle root not found")]
     CoinMerkleRootNotFound,
 
@@ -135,7 +131,6 @@ impl From<MoneyError> for ContractError {
             MoneyError::InvalidNumberOfInputs => Self::Custom(10),
             MoneyError::InvalidNumberOfOutputs => Self::Custom(11),
             MoneyError::SpendHookNonZero => Self::Custom(12),
-            MoneyError::SwapMerkleRootNotFound => Self::Custom(13),
             MoneyError::TokenIdDoesNotDeriveFromMint => Self::Custom(14),
             MoneyError::TokenMintFrozen => Self::Custom(15),
             MoneyError::ParentCallFunctionMismatch => Self::Custom(16),

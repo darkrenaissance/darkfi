@@ -781,20 +781,6 @@ impl Drk {
                     }
                 }
             }
-            MoneyFunction::OtcSwapV1 => {
-                scan_cache.log(String::from("[parse_money_call] Found Money::OtcSwapV1 call"));
-                let params: MoneyTransferParamsV1 = deserialize_async(&data[1..]).await?;
-
-                for input in params.inputs {
-                    nullifiers.push(input.nullifier);
-                }
-
-                for output in params.outputs {
-                    if !output.tx_local {
-                        coins.push((output.coin, output.note, false));
-                    }
-                }
-            }
             MoneyFunction::AuthTokenMintV1 => {
                 scan_cache
                     .log(String::from("[parse_money_call] Found Money::AuthTokenMintV1 call"));
@@ -1065,13 +1051,6 @@ impl Drk {
                 nullifiers.push(params.input.nullifier);
             }
             MoneyFunction::TransferV1 => {
-                let params: MoneyTransferParamsV1 = deserialize_async(&data[1..]).await?;
-
-                for input in params.inputs {
-                    nullifiers.push(input.nullifier);
-                }
-            }
-            MoneyFunction::OtcSwapV1 => {
                 let params: MoneyTransferParamsV1 = deserialize_async(&data[1..]).await?;
 
                 for input in params.inputs {

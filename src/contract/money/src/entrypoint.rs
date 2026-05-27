@@ -67,13 +67,6 @@ use transfer_v1::{
     money_transfer_process_update_v1,
 };
 
-/// `Money::OtcSwap` functions
-mod swap_v1;
-use swap_v1::{
-    money_otcswap_get_metadata_v1, money_otcswap_process_instruction_v1,
-    money_otcswap_process_update_v1,
-};
-
 /// `Money::AuthTokenMint` functions
 mod auth_token_mint_v1;
 use auth_token_mint_v1::{
@@ -250,7 +243,6 @@ fn get_metadata(cid: ContractId, ix: &[u8]) -> ContractResult {
         MoneyFunction::GenesisMintV1 => money_genesis_mint_get_metadata_v1(cid, call_idx, calls)?,
         MoneyFunction::PoWRewardV1 => money_pow_reward_get_metadata_v1(cid, call_idx, calls)?,
         MoneyFunction::TransferV1 => money_transfer_get_metadata_v1(cid, call_idx, calls)?,
-        MoneyFunction::OtcSwapV1 => money_otcswap_get_metadata_v1(cid, call_idx, calls)?,
         MoneyFunction::AuthTokenMintV1 => {
             money_auth_token_mint_get_metadata_v1(cid, call_idx, calls)?
         }
@@ -289,7 +281,6 @@ fn process_instruction(cid: ContractId, ix: &[u8]) -> ContractResult {
             money_pow_reward_process_instruction_v1(cid, call_idx, calls)?
         }
         MoneyFunction::TransferV1 => money_transfer_process_instruction_v1(cid, call_idx, calls)?,
-        MoneyFunction::OtcSwapV1 => money_otcswap_process_instruction_v1(cid, call_idx, calls)?,
         MoneyFunction::AuthTokenMintV1 => {
             money_auth_token_mint_process_instruction_v1(cid, call_idx, calls)?
         }
@@ -330,13 +321,6 @@ fn process_update(cid: ContractId, update_data: &[u8]) -> ContractResult {
         MoneyFunction::TransferV1 => {
             let update: MoneyTransferUpdateV1 = deserialize(&update_data[1..])?;
             Ok(money_transfer_process_update_v1(cid, update)?)
-        }
-
-        MoneyFunction::OtcSwapV1 => {
-            // For the atomic swaps, we use the same state update like we would
-            // use for `Money::Transfer`.
-            let update: MoneyTransferUpdateV1 = deserialize(&update_data[1..])?;
-            Ok(money_otcswap_process_update_v1(cid, update)?)
         }
 
         MoneyFunction::AuthTokenMintV1 => {

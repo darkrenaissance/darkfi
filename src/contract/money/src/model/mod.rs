@@ -200,7 +200,7 @@ pub struct MoneyFeeUpdateV1 {
 
 #[derive(Clone, Debug, SerialEncodable, SerialDecodable)]
 // ANCHOR: money-params
-/// Parameters for `Money::Transfer` and `Money::OtcSwap`
+/// Parameters for `Money::Transfer`
 pub struct MoneyTransferParamsV1 {
     /// Anonymous inputs
     pub inputs: Vec<Input>,
@@ -209,7 +209,7 @@ pub struct MoneyTransferParamsV1 {
 }
 // ANCHOR_END: money-params
 
-/// State update for `Money::Transfer` and `Money::OtcSwap`
+/// State update for `Money::Transfer`
 #[derive(Clone, Debug, SerialEncodable, SerialDecodable)]
 pub struct MoneyTransferUpdateV1 {
     /// Revealed nullifiers

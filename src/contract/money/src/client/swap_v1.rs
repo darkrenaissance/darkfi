@@ -51,7 +51,8 @@ pub struct SwapCallDebris {
     pub signature_secret: SecretKey,
 }
 
-/// Struct holding necessary information to build a `Money::OtcSwapV1` contract call.
+/// Struct holding necessary information to build a `Money::TransferV1` contract call
+/// for an atomic swap.
 /// This is used to build half of the swap transaction, so both parties have to build
 /// their halves and combine them.
 pub struct SwapCallBuilder {
@@ -94,7 +95,7 @@ pub struct SwapCallBuilder {
 
 impl SwapCallBuilder {
     pub fn build(&self) -> Result<SwapCallDebris> {
-        debug!(target: "contract::money::client::swap", "Building half of Money::OtcSwapV1 contract call");
+        debug!(target: "contract::money::client::swap", "Building half of Money::TransferV1 contract call");
         if self.value_send == 0 {
             error!(target: "contract::money::client::swap", "Error: Value send is 0");
             return Err(ClientFailed::InvalidAmount(self.value_send).into())

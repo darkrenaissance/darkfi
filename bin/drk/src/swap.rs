@@ -272,7 +272,7 @@ impl Drk {
             debris.proofs[1].clone(),
         ];
 
-        let mut data = vec![MoneyFunction::OtcSwapV1 as u8];
+        let mut data = vec![MoneyFunction::TransferV1 as u8];
         full_params.encode_async(&mut data).await?;
         let call = ContractCall { contract_id: *MONEY_CONTRACT_ID, data };
         let mut tx_builder =
