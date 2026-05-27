@@ -88,6 +88,8 @@ async fn handle_request<T>(
     settings: RpcSettings,
     req: JsonRequest,
 ) -> Result<()> {
+    let req_id = req.id;
+
     // Handle disabled RPC methods
     let rep = if settings.is_method_disabled(&req.method) {
         debug!(target: "rpc::server", "RPC method {} is disabled", req.method);
@@ -217,7 +219,24 @@ async fn handle_request<T>(
         }
 
         JsonResult::Request(_) | JsonResult::Notification(_) => {
-            unreachable!("Should never happen")
+            warn!(
+                target: "rpc::server",
+                "{addr}: handler returned Request/Notification for id={req_id}",
+            );
+            let err_rep: JsonResult = JsonError::new(
+                ErrorCode::InternalError,
+                Some("Handler returned a non-response variant".to_string()),
+                req_id,
+            )
+            .into();
+
+            let mut writer_lock = writer.lock().await;
+            if settings.use_http() {
+                http_write_to_stream(&mut writer_lock, &err_rep).await?;
+            } else {
+                write_to_stream(&mut writer_lock, &err_rep).await?;
+            }
+            drop(writer_lock);
         }
 
         JsonResult::Response(ref v) => {
