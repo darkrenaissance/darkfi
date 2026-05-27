@@ -104,6 +104,12 @@ pub enum DaoError {
     #[error("Parent call is missing")]
     AuthXferParentMissing,
 
+    #[error("Parent contract ID is not dao::exec()")]
+    AuthXferParentWrongContractId,
+
+    #[error("Parent function code is not dao::exec()")]
+    AuthXferParentWrongFunctionCode,
+
     #[error("Transaction height higher than current height")]
     FutureTransactionHeight,
 
@@ -142,8 +148,10 @@ impl From<DaoError> for ContractError {
             DaoError::AuthXferWrongOutputCoin => Self::Custom(26),
             DaoError::AuthXferSiblingMissing => Self::Custom(27),
             DaoError::AuthXferParentMissing => Self::Custom(28),
-            DaoError::FutureTransactionHeight => Self::Custom(29),
-            DaoError::InvalidTransactionHashData => Self::Custom(30),
+            DaoError::AuthXferParentWrongContractId => Self::Custom(29),
+            DaoError::AuthXferParentWrongFunctionCode => Self::Custom(30),
+            DaoError::FutureTransactionHeight => Self::Custom(31),
+            DaoError::InvalidTransactionHashData => Self::Custom(32),
         }
     }
 }

@@ -200,9 +200,17 @@ pub(crate) fn dao_authxfer_process_instruction(
     // 3. Check the coins on transfer outputs match
     ///////////////////////////////////////////////////
 
-    // Find this auth_call in the parent DAO::exec()
+    // Find this auth_call in the parent DAO::exec().
+    // Its safe to unwrap here since we have already checked the
+    // indexes in metadata().
     let parent_idx = calls[call_idx].parent_index.unwrap();
     let exec_callnode = &calls[parent_idx];
+    if exec_callnode.data.contract_id != *DAO_CONTRACT_ID {
+        return Err(DaoError::AuthXferParentWrongContractId.into())
+    }
+    if exec_callnode.data.data[0] != DaoFunction::Exec as u8 {
+        return Err(DaoError::AuthXferParentWrongFunctionCode.into())
+    }
     let exec_params: DaoExecParams = deserialize(&exec_callnode.data.data[1..])?;
 
     let auth_call = find_auth_in_parent(exec_callnode, exec_params.proposal_auth_calls, call_idx);
