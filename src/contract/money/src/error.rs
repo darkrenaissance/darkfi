@@ -115,6 +115,9 @@ pub enum MoneyError {
 
     #[error("Missing inputs in burn call")]
     BurnMissingInputs,
+
+    #[error("Invalid commitment")]
+    InvalidCommitment,
 }
 
 impl From<MoneyError> for ContractError {
@@ -151,6 +154,7 @@ impl From<MoneyError> for ContractError {
             MoneyError::RootsValueDataMismatch => Self::Custom(29),
             MoneyError::ChildrenIndexesLengthMismatch => Self::Custom(30),
             MoneyError::BurnMissingInputs => Self::Custom(31),
+            MoneyError::InvalidCommitment => Self::Custom(32),
         }
     }
 }

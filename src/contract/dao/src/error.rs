@@ -106,6 +106,9 @@ pub enum DaoError {
 
     #[error("Transaction height higher than current height")]
     FutureTransactionHeight,
+
+    #[error("Invalid transaction hash data")]
+    InvalidTransactionHashData,
 }
 
 impl From<DaoError> for ContractError {
@@ -140,6 +143,7 @@ impl From<DaoError> for ContractError {
             DaoError::AuthXferSiblingMissing => Self::Custom(27),
             DaoError::AuthXferParentMissing => Self::Custom(28),
             DaoError::FutureTransactionHeight => Self::Custom(29),
+            DaoError::InvalidTransactionHashData => Self::Custom(30),
         }
     }
 }

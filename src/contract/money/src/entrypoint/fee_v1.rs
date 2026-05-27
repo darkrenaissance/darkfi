@@ -67,8 +67,18 @@ pub(crate) fn money_fee_get_metadata_v1(
     let signature_pubkeys: Vec<PublicKey> = vec![params.input.signature_public];
 
     // Grab the Pedersen commitments and the signature pubkey from the params
-    let input_value_coords = params.input.value_commit.to_affine().coordinates().unwrap();
-    let output_value_coords = params.output.value_commit.to_affine().coordinates().unwrap();
+    let input_value_coords = params.input.value_commit.to_affine().coordinates();
+    if input_value_coords.is_none().into() {
+        msg!("[FeeV1] Error: Invalid input value commitment coordinates");
+        return Err(MoneyError::InvalidCommitment.into())
+    };
+    let input_value_coords = input_value_coords.unwrap();
+    let output_value_coords = params.output.value_commit.to_affine().coordinates();
+    if output_value_coords.is_none().into() {
+        msg!("[FeeV1] Error: Invalid output value commitment coordinates");
+        return Err(MoneyError::InvalidCommitment.into())
+    };
+    let output_value_coords = output_value_coords.unwrap();
     let (sig_x, sig_y) = params.input.signature_public.xy();
 
     zk_public_inputs.push((
@@ -199,8 +209,11 @@ pub(crate) fn money_fee_process_instruction_v1(
 
     // Accumulate the height paid fee
     let verifying_block_height = wasm::util::get_verifying_block_height()?;
-    let mut paid_fee: u64 =
-        deserialize(&db_get(fees_db, &serialize(&verifying_block_height))?.unwrap())?;
+    let Some(paid_fee) = db_get(fees_db, &serialize(&verifying_block_height))? else {
+        msg!("[FeeV1] Error: Block height fees accumulator not found");
+        return Err(MoneyError::PoWRewardCallMissingFeesAccumulator.into())
+    };
+    let mut paid_fee: u64 = deserialize(&paid_fee)?;
     paid_fee += fee;
 
     // At this point the state transition has passed, so we create a state update.

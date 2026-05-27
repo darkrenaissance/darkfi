@@ -73,8 +73,13 @@ pub(crate) fn money_burn_get_metadata_v1(
 
     // Grab the pedersen commitments and signature pubkeys from the
     // anonymous inputs
-    for input in &params.inputs {
-        let value_coords = input.value_commit.to_affine().coordinates().unwrap();
+    for (i, input) in params.inputs.iter().enumerate() {
+        let value_coords = input.value_commit.to_affine().coordinates();
+        if value_coords.is_none().into() {
+            msg!("[BurnV1] Error: Invalid value commitment coordinates for input: {}", i);
+            return Err(MoneyError::InvalidCommitment.into())
+        };
+        let value_coords = value_coords.unwrap();
         let (sig_x, sig_y) = input.signature_public.xy();
 
         // It is very important that these are in the same order as the

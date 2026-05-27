@@ -51,7 +51,12 @@ pub(crate) fn money_pow_reward_get_metadata_v1(
     let signature_pubkeys = vec![params.input.signature_public];
 
     // Grab the pedersen commitment from the anonymous output
-    let value_coords = params.output.value_commit.to_affine().coordinates().unwrap();
+    let value_coords = params.output.value_commit.to_affine().coordinates();
+    if value_coords.is_none().into() {
+        msg!("[PoWRewardV1] Error: Invalid input value commitment coordinates");
+        return Err(MoneyError::InvalidCommitment.into())
+    };
+    let value_coords = value_coords.unwrap();
 
     zk_public_inputs.push((
         MONEY_CONTRACT_ZKAS_MINT_NS_V1.to_string(),

@@ -50,8 +50,13 @@ pub(crate) fn money_genesis_mint_get_metadata_v1(
     let signature_pubkeys = vec![params.input.signature_public];
 
     // Grab the pedersen commitments from the anonymous outputs
-    for output in &params.outputs {
-        let value_coords = output.value_commit.to_affine().coordinates().unwrap();
+    for (i, output) in params.outputs.iter().enumerate() {
+        let value_coords = output.value_commit.to_affine().coordinates();
+        if value_coords.is_none().into() {
+            msg!("[GenesisMintV1] Error: Invalid value commitment coordinates for output: {}", i);
+            return Err(MoneyError::InvalidCommitment.into())
+        };
+        let value_coords = value_coords.unwrap();
 
         zk_public_inputs.push((
             MONEY_CONTRACT_ZKAS_MINT_NS_V1.to_string(),

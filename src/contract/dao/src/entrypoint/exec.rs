@@ -16,6 +16,7 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+use darkfi_money_contract::error::MoneyError;
 use darkfi_sdk::{
     crypto::{pasta_prelude::*, ContractId, PublicKey},
     dark_tree::DarkLeaf,
@@ -51,8 +52,18 @@ pub(crate) fn dao_exec_get_metadata(
         blockwindow(wasm::util::get_verifying_block_height()?, wasm::util::get_block_target()?);
 
     let blind_vote = params.blind_total_vote;
-    let yes_vote_coords = blind_vote.yes_vote_commit.to_affine().coordinates().unwrap();
-    let all_vote_coords = blind_vote.all_vote_commit.to_affine().coordinates().unwrap();
+    let yes_vote_coords = blind_vote.yes_vote_commit.to_affine().coordinates();
+    if yes_vote_coords.is_none().into() {
+        msg!("[Dao::Exec] Error: Invalid yes vote value commitment coordinates");
+        return Err(MoneyError::InvalidCommitment.into())
+    };
+    let yes_vote_coords = yes_vote_coords.unwrap();
+    let all_vote_coords = blind_vote.all_vote_commit.to_affine().coordinates();
+    if all_vote_coords.is_none().into() {
+        msg!("[Dao::Exec] Error: Invalid all vote value commitment coordinates");
+        return Err(MoneyError::InvalidCommitment.into())
+    };
+    let all_vote_coords = all_vote_coords.unwrap();
 
     // Grab proof namespace to use, based on early execution flag
     let proof_namespace = match params.early_exec {

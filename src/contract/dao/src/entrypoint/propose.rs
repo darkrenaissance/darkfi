@@ -64,11 +64,16 @@ pub(crate) fn dao_propose_get_metadata(
     let mut total_funds_commit = pallas::Point::identity();
 
     // Iterate through inputs
-    for input in &params.inputs {
+    for (i, input) in params.inputs.iter().enumerate() {
         signature_pubkeys.push(input.signature_public);
         total_funds_commit += input.value_commit;
 
-        let value_coords = input.value_commit.to_affine().coordinates().unwrap();
+        let value_coords = input.value_commit.to_affine().coordinates();
+        if value_coords.is_none().into() {
+            msg!("[Dao::Propose] Error: Invalid value commitment coordinates for input: {}", i);
+            return Err(MoneyError::InvalidCommitment.into())
+        };
+        let value_coords = value_coords.unwrap();
         let (sig_x, sig_y) = input.signature_public.xy();
 
         zk_public_inputs.push((
@@ -92,7 +97,12 @@ pub(crate) fn dao_propose_get_metadata(
         blockwindow(wasm::util::get_verifying_block_height()?, wasm::util::get_block_target()?);
     // ANCHOR_END: dao-blockwindow-example-usage
 
-    let total_funds_coords = total_funds_commit.to_affine().coordinates().unwrap();
+    let total_funds_coords = total_funds_commit.to_affine().coordinates();
+    if total_funds_coords.is_none().into() {
+        msg!("[Dao::Propose] Error: Invalid total funds value commitment coordinates");
+        return Err(MoneyError::InvalidCommitment.into())
+    };
+    let total_funds_coords = total_funds_coords.unwrap();
     zk_public_inputs.push((
         DAO_CONTRACT_ZKAS_PROPOSE_MAIN_NS.to_string(),
         vec![
@@ -177,7 +187,13 @@ pub(crate) fn dao_propose_process_instruction(
         }
 
         // Get block_height where tx_hash was confirmed
-        let tx_hash_data: [u8; 32] = coin_root_data[0..32].try_into().unwrap();
+        let tx_hash_data: [u8; 32] = match coin_root_data[0..32].try_into() {
+            Ok(t) => t,
+            Err(e) => {
+                msg!("[Dao::Propose] Error: Invalid transaction hash data: {}", e);
+                return Err(DaoError::InvalidTransactionHashData.into())
+            }
+        };
         let tx_hash = TransactionHash(tx_hash_data);
         let (tx_height, _) = wasm::util::get_tx_location(&tx_hash)?;
 

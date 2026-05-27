@@ -16,6 +16,7 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+use darkfi_money_contract::error::MoneyError;
 use darkfi_sdk::{
     crypto::{pasta_prelude::*, ContractId, PublicKey},
     dark_tree::DarkLeaf,
@@ -65,11 +66,16 @@ pub(crate) fn dao_vote_get_metadata(
     let proposal_metadata: DaoProposalMetadata = deserialize(&data)?;
 
     // Iterate through inputs
-    for input in &params.inputs {
+    for (i, input) in params.inputs.iter().enumerate() {
         signature_pubkeys.push(input.signature_public);
         all_vote_commit += input.vote_commit;
 
-        let value_coords = input.vote_commit.to_affine().coordinates().unwrap();
+        let value_coords = input.vote_commit.to_affine().coordinates();
+        if value_coords.is_none().into() {
+            msg!("[Dao::Vote] Error: Invalid vote commitment coordinates for input: {}", i);
+            return Err(MoneyError::InvalidCommitment.into())
+        };
+        let value_coords = value_coords.unwrap();
         let (sig_x, sig_y) = input.signature_public.xy();
 
         zk_public_inputs.push((
@@ -91,8 +97,18 @@ pub(crate) fn dao_vote_get_metadata(
     let current_blockwindow =
         blockwindow(wasm::util::get_verifying_block_height()?, wasm::util::get_block_target()?);
 
-    let yes_vote_commit_coords = params.yes_vote_commit.to_affine().coordinates().unwrap();
-    let all_vote_commit_coords = all_vote_commit.to_affine().coordinates().unwrap();
+    let yes_vote_commit_coords = params.yes_vote_commit.to_affine().coordinates();
+    if yes_vote_commit_coords.is_none().into() {
+        msg!("[Dao::Vote] Error: Invalid yes vote value commitment coordinates");
+        return Err(MoneyError::InvalidCommitment.into())
+    };
+    let yes_vote_commit_coords = yes_vote_commit_coords.unwrap();
+    let all_vote_commit_coords = all_vote_commit.to_affine().coordinates();
+    if all_vote_commit_coords.is_none().into() {
+        msg!("[Dao::Vote] Error: Invalid all vote value commitment coordinates");
+        return Err(MoneyError::InvalidCommitment.into())
+    };
+    let all_vote_commit_coords = all_vote_commit_coords.unwrap();
 
     let (ephem_x, ephem_y) = params.note.ephem_public.xy();
     zk_public_inputs.push((
