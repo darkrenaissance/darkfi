@@ -273,22 +273,9 @@ pub async fn accept<'a, T: 'a>(
     writer: Arc<Mutex<WriteHalf<Box<dyn PtStream>>>>,
     addr: Url,
     rh: Arc<impl RequestHandler<T> + 'static>,
-    conn_limit: Option<usize>,
     settings: RpcSettings,
     ex: Arc<smol::Executor<'a>>,
 ) -> Result<()> {
-    // If there's a connection limit set, we will refuse connections
-    // after this point.
-    if let Some(conn_limit) = conn_limit {
-        if rh.clone().active_connections().await >= conn_limit {
-            debug!(
-                target: "rpc::server::accept",
-                "Connection limit reached, refusing new conn"
-            );
-            return Err(Error::RpcConnectionsExhausted)
-        }
-    }
-
     // We'll hold our background tasks here
     let tasks = Arc::new(Mutex::new(HashSet::new()));
 
@@ -389,6 +376,35 @@ async fn run_accept_loop<'a, T: 'a>(
                 let rh_ = rh.clone();
                 verbose!(target: "rpc::server", "[RPC] Server accepted conn from {url}");
 
+                // Enforce the connection limit here, before mark_connection,
+                // so the active count never crosses the limit.
+                if let Some(limit) = conn_limit {
+                    if rh.active_connections().await >= limit {
+                        debug!(
+                            target: "rpc::server::run_accept_loop",
+                            "[RPC] Connection limit ({limit}) reached, rejecting {url}",
+                        );
+
+                        // Send a JSONRPC error before dropping the stream so
+                        // the client can tell "rejected" apart from "unreachabl;e".
+                        let err: JsonResult = JsonError::new(
+                            ErrorCode::ServerError(-32000),
+                            Some("Server connection limit reached".to_string()),
+                            0,
+                        )
+                        .into();
+
+                        let (_, mut writer) = smol::io::split(stream);
+                        if settings.use_http() {
+                            let _ = http_write_to_stream(&mut writer, &err).await;
+                        } else {
+                            let _ = write_to_stream(&mut writer, &err).await;
+                        }
+                        // Writer drops here, closing the connection
+                        continue
+                    }
+                }
+
                 let (reader, writer) = smol::io::split(stream);
                 let reader = Arc::new(Mutex::new(BufReader::new(reader)));
                 let writer = Arc::new(Mutex::new(writer));
@@ -397,15 +413,7 @@ async fn run_accept_loop<'a, T: 'a>(
                 let task_ = task.clone();
                 let ex_ = ex.clone();
                 task.clone().start(
-                    accept(
-                        reader,
-                        writer,
-                        url.clone(),
-                        rh.clone(),
-                        conn_limit,
-                        settings.clone(),
-                        ex_,
-                    ),
+                    accept(reader, writer, url.clone(), rh.clone(), settings.clone(), ex_),
                     |_| async move {
                         verbose!(target: "rpc::server", "[RPC] Closed conn from {url}");
                         rh_.clone().unmark_connection(task_.clone()).await;
