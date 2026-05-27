@@ -19,7 +19,7 @@
 //! DarkFi Money Contract
 //!
 //! Smart contract implementing money transfers, token minting and freezing,
-//! and staking/unstaking of consensus tokens.
+//! and consensus rewards minting.
 
 use darkfi_sdk::error::ContractError;
 
@@ -32,10 +32,10 @@ pub enum MoneyFunction {
     GenesisMintV1 = 0x01,
     PoWRewardV1 = 0x02,
     TransferV1 = 0x03,
-    AuthTokenMintV1 = 0x05,
-    AuthTokenFreezeV1 = 0x06,
-    TokenMintV1 = 0x07,
-    BurnV1 = 0x08,
+    AuthTokenMintV1 = 0x04,
+    AuthTokenFreezeV1 = 0x05,
+    TokenMintV1 = 0x06,
+    BurnV1 = 0x07,
 }
 // ANCHOR_END: money-function
 
@@ -48,10 +48,10 @@ impl TryFrom<u8> for MoneyFunction {
             0x01 => Ok(Self::GenesisMintV1),
             0x02 => Ok(Self::PoWRewardV1),
             0x03 => Ok(Self::TransferV1),
-            0x05 => Ok(Self::AuthTokenMintV1),
-            0x06 => Ok(Self::AuthTokenFreezeV1),
-            0x07 => Ok(Self::TokenMintV1),
-            0x08 => Ok(Self::BurnV1),
+            0x04 => Ok(Self::AuthTokenMintV1),
+            0x05 => Ok(Self::AuthTokenFreezeV1),
+            0x06 => Ok(Self::TokenMintV1),
+            0x07 => Ok(Self::BurnV1),
             _ => Err(ContractError::InvalidFunction),
         }
     }

@@ -104,23 +104,23 @@ impl ContractCall {
         self.matches_contract_call_type(*MONEY_CONTRACT_ID, 0x03)
     }
 
-    /// Returns true if call is a money over-the-counter swap.
-    pub fn is_money_otc_swap(&self) -> bool {
-        self.matches_contract_call_type(*MONEY_CONTRACT_ID, 0x04)
-    }
-
     /// Returns true if call is a money token mint authorization.
     pub fn is_money_auth_token_mint(&self) -> bool {
-        self.matches_contract_call_type(*MONEY_CONTRACT_ID, 0x05)
+        self.matches_contract_call_type(*MONEY_CONTRACT_ID, 0x04)
     }
 
     /// Returns true if call is a money token freeze authorization.
     pub fn is_money_auth_token_freeze(&self) -> bool {
-        self.matches_contract_call_type(*MONEY_CONTRACT_ID, 0x06)
+        self.matches_contract_call_type(*MONEY_CONTRACT_ID, 0x05)
     }
 
     /// Returns true if call is a money token mint.
     pub fn is_money_token_mint(&self) -> bool {
+        self.matches_contract_call_type(*MONEY_CONTRACT_ID, 0x06)
+    }
+
+    /// Returns true if call is a money burn.
+    pub fn is_money_burn(&self) -> bool {
         self.matches_contract_call_type(*MONEY_CONTRACT_ID, 0x07)
     }
 

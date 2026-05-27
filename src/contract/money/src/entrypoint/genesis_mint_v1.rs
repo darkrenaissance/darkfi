@@ -119,6 +119,12 @@ pub(crate) fn money_genesis_mint_process_instruction_v1(
     let mut new_coins = Vec::with_capacity(params.outputs.len());
     msg!("[GenesisMintV1] Iterating over anonymous outputs");
     for (i, output) in params.outputs.iter().enumerate() {
+        // Disallow local outputs
+        if output.tx_local {
+            msg!("[GenesisMintV1] Error: Local output found: {}", i);
+            return Err(MoneyError::InvalidLocalOutput.into())
+        }
+
         // Check that the coin has not existed before
         if new_coins.contains(&output.coin) ||
             wasm::db::db_contains_key(coins_db, &serialize(&output.coin))?
