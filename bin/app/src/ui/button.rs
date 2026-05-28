@@ -26,7 +26,7 @@ use std::sync::{
 use tracing::instrument;
 
 use crate::{
-    gfx::{gfxtag, DrawCall, DrawInstruction, DrawMesh, Point, Rectangle, RenderApi, Renderer},
+    gfx::{gfxtag, DrawCall, DrawInstruction, DrawMesh, Point, Rectangle, RenderApi, Renderer, RendererSync},
     mesh::MeshBuilder,
     prop::{PropertyAtomicGuard, PropertyBool, PropertyRect, PropertyUint32, Role},
     scene::{Pimpl, SceneNodeWeak},
@@ -185,6 +185,32 @@ impl UIObject for Button {
             TouchPhase::Started => self.handle_mouse_btn_down(MouseButton::Left, touch_pos).await,
             TouchPhase::Moved => false,
             TouchPhase::Ended => self.handle_mouse_btn_up(MouseButton::Left, touch_pos).await,
+            TouchPhase::Cancelled => false,
+        }
+    }
+
+    fn handle_touch_sync(&self, _renderer: &RendererSync, phase: TouchPhase, id: u64, touch_pos: Point) -> bool {
+        if !self.is_active.get() {
+            return false
+        }
+
+        // Ignore multi-touch
+        if id != 0 {
+            return false
+        }
+
+        let rect = self.rect.get();
+        if !rect.contains(touch_pos) {
+            return false
+        }
+
+        match phase {
+            TouchPhase::Started => {
+                self.mouse_btn_held.store(true, Ordering::Relaxed);
+                true
+            },
+            TouchPhase::Moved => false,
+            TouchPhase::Ended => false,
             TouchPhase::Cancelled => false,
         }
     }
