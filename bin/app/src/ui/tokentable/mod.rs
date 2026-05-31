@@ -19,7 +19,7 @@
 use async_trait::async_trait;
 use darkfi_money_contract::model::{DARK_TOKEN_ID, TokenId};
 use darkfi_serial::{Decodable, Encodable, SerialEncodable};
-use miniquad::MouseButton;
+use miniquad::{MouseButton, TouchPhase};
 use parking_lot::Mutex as SyncMutex;
 use rand::{rngs::OsRng, Rng};
 use std::sync::{Arc, Weak};
@@ -64,6 +64,7 @@ pub struct TokenTable {
     node: SceneNodeWeak,
     renderer: Renderer,
     sg_root: SceneNodePtr,
+    mouse_btn_token: SyncMutex<Option<TokenId>>,
 
     rows: SyncMutex<Vec<TokenRow>>,
     dc_key: u64,
@@ -104,6 +105,7 @@ impl TokenTable {
             node: node.clone(),
             renderer: renderer.clone(),
             sg_root,
+            mouse_btn_token: SyncMutex::new(None),
             rows: SyncMutex::new(vec![]),
             dc_key: OsRng.gen(),
             rect,
@@ -370,18 +372,72 @@ impl UIObject for TokenTable {
         }
 
         if let Some(row) = self.get_row_at_y(mouse_pos.y) {
-            let mut data = vec![];
-            if let Err(e) = row.encode(&mut data) {
-                error!(target: "ui::tokentable", "Failed to encode row: {e}");
-                return false
-            }
-
-            let node_ref = self.node.upgrade().unwrap();
-            let _ = node_ref.trigger("row_click", data).await;
+            *self.mouse_btn_token.lock() = Some(row.id);
             return true
         }
 
         false
+    }
+
+    async fn handle_mouse_btn_up(&self, btn: MouseButton, mouse_pos: Point) -> bool {
+        if btn != MouseButton::Left {
+            return false
+        }
+
+        let token_held = {
+            let mut mouse_lock = self.mouse_btn_token.lock();
+            let token_held = *mouse_lock;
+            *mouse_lock = None;
+            token_held
+        };
+
+        let Some(token_held) = token_held else {
+            return false
+        };
+
+        let rect = self.rect.get();
+        if !rect.contains(mouse_pos) {
+            return false
+        }
+
+        let Some(row) = self.get_row_at_y(mouse_pos.y) else {
+            return false
+        };
+
+        if row.id != token_held {
+            return false
+        }
+
+        let mut data = vec![];
+        if let Err(e) = row.encode(&mut data) {
+            error!(target: "ui::tokentable", "Failed to encode row: {e}");
+            return false
+        }
+
+        let node_ref = self.node.upgrade().unwrap();
+        let _ = node_ref.trigger("row_click", data).await;
+
+        true
+    }
+
+    async fn handle_touch(&self, phase: TouchPhase, id: u64, touch_pos: Point) -> bool {
+        // Ignore multi-touch
+        if id != 0 {
+            return false
+        }
+
+        let rect = self.rect.get();
+        if !rect.contains(touch_pos) {
+            return false
+        }
+
+        // Simulate mouse events
+        match phase {
+            TouchPhase::Started => self.handle_mouse_btn_down(MouseButton::Left, touch_pos).await,
+            TouchPhase::Moved => false,
+            TouchPhase::Ended => self.handle_mouse_btn_up(MouseButton::Left, touch_pos).await,
+            TouchPhase::Cancelled => false,
+        }
     }
 }
 
