@@ -36,8 +36,8 @@ use darkfi_dao_contract::{
     DAO_CONTRACT_ZKAS_VOTE_INPUT_NS, DAO_CONTRACT_ZKAS_VOTE_MAIN_NS,
 };
 use darkfi_money_contract::{
-    MONEY_CONTRACT_ZKAS_AUTH_TOKEN_MINT_NS_V1, MONEY_CONTRACT_ZKAS_BURN_NS_V1,
-    MONEY_CONTRACT_ZKAS_FEE_NS_V1, MONEY_CONTRACT_ZKAS_MINT_NS_V1,
+    MONEY_CONTRACT_ZKAS_AUTH_TOKEN_FREEZE_NS_V1, MONEY_CONTRACT_ZKAS_AUTH_TOKEN_MINT_NS_V1,
+    MONEY_CONTRACT_ZKAS_BURN_NS_V1, MONEY_CONTRACT_ZKAS_FEE_NS_V1, MONEY_CONTRACT_ZKAS_MINT_NS_V1,
     MONEY_CONTRACT_ZKAS_TOKEN_MINT_NS_V1,
 };
 use darkfi_sdk::crypto::contract_id::{
@@ -49,8 +49,8 @@ use tracing::debug;
 
 /// Update these if any circuits are changed.
 /// Delete the existing cachefiles, and enable debug logging, you will see the new hashes.
-const PKS_HASH: &str = "f618ddf6916fb043200fdc1611b9a914e08d20a17e97c5a262dde874c3212fd8";
-const VKS_HASH: &str = "e083ec986b85ec3435a880363f266b793708b5fe47714a180ca548273891c1e1";
+const PKS_HASH: &str = "76c13b755770efd5d2fd4f7f635ab5c20366686482ab59f5e7ec7315ee2b8a82";
+const VKS_HASH: &str = "917098f91e004cd28fe12e51a4204b7d3ee676a9dd8bb89e5a935c9d2f55ca99";
 
 /// Build a `PathBuf` to a cachefile
 fn cache_path(typ: &str) -> Result<PathBuf> {
@@ -127,6 +127,7 @@ pub fn get_cached_pks_and_vks() -> Result<(Pks, Vks)> {
         &include_bytes!("../../money/proof/burn_v1.zk.bin")[..],
         &include_bytes!("../../money/proof/token_mint_v1.zk.bin")[..],
         &include_bytes!("../../money/proof/auth_token_mint_v1.zk.bin")[..],
+        &include_bytes!("../../money/proof/auth_token_freeze_v1.zk.bin")[..],
         // DAO
         &include_bytes!("../../dao/proof/mint.zk.bin")[..],
         &include_bytes!("../../dao/proof/propose-input.zk.bin")[..],
@@ -199,7 +200,8 @@ pub fn inject(overlay: &BlockchainOverlayPtr, vks: &Vks) -> Result<()> {
             MONEY_CONTRACT_ZKAS_MINT_NS_V1 |
             MONEY_CONTRACT_ZKAS_BURN_NS_V1 |
             MONEY_CONTRACT_ZKAS_TOKEN_MINT_NS_V1 |
-            MONEY_CONTRACT_ZKAS_AUTH_TOKEN_MINT_NS_V1 => {
+            MONEY_CONTRACT_ZKAS_AUTH_TOKEN_MINT_NS_V1 |
+            MONEY_CONTRACT_ZKAS_AUTH_TOKEN_FREEZE_NS_V1 => {
                 let key = serialize(&namespace.as_str());
                 let value = serialize(&(bincode.clone(), vk.clone()));
                 overlay.insert(&money_db_name, &key, &value)?;

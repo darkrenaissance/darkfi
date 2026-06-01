@@ -32,7 +32,8 @@ use darkfi_money_contract::{
         auth_token_mint_v1::AuthTokenMintCallBuilder, token_mint_v1::TokenMintCallBuilder,
     },
     model::{CoinAttributes, TokenAttributes, TokenId},
-    MoneyFunction, MONEY_CONTRACT_ZKAS_AUTH_TOKEN_MINT_NS_V1, MONEY_CONTRACT_ZKAS_FEE_NS_V1,
+    MoneyFunction, MONEY_CONTRACT_ZKAS_AUTH_TOKEN_FREEZE_NS_V1,
+    MONEY_CONTRACT_ZKAS_AUTH_TOKEN_MINT_NS_V1, MONEY_CONTRACT_ZKAS_FEE_NS_V1,
     MONEY_CONTRACT_ZKAS_TOKEN_MINT_NS_V1,
 };
 use darkfi_sdk::{
@@ -398,10 +399,10 @@ impl Drk {
         // We also do this through the RPC.
         let zkas_bins = self.lookup_zkas(&MONEY_CONTRACT_ID).await?;
 
-        let Some(auth_mint_zkbin) =
-            zkas_bins.iter().find(|x| x.0 == MONEY_CONTRACT_ZKAS_AUTH_TOKEN_MINT_NS_V1)
+        let Some(auth_freeze_zkbin) =
+            zkas_bins.iter().find(|x| x.0 == MONEY_CONTRACT_ZKAS_AUTH_TOKEN_FREEZE_NS_V1)
         else {
-            return Err(Error::Custom("Auth token mint circuit not found".to_string()))
+            return Err(Error::Custom("Auth token freeze circuit not found".to_string()))
         };
 
         let Some(fee_zkbin) = zkas_bins.iter().find(|x| x.0 == MONEY_CONTRACT_ZKAS_FEE_NS_V1)
@@ -409,23 +410,23 @@ impl Drk {
             return Err(Error::Custom("Fee circuit not found".to_string()))
         };
 
-        let auth_mint_zkbin = ZkBinary::decode(&auth_mint_zkbin.1, false)?;
+        let auth_freeze_zkbin = ZkBinary::decode(&auth_freeze_zkbin.1, false)?;
         let fee_zkbin = ZkBinary::decode(&fee_zkbin.1, false)?;
 
-        let auth_mint_circuit =
-            ZkCircuit::new(empty_witnesses(&auth_mint_zkbin)?, &auth_mint_zkbin);
+        let auth_freeze_circuit =
+            ZkCircuit::new(empty_witnesses(&auth_freeze_zkbin)?, &auth_freeze_zkbin);
         let fee_circuit = ZkCircuit::new(empty_witnesses(&fee_zkbin)?, &fee_zkbin);
 
-        // Creating AuthTokenMint and Fee circuits proving keys
-        let auth_mint_pk = ProvingKey::build(auth_mint_zkbin.k, &auth_mint_circuit);
+        // Creating AuthTokenFreeze and Fee circuits proving keys
+        let auth_freeze_pk = ProvingKey::build(auth_freeze_zkbin.k, &auth_freeze_circuit);
         let fee_pk = ProvingKey::build(fee_zkbin.k, &fee_circuit);
 
         // Create the freeze call
         let builder = AuthTokenFreezeCallBuilder {
             mint_keypair: mint_authority,
             token_attrs,
-            auth_mint_zkbin,
-            auth_mint_pk,
+            auth_freeze_zkbin,
+            auth_freeze_pk,
         };
         let freeze_debris = builder.build()?;
         let mut data = vec![MoneyFunction::AuthTokenFreezeV1 as u8];

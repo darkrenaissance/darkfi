@@ -48,8 +48,9 @@ fn mint_pay_swap() -> Result<()> {
 
         // Mint tokens for Alice and Bob
         info!(target: "money", "Minting tokens for Alice and Bob");
-        let alice_token = th.token_mint_to_all(ALICE_INITIAL, &Alice, &Alice, block_height).await?;
-        let bob_token = th.token_mint_to_all(BOB_INITIAL, &Bob, &Bob, block_height).await?;
+        let (alice_token, _) =
+            th.token_mint_to_all(ALICE_INITIAL, &Alice, &Alice, block_height).await?;
+        let (bob_token, _) = th.token_mint_to_all(BOB_INITIAL, &Bob, &Bob, block_height).await?;
 
         // Alice sends some tokens to Bob
         info!(target: "money", "Alice sends {ALICE_SEND} to Bob");
