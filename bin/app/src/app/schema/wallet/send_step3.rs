@@ -24,7 +24,7 @@ use darkfi_serial::Encodable;
 use crate::{
     app::{
         App,
-        node::{create_button, create_layer, create_singleline_edit, create_text, create_vector_art},
+        node::{create_button, create_layer, create_decimal_edit, create_text, create_vector_art},
         schema::COLOR_SCHEME,
     },
     expr,
@@ -307,7 +307,7 @@ pub async fn make(
     send_step3_layer.link(amount_wrapper.clone());
 
     // Amount input
-    let input_node = create_singleline_edit("send_amount_input");
+    let input_node = create_decimal_edit("send_amount_input");
     input_node.set_property_bool(atom, Role::App, "is_active", true).unwrap();
     let prop = input_node.get_property("rect").unwrap();
     // Position at (0, 0) within wrapper - wrapper controls the position
