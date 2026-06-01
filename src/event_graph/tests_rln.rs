@@ -321,13 +321,13 @@ fn rln_all_blob_types_serial_round_trip() {
             proof: synthesize_placeholder_proof(),
             user_message_limit: 7,
             max_message_limit: MAX_MSG_LIMIT,
-            attestation: RegistrationAttestation::Free,
+            attestation: RegistrationAttestation::SPECIAL,
         };
         let bytes = serialize_async(&reg).await;
         let decoded: RegistrationBlob = darkfi_serial::deserialize_async(&bytes).await.unwrap();
         assert_eq!(decoded.user_message_limit, 7);
         assert_eq!(decoded.max_message_limit, MAX_MSG_LIMIT);
-        assert!(matches!(decoded.attestation, RegistrationAttestation::Free));
+        assert!(matches!(decoded.attestation, RegistrationAttestation::SPECIAL));
 
         // Slash blob.
         let slash = SlashBlob {
@@ -498,11 +498,14 @@ fn rln_static_event_registration_invalid_limits_are_malicious() {
         let cases: &[(u64, &str)] = &[
             (0, "zero limit is structurally invalid"),
             (MAX_MSG_LIMIT + 1, "limit above MAX_MSG_LIMIT"),
-            (RegistrationAttestation::FREE_TIER_LIMIT + 1, "limit above free-tier cap"),
+            (RegistrationAttestation::SPECIAL_TIER_LIMIT + 1, "limit above SPECIAL-tier cap"),
         ];
         for (limit, why) in cases {
-            let blob =
-                placeholder_registration_blob(*limit, MAX_MSG_LIMIT, RegistrationAttestation::Free);
+            let blob = placeholder_registration_blob(
+                *limit,
+                MAX_MSG_LIMIT,
+                RegistrationAttestation::SPECIAL,
+            );
             let bytes = serialize_async(&blob).await;
             let outcome = eg.rln_verify_static_event(&node, &bytes, 0).await;
             assert!(matches!(outcome, StaticEventCheck::Malicious), "{why}");
@@ -521,7 +524,8 @@ fn rln_static_event_registration_duplicate_commitment_soft_reject() {
         let commitment = pallas::Base::from(0xc0ffeeu64);
         eg.identity_state.write().await.register(commitment).unwrap();
 
-        let blob = placeholder_registration_blob(5, MAX_MSG_LIMIT, RegistrationAttestation::Free);
+        let blob =
+            placeholder_registration_blob(5, MAX_MSG_LIMIT, RegistrationAttestation::SPECIAL);
         let bytes = serialize_async(&blob).await;
         let node = RLNNode::Registration(commitment);
         let outcome = eg.rln_verify_static_event(&node, &bytes, 0).await;
