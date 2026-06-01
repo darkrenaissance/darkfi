@@ -199,8 +199,11 @@ pub(crate) fn money_fee_process_instruction_v1(
 
     // Accumulate the height paid fee
     let verifying_block_height = wasm::util::get_verifying_block_height()?;
-    let mut paid_fee: u64 =
-        deserialize(&db_get(fees_db, &serialize(&verifying_block_height))?.unwrap())?;
+    let Some(paid_fee) = db_get(fees_db, &serialize(&verifying_block_height))? else {
+        msg!("[FeeV1] Error: Block height fees accumulator not found");
+        return Err(MoneyError::PoWRewardCallMissingFeesAccumulator.into())
+    };
+    let mut paid_fee: u64 = deserialize(&paid_fee)?;
     paid_fee += fee;
 
     // At this point the state transition has passed, so we create a state update.

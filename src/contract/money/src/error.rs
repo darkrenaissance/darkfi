@@ -94,6 +94,9 @@ pub enum MoneyError {
     #[error("Call is not executed on next block height")]
     PoWRewardCallNotOnNextBlockHeight,
 
+    #[error("Block height fees accumulator not found")]
+    PoWRewardCallMissingFeesAccumulator,
+
     #[error("No inputs in fee call")]
     FeeMissingInputs,
 
@@ -141,12 +144,13 @@ impl From<MoneyError> for ContractError {
             MoneyError::PoWRewardCallOnGenesisBlock => Self::Custom(22),
             MoneyError::PoWRewardRetrieveLastBlockHeightError => Self::Custom(23),
             MoneyError::PoWRewardCallNotOnNextBlockHeight => Self::Custom(24),
-            MoneyError::FeeMissingInputs => Self::Custom(25),
-            MoneyError::InsufficientFee => Self::Custom(26),
-            MoneyError::CoinMerkleRootNotFound => Self::Custom(27),
-            MoneyError::RootsValueDataMismatch => Self::Custom(28),
-            MoneyError::ChildrenIndexesLengthMismatch => Self::Custom(29),
-            MoneyError::BurnMissingInputs => Self::Custom(30),
+            MoneyError::PoWRewardCallMissingFeesAccumulator => Self::Custom(25),
+            MoneyError::FeeMissingInputs => Self::Custom(26),
+            MoneyError::InsufficientFee => Self::Custom(27),
+            MoneyError::CoinMerkleRootNotFound => Self::Custom(28),
+            MoneyError::RootsValueDataMismatch => Self::Custom(29),
+            MoneyError::ChildrenIndexesLengthMismatch => Self::Custom(30),
+            MoneyError::BurnMissingInputs => Self::Custom(31),
         }
     }
 }

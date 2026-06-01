@@ -110,8 +110,11 @@ pub(crate) fn money_pow_reward_process_instruction_v1(
 
     // Grab the currect height accumulated fees
     let fees_db = wasm::db::db_lookup(cid, MONEY_CONTRACT_FEES_TREE)?;
-    let paid_fee: u64 =
-        deserialize(&wasm::db::db_get(fees_db, &serialize(&verifying_block_height))?.unwrap())?;
+    let Some(paid_fee) = wasm::db::db_get(fees_db, &serialize(&verifying_block_height))? else {
+        msg!("[PoWRewardV1] Error: Block height fees accumulator not found");
+        return Err(MoneyError::PoWRewardCallMissingFeesAccumulator.into())
+    };
+    let paid_fee: u64 = deserialize(&paid_fee)?;
 
     // Verify reward value matches the expected one for this block height,
     // including the paid fees.
