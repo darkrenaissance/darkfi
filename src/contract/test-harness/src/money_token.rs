@@ -176,7 +176,7 @@ impl TestHarness {
         holder: &Holder,
         tx: Transaction,
         mint_params: &MoneyTokenMintParamsV1,
-        auth_params: &MoneyAuthTokenMintParamsV1,
+        _auth_params: &MoneyAuthTokenMintParamsV1,
         fee_params: &Option<MoneyFeeParamsV1>,
         block_height: u32,
         append: bool,
@@ -192,7 +192,7 @@ impl TestHarness {
 
             // Process the minted coin output
             wallet.money_merkle_tree.append(MerkleNode::from(mint_params.coin.inner()));
-            if let Ok(note) = auth_params.enc_note.decrypt::<MoneyNote>(&wallet.keypair.secret) {
+            if let Ok(note) = mint_params.enc_note.decrypt::<MoneyNote>(&wallet.keypair.secret) {
                 let owncoin = OwnCoin {
                     coin: mint_params.coin,
                     note: note.clone(),

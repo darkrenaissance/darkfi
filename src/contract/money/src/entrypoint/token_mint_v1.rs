@@ -51,10 +51,10 @@ pub(crate) fn money_token_mint_get_metadata_v1(
         );
         return Err(MoneyError::ChildrenIndexesLengthMismatch.into())
     }
-    let child_idx = self_.children_indexes[0];
-    let child_call = &calls[child_idx].data;
-    let child_contract_id = child_call.contract_id;
-    let child_func_code = child_call.data[0];
+    let auth_idx = self_.children_indexes[0];
+    let auth_call = &calls[auth_idx].data;
+    let auth_contract_id = auth_call.contract_id;
+    let auth_func_code = auth_call.data[0];
 
     let params: MoneyTokenMintParamsV1 = deserialize(&self_.data.data[1..])?;
 
@@ -63,12 +63,15 @@ pub(crate) fn money_token_mint_get_metadata_v1(
     // Public keys for the transaction signatures we have to verify.
     let signature_pubkeys: Vec<PublicKey> = vec![];
 
-    let child_func_id =
-        FuncRef { contract_id: child_contract_id, func_code: child_func_code }.to_func_id();
+    // Derive the mint authority function ID
+    let auth_func_id =
+        FuncRef { contract_id: auth_contract_id, func_code: auth_func_code }.to_func_id();
 
+    // In ZK we verify that the minted coin is properly derived from
+    // using the authority token ID.
     zk_public_inputs.push((
         MONEY_CONTRACT_ZKAS_TOKEN_MINT_NS_V1.to_string(),
-        vec![child_func_id.inner(), params.coin.inner()],
+        vec![auth_func_id.inner(), params.coin.inner()],
     ));
 
     // Serialize everything gathered and return it

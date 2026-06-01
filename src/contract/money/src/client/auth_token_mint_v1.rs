@@ -21,17 +21,11 @@ use darkfi::{
     zkas::ZkBinary,
     Result,
 };
-use darkfi_sdk::{
-    crypto::{note::AeadEncryptedNote, Blind, Keypair},
-    pasta::pallas,
-};
+use darkfi_sdk::{crypto::Keypair, pasta::pallas};
 use rand::rngs::OsRng;
 use tracing::debug;
 
-use crate::{
-    client::MoneyNote,
-    model::{CoinAttributes, MoneyAuthTokenMintParamsV1, TokenAttributes},
-};
+use crate::model::{CoinAttributes, MoneyAuthTokenMintParamsV1, TokenAttributes};
 
 pub struct AuthTokenMintCallDebris {
     pub params: MoneyAuthTokenMintParamsV1,
@@ -89,21 +83,7 @@ impl AuthTokenMintCallBuilder {
         let circuit = ZkCircuit::new(prover_witnesses, &self.auth_mint_zkbin);
         let proof = Proof::create(&self.auth_mint_pk, &[circuit], &public_inputs, &mut OsRng)?;
 
-        // Create the note
-        let note = MoneyNote {
-            value: self.coin_attrs.value,
-            token_id: self.coin_attrs.token_id,
-            spend_hook: self.coin_attrs.spend_hook,
-            user_data: self.coin_attrs.user_data,
-            coin_blind: self.coin_attrs.blind,
-            value_blind: Blind::random(&mut OsRng),
-            token_blind: Blind::ZERO,
-            memo: vec![],
-        };
-
-        let enc_note = AeadEncryptedNote::encrypt(&note, &self.coin_attrs.public_key, &mut OsRng)?;
-
-        let params = MoneyAuthTokenMintParamsV1 { token_id, enc_note, mint_pubkey };
+        let params = MoneyAuthTokenMintParamsV1 { token_id, mint_pubkey };
         let debris = AuthTokenMintCallDebris { params, proofs: vec![proof] };
         Ok(debris)
     }
