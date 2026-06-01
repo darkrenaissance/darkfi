@@ -82,7 +82,7 @@ pub fn decode_money_function_params(
             let params: money_model::MoneyPoWRewardParamsV1 = deserialize(&data[1..])?;
             Box::new(params)
         }
-        MoneyFunction::TransferV1 | MoneyFunction::OtcSwapV1 => {
+        MoneyFunction::TransferV1 => {
             let params: money_model::MoneyTransferParamsV1 = deserialize(&data[1..])?;
             Box::new(params)
         }

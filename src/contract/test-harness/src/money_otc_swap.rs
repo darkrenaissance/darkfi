@@ -39,7 +39,7 @@ use rand::rngs::OsRng;
 use super::{Holder, TestHarness};
 
 impl TestHarness {
-    /// Create a `Money::OtcSwap` transaction with two given [`Holder`]s.
+    /// Create a `Money::TransferV1` transaction with two given [`Holder`]s.
     ///
     /// Returns the [`Transaction`], and the transaction parameters.
     pub async fn otc_swap(
@@ -129,7 +129,7 @@ impl TestHarness {
         ];
 
         // Encode the contract call
-        let mut data = vec![MoneyFunction::OtcSwapV1 as u8];
+        let mut data = vec![MoneyFunction::TransferV1 as u8];
         swap_full_params.encode(&mut data)?;
         let call = ContractCall { contract_id: *MONEY_CONTRACT_ID, data };
         let mut tx_builder =
