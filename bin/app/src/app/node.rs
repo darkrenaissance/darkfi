@@ -21,6 +21,9 @@ use crate::{
     scene::{CallArgType, SceneNode, SceneNodeType},
 };
 
+#[cfg(target_os = "android")]
+use crate::prop::{PropertyAtomicGuard, Role};
+
 pub fn create_window(name: &str) -> SceneNode {
     let mut node = SceneNode::new(name, SceneNodeType::Window);
 
@@ -390,6 +393,14 @@ pub fn create_baseedit(name: &str) -> SceneNode {
     let prop = Property::new("debug", PropertyType::Bool, PropertySubType::Null);
     node.add_property(prop).unwrap();
 
+    let mut prop = Property::new("android_input_type", PropertyType::Uint32, PropertySubType::Null);
+    #[cfg(target_os = "android")]
+    {
+        use crate::android::textinput::input_types::*;
+        prop.set_defaults_u32(vec![CLASS_TEXT | TEXT_FLAG_AUTO_CORRECT]).unwrap();
+    }
+    node.add_property(prop).unwrap();
+
     let mut prop = Property::new("action_fg_color", PropertyType::Float32, PropertySubType::Color);
     prop.set_ui_text("Action Menu FG Color", "Foreground color of action menu items");
     prop.set_array_len(4);
@@ -436,11 +447,35 @@ pub fn create_singleline_edit(name: &str) -> SceneNode {
 pub fn create_multiline_edit(name: &str) -> SceneNode {
     let mut node = create_baseedit(name);
 
+    #[cfg(target_os = "android")]
+    {
+        use crate::android::textinput::input_types::*;
+        let input_type = CLASS_TEXT | TEXT_FLAG_MULTI_LINE | TEXT_FLAG_AUTO_CORRECT;
+
+        let atom = &mut PropertyAtomicGuard::none();
+        node.set_property_u32(atom, Role::App, "android_input_type", input_type).unwrap();
+    }
+
     let mut prop = Property::new("height_range", PropertyType::Float32, PropertySubType::Pixel);
     prop.set_ui_text("Min/Max Height", "Minimum and Maximum height");
     prop.set_range_f32(0., f32::MAX);
     prop.set_array_len(2);
     node.add_property(prop).unwrap();
+
+    node
+}
+
+pub fn create_decimal_edit(name: &str) -> SceneNode {
+    let mut node = create_baseedit(name);
+
+    #[cfg(target_os = "android")]
+    {
+        use crate::android::textinput::input_types::*;
+        let input_type = CLASS_NUMBER | NUMBER_FLAG_DECIMAL;
+
+        let atom = &mut PropertyAtomicGuard::none();
+        node.set_property_u32(atom, Role::App, "android_input_type", input_type).unwrap();
+    }
 
     node
 }

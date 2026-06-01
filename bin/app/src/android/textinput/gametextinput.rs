@@ -49,6 +49,7 @@ pub struct GameTextInput {
     input_connection_class: ndk_sys::jclass,
     state_class: ndk_sys::jclass,
     set_soft_keyboard_active_method: ndk_sys::jmethodID,
+    set_input_type_method: ndk_sys::jmethodID,
     //restart_input_method: ndk_sys::jmethodID,
     state_constructor: ndk_sys::jmethodID,
     state_class_info: StateClassInfo,
@@ -86,6 +87,14 @@ impl GameTextInput {
                 input_connection_class,
                 b"setSoftKeyboardActive\0".as_ptr() as _,
                 set_soft_keyboard_active_sig.as_ptr() as _,
+            );
+
+            let set_input_type_sig = b"(I)V\0";
+            let set_input_type_method = get_method_id(
+                env,
+                input_connection_class,
+                b"setInputType\0".as_ptr() as _,
+                set_input_type_sig.as_ptr() as _,
             );
 
             /*let restart_input_sig = b"()V\0";
@@ -153,6 +162,7 @@ impl GameTextInput {
                 input_connection_class,
                 state_class,
                 set_soft_keyboard_active_method,
+                set_input_type_method,
                 //restart_input_method,
                 state_constructor,
                 state_class_info,
@@ -268,6 +278,23 @@ impl GameTextInput {
                 self.set_soft_keyboard_active_method,
                 0, // active: false
                 flags as ndk_sys::jint,
+            );
+        }
+    }
+
+    pub fn set_input_type(&self, input_type: u32) {
+        let Some(input_connection) = *self.input_connection.read() else {
+            w!("set_input_type() - no input_connection set");
+            return
+        };
+        unsafe {
+            let env = get_jni_env();
+            let call_void_method = (**env).CallVoidMethod.unwrap();
+            call_void_method(
+                env,
+                input_connection,
+                self.set_input_type_method,
+                input_type as ndk_sys::jint,
             );
         }
     }

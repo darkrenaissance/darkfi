@@ -27,6 +27,24 @@ use gametextinput::GAME_TEXT_INPUT;
 
 macro_rules! t { ($($arg:tt)*) => { trace!(target: "android::textinput", $($arg)*); } }
 
+/// Android input type constants
+/// See: https://developer.android.com/reference/android/text/InputType
+pub mod input_types {
+    /// Base classes
+    pub const CLASS_TEXT: u32 = 0x00000001;
+    pub const CLASS_NUMBER: u32 = 0x00000002;
+    pub const CLASS_PHONE: u32 = 0x00000003;
+    pub const CLASS_DATETIME: u32 = 0x00000004;
+
+    /// Text flags
+    pub const TEXT_FLAG_AUTO_CORRECT: u32 = 0x00008000;
+    pub const TEXT_FLAG_MULTI_LINE: u32 = 0x00020000;
+
+    /// Number flags
+    pub const NUMBER_FLAG_DECIMAL: u32 = 0x00002000;
+    pub const NUMBER_FLAG_SIGNED: u32 = 0x00001000;
+}
+
 // Text input state exposed to the rest of the app
 #[derive(Debug, Clone, Default)]
 pub struct AndroidTextInputState {
@@ -71,6 +89,12 @@ impl AndroidTextInput {
         t!("hide IME");
         let gti = GAME_TEXT_INPUT.get().unwrap();
         gti.hide_ime(0);
+    }
+
+    pub fn set_input_type(&self, input_type: u32) {
+        t!("set_input_type({input_type})");
+        let gti = GAME_TEXT_INPUT.get().unwrap();
+        gti.set_input_type(input_type);
     }
 
     pub fn set_state(&self, state: AndroidTextInputState) {

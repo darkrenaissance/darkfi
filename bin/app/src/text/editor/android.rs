@@ -231,4 +231,8 @@ impl Editor {
     pub fn buffer(&self) -> String {
         self.state.text.clone()
     }
+
+    pub fn set_input_type(&mut self, input_type: u32) {
+        self.input.set_input_type(input_type);
+    }
 }

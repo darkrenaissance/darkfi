@@ -187,6 +187,17 @@ public class InputConnection extends BaseInputConnection implements View.OnKeyLi
   }
 
   /**
+   * Set the input type for the IME.
+   *
+   * @param inputType The input type to use.
+   */
+  public final void setInputType(int inputType) {
+    log("setInputType: " + inputType);
+    settings.mEditorInfo.inputType = inputType;
+    restartInput();
+  }
+
+  /**
    * Set the text, selection and composing region state.
    *
    * @param state The state to be used by the IME.

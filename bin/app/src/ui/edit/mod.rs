@@ -194,6 +194,8 @@ pub struct BaseEdit {
     priority: PropertyUint32,
     debug: PropertyBool,
 
+    android_input_type: PropertyUint32,
+
     action_fg_color: PropertyColor,
     action_bg_color: PropertyColor,
     action_padding: PropertyFloat32,
@@ -266,6 +268,8 @@ impl BaseEdit {
         let z_index = PropertyUint32::wrap(node_ref, Role::Internal, "z_index", 0).unwrap();
         let priority = PropertyUint32::wrap(node_ref, Role::Internal, "priority", 0).unwrap();
         let debug = PropertyBool::wrap(node_ref, Role::Internal, "debug", 0).unwrap();
+
+        let android_input_type = PropertyUint32::wrap(node_ref, Role::Internal, "android_input_type", 0).unwrap();
 
         let action_fg_color =
             PropertyColor::wrap(node_ref, Role::Internal, "action_fg_color").unwrap();
@@ -364,6 +368,8 @@ impl BaseEdit {
             z_index,
             priority,
             debug,
+
+            android_input_type,
 
             action_fg_color,
             action_bg_color,
@@ -1348,6 +1354,13 @@ impl BaseEdit {
             // Should not happen
             panic!("self destroyed before insert_text_method_task was stopped!");
         };
+
+        // Set input type from property
+        #[cfg(target_os = "android")]
+        {
+            let input_type = self_.android_input_type.get();
+            self_.editor.lock().set_input_type(input_type);
+        }
 
         self_.editor.lock().focus();
         let atom = &mut self_.renderer.make_guard(gfxtag!("BaseEdit::process_focus_method"));
