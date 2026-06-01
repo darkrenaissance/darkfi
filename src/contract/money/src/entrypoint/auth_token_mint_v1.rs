@@ -17,7 +17,7 @@
  */
 
 use darkfi_sdk::{
-    crypto::{ContractId, PublicKey},
+    crypto::{ContractId, FuncRef, PublicKey},
     dark_tree::DarkLeaf,
     error::{ContractError, ContractResult},
     msg,
@@ -28,7 +28,8 @@ use darkfi_serial::{deserialize, serialize, Encodable};
 
 use crate::{
     error::MoneyError,
-    model::{MoneyAuthTokenMintParamsV1, MoneyAuthTokenMintUpdateV1},
+    model::{MoneyAuthTokenMintParamsV1, MoneyAuthTokenMintUpdateV1, MoneyTokenMintParamsV1},
+    MoneyFunction::TokenMintV1,
     MONEY_CONTRACT_TOKEN_FREEZE_TREE, MONEY_CONTRACT_ZKAS_AUTH_TOKEN_MINT_NS_V1,
 };
 
@@ -38,16 +39,36 @@ pub(crate) fn money_auth_token_mint_get_metadata_v1(
     call_idx: usize,
     calls: Vec<DarkLeaf<ContractCall>>,
 ) -> Result<Vec<u8>, ContractError> {
-    let params: MoneyAuthTokenMintParamsV1 = deserialize(&calls[call_idx].data.data[1..])?;
+    let self_ = &calls[call_idx].data;
+    let params: MoneyAuthTokenMintParamsV1 = deserialize(&self_.data[1..])?;
 
     // Public inputs for the ZK proofs we have to verify
     let mut zk_public_inputs: Vec<(String, Vec<pallas::Base>)> = vec![];
     // Public keys for the transaction signatures we have to verify.
     let signature_pubkeys: Vec<PublicKey> = vec![params.mint_pubkey];
 
+    // Grab the mint authority pubkey coords
+    let (mint_x, mint_y) = params.mint_pubkey.xy();
+
+    // Derive our function ID
+    let func_id = FuncRef { contract_id: self_.contract_id, func_code: self_.data[0] }.to_func_id();
+
+    // Retrieve the minted coin params from the parent call
+    let parent_idx = calls[call_idx].parent_index.unwrap();
+    let coin_mint_call = &calls[parent_idx].data;
+    let coin_mint_params: MoneyTokenMintParamsV1 = deserialize(&coin_mint_call.data[1..])?;
+
+    // In ZK we verify that the token ID is properly derived from the
+    // authority and the minted coin corresponds to this mint proof.
     zk_public_inputs.push((
         MONEY_CONTRACT_ZKAS_AUTH_TOKEN_MINT_NS_V1.to_string(),
-        vec![params.mint_pubkey.x(), params.mint_pubkey.y(), params.token_id.inner()],
+        vec![
+            mint_x,
+            mint_y,
+            func_id.inner(),
+            params.token_id.inner(),
+            coin_mint_params.coin.inner(),
+        ],
     ));
 
     // Serialize everything gathered and return it
@@ -66,6 +87,16 @@ pub(crate) fn money_auth_token_mint_process_instruction_v1(
 ) -> Result<Vec<u8>, ContractError> {
     let self_ = &calls[call_idx].data;
     let params: MoneyAuthTokenMintParamsV1 = deserialize(&self_.data[1..])?;
+
+    // Ensure parent call is token mint
+    let parent_idx = calls[call_idx].parent_index.unwrap();
+    let coin_mint_call = &calls[parent_idx].data;
+    if coin_mint_call.contract_id != self_.contract_id ||
+        coin_mint_call.data[0] != TokenMintV1 as u8
+    {
+        msg!("[AuthTokenMintV1] Error: Parent call is missing");
+        return Err(MoneyError::ParentCallFunctionMismatch.into())
+    }
 
     // We have to check if the token mint is frozen.
     let token_freeze_db = wasm::db::db_lookup(cid, MONEY_CONTRACT_TOKEN_FREEZE_TREE)?;

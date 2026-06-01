@@ -21,7 +21,10 @@ use darkfi::{
     zkas::ZkBinary,
     Result,
 };
-use darkfi_sdk::crypto::{note::AeadEncryptedNote, Blind, Keypair};
+use darkfi_sdk::{
+    crypto::{note::AeadEncryptedNote, Blind, Keypair},
+    pasta::pallas,
+};
 use rand::rngs::OsRng;
 use tracing::debug;
 
@@ -54,18 +57,33 @@ impl AuthTokenMintCallBuilder {
         debug!(target: "contract::money::client::auth_token_mint", "Building Money::AuthTokenMintV1 contract call");
 
         // Create the proof
+        let (public_x, public_y) = self.coin_attrs.public_key.xy();
         let prover_witnesses = vec![
+            // Secret key used by the mint authority
+            Witness::Base(Value::known(self.mint_keypair.secret.inner())),
             // Token attributes
             Witness::Base(Value::known(self.token_attrs.auth_parent.inner())),
             Witness::Base(Value::known(self.token_attrs.blind.inner())),
-            // Secret key used by the mint authority
-            Witness::Base(Value::known(self.mint_keypair.secret.inner())),
+            // Coin attributes
+            Witness::Base(Value::known(public_x)),
+            Witness::Base(Value::known(public_y)),
+            Witness::Base(Value::known(pallas::Base::from(self.coin_attrs.value))),
+            Witness::Base(Value::known(self.coin_attrs.spend_hook.inner())),
+            Witness::Base(Value::known(self.coin_attrs.user_data)),
+            Witness::Base(Value::known(self.coin_attrs.blind.inner())),
         ];
 
         let mint_pubkey = self.mint_keypair.public;
+        let token_id = self.token_attrs.to_token_id();
+        let coin = self.coin_attrs.to_coin();
 
-        let public_inputs =
-            vec![mint_pubkey.x(), mint_pubkey.y(), self.token_attrs.to_token_id().inner()];
+        let public_inputs = vec![
+            mint_pubkey.x(),
+            mint_pubkey.y(),
+            self.token_attrs.auth_parent.inner(),
+            token_id.inner(),
+            coin.inner(),
+        ];
 
         //darkfi::zk::export_witness_json("proof/witness/auth_token_mint_v1.json", &prover_witnesses, &public_inputs);
         let circuit = ZkCircuit::new(prover_witnesses, &self.auth_mint_zkbin);
@@ -85,11 +103,7 @@ impl AuthTokenMintCallBuilder {
 
         let enc_note = AeadEncryptedNote::encrypt(&note, &self.coin_attrs.public_key, &mut OsRng)?;
 
-        let params = MoneyAuthTokenMintParamsV1 {
-            token_id: self.token_attrs.to_token_id(),
-            enc_note,
-            mint_pubkey,
-        };
+        let params = MoneyAuthTokenMintParamsV1 { token_id, enc_note, mint_pubkey };
         let debris = AuthTokenMintCallDebris { params, proofs: vec![proof] };
         Ok(debris)
     }
