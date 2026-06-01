@@ -111,6 +111,9 @@ pub enum MoneyError {
 
     #[error("Missing inputs in burn call")]
     BurnMissingInputs,
+
+    #[error("Invalid local output")]
+    InvalidLocalOutput,
 }
 
 impl From<MoneyError> for ContractError {
@@ -146,6 +149,7 @@ impl From<MoneyError> for ContractError {
             MoneyError::RootsValueDataMismatch => Self::Custom(28),
             MoneyError::ChildrenIndexesLengthMismatch => Self::Custom(29),
             MoneyError::BurnMissingInputs => Self::Custom(30),
+            MoneyError::InvalidLocalOutput => Self::Custom(31),
         }
     }
 }

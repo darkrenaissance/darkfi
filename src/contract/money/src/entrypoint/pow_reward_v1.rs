@@ -80,6 +80,12 @@ pub(crate) fn money_pow_reward_process_instruction_v1(
     let self_ = &calls[call_idx].data;
     let params: MoneyPoWRewardParamsV1 = deserialize(&self_.data[1..])?;
 
+    // Disallow local output
+    if params.output.tx_local {
+        msg!("[PoWRewardV1] Error: Local output found");
+        return Err(MoneyError::InvalidLocalOutput.into())
+    }
+
     // Verify this contract call is not verified against genesis block
     let verifying_block_height = wasm::util::get_verifying_block_height()?;
     if verifying_block_height == 0 {
