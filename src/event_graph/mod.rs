@@ -2287,6 +2287,10 @@ impl EventGraph {
                     }
                 }
 
+                // Rejecting every account
+                return StaticEventCheck::Rejected;
+
+                #[allow(unreachable_code)]
                 let reg: RegistrationBlob = match deserialize_async_partial(blob).await {
                     Ok((v, _)) => v,
                     Err(_) => return StaticEventCheck::Rejected,

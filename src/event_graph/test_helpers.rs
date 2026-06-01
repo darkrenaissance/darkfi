@@ -288,7 +288,7 @@ mod test_identity {
             Self {
                 nullifier: pallas::Base::from(0xa11ce_u64),
                 trapdoor: pallas::Base::from(0xb0b_u64),
-                user_message_limit: RegistrationAttestation::FREE_TIER_LIMIT,
+                user_message_limit: RegistrationAttestation::SPECIAL_TIER_LIMIT,
                 message_id: 0,
                 last_epoch: 0,
             }
@@ -306,7 +306,7 @@ mod test_identity {
             Self {
                 nullifier: pallas::Base::from(n | 1),
                 trapdoor: pallas::Base::from(t | 1),
-                user_message_limit: RegistrationAttestation::FREE_TIER_LIMIT,
+                user_message_limit: RegistrationAttestation::SPECIAL_TIER_LIMIT,
                 message_id: 0,
                 last_epoch: 0,
             }
@@ -361,7 +361,7 @@ mod test_identity {
                 proof,
                 user_message_limit: self.user_message_limit,
                 max_message_limit: MAX_MSG_LIMIT,
-                attestation: RegistrationAttestation::Free,
+                attestation: RegistrationAttestation::SPECIAL,
             })
         }
 
