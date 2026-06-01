@@ -97,6 +97,12 @@ pub enum DaoError {
 
     #[error("Wrong output coin")]
     AuthXferWrongOutputCoin,
+
+    #[error("Parent contract ID is not dao::exec()")]
+    AuthXferParentWrongContractId,
+
+    #[error("Parent function code is not dao::exec()")]
+    AuthXferParentWrongFunctionCode,
 }
 
 impl From<DaoError> for ContractError {
@@ -128,6 +134,8 @@ impl From<DaoError> for ContractError {
             DaoError::AuthXferCallNotFoundInParent => Self::Custom(24),
             DaoError::AuthXferWrongNumberOutputs => Self::Custom(25),
             DaoError::AuthXferWrongOutputCoin => Self::Custom(26),
+            DaoError::AuthXferParentWrongContractId => Self::Custom(27),
+            DaoError::AuthXferParentWrongFunctionCode => Self::Custom(28),
         }
     }
 }
