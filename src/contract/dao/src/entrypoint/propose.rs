@@ -75,6 +75,8 @@ pub(crate) fn dao_propose_get_metadata(
             DAO_CONTRACT_ZKAS_PROPOSE_INPUT_NS.to_string(),
             vec![
                 input.smt_null_root,
+                params.proposal_bulla.inner(),
+                input.input_nullifier.inner(),
                 *value_coords.x(),
                 *value_coords.y(),
                 params.token_commit,
@@ -123,8 +125,15 @@ pub(crate) fn dao_propose_process_instruction(
     let coin_roots_db = wasm::db::db_lookup(*MONEY_CONTRACT_ID, MONEY_CONTRACT_COIN_ROOTS_TREE)?;
     let null_roots_db =
         wasm::db::db_lookup(*MONEY_CONTRACT_ID, MONEY_CONTRACT_NULLIFIER_ROOTS_TREE)?;
+    let mut input_nullifiers = vec![];
 
     for input in &params.inputs {
+        // Check input has not been reused
+        if input_nullifiers.contains(&input.input_nullifier) {
+            msg!("[Dao::Propose] Error: Attempted to reuse input");
+            return Err(DaoError::ProposalInputsReuse.into())
+        }
+
         // Check the Merkle roots for the input coins are valid
         let Some(coin_root_data) =
             wasm::db::db_get(coin_roots_db, &serialize(&input.merkle_coin_root))?
@@ -174,11 +183,15 @@ pub(crate) fn dao_propose_process_instruction(
 
         // Check snapshot age againts current height
         let current_height = wasm::util::get_verifying_block_height()?;
+        // We assert here to prevent underflow and catch catastrophic
+        // internal failure.
+        assert!(current_height >= tx_height);
         if current_height - tx_height > PROPOSAL_SNAPSHOT_CUTOFF_LIMIT {
             msg!("[Dao::Propose] Error: Snapshot is too old. Current height: {}, snapshot height: {}",
                  current_height, tx_height);
             return Err(DaoError::SnapshotTooOld.into())
         }
+        input_nullifiers.push(input.input_nullifier);
     }
 
     // Is the DAO bulla generated in the ZK proof valid

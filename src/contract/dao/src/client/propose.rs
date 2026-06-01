@@ -70,6 +70,11 @@ impl<T: StorageAdapter<Value = pallas::Base>> DaoProposeCall<'_, T> {
         main_zkbin: &ZkBinary,
         main_pk: &ProvingKey,
     ) -> Result<(DaoProposeParams, Vec<Proof>, Vec<SecretKey>)> {
+        if self.dao.to_bulla() != self.proposal.dao_bulla {
+            return Err(ClientFailed::VerifyError(DaoError::InvalidCalls.to_string()).into())
+        }
+        let proposal_bulla = self.proposal.to_bulla();
+
         let mut proofs = vec![];
         let mut signature_secrets = vec![];
 
@@ -119,6 +124,7 @@ impl<T: StorageAdapter<Value = pallas::Base>> DaoProposeCall<'_, T> {
                 Witness::Base(Value::known(pallas::Base::ZERO)),
                 Witness::Base(Value::known(pallas::Base::ZERO)),
                 Witness::Base(Value::known(note.coin_blind.inner())),
+                Witness::Base(Value::known(proposal_bulla.inner())),
                 Witness::Scalar(Value::known(funds_blind.inner())),
                 Witness::Base(Value::known(gov_token_blind.inner())),
                 Witness::Uint32(Value::known(leaf_pos.try_into().unwrap())),
@@ -151,8 +157,12 @@ impl<T: StorageAdapter<Value = pallas::Base>> DaoProposeCall<'_, T> {
             let value_commit = pedersen_commitment_u64(note.value, funds_blind);
             let value_coords = value_commit.to_affine().coordinates().unwrap();
 
+            let input_nullifier = poseidon_hash([nullifier, proposal_bulla.inner()]);
+
             let public_inputs = vec![
                 smt_null_root,
+                proposal_bulla.inner(),
+                input_nullifier,
                 *value_coords.x(),
                 *value_coords.y(),
                 token_commit,
@@ -172,6 +182,7 @@ impl<T: StorageAdapter<Value = pallas::Base>> DaoProposeCall<'_, T> {
                 value_commit,
                 merkle_coin_root,
                 smt_null_root,
+                input_nullifier: input_nullifier.into(),
                 signature_public,
             };
             inputs.push(input);
@@ -195,11 +206,6 @@ impl<T: StorageAdapter<Value = pallas::Base>> DaoProposeCall<'_, T> {
         let (dao_early_exec_pub_x, dao_early_exec_pub_y) = self.dao.early_exec_public_key.xy();
 
         let dao_leaf_position: u64 = self.dao_leaf_position.into();
-
-        if self.dao.to_bulla() != self.proposal.dao_bulla {
-            return Err(ClientFailed::VerifyError(DaoError::InvalidCalls.to_string()).into())
-        }
-        let proposal_bulla = self.proposal.to_bulla();
 
         let prover_witnesses = vec![
             // Proposers total number of gov tokens

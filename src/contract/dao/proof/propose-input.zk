@@ -15,6 +15,8 @@ witness "ProposeInput" {
     Base coin_user_data,
     Base coin_blind,
 
+    Base proposal_bulla,
+
     Scalar value_blind,
     Base coin_token_blind,
 
@@ -51,6 +53,14 @@ circuit "ProposeInput" {
         ZERO,                   # Leaf value
     );
     constrain_instance(null_tree_root);
+
+    # Include some secret information in input nullifier to defeat
+    # input reuse attacks. We reveal the proposal_bulla in
+    # propose-main.zk as well. Always use different nullifiers for
+    # same inputs to avoid deanonimizing them between calls.
+    input_nullifier = poseidon_hash(nullifier, proposal_bulla);
+    constrain_instance(proposal_bulla);
+    constrain_instance(input_nullifier);
 
     # Pedersen commitment for coin's coin_value
     vcv = ec_mul_short(coin_value, VALUE_COMMIT_VALUE);
