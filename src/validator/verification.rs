@@ -722,6 +722,12 @@ pub async fn verify_transaction(
     for (idx, call) in tx.calls.iter().enumerate() {
         debug!(target: "validator::verification::verify_transaction", "Executing contract call {idx}");
 
+        // Transaction must contain a function code
+        if call.data.data.is_empty() {
+            error!(target: "validator::verification::verify_transaction", "Call contains no data");
+            return Err(TxVerifyFailed::ErroneousTxs(vec![tx.clone()]).into())
+        }
+
         // Transaction must not contain a Pow reward call
         if call.data.is_money_pow_reward() {
             error!(target: "validator::verification::verify_transaction", "Reward transaction detected");
