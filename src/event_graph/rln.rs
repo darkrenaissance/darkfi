@@ -124,24 +124,18 @@ impl RlnAppId {
 /// Versioned attestation accompanying a registration
 #[derive(Clone, Debug, SerialEncodable, SerialDecodable)]
 pub enum RegistrationAttestation {
-    /// No external attestation. The user_message_limit must be
-    /// at most [`Self::FREE_TIER_LIMIT`].
-    Free,
     SPECIAL,
     /// Reserved for the future staking integration.
     Staked(Vec<u8>),
 }
 
 impl RegistrationAttestation {
-    /// In free-tier mode, hard cap on `user_message_limit`.
-    pub const FREE_TIER_LIMIT: u64 = 10;
     /// In special-tier mode.
     pub const SPECIAL_TIER_LIMIT: u64 = 100;
 
     /// Validate the attestation against a claimed limit.
     pub fn permits(&self, user_message_limit: u64) -> bool {
         match self {
-            Self::Free => user_message_limit <= Self::FREE_TIER_LIMIT,
             Self::SPECIAL => user_message_limit <= Self::SPECIAL_TIER_LIMIT,
             // Until staking is implemented, refuse to honor any
             // "Staked" attestation

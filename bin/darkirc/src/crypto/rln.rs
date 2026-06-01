@@ -86,7 +86,7 @@ impl RlnIdentity {
             // attestation gating in `RegistrationAttestation::permits`,
             // which currently only honours the free-tier cap until
             // staking lands).
-            user_message_limit: RegistrationAttestation::FREE_TIER_LIMIT,
+            user_message_limit: RegistrationAttestation::SPECIAL_TIER_LIMIT,
             message_id: 0,
             last_epoch: 0,
         }
@@ -167,7 +167,7 @@ impl RlnIdentity {
             proof,
             user_message_limit: self.user_message_limit,
             max_message_limit: MAX_MSG_LIMIT,
-            attestation: RegistrationAttestation::Free,
+            attestation: RegistrationAttestation::SPECIAL,
         })
     }
 
