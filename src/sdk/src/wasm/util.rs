@@ -192,6 +192,7 @@ pub fn get_tx_location(hash: &TransactionHash) -> GenericResult<(u32, u16)> {
     Ok((Decodable::decode(&mut cursor)?, Decodable::decode(&mut cursor)?))
 }
 
+#[link(wasm_import_module = "env")]
 extern "C" {
     fn set_return_data_(ptr: *const u8, len: u32) -> i64;
     fn get_object_bytes_(ptr: *const u8, len: u32) -> i64;

@@ -37,6 +37,7 @@ pub fn drk_log(message: &str) {
 }
 
 #[cfg(target_arch = "wasm32")]
+#[link(wasm_import_module = "env")]
 extern "C" {
     fn drk_log_(ptr: *const u8, len: usize);
 }

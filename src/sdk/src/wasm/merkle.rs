@@ -169,6 +169,7 @@ pub fn sparse_merkle_insert_batch(
     }
 }
 
+#[link(wasm_import_module = "env")]
 extern "C" {
     fn merkle_add_(ptr: *const u8, len: u32) -> i64;
     fn merkle_add_local_(ptr: *const u8, len: u32) -> i64;
