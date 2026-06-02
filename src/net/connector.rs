@@ -82,10 +82,11 @@ impl Connector {
         let outbound_connect_timeout = settings.outbound_connect_timeout(endpoint.scheme());
         drop(settings);
 
-        let dialer = match Dialer::new(endpoint.clone(), datastore, Some(i2p_socks5_proxy)).await {
-            Ok(dialer) => dialer,
-            Err(err) => return Err(Error::ConnectFailed(format!("[{endpoint}]: {err}"))),
-        };
+        let dialer =
+            match Dialer::new(endpoint.clone(), datastore, Some(i2p_socks5_proxy), true).await {
+                Ok(dialer) => dialer,
+                Err(err) => return Err(Error::ConnectFailed(format!("[{endpoint}]: {err}"))),
+            };
         let timeout = Duration::from_secs(outbound_connect_timeout);
 
         let stop_fut = async {

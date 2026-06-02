@@ -80,7 +80,7 @@ impl Acceptor {
             self.session.upgrade().unwrap().p2p().settings().read().await.p2p_datastore.clone();
 
         // Initialize listener
-        let listener = Listener::new(endpoint.clone(), datastore).await?;
+        let listener = Listener::new(endpoint.clone(), datastore, true).await?;
 
         // Open socket
         let ptlistener = listener.listen().await?;
