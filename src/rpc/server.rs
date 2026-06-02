@@ -511,7 +511,7 @@ pub async fn listen_and_serve<'a, T: 'a>(
         listen_url = url_str.parse()?;
     }
 
-    let listener = Listener::new(listen_url, None).await?.listen().await?;
+    let listener = Listener::new(listen_url, None, false).await?.listen().await?;
 
     run_accept_loop(listener, rh, conn_limit, settings, ex.clone()).await
 }

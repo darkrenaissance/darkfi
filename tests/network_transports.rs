@@ -32,7 +32,8 @@ fn tcp_transport() {
         drop(listener);
         let url = Url::parse(&format!("tcp://127.0.0.1:{port}")).unwrap();
 
-        let listener = Listener::new(url.clone(), None).await.unwrap().listen().await.unwrap();
+        let listener =
+            Listener::new(url.clone(), None, true).await.unwrap().listen().await.unwrap();
         executor
             .spawn(async move {
                 let (stream, _) = listener.next().await.unwrap();
@@ -43,7 +44,7 @@ fn tcp_transport() {
 
         let payload = "ohai tcp";
 
-        let dialer = Dialer::new(url, None, None).await.unwrap();
+        let dialer = Dialer::new(url, None, None, true).await.unwrap();
         let mut client = dialer.dial(None).await.unwrap();
         payload.encode_async(&mut client).await.unwrap();
 
@@ -67,7 +68,8 @@ fn tcp_tls_transport() {
         drop(listener);
         let url = Url::parse(&format!("tcp://127.0.0.1:{port}")).unwrap();
 
-        let listener = Listener::new(url.clone(), None).await.unwrap().listen().await.unwrap();
+        let listener =
+            Listener::new(url.clone(), None, true).await.unwrap().listen().await.unwrap();
         executor
             .spawn(async move {
                 let (stream, _) = listener.next().await.unwrap();
@@ -78,7 +80,7 @@ fn tcp_tls_transport() {
 
         let payload = "ohai tls";
 
-        let dialer = Dialer::new(url, None, None).await.unwrap();
+        let dialer = Dialer::new(url, None, None, true).await.unwrap();
         let mut client = dialer.dial(None).await.unwrap();
         payload.encode_async(&mut client).await.unwrap();
 
@@ -98,7 +100,8 @@ fn quic_transport() {
         drop(listener);
         let url = Url::parse(&format!("quic://127.0.0.1:{port}")).unwrap();
 
-        let listener = Listener::new(url.clone(), None).await.unwrap().listen().await.unwrap();
+        let listener =
+            Listener::new(url.clone(), None, true).await.unwrap().listen().await.unwrap();
 
         executor
             .spawn(async move {
@@ -110,7 +113,7 @@ fn quic_transport() {
 
         let payload = "ohai quic";
 
-        let dialer = Dialer::new(url, None, None).await.unwrap();
+        let dialer = Dialer::new(url, None, None, true).await.unwrap();
         let mut client = dialer.dial(None).await.unwrap();
         payload.encode_async(&mut client).await.unwrap();
 
@@ -132,7 +135,8 @@ fn unix_transport() {
     .unwrap();
 
     smol::block_on(executor.run(async {
-        let listener = Listener::new(url.clone(), None).await.unwrap().listen().await.unwrap();
+        let listener =
+            Listener::new(url.clone(), None, true).await.unwrap().listen().await.unwrap();
         executor
             .spawn(async move {
                 let (stream, _) = listener.next().await.unwrap();
@@ -143,7 +147,7 @@ fn unix_transport() {
 
         let payload = "ohai unix";
 
-        let dialer = Dialer::new(url, None, None).await.unwrap();
+        let dialer = Dialer::new(url, None, None, true).await.unwrap();
         let mut client = dialer.dial(None).await.unwrap();
         payload.encode_async(&mut client).await.unwrap();
 

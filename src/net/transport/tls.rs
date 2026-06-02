@@ -257,18 +257,27 @@ pub struct TlsUpgrade {
 }
 
 impl TlsUpgrade {
-    pub async fn new() -> io::Result<Self> {
+    pub async fn new(enable_tls_client_cert: bool) -> io::Result<Self> {
         // On each instantiation, generate a new keypair and certificate
         let (certificate, secret_key_der) = generate_certificate()?;
 
         // Server-side config
         let client_cert_verifier = Arc::new(ClientCertificateVerifier {});
-        let server_config = Arc::new(
-            ServerConfig::builder_with_protocol_versions(&[&TLS13])
-                .with_client_cert_verifier(client_cert_verifier)
-                .with_single_cert(vec![certificate.clone()], secret_key_der.clone_key())
-                .unwrap(),
-        );
+        let server_config = if enable_tls_client_cert {
+            Arc::new(
+                ServerConfig::builder_with_protocol_versions(&[&TLS13])
+                    .with_client_cert_verifier(client_cert_verifier)
+                    .with_single_cert(vec![certificate.clone()], secret_key_der.clone_key())
+                    .unwrap(),
+            )
+        } else {
+            Arc::new(
+                ServerConfig::builder_with_protocol_versions(&[&TLS13])
+                    .with_no_client_auth()
+                    .with_single_cert(vec![certificate.clone()], secret_key_der.clone_key())
+                    .unwrap(),
+            )
+        };
 
         // Client-side config
         let server_cert_verifier = Arc::new(ServerCertificateVerifier {});
