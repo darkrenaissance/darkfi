@@ -18,8 +18,8 @@ smol = {version = "2.0.2"}
 clap = {version = "4.4.11", features = ["derive"]}
 
 [patch.crates-io]
-halo2_proofs = {git="https://github.com/parazyd/halo2", branch="v032"}
-halo2_gadgets = {git="https://github.com/parazyd/halo2", branch="v032"}
+halo2_proofs = {git="https://github.com/parazyd/halo2", branch="v050"}
+halo2_gadgets = {git="https://github.com/parazyd/halo2", branch="v050"}
 
 [profile.release]
 debug = true

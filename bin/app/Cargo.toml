@@ -81,8 +81,8 @@ schema-test = []
 schema-test-scroll-layer = []
 
 [patch.crates-io]
-halo2_proofs = { git="https://github.com/parazyd/halo2", branch="v032" }
-halo2_gadgets = { git="https://github.com/parazyd/halo2", branch="v032" }
+halo2_proofs = { git="https://github.com/parazyd/halo2", branch="v050" }
+halo2_gadgets = { git="https://github.com/parazyd/halo2", branch="v050" }
 # This patch didn't work for me
 #dirs-sys = {git="https://github.com/sbechet/dirs-sys-rs.git"}
 

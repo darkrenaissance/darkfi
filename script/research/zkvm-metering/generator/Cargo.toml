@@ -13,14 +13,14 @@ edition = "2024"
 darkfi-sdk = {path = "../../../../src/sdk"}
 darkfi = {path = "../../../../", features = ["zk"]}
 halo2_proofs = {version = "0.3.2", features = ["circuit-params"]}
-halo2_gadgets = {version = "0.4.0", features = ["circuit-params"]}
+halo2_gadgets = {version = "0.5.0", features = ["circuit-params"]}
 rand = "0.8.6"
 darkfi-serial = {path = "../../../../src/serial"}
 
 [dev-dependencies]
-halo2_proofs = {version = "0.3.1", features = ["dev-graph", "sanity-checks"]}
-halo2_gadgets = "0.3.1"
+halo2_proofs = {version = "0.3.2", features = ["dev-graph", "sanity-checks"]}
+halo2_gadgets = "0.5.0"
 
 [patch.crates-io]
-halo2_proofs = {git="https://github.com/parazyd/halo2", branch="v032"}
-halo2_gadgets = {git="https://github.com/parazyd/halo2", branch="v032"}
+halo2_proofs = {git="https://github.com/parazyd/halo2", branch="v050"}
+halo2_gadgets = {git="https://github.com/parazyd/halo2", branch="v050"}

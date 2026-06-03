@@ -108,7 +108,7 @@ rand = {version = "0.8.6", optional = true}
 blake3 = {version = "1.8.5", features = ["rayon"], optional = true}
 crypto_api_chachapoly = {version = "0.5.0", optional = true}
 halo2_proofs = {version = "0.3.2", features = ["circuit-params"], optional = true}
-halo2_gadgets = {version = "0.4.0", features = ["circuit-params"], optional = true}
+halo2_gadgets = {version = "0.5.0", features = ["circuit-params"], optional = true}
 sha2 = {version = "0.11.0", optional = true}
 
 # Smart contract runtime
@@ -128,7 +128,7 @@ tiny-keccak = { version = "2.0.2", features = ["keccak"], optional = true }
 [dev-dependencies]
 clap = {version = "4.4.11", features = ["derive"]}
 halo2_proofs = {version = "0.3.2", features = ["circuit-params", "dev-graph", "sanity-checks"]}
-halo2_gadgets = {version = "0.4.0", features = ["circuit-params", "test-dependencies"]}
+halo2_gadgets = {version = "0.5.0", features = ["circuit-params", "test-dependencies"]}
 plotters = "0.3.7"
 easy-parallel = "3.3.1"
 prettytable-rs = "0.10.0"
@@ -328,8 +328,8 @@ dht = [
 # -----END LIBRARY FEATURES-----
 
 [patch.crates-io]
-halo2_proofs = {git="https://github.com/parazyd/halo2", branch="v032"}
-halo2_gadgets = {git="https://github.com/parazyd/halo2", branch="v032"}
+halo2_proofs = {git="https://github.com/parazyd/halo2", branch="v050"}
+halo2_gadgets = {git="https://github.com/parazyd/halo2", branch="v050"}
 # Forked "url" crate with added P2P schemas
 url = {git="https://github.com/darkrenaissance/rust-url", branch="v258"}
 

@@ -15,8 +15,8 @@ darkfi = {path = "../../../../", features = ["zk"]}
 darkfi-serial = {path = "../../../../src/serial"}
 
 [patch.crates-io]
-halo2_proofs = {git="https://github.com/parazyd/halo2", branch="v032"}
-halo2_gadgets = {git="https://github.com/parazyd/halo2", branch="v032"}
+halo2_proofs = {git="https://github.com/parazyd/halo2", branch="v050"}
+halo2_gadgets = {git="https://github.com/parazyd/halo2", branch="v050"}
 
 [profile.release]
 debug = true

@@ -32,7 +32,7 @@ sha2 = "0.11.0"
 blake2b_simd = "1.0.4"
 blake3 = "1.8.5"
 chacha20poly1305 = "0.10.1"
-halo2_gadgets = "0.4.0"
+halo2_gadgets = "0.5.0"
 bridgetree = "0.7.0"
 num-bigint = "0.4.6"
 num-traits = "0.2.19"
@@ -50,7 +50,7 @@ sled-overlay = "0.1.20"
 
 [dev-dependencies]
 halo2_proofs = {version = "0.3.2", features = ["circuit-params", "dev-graph", "sanity-checks"]}
-halo2_gadgets = {version = "0.4.0", features = ["circuit-params", "test-dependencies"]}
+halo2_gadgets = {version = "0.5.0", features = ["circuit-params", "test-dependencies"]}
 
 [lints]
 workspace = true
