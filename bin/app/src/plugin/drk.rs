@@ -42,6 +42,7 @@ use crate::{
     ExecutorPtr,
 };
 
+const DARKFID_ENDPOINT: &str = "tcp://127.0.0.1:18345"; // TODO: should be configurable at runtime
 const DARKFID_RETRY_TIME: u64 = 20;
 
 #[cfg(target_os = "android")]
@@ -142,7 +143,7 @@ impl DrkPlugin {
         let setting_root = Arc::new(SceneNode::new("setting", SceneNodeType::SettingRoot));
         node_ref.clone().link(setting_root.clone());
 
-        let endpoint = Url::parse("tcp://127.0.0.1:18345").unwrap();
+        let endpoint = Url::parse(DARKFID_ENDPOINT).unwrap();
 
         let drk = match Drk::new(Network::Testnet, get_cache_path().to_string_lossy().to_string(), get_wallet_path().to_string_lossy().to_string(), "changeme".to_string(), Some(endpoint), &ex, false).await {
             Ok(wallet) => wallet,
@@ -630,7 +631,7 @@ impl DrkPlugin {
     }
 
     async fn start(self: Arc<Self>, ex: ExecutorPtr, local_ex: Arc<smol::LocalExecutor<'_>>, tasks: Vec<smol::Task<()>>) {
-        let endpoint = Url::parse("tcp://127.0.0.1:18345").unwrap();
+        let endpoint = Url::parse(DARKFID_ENDPOINT).unwrap();
 
         let self2 = self.clone();
         let drk = self.drk.clone();
