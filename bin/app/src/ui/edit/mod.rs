@@ -704,6 +704,7 @@ impl BaseEdit {
                     if let Some(txt) = miniquad::window::clipboard_get() {
                         self.editor.lock().insert(&txt, atom);
                         self.behave.apply_cursor_scroll();
+                        self.finish_select(atom);
                     }
                 }
                 ACTION_SELALL => {
@@ -1818,6 +1819,7 @@ impl UIObject for BaseEdit {
                     if let Some(txt) = miniquad::window::clipboard_get() {
                         self.editor.lock().insert(&txt, atom);
                         self.behave.apply_cursor_scroll();
+                        self.finish_select(atom);
                     }
                 }
                 ACTION_SELALL => {
