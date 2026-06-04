@@ -287,7 +287,7 @@ for maximum mining performance. Start `darkfid` as usual and then start
 which wallet:
 
 ```shell
-$ ./xmrig -u x+1 -r 1000 -R 20 -o 127.0.0.1:18347 -t {XMRIG_THREADS} -u {YOUR_DARKFI_WALLET_ADDRESS}
+$ ./xmrig -r 1000 -R 20 -o 127.0.0.1:18347 -t {XMRIG_THREADS} -u {YOUR_DARKFI_WALLET_ADDRESS}
 ```
 
 > Note: All miners should use the lowest possible resources so other
