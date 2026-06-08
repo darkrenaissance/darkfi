@@ -31,6 +31,7 @@ use crate::{
     },
     error::TxVerifyFailed,
     tx::Transaction,
+    util::time::Timestamp,
     zk::VerifyingKey,
     Error, Result,
 };
@@ -239,8 +240,12 @@ impl Validator {
 
     /// The node tries to append provided proposal to its consensus
     /// state.
-    pub async fn append_proposal(&mut self, proposal: &Proposal) -> Result<()> {
-        self.consensus.append_proposal(proposal, self.synced, self.verify_fees).await
+    pub async fn append_proposal(
+        &mut self,
+        proposal: &Proposal,
+        timestamp_bound: Option<Timestamp>,
+    ) -> Result<()> {
+        self.consensus.append_proposal(proposal, timestamp_bound, self.verify_fees).await
     }
 
     /// The node checks if best fork can be confirmed.
@@ -448,6 +453,9 @@ impl Validator {
         let mut diffs = vec![];
         let mut inverse_diffs = vec![];
 
+        // All blocks must be before the future timestamp upper bound
+        let timestamp_bound = Some(module.future_timestamp_upper_bound()?);
+
         // Validate and insert each block
         for block in blocks {
             // Verify block
@@ -457,7 +465,7 @@ impl Validator {
                 &mut module,
                 block,
                 previous,
-                true,
+                timestamp_bound,
                 self.verify_fees,
             )
             .await
@@ -675,6 +683,9 @@ impl Validator {
         // Keep track of all block database state diffs
         let mut diffs = vec![];
 
+        // All blocks must be before the future timestamp upper bound
+        let timestamp_bound = Some(module.future_timestamp_upper_bound()?);
+
         // Validate and insert each block
         info!(target: "validator::validate_blockchain", "Validating rest blocks...");
         blocks_count -= 1;
@@ -690,7 +701,7 @@ impl Validator {
                 &mut module,
                 &block,
                 &previous,
-                false,
+                timestamp_bound,
                 self.verify_fees,
             )
             .await

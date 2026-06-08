@@ -190,10 +190,26 @@ async fn handle_unknown_proposal(node: &DarkfiNodePtr, channel: u32, proposal: &
         return handle_reorg(node, &(&channel, &comms_timeout), proposal).await
     }
 
+    // All proposals must be before the future timestamp upper bound
+    let timestamps_bound = match node
+        .validator
+        .read()
+        .await
+        .consensus
+        .module
+        .future_timestamp_upper_bound()
+    {
+        Ok(bound) => Some(bound),
+        Err(e) => {
+            error!(target: "darkfid::task::handle_unknown_proposal", "Future timestamp upper bound retriaval failed: {e}");
+            return false
+        }
+    };
+
     // Process response proposals
     for proposal in &response.proposals {
         // Append proposal
-        match node.validator.write().await.append_proposal(proposal).await {
+        match node.validator.write().await.append_proposal(proposal, timestamps_bound).await {
             Ok(()) => { /* Do nothing */ }
             // Skip already existing proposals
             Err(ProposalAlreadyExists) => continue,
@@ -297,12 +313,22 @@ async fn handle_reorg(
     };
     drop(validator);
 
+    // All proposals must be before the future timestamp upper bound
+    let timestamps_bound = match module.future_timestamp_upper_bound() {
+        Ok(bound) => bound,
+        Err(e) => {
+            error!(target: "darkfid::task::handle_reorg", "Future timestamp upper bound retriaval failed: {e}");
+            return false
+        }
+    };
+
     // Retrieve the headers of the hashes sequence and its ranking
     let (targets_rank, hashes_rank) = match retrieve_peer_headers_sequence_ranking(
         (&last_common_height, &last_common_hash, &module, &last_difficulty),
         channel,
         proposal,
         &peer_header_hashes,
+        timestamps_bound,
     )
     .await
     {
@@ -377,6 +403,7 @@ async fn handle_reorg(
         &validator,
         (&last_common_height, &module, &last_difficulty),
         &peer_proposals,
+        Some(timestamps_bound),
     )
     .await
     {
@@ -529,6 +556,8 @@ async fn retrieve_peer_headers_sequence_ranking(
     proposal: &Proposal,
     // Peer header hashes sequence
     header_hashes: &[HeaderHash],
+    // Timestamps upper bound
+    timestamps_bound: Timestamp,
 ) -> Result<(BigUint, BigUint)> {
     // Communication setup
     let response_sub = channel.0.subscribe_msg::<ForkHeadersResponse>().await?;
@@ -584,6 +613,11 @@ async fn retrieve_peer_headers_sequence_ranking(
                 return Err(Custom(String::from("Invalid header sequence detected")))
             }
 
+            // Verify header timestamp is before the future upper bound
+            if peer_header.timestamp > timestamps_bound {
+                return Err(Custom(String::from("Header timestamp is after the future upper bound")))
+            }
+
             // Verify header hash and calculate its rank
             let (next_difficulty, target_distance_sq, hash_distance_sq) =
                 match header_rank(&mut module, peer_header) {
@@ -618,6 +652,12 @@ async fn retrieve_peer_headers_sequence_ranking(
         proposal.block.header.height != previous_height + 1
     {
         return Err(Custom(String::from("Invalid header sequence detected")))
+    }
+
+    // Verify trigger proposal header timestamp is before the future
+    // upper bound.
+    if proposal.block.header.timestamp > timestamps_bound {
+        return Err(Custom(String::from("Header timestamp is after the future upper bound")))
     }
 
     // Verify trigger proposal header hash and calculate its rank
@@ -708,6 +748,8 @@ async fn generate_peer_fork(
     last_common_info: (&u32, &PoWModule, &BlockDifficulty),
     // Peer proposals sequence
     proposals: &[Proposal],
+    // Timestamps upper bound
+    timestamps_bound: Option<Timestamp>,
 ) -> Result<Fork> {
     // Create a fork from last common height
     let mut fork =
@@ -750,7 +792,7 @@ async fn generate_peer_fork(
         info!(target: "darkfid::task::handle_reorg", "Processing proposal: {} - {}", proposal.hash, proposal.block.header.height);
 
         // Verify proposal
-        verify_fork_proposal(&mut fork, proposal, validator.verify_fees).await?;
+        verify_fork_proposal(&mut fork, proposal, timestamps_bound, validator.verify_fees).await?;
 
         // Append proposal
         fork.append_proposal(proposal).await?;

@@ -86,7 +86,7 @@ async fn sync_blocks_real(ex: Arc<Executor<'static>>) -> Result<()> {
         &mut fork.module,
         &block3,
         &block2,
-        true,
+        None,
         alice.verify_fees,
     )
     .await?;

@@ -19,13 +19,18 @@
 use std::collections::HashMap;
 
 use darkfi::{
-    blockchain::HeaderHash, net::ChannelPtr, rpc::jsonrpc::JsonSubscriber, system::sleep,
-    util::encoding::base64, validator::consensus::Proposal, Error, Result,
+    blockchain::HeaderHash,
+    net::ChannelPtr,
+    rpc::jsonrpc::JsonSubscriber,
+    system::sleep,
+    util::{encoding::base64, time::Timestamp},
+    validator::consensus::Proposal,
+    Error, Result,
 };
 use darkfi_serial::serialize_async;
 use rand::{prelude::SliceRandom, rngs::OsRng};
 use tinyjson::JsonValue;
-use tracing::{debug, info, warn};
+use tracing::{debug, error, info, warn};
 
 use crate::{
     proto::{
@@ -87,12 +92,25 @@ pub async fn sync_task(node: &DarkfiNodePtr, checkpoint: Option<(u32, HeaderHash
     if let Some(checkpoint) = checkpoint {
         if checkpoint.0 > last.0 {
             info!(target: "darkfid::task::sync_task", "Syncing until configured checkpoint: {} - {}", checkpoint.0, checkpoint.1);
+            // All blocks must be before the future timestamp upper bound
+            let timestamps_bound =
+                node.validator.read().await.consensus.module.future_timestamp_upper_bound()?;
+
             // Retrieve all the headers backwards until our last known one and verify them.
             // We use the next height, in order to also retrieve the checkpoint header.
-            retrieve_headers(node, &common_tip_peers, last, checkpoint.0 + 1).await?;
+            retrieve_headers(node, &common_tip_peers, last, checkpoint.0 + 1, timestamps_bound)
+                .await?;
 
             // Retrieve all the blocks for those headers and apply them to canonical
-            last = retrieve_blocks(node, &common_tip_peers, last, block_sub, true).await?;
+            last = retrieve_blocks(
+                node,
+                &common_tip_peers,
+                last,
+                block_sub,
+                true,
+                Some(timestamps_bound),
+            )
+            .await?;
             info!(target: "darkfid::task::sync_task", "Last received block: {} - {}", last.0, last.1);
 
             // Grab synced peers most common tip again
@@ -102,13 +120,25 @@ pub async fn sync_task(node: &DarkfiNodePtr, checkpoint: Option<(u32, HeaderHash
 
     // Sync headers and blocks
     loop {
+        // All blocks must be before the future timestamp upper bound
+        let timestamps_bound =
+            node.validator.read().await.consensus.module.future_timestamp_upper_bound()?;
+
         // Retrieve all the headers backwards until our last known one and verify them.
         // We use the next height, in order to also retrieve the peers tip header.
-        retrieve_headers(node, &common_tip_peers, last, common_tip_height + 1).await?;
+        retrieve_headers(node, &common_tip_peers, last, common_tip_height + 1, timestamps_bound)
+            .await?;
 
         // Retrieve all the blocks for those headers and apply them to canonical
-        let last_received =
-            retrieve_blocks(node, &common_tip_peers, last, block_sub, false).await?;
+        let last_received = retrieve_blocks(
+            node,
+            &common_tip_peers,
+            last,
+            block_sub,
+            false,
+            Some(timestamps_bound),
+        )
+        .await?;
         info!(target: "darkfid::task::sync_task", "Last received block: {} - {}", last_received.0, last_received.1);
 
         if last == last_received {
@@ -287,6 +317,7 @@ async fn retrieve_headers(
     peers: &[ChannelPtr],
     last_known: (u32, HeaderHash),
     tip_height: u32,
+    timestamps_bound: Timestamp,
 ) -> Result<()> {
     info!(target: "darkfid::task::sync::retrieve_headers", "Retrieving missing headers from peers...");
     // Communication setup
@@ -371,23 +402,30 @@ async fn retrieve_headers(
         return Ok(());
     }
 
-    // Verify headers sequence. Here we do a quick and dirty verification
-    // of just the hashes and heights sequence. We will formaly verify
-    // the blocks when we retrieve them. We verify them in batches,
-    // to not load them all in memory.
+    // Verify headers sequence. Here we do a quick and dirty
+    // verification of just the hashes and heights sequence, along with
+    // its timestamp. We will formaly verify the blocks when we
+    // retrieve them. We verify them in batches, to not load them all
+    // in memory.
     info!(target: "darkfid::task::sync::retrieve_headers", "Verifying headers sequence...");
     let mut verified_headers = 0;
     let total = validator.blockchain.headers.len_sync();
     // First we verify the first `BATCH` sequence, using the last known header
     // as the first sync header previous.
     let mut headers = validator.blockchain.headers.get_after_sync(0, BATCH)?;
-    if headers[0].previous != last_known.1 || headers[0].height != last_known.0 + 1 {
+    if headers[0].previous != last_known.1 ||
+        headers[0].height != last_known.0 + 1 ||
+        headers[0].timestamp > timestamps_bound
+    {
         validator.blockchain.headers.remove_all_sync()?;
         return Err(Error::BlockIsInvalid(headers[0].hash().as_string()))
     }
     verified_headers += 1;
     for (index, header) in headers[1..].iter().enumerate() {
-        if header.previous != headers[index].hash() || header.height != headers[index].height + 1 {
+        if header.previous != headers[index].hash() ||
+            header.height != headers[index].height + 1 ||
+            header.timestamp > timestamps_bound
+        {
             return Err(Error::BlockIsInvalid(header.hash().as_string()))
         }
         verified_headers += 1;
@@ -430,6 +468,7 @@ async fn retrieve_blocks(
     last_known: (u32, HeaderHash),
     block_sub: &JsonSubscriber,
     checkpoint_blocks: bool,
+    timestamps_bound: Option<Timestamp>,
 ) -> Result<(u32, HeaderHash)> {
     info!(target: "darkfid::task::sync::retrieve_blocks", "Retrieving missing blocks from peers...");
     let mut last_received = last_known;
@@ -518,7 +557,10 @@ async fn retrieve_blocks(
                 };
             } else {
                 for block in &response.blocks {
-                    match validator.append_proposal(&Proposal::new(block.clone())).await {
+                    match validator
+                        .append_proposal(&Proposal::new(block.clone()), timestamps_bound)
+                        .await
+                    {
                         Ok(()) | Err(Error::ProposalAlreadyExists) => continue,
                         Err(e) => {
                             debug!(target: "darkfid::task::sync::retrieve_blocks", "Error while appending proposal: {e}");
@@ -598,11 +640,27 @@ async fn sync_best_fork(node: &DarkfiNodePtr, peers: &[ChannelPtr], last_tip: &H
         return
     };
 
+    // All proposals must be before the future timestamp upper bound
+    let timestamps_bound = match node
+        .validator
+        .read()
+        .await
+        .consensus
+        .module
+        .future_timestamp_upper_bound()
+    {
+        Ok(bound) => Some(bound),
+        Err(e) => {
+            error!(target: "darkfid::task::sync::sync_best_fork", "Future timestamp upper bound retriaval failed: {e}");
+            return
+        }
+    };
+
     // Verify and store retrieved proposals
     debug!(target: "darkfid::task::sync::sync_best_fork", "Processing received proposals");
     let mut validator = node.validator.write().await;
     for proposal in &response.proposals {
-        if let Err(e) = validator.append_proposal(proposal).await {
+        if let Err(e) = validator.append_proposal(proposal, timestamps_bound).await {
             debug!(target: "darkfid::task::sync::sync_best_fork", "Error while appending proposal: {e}");
             return
         };

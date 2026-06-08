@@ -43,6 +43,7 @@ use crate::{
     error::TxVerifyFailed,
     runtime::vm_runtime::{Runtime, TxLocalState},
     tx::{Transaction, MAX_TX_CALLS, MIN_TX_CALLS},
+    util::time::Timestamp,
     validator::{
         consensus::{Consensus, Fork, Proposal, BLOCK_GAS_LIMIT},
         fees::{circuit_gas_use, GasData, PALLAS_SCHNORR_SIGNATURE_FEE},
@@ -163,7 +164,7 @@ pub fn validate_block(
     block: &BlockInfo,
     previous: &BlockInfo,
     module: &mut PoWModule,
-    is_new: bool,
+    timestamp_bound: Option<Timestamp>,
 ) -> Result<()> {
     // Check block version (1)
     if block.header.version != block_version(block.header.height) {
@@ -181,12 +182,7 @@ pub fn validate_block(
     }
 
     // Check timestamp validity (4)
-    let valid = if is_new {
-        module.verify_current_timestamp(block.header.timestamp)?
-    } else {
-        module.verify_timestamp_by_median(block.header.timestamp)
-    };
-    if !valid {
+    if !module.verify_timestamp_by_median(block.header.timestamp, timestamp_bound)? {
         return Err(Error::BlockIsInvalid(block.hash().as_string()))
     }
 
@@ -214,10 +210,14 @@ pub fn validate_blockchain(
 
     // We use block order store here so we have all blocks in order
     let blocks = blockchain.blocks.get_all_order()?;
+
+    // All blocks must be before the future timestamp upper bound
+    let timestamp_bound = Some(module.future_timestamp_upper_bound()?);
+
     for (index, block) in blocks[1..].iter().enumerate() {
         let full_blocks = blockchain.get_blocks_by_hash(&[blocks[index].1, block.1])?;
         let full_block = &full_blocks[1];
-        validate_block(full_block, &full_blocks[0], &mut module, false)?;
+        validate_block(full_block, &full_blocks[0], &mut module, timestamp_bound)?;
         // Update PoW module
         module.append(&full_block.header, &module.next_difficulty()?)?;
     }
@@ -235,7 +235,7 @@ pub async fn verify_block(
     module: &mut PoWModule,
     block: &BlockInfo,
     previous: &BlockInfo,
-    is_new: bool,
+    timestamp_bound: Option<Timestamp>,
     verify_fees: bool,
 ) -> Result<()> {
     let block_hash = block.hash();
@@ -247,7 +247,7 @@ pub async fn verify_block(
     }
 
     // Validate block, using its previous
-    validate_block(block, previous, module, is_new)?;
+    validate_block(block, previous, module, timestamp_bound)?;
 
     // Verify transactions vector contains at least one(producers)
     // transaction.
@@ -1176,7 +1176,7 @@ async fn apply_transactions(
 pub async fn verify_proposal(
     consensus: &Consensus,
     proposal: &Proposal,
-    is_new: bool,
+    timestamp_bound: Option<Timestamp>,
     verify_fees: bool,
 ) -> Result<(Fork, Option<usize>)> {
     // Check if proposal hash matches actual one (1)
@@ -1202,7 +1202,7 @@ pub async fn verify_proposal(
         &mut fork.module,
         &proposal.block,
         &previous,
-        is_new,
+        timestamp_bound,
         verify_fees,
     )
     .await
@@ -1226,6 +1226,7 @@ pub async fn verify_proposal(
 pub async fn verify_fork_proposal(
     fork: &mut Fork,
     proposal: &Proposal,
+    timestamp_bound: Option<Timestamp>,
     verify_fees: bool,
 ) -> Result<()> {
     // Check if proposal hash matches actual one (1)
@@ -1248,7 +1249,7 @@ pub async fn verify_fork_proposal(
         &mut fork.module,
         &proposal.block,
         &previous,
-        false,
+        timestamp_bound,
         verify_fees,
     )
     .await

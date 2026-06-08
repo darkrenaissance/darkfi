@@ -32,6 +32,7 @@ use crate::{
     },
     runtime::vm_runtime::GAS_LIMIT,
     tx::{Transaction, MAX_TX_CALLS},
+    util::time::Timestamp,
     validator::{
         pow::{PoWModule, RANDOMX_KEY_CHANGE_DELAY, RANDOMX_KEY_CHANGING_HEIGHT},
         utils::{best_fork_index, block_rank, find_extended_fork_index, worst_fork_index},
@@ -132,7 +133,7 @@ impl Consensus {
     pub async fn append_proposal(
         &mut self,
         proposal: &Proposal,
-        is_new: bool,
+        timestamp_bound: Option<Timestamp>,
         verify_fees: bool,
     ) -> Result<()> {
         debug!(target: "validator::consensus::append_proposal", "Appending proposal {}", proposal.hash);
@@ -157,7 +158,8 @@ impl Consensus {
         }
 
         // Verify proposal and grab corresponding fork
-        let (mut fork, index) = verify_proposal(self, proposal, is_new, verify_fees).await?;
+        let (mut fork, index) =
+            verify_proposal(self, proposal, timestamp_bound, verify_fees).await?;
 
         // Append proposal to the fork
         fork.append_proposal(proposal).await?;

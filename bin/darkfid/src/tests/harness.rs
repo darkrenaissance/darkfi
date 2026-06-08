@@ -174,7 +174,7 @@ impl Harness {
         // and then we broadcast it to rest nodes
         for block in blocks {
             let proposal = Proposal::new(block.clone());
-            self.alice.validator.write().await.append_proposal(&proposal).await?;
+            self.alice.validator.write().await.append_proposal(&proposal, None).await?;
             let message = ProposalMessage(proposal);
             self.alice.p2p_handler.p2p.broadcast(&message).await;
         }
@@ -265,7 +265,7 @@ impl Harness {
             &mut fork.module,
             &block,
             &previous,
-            true,
+            None,
             self.alice.validator.read().await.verify_fees,
         )
         .await?;

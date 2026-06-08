@@ -185,7 +185,7 @@ impl DarkfiMinersRegistryState {
         block: BlockInfo,
     ) -> Result<()> {
         let proposal = Proposal::new(block);
-        validator.append_proposal(&proposal).await?;
+        validator.append_proposal(&proposal, None).await?;
 
         info!(
             target: "darkfid::registry::mod::DarkfiMinersRegistry::submit",

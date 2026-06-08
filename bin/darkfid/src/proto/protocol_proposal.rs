@@ -217,7 +217,7 @@ async fn handle_receive_proposal(
         }
 
         // Append proposal
-        match validator.append_proposal(&proposal.0).await {
+        match validator.append_proposal(&proposal.0, None).await {
             Ok(()) => {
                 // Signal handler to broadcast the valid proposal to rest nodes
                 handler.send_action(channel, ProtocolGenericAction::Broadcast).await;

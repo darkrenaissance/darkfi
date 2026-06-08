@@ -255,27 +255,38 @@ impl PoWModule {
         Ok(difficulty == &self.next_difficulty()?)
     }
 
-    /// Verify provided block timestamp is not far in the future and
-    /// check its valid acorrding to current timestamps median.
-    pub fn verify_current_timestamp(&self, timestamp: Timestamp) -> Result<bool> {
-        if timestamp > Timestamp::current_time().checked_add(BLOCK_FUTURE_TIME_LIMIT)? {
-            return Ok(false)
-        }
-
-        Ok(self.verify_timestamp_by_median(timestamp))
+    /// Auxiliary funtion to retrieve currently set future timestamp
+    /// bound.
+    pub fn future_timestamp_upper_bound(&self) -> Result<Timestamp> {
+        Timestamp::current_time().checked_add(BLOCK_FUTURE_TIME_LIMIT)
     }
 
     /// Verify provided block timestamp is valid and matches certain
     /// criteria.
-    pub fn verify_timestamp_by_median(&self, timestamp: Timestamp) -> bool {
+    pub fn verify_timestamp_by_median(
+        &self,
+        timestamp: Timestamp,
+        upper_bound: Option<Timestamp>,
+    ) -> Result<bool> {
         // Check timestamp is after genesis one
         if timestamp <= self.genesis {
-            return false
+            return Ok(false)
+        }
+
+        // If an upper bound is not provided, use default future bound
+        let upper_bound = match upper_bound {
+            Some(bound) => bound,
+            None => self.future_timestamp_upper_bound()?,
+        };
+
+        // Check timestamp is not after the upper bound
+        if timestamp > upper_bound {
+            return Ok(false)
         }
 
         // If not enough blocks, no proper median yet, return true
         if self.timestamps.len() < BLOCKCHAIN_TIMESTAMP_CHECK_WINDOW {
-            return true
+            return Ok(true)
         }
 
         // Make sure the timestamp is higher or equal to the median
@@ -287,13 +298,13 @@ impl PoWModule {
             .map(|x| x.inner())
             .collect();
 
-        timestamp >= median(timestamps).into()
+        Ok(timestamp >= median(timestamps).into())
     }
 
     /// Verify provided block timestamp and hash.
     pub fn verify_current_block(&mut self, header: &Header) -> Result<()> {
         // First we verify the block's timestamp
-        if !self.verify_current_timestamp(header.timestamp)? {
+        if !self.verify_timestamp_by_median(header.timestamp, None)? {
             return Err(Error::PoWInvalidTimestamp)
         }
 
