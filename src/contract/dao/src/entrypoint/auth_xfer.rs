@@ -38,6 +38,17 @@ use crate::{
     DAO_CONTRACT_ZKAS_AUTH_MONEY_TRANSFER_NS,
 };
 
+/// Auxiliary function to retrieve the sibling transfer call index of
+/// an authxfer call. It must be the immediate next sibling one.
+fn sibling_idx(call_idx: &usize, siblings: &[usize]) -> Option<usize> {
+    for (i, index) in siblings.iter().enumerate() {
+        if index == call_idx {
+            return Some(siblings[i + 1])
+        }
+    }
+    None
+}
+
 /// `get_metdata` function for `Dao::AuthMoneyTransfer`
 pub(crate) fn dao_authxfer_get_metadata(
     _cid: ContractId,
@@ -47,13 +58,13 @@ pub(crate) fn dao_authxfer_get_metadata(
     let self_ = &calls[call_idx];
     let self_params: DaoAuthMoneyTransferParams = deserialize(&self_.data.data[1..])?;
 
-    let sibling_idx = call_idx + 1;
-    let xfer_call = &calls[sibling_idx].data;
-    let xfer_params: MoneyTransferParamsV1 = deserialize(&xfer_call.data[1..])?;
-
     let parent_idx = calls[call_idx].parent_index.unwrap();
     let exec_callnode = &calls[parent_idx];
     let exec_params: DaoExecParams = deserialize(&exec_callnode.data.data[1..])?;
+
+    let sibling_idx = sibling_idx(&call_idx, &exec_callnode.children_indexes).unwrap();
+    let xfer_call = &calls[sibling_idx].data;
+    let xfer_params: MoneyTransferParamsV1 = deserialize(&xfer_call.data[1..])?;
 
     if xfer_params.inputs.is_empty() {
         msg!("[Dao::AuthXfer] Error: Transfer inputs are missing");
@@ -140,7 +151,9 @@ pub(crate) fn dao_authxfer_process_instruction(
     call_idx: usize,
     calls: Vec<DarkLeaf<ContractCall>>,
 ) -> Result<Vec<u8>, ContractError> {
-    let sibling_idx = call_idx + 1;
+    let parent_idx = calls[call_idx].parent_index.unwrap();
+    let exec_callnode = &calls[parent_idx];
+    let sibling_idx = sibling_idx(&call_idx, &exec_callnode.children_indexes).unwrap();
     let xfer_call = &calls[sibling_idx].data;
 
     ///////////////////////////////////////////////////
@@ -188,8 +201,6 @@ pub(crate) fn dao_authxfer_process_instruction(
     ///////////////////////////////////////////////////
 
     // Find this auth_call in the parent DAO::exec()
-    let parent_idx = calls[call_idx].parent_index.unwrap();
-    let exec_callnode = &calls[parent_idx];
     if exec_callnode.data.contract_id != *DAO_CONTRACT_ID {
         return Err(DaoError::AuthXferParentWrongContractId.into())
     }
