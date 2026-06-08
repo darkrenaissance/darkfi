@@ -1,7 +1,7 @@
 FROM docker.io/archlinux
 
 RUN pacman -Syu --noconfirm
-RUN pacman -S --noconfirm jdk17-openjdk unzip wget cmake openssl pkgconf gcc git zip
+RUN pacman -S --noconfirm jdk17-openjdk unzip wget cmake make pkgconf gcc git zip
 
 # github override HOME, so here we are
 ENV RUSTUP_HOME=/usr/local/rustup \
@@ -42,6 +42,10 @@ RUN cd /opt/ && \
     unzip -q android-ndk-r25-linux.zip && \
     rm android-ndk-r25-linux.zip
 ENV NDK_HOME /opt/android-ndk-r25/
+
+# Needed for cross compiling openssl which is used by bundled sqlcipher in drk
+ENV AR /opt/android-ndk-r25/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-ar
+ENV RANLIB /opt/android-ndk-r25/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-ranlib
 
 # Copy contents to container. Should only use this on a clean directory
 WORKDIR /root/

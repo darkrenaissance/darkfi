@@ -51,5 +51,8 @@ serde = {version = "1.0.228", features = ["derive"]}
 structopt = "0.3.26"
 structopt-toml = "0.5.1"
 
+[target.'cfg(target_os = "android")'.dependencies]
+libsqlite3-sys = { version = "*", features = ["bundled-sqlcipher-vendored-openssl"] }
+
 [lints]
 workspace = true
