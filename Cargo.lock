@@ -2587,6 +2587,7 @@ dependencies = [
  "futures",
  "lazy_static",
  "libc",
+ "libsqlite3-sys",
  "linenoise-rs",
  "num-bigint",
  "prettytable-rs",
@@ -4378,6 +4379,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "133c182a6a2c87864fe97778797e46c7e999672690dc9fa3ee8e241aa4a9c13f"
 dependencies = [
  "cc",
+ "openssl-sys",
  "pkg-config",
  "vcpkg",
 ]
