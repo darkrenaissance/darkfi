@@ -76,6 +76,11 @@ pub(crate) fn dao_authxfer_get_metadata(
         return Err(MoneyError::TransferMissingOutputs.into())
     }
 
+    if xfer_params.outputs.len() != self_params.enc_attrs.len() {
+        msg!("[Dao::AuthXfer] Error: Transfer outputs missmatch with encrypted attributes");
+        return Err(DaoError::AuthXferWrongNumberOutputs.into())
+    }
+
     let mut zk_public_inputs: Vec<(String, Vec<pallas::Base>)> = vec![];
     let signature_pubkeys: Vec<PublicKey> = vec![];
 
