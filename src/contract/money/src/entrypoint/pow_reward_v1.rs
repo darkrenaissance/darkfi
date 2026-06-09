@@ -145,9 +145,13 @@ pub(crate) fn money_pow_reward_process_instruction_v1(
     // Access the necessary databases where there is information to
     // validate this state transition.
     let coins_db = wasm::db::db_lookup(cid, MONEY_CONTRACT_COINS_TREE)?;
+    let coins_db_local = wasm::db::db_lookup_local(cid, MONEY_CONTRACT_COINS_TREE)?;
 
     // Check that the coin from the output hasn't existed before.
-    if wasm::db::db_contains_key(coins_db, &serialize(&params.output.coin))? {
+    let coin_ser = serialize(&params.output.coin);
+    if wasm::db::db_contains_key(coins_db, &coin_ser)? ||
+        wasm::db::db_contains_key_local(coins_db_local, &coin_ser)?
+    {
         msg!("[PoWRewardV1] Error: Duplicate coin in output");
         return Err(MoneyError::DuplicateCoin.into())
     }

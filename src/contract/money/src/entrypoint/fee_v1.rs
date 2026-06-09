@@ -165,13 +165,10 @@ pub(crate) fn money_fee_process_instruction_v1(
     }
 
     // The new coin should not exist
-    if params.output.tx_local {
-        if db_contains_key_local(coins_db_local, &serialize(&params.output.coin))? {
-            msg!("[FeeV1] Error: Duplicate tx-local coin found");
-            return Err(MoneyError::DuplicateCoin.into())
-        }
-    } else if db_contains_key(coins_db, &serialize(&params.output.coin))? {
-        msg!("[FeeV1] Error: Duplicate on-chain coin found");
+    let coin_ser = serialize(&params.output.coin);
+    if db_contains_key(coins_db, &coin_ser)? || db_contains_key_local(coins_db_local, &coin_ser)? {
+        let coin_type = if params.output.tx_local { "tx-local" } else { "on-chain" };
+        msg!("[FeeV1] Error: Duplicate {} coin found", coin_type);
         return Err(MoneyError::DuplicateCoin.into())
     }
 

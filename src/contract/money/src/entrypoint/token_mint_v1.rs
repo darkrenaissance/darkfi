@@ -93,8 +93,12 @@ pub(crate) fn money_token_mint_process_instruction_v1(
 
     // Check that the coin from the output hasn't existed before
     let coins_db = wasm::db::db_lookup(cid, MONEY_CONTRACT_COINS_TREE)?;
+    let coins_db_local = wasm::db::db_lookup_local(cid, MONEY_CONTRACT_COINS_TREE)?;
 
-    if wasm::db::db_contains_key(coins_db, &serialize(&params.coin))? {
+    let coin_ser = serialize(&params.coin);
+    if wasm::db::db_contains_key(coins_db, &coin_ser)? ||
+        wasm::db::db_contains_key_local(coins_db_local, &coin_ser)?
+    {
         msg!("[TokenMintV1] Error: Duplicate coin in output");
         return Err(MoneyError::DuplicateCoin.into())
     }
