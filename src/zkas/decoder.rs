@@ -252,6 +252,23 @@ impl ZkBinary {
 
         let heap_size = self.constants.len() + self.witnesses.len() + num_assignments;
 
+        for (opcode, args) in &self.opcodes {
+            let (_ret, arg_types) = opcode.arg_types();
+            let variadic = arg_types.iter().any(|t| matches!(t, VarType::BaseArray | VarType::Any));
+            if variadic {
+                if args.is_empty() {
+                    return Err(ZkasErr(format!("Opcode {} requires >= 1 argument", opcode.name())))
+                }
+            } else if args.len() != arg_types.len() {
+                return Err(ZkasErr(format!(
+                    "Opcode {} expects {} args, got {}",
+                    opcode.name(),
+                    arg_types.len(),
+                    args.len()
+                )))
+            }
+        }
+
         // Validate all heap references in opcodes
         for (op_idx, (opcode, args)) in self.opcodes.iter().enumerate() {
             // Calculate heap size at this point in execution
@@ -412,8 +429,6 @@ impl ZkBinary {
                 ZkasErr(format!("Could not decode Opcode from {}", bytes[offset]))
             })?;
             offset += 1;
-
-            // TODO: Check that the types and arg number are correct
 
             // Parse argument count
             let (arg_count, len) = deserialize_partial::<VarInt>(&bytes[offset..])?;
