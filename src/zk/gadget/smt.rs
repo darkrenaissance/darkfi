@@ -754,9 +754,7 @@ mod tests {
             smt.store.get(&BigUint::from(1u32)).expect("left subtree root must be stored");
         let mut forged_path = [Fp::ZERO; SMT_FP_DEPTH];
         forged_path[0] = left_subtree_root;
-        for i in 1..SMT_FP_DEPTH {
-            forged_path[i] = EMPTY_NODES_FP[i + 1];
-        }
+        forged_path[1..SMT_FP_DEPTH].copy_from_slice(&EMPTY_NODES_FP[2..(SMT_FP_DEPTH + 1)]);
 
         // NON-VACUOUSNESS ANCHOR: outside the circuit, the forged witness really
         // does authenticate an EMPTY leaf against the genuine root. So *without*

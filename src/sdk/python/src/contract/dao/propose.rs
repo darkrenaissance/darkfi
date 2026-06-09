@@ -33,6 +33,8 @@ impl FunctionParams for dao_model::DaoProposeParams {
     fn to_pydict(&self, py: Python) -> PyResult<Py<PyDict>> {
         let dict = PyDict::new(py);
         dict.set_item("dao_merkle_root", self.dao_merkle_root.to_string())?;
+        dict.set_item("merkle_coin_root", self.merkle_coin_root.to_string())?;
+        dict.set_item("smt_null_root", self.smt_null_root.to_string())?;
         dict.set_item("token_commit", self.token_commit.to_string())?;
         dict.set_item("proposal_bulla", self.proposal_bulla.to_string())?;
         dict.set_item("note", self.note.to_pydict(py)?)?;
@@ -49,6 +51,8 @@ impl FunctionParams for dao_model::DaoProposeParams {
     fn fmt_pretty(&self, out: &mut String, depth: usize) -> PyResult<()> {
         let prefix = format!("{}├─ ", "   ".repeat(depth));
         writeln!(out, "{prefix}dao_merkle_root: {}", self.dao_merkle_root).unwrap();
+        writeln!(out, "{prefix}merkle_coin_root: {}", self.merkle_coin_root).unwrap();
+        writeln!(out, "{prefix}smt_null_root: {:?}", self.smt_null_root).unwrap();
         writeln!(out, "{prefix}token_commit: {}", self.dao_merkle_root).unwrap();
         writeln!(out, "{prefix}proposal_bulla: {}", self.dao_merkle_root).unwrap();
         writeln!(out, "{prefix}note:").unwrap();
@@ -73,8 +77,6 @@ impl FunctionParams for dao_model::DaoProposeParamsInput {
     fn to_pydict(&self, py: Python) -> PyResult<Py<PyDict>> {
         let dict = PyDict::new(py);
         dict.set_item("value_commit", format!("{:?}", self.value_commit))?;
-        dict.set_item("merkle_coin_root", self.merkle_coin_root.to_string())?;
-        dict.set_item("smt_null_root", self.smt_null_root.to_string())?;
         dict.set_item("signature_public", self.signature_public.to_string())?;
         Ok(dict.unbind())
     }
@@ -82,8 +84,6 @@ impl FunctionParams for dao_model::DaoProposeParamsInput {
     fn fmt_pretty(&self, out: &mut String, depth: usize) -> PyResult<()> {
         let prefix = format!("{}├─ ", "   ".repeat(depth));
         writeln!(out, "{prefix}value_commit: {:?}", self.value_commit).unwrap();
-        writeln!(out, "{prefix}merkle_coin_root: {}", self.merkle_coin_root).unwrap();
-        writeln!(out, "{prefix}smt_null_root: {:?}", self.smt_null_root).unwrap();
         writeln!(out, "{prefix}signature_public: {:?}", self.signature_public).unwrap();
         Ok(())
     }

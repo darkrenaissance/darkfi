@@ -2545,6 +2545,7 @@ impl Drk {
 
         // Create the proposal call
         let call = DaoProposeCall {
+            money_merkle_coin_root: money_merkle_tree.root(0).unwrap(),
             money_null_smt: &money_null_smt,
             inputs,
             proposal: proposal.proposal.clone(),
@@ -2725,6 +2726,7 @@ impl Drk {
 
         // Create the proposal call
         let call = DaoProposeCall {
+            money_merkle_coin_root: money_merkle_tree.root(0).unwrap(),
             money_null_smt: &money_null_smt,
             inputs,
             proposal: proposal.proposal.clone(),

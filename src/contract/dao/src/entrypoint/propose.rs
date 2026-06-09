@@ -74,13 +74,13 @@ pub(crate) fn dao_propose_get_metadata(
         zk_public_inputs.push((
             DAO_CONTRACT_ZKAS_PROPOSE_INPUT_NS.to_string(),
             vec![
-                input.smt_null_root,
+                params.smt_null_root,
                 params.proposal_bulla.inner(),
                 input.input_nullifier.inner(),
                 *value_coords.x(),
                 *value_coords.y(),
                 params.token_commit,
-                input.merkle_coin_root.inner(),
+                params.merkle_coin_root.inner(),
                 sig_x,
                 sig_y,
             ],
@@ -122,76 +122,79 @@ pub(crate) fn dao_propose_process_instruction(
     let self_ = &calls[call_idx].data;
     let params: DaoProposeParams = deserialize(&self_.data[1..])?;
 
-    let coin_roots_db = wasm::db::db_lookup(*MONEY_CONTRACT_ID, MONEY_CONTRACT_COIN_ROOTS_TREE)?;
-    let null_roots_db =
-        wasm::db::db_lookup(*MONEY_CONTRACT_ID, MONEY_CONTRACT_NULLIFIER_ROOTS_TREE)?;
+    // Verify inputs are unique
     let mut input_nullifiers = vec![];
-
     for input in &params.inputs {
-        // Check input has not been reused
         if input_nullifiers.contains(&input.input_nullifier) {
             msg!("[Dao::Propose] Error: Attempted to reuse input");
             return Err(DaoError::ProposalInputsReuse.into())
         }
-
-        // Check the Merkle roots for the input coins are valid
-        let Some(coin_root_data) =
-            wasm::db::db_get(coin_roots_db, &serialize(&input.merkle_coin_root))?
-        else {
-            msg!(
-                "[Dao::Propose] Error: Invalid input Merkle root: {:?}",
-                input.merkle_coin_root.inner()
-            );
-            return Err(DaoError::InvalidInputMerkleRoot.into())
-        };
-        if coin_root_data.len() != 32 + 1 {
-            msg!(
-                "[Dao::Propose] Error: Coin roots data length is not expected(32 + 1): {}",
-                coin_root_data.len()
-            );
-            return Err(MoneyError::RootsValueDataMismatch.into())
-        }
-
-        // Check the SMT roots for the input nullifiers are valid
-        let Some(null_root_data) =
-            wasm::db::db_get(null_roots_db, &serialize(&input.smt_null_root))?
-        else {
-            msg!("[Dao::Propose] Error: Invalid input SMT root: {:?}", input.smt_null_root);
-            return Err(DaoError::InvalidInputMerkleRoot.into())
-        };
-
-        // Deserialize the SMT roots set
-        let null_root_data: Vec<Vec<u8>> = match deserialize(&null_root_data) {
-            Ok(set) => set,
-            Err(e) => {
-                msg!("[Dao::Propose] Error: Failed to deserialize nulls root snapshot: {}", e);
-                return Err(DaoError::SnapshotDeserializationError.into())
-            }
-        };
-
-        // Nullifiers roots snapshot must include the Merkle root data
-        if !null_root_data.contains(&coin_root_data) {
-            msg!("[Dao::Propose] Error: coin roots snapshot for {:?} does not exist in the nulls root snapshot {:?}",
-                 input.merkle_coin_root.inner(), input.smt_null_root);
-            return Err(DaoError::NonMatchingSnapshotRoots.into())
-        }
-
-        // Get block_height where tx_hash was confirmed
-        let tx_hash_data: [u8; 32] = coin_root_data[0..32].try_into().unwrap();
-        let tx_hash = TransactionHash(tx_hash_data);
-        let (tx_height, _) = wasm::util::get_tx_location(&tx_hash)?;
-
-        // Check snapshot age againts current height
-        let current_height = wasm::util::get_verifying_block_height()?;
-        // We assert here to prevent underflow and catch catastrophic
-        // internal failure.
-        assert!(current_height >= tx_height);
-        if current_height - tx_height > PROPOSAL_SNAPSHOT_CUTOFF_LIMIT {
-            msg!("[Dao::Propose] Error: Snapshot is too old. Current height: {}, snapshot height: {}",
-                 current_height, tx_height);
-            return Err(DaoError::SnapshotTooOld.into())
-        }
         input_nullifiers.push(input.input_nullifier);
+    }
+
+    // Grab all db handles we want to work on
+    let coin_roots_db = wasm::db::db_lookup(*MONEY_CONTRACT_ID, MONEY_CONTRACT_COIN_ROOTS_TREE)?;
+    let null_roots_db =
+        wasm::db::db_lookup(*MONEY_CONTRACT_ID, MONEY_CONTRACT_NULLIFIER_ROOTS_TREE)?;
+
+    // Check the Merkle root for the input coins is valid
+    let Some(coin_root_data) =
+        wasm::db::db_get(coin_roots_db, &serialize(&params.merkle_coin_root))?
+    else {
+        msg!(
+            "[Dao::Propose] Error: Invalid input Merkle root: {:?}",
+            params.merkle_coin_root.inner()
+        );
+        return Err(DaoError::InvalidInputMerkleRoot.into())
+    };
+    if coin_root_data.len() != 32 + 1 {
+        msg!(
+            "[Dao::Propose] Error: Coins root data length is not expected(32 + 1): {}",
+            coin_root_data.len()
+        );
+        return Err(MoneyError::RootsValueDataMismatch.into())
+    }
+
+    // Check the SMT root for the input nullifiers is valid
+    let Some(null_root_data) = wasm::db::db_get(null_roots_db, &serialize(&params.smt_null_root))?
+    else {
+        msg!("[Dao::Propose] Error: Invalid inputs SMT root: {:?}", params.smt_null_root);
+        return Err(DaoError::InvalidInputMerkleRoot.into())
+    };
+
+    // Deserialize the SMT roots set
+    let null_root_data: Vec<Vec<u8>> = match deserialize(&null_root_data) {
+        Ok(set) => set,
+        Err(e) => {
+            msg!("[Dao::Propose] Error: Failed to deserialize nulls root snapshot: {}", e);
+            return Err(DaoError::SnapshotDeserializationError.into())
+        }
+    };
+
+    // Nullifiers roots snapshot must include the Merkle root data
+    if !null_root_data.contains(&coin_root_data) {
+        msg!("[Dao::Propose] Error: coin roots snapshot for {:?} does not exist in the nulls root snapshot {:?}",
+             params.merkle_coin_root.inner(), params.smt_null_root);
+        return Err(DaoError::NonMatchingSnapshotRoots.into())
+    }
+
+    // Get block_height where tx_hash was confirmed
+    let tx_hash_data: [u8; 32] = coin_root_data[0..32].try_into().unwrap();
+    let tx_hash = TransactionHash(tx_hash_data);
+    let (tx_height, _) = wasm::util::get_tx_location(&tx_hash)?;
+
+    // Check snapshot age againts current height
+    let current_height = wasm::util::get_verifying_block_height()?;
+    // We assert here to prevent underflow and catch catastrophic
+    // internal failure.
+    assert!(current_height >= tx_height);
+    if current_height - tx_height > PROPOSAL_SNAPSHOT_CUTOFF_LIMIT {
+        msg!(
+            "[Dao::Propose] Error: Snapshot is too old. Current height: {}, snapshot height: {}",
+            current_height,
+            tx_height
+        );
+        return Err(DaoError::SnapshotTooOld.into())
     }
 
     // Is the DAO bulla generated in the ZK proof valid

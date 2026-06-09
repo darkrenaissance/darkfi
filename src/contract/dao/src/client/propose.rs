@@ -19,7 +19,6 @@
 use darkfi_money_contract::model::CoinAttributes;
 use darkfi_sdk::{
     bridgetree,
-    bridgetree::Hashable,
     crypto::{
         note::AeadEncryptedNote,
         pasta_prelude::*,
@@ -51,6 +50,7 @@ pub struct DaoProposeStakeInput {
 }
 
 pub struct DaoProposeCall<'a, T: StorageAdapter<Value = pallas::Base>> {
+    pub money_merkle_coin_root: MerkleNode,
     pub money_null_smt:
         &'a SparseMerkleTree<'a, SMT_FP_DEPTH, { SMT_FP_DEPTH + 1 }, pallas::Base, PoseidonFp, T>,
     pub inputs: Vec<DaoProposeStakeInput>,
@@ -133,22 +133,6 @@ impl<T: StorageAdapter<Value = pallas::Base>> DaoProposeCall<'_, T> {
                 Witness::Base(Value::known(signature_secret.inner())),
             ];
 
-            // TODO: We need a generic ZkSet widget to avoid doing this all the time
-
-            let merkle_coin_root = {
-                let position: u64 = input.leaf_position.into();
-                let mut current = MerkleNode::from(coin.inner());
-                for (level, sibling) in input.merkle_path.iter().enumerate() {
-                    let level = level as u8;
-                    current = if position & (1 << level) == 0 {
-                        MerkleNode::combine(level.into(), &current, sibling)
-                    } else {
-                        MerkleNode::combine(level.into(), sibling, &current)
-                    };
-                }
-                current
-            };
-
             let token_commit = poseidon_hash([note.token_id.inner(), gov_token_blind.inner()]);
             if note.token_id != self.dao.gov_token_id {
                 return Err(ClientFailed::InvalidTokenId(note.token_id.to_string()).into())
@@ -166,7 +150,7 @@ impl<T: StorageAdapter<Value = pallas::Base>> DaoProposeCall<'_, T> {
                 *value_coords.x(),
                 *value_coords.y(),
                 token_commit,
-                merkle_coin_root.inner(),
+                self.money_merkle_coin_root.inner(),
                 sig_x,
                 sig_y,
             ];
@@ -180,8 +164,6 @@ impl<T: StorageAdapter<Value = pallas::Base>> DaoProposeCall<'_, T> {
 
             let input = DaoProposeParamsInput {
                 value_commit,
-                merkle_coin_root,
-                smt_null_root,
                 input_nullifier: input_nullifier.into(),
                 signature_public,
             };
@@ -260,6 +242,8 @@ impl<T: StorageAdapter<Value = pallas::Base>> DaoProposeCall<'_, T> {
                 .unwrap();
         let params = DaoProposeParams {
             dao_merkle_root: self.dao_merkle_root,
+            merkle_coin_root: self.money_merkle_coin_root,
+            smt_null_root,
             proposal_bulla,
             token_commit,
             note: enc_note,

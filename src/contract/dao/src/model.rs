@@ -264,6 +264,10 @@ pub struct DaoMintUpdate {
 pub struct DaoProposeParams {
     /// Merkle root of the DAO in the DAO state
     pub dao_merkle_root: MerkleNode,
+    /// Merkle root for the input coins inclusion proofs
+    pub merkle_coin_root: MerkleNode,
+    /// SMT root for the input nullifiers exclusion proofs
+    pub smt_null_root: pallas::Base,
     /// Token ID commitment for the proposal
     pub token_commit: pallas::Base,
     /// Bulla of the DAO proposal
@@ -281,10 +285,6 @@ pub struct DaoProposeParams {
 pub struct DaoProposeParamsInput {
     /// Value commitment for the input
     pub value_commit: pallas::Point,
-    /// Merkle root for the input's coin inclusion proof
-    pub merkle_coin_root: MerkleNode,
-    /// SMT root for the input's nullifier exclusion proof
-    pub smt_null_root: pallas::Base,
     /// Input proposal specific nullifier
     pub input_nullifier: Nullifier,
     /// Public key used for signing

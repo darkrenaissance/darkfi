@@ -132,6 +132,7 @@ impl TestHarness {
         let dao_bulla = dao.to_bulla();
 
         let call = DaoProposeCall {
+            money_merkle_coin_root: wallet.money_merkle_tree.root(0).unwrap(),
             money_null_smt: &wallet.money_null_smt,
             inputs: vec![input],
             proposal: proposal.clone(),
@@ -236,6 +237,7 @@ impl TestHarness {
         let dao_bulla = dao.to_bulla();
 
         let call = DaoProposeCall {
+            money_merkle_coin_root: wallet.money_merkle_tree.root(0).unwrap(),
             money_null_smt: &wallet.money_null_smt,
             inputs: vec![input],
             proposal: proposal.clone(),
