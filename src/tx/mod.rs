@@ -36,7 +36,7 @@ use darkfi_serial::{Encodable, SerialDecodable, SerialEncodable};
 use tracing::{debug, error};
 
 use crate::{
-    error::TxVerifyFailed,
+    error::{Error::InvalidInputLengths, TxVerifyFailed},
     zk::{proof::VerifyingKey, Proof},
     Error, Result,
 };
@@ -73,12 +73,20 @@ impl Transaction {
         verifying_keys: &HashMap<[u8; 32], HashMap<String, VerifyingKey>>,
         zkp_table: Vec<Vec<(String, Vec<pallas::Base>)>>,
     ) -> Result<()> {
-        // TODO: Are we sure we should assert here?
-        assert_eq!(self.calls.len(), self.proofs.len());
-        assert_eq!(self.calls.len(), zkp_table.len());
+        if self.calls.len() != self.proofs.len() {
+            error!(target: "tx::verify_zkps", "[TX] Calls length {} doesn't match ZK proofs one {}", self.calls.len(), self.proofs.len());
+            return Err(InvalidInputLengths)
+        }
+        if self.calls.len() != zkp_table.len() {
+            error!(target: "tx::verify_zkps", "[TX] Calls length {} doesn't match ZK proofs table one {}", self.calls.len(), zkp_table.len());
+            return Err(InvalidInputLengths)
+        }
 
         for (call, (proofs, pubvals)) in zip!(self.calls, self.proofs, zkp_table) {
-            assert_eq!(proofs.len(), pubvals.len());
+            if proofs.len() != pubvals.len() {
+                error!(target: "tx::verify_zkps", "[TX] Proofs length {} doesn't match public values one {} for contract {}", proofs.len(), pubvals.len(), call.data.contract_id);
+                return Err(InvalidInputLengths)
+            }
 
             let Some(contract_map) = verifying_keys.get(&call.data.contract_id.to_bytes()) else {
                 error!(
@@ -131,10 +139,16 @@ impl Transaction {
 
         debug!(target: "tx::verify_sigs", "tx.verify_sigs: data_hash: {data_hash}");
 
-        assert_eq!(self.signatures.len(), pub_table.len());
+        if self.signatures.len() != pub_table.len() {
+            error!(target: "tx::verify_sigs", "[TX] Signatures length {} doesn't match public keys table one {}", self.signatures.len(), pub_table.len());
+            return Err(InvalidInputLengths)
+        }
 
         for (i, (sigs, pubkeys)) in self.signatures.iter().zip(pub_table.iter()).enumerate() {
-            assert_eq!(sigs.len(), pubkeys.len());
+            if sigs.len() != pubkeys.len() {
+                error!(target: "tx::verify_sigs", "[TX] Signatures {i} length {} doesn't match public keys one {}", sigs.len(), pubkeys.len());
+                return Err(InvalidInputLengths)
+            }
 
             for (pubkey, signature) in pubkeys.iter().zip(sigs) {
                 debug!(target: "tx::verify_sigs", "[TX] Verifying signature with public key: {pubkey}");
