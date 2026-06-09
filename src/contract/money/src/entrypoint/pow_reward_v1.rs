@@ -99,11 +99,15 @@ pub(crate) fn money_pow_reward_process_instruction_v1(
         return Err(MoneyError::PoWRewardRetrieveLastBlockHeightError.into())
     };
     let last_block_height: u32 = deserialize(&last_block_height)?;
-    if verifying_block_height != last_block_height + 1 {
+    let Some(next_block_height) = last_block_height.checked_add(1) else {
+        msg!("[PoWRewardV1] Error: Could not compute next block height");
+        return Err(MoneyError::ValueMismatch.into())
+    };
+    if verifying_block_height != next_block_height {
         msg!(
             "[PoWRewardV1] Error: Call is executed for block height {}, not next one: {}",
             verifying_block_height,
-            last_block_height
+            next_block_height
         );
         return Err(MoneyError::PoWRewardCallNotOnNextBlockHeight.into())
     }
@@ -124,7 +128,11 @@ pub(crate) fn money_pow_reward_process_instruction_v1(
 
     // Verify reward value matches the expected one for this block height,
     // including the paid fees.
-    let expected_reward = expected_reward(verifying_block_height) + paid_fee;
+    let Some(expected_reward) = expected_reward(verifying_block_height).checked_add(paid_fee)
+    else {
+        msg!("[PoWRewardV1] Error: Could not compute expected reward");
+        return Err(MoneyError::ValueMismatch.into())
+    };
     if params.input.value != expected_reward {
         msg!(
             "[PoWRewardV1] Error: Reward value({}) is not the expected one: {}",
@@ -182,7 +190,11 @@ pub(crate) fn money_pow_reward_process_update_v1(
 
     // Generate the accumulator for the next height
     msg!("[PoWRewardV1] Creating next height fees accumulator");
-    wasm::db::db_set(fees_db, &serialize(&(update.height + 1)), &serialize(&0_u64))?;
+    let Some(next_block_height) = update.height.checked_add(1) else {
+        msg!("[PoWRewardV1] Error: Could not compute next block height");
+        return Err(MoneyError::ValueMismatch.into())
+    };
+    wasm::db::db_set(fees_db, &serialize(&(next_block_height)), &serialize(&0_u64))?;
 
     // This will just make a snapshot to match the coins one
     msg!("[PoWRewardV1] Updating nullifiers snapshot");

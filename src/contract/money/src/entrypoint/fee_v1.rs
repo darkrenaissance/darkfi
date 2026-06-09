@@ -203,8 +203,11 @@ pub(crate) fn money_fee_process_instruction_v1(
         msg!("[FeeV1] Error: Block height fees accumulator not found");
         return Err(MoneyError::PoWRewardCallMissingFeesAccumulator.into())
     };
-    let mut paid_fee: u64 = deserialize(&paid_fee)?;
-    paid_fee += fee;
+    let paid_fee: u64 = deserialize(&paid_fee)?;
+    let Some(paid_fee) = paid_fee.checked_add(fee) else {
+        msg!("[FeeV1] Error: Could not compute paid fee");
+        return Err(MoneyError::ValueMismatch.into())
+    };
 
     // At this point the state transition has passed, so we create a state update.
     let update = MoneyFeeUpdateV1 {
