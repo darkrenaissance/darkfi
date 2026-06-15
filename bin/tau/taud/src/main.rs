@@ -24,7 +24,7 @@ use std::{
     io::{stdin, Write},
     slice,
     str::FromStr,
-    sync::{Arc, OnceLock},
+    sync::{atomic::Ordering, Arc, OnceLock},
 };
 
 use crypto_box::{
@@ -48,7 +48,7 @@ use darkfi::{
     async_daemonize,
     event_graph::{
         proto::{EventPut, ProtocolEventGraph},
-        Event, EventGraph, EventGraphPtr,
+        Event, EventGraph, EventGraphConfig, EventGraphPtr,
     },
     net::{session::SESSION_DEFAULT, P2p, P2pPtr},
     rpc::{
@@ -64,6 +64,31 @@ use darkfi_sdk::crypto::{
     schnorr::{SchnorrPublic, SchnorrSecret, Signature},
     Keypair, PublicKey,
 };
+
+// =====================================================================
+// Taud consensus parameters.
+//
+// These define the EventGraph configuration that EVERY Taud node
+// in the network must agree on. Changing any of them is a hard fork.
+// They are passed verbatim to `EventGraph::new` at startup.
+// =====================================================================
+
+/// Epoch origin for DAG rotation (UTC midnight, 1 March 2025).
+/// Rotation boundaries are computed as offsets from this point.
+const TAUD_INITIAL_GENESIS: u64 = 1_740_787_200_000;
+
+/// DAG rotation period, in hours.
+const TAUD_HOURS_ROTATION: u64 = 0;
+
+/// Genesis payload. Two protocols MUST use distinct values; this
+/// also feeds into `RlnAppId::from_genesis` so RLN signals from one
+/// deployment never appear valid on another.
+const TAUD_GENESIS_CONTENTS: &[u8] = b"taud-v1";
+
+/// How many rotation periods to keep in the rolling DAG window.
+/// With `hours_rotation = 1` and `max_dags = 24`, this gives a
+/// 24-hour history window. Older events are evicted from sled.
+const TAUD_MAX_DAGS: usize = 1;
 
 mod jsonrpc;
 mod settings;
@@ -522,7 +547,7 @@ async fn realmain(settings: Args, executor: Arc<smol::Executor<'static>>) -> Res
 
     let replay_datastore = expand_path(&settings.replay_datastore)?;
     let replay_mode = settings.replay_mode;
-    let fast_mode = settings.fast_mode;
+    // let fast_mode = settings.fast_mode;
 
     info!(target: "taud", "Instantiating event DAG");
     let sled_db = sled::open(datastore)?;
@@ -530,18 +555,36 @@ async fn realmain(settings: Args, executor: Arc<smol::Executor<'static>>) -> Res
     let p2p_settings: darkfi::net::Settings =
         (env!("CARGO_PKG_NAME"), env!("CARGO_PKG_VERSION"), settings.net.clone()).try_into()?;
     let comms_timeout = p2p_settings.outbound_connect_timeout_max();
-
-    let p2p = P2p::new(p2p_settings, executor.clone()).await?;
-    let event_graph = EventGraph::new(
+    let p2p = match P2p::new(p2p_settings, executor.clone()).await {
+        Ok(p2p) => p2p,
+        Err(e) => {
+            error!("Unable to create P2P network: {e}");
+            return Err(e);
+        }
+    };
+    // Consensus config. Every node must use exactly these values.
+    let eg_config = EventGraphConfig {
+        initial_genesis: TAUD_INITIAL_GENESIS,
+        hours_rotation: TAUD_HOURS_ROTATION,
+        genesis_contents: TAUD_GENESIS_CONTENTS.to_vec(),
+        max_dags: Some(TAUD_MAX_DAGS),
+    };
+    let event_graph = match EventGraph::new(
         p2p.clone(),
         sled_db.clone(),
-        replay_datastore,
+        replay_datastore.clone(),
         replay_mode,
-        fast_mode,
-        0,
+        eg_config,
         executor.clone(),
     )
-    .await?;
+    .await
+    {
+        Ok(v) => v,
+        Err(e) => {
+            error!("Event graph failed to start: {e}");
+            return Err(e);
+        }
+    };
 
     info!(target: "taud", "Registering EventGraph P2P protocol");
     let event_graph_ = Arc::clone(&event_graph);
@@ -564,7 +607,7 @@ async fn realmain(settings: Args, executor: Arc<smol::Executor<'static>>) -> Res
             // We'll attempt to sync for ever
             if !settings.skip_dag_sync {
                 info!(target: "taud", "Syncing event DAG");
-                match event_graph.sync_selected(1, settings.fast_mode).await {
+                match event_graph.sync_selected(1).await {
                     Ok(()) => break,
                     Err(e) => {
                         // TODO: Maybe at this point we should prune or something?
@@ -574,7 +617,7 @@ async fn realmain(settings: Args, executor: Arc<smol::Executor<'static>>) -> Res
                     }
                 }
             } else {
-                *event_graph.synced.write().await = true;
+                event_graph.synced.store(true, Ordering::Release);
                 break
             }
         } else {
