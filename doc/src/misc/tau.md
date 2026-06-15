@@ -163,7 +163,7 @@ connects to a seed node and runs `protocol_seed`, which requests a list of
 addresses from the seed node and disconnects straight after receiving them.
 
     # P2P accept addresses
-    inbound=["127.0.0.1:11001"] 
+    inbound=["127.0.0.1:9800"] 
 
 Note that the above config doesn't specify an external address since the
 seed node shouldn't be advertised in the list of connectable nodes. The seed
@@ -178,13 +178,13 @@ making any outbound connections.
 The external addresses are important and must be correct.
 
     # P2P accept addresses
-    inbound=["127.0.0.1:11002"]
+    inbound=["127.0.0.1:9800"]
     
     # P2P external addresses
-    external_addr=["127.0.0.1:11002"]
+    external_addr=["127.0.0.1:9800"]
 
     # Seed nodes to connect to 
-    seeds=["127.0.0.1:11001"]
+    seeds=["127.0.0.1:9801"]
 
 ### Outbound Node
 

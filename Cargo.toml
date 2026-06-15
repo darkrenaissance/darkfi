@@ -21,8 +21,6 @@ members = [
     "bin/drk",
     "bin/fud/fu",
     "bin/fud/fud",
-    "bin/genev/genevd",
-    "bin/genev/genev-cli",
     "bin/darkirc",
     "bin/tau/taud",
     "bin/vanityaddr",
