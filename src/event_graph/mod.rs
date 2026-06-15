@@ -554,7 +554,9 @@ impl EventGraph {
         });
 
         // Init genesis registration events
-        self_.bootstrap_genesis_identities().await?;
+        if config.hours_rotation > 0 {
+            self_.bootstrap_genesis_identities().await?;
+        }
 
         if need_prune {
             info!(
@@ -2266,8 +2268,8 @@ impl EventGraph {
         blob: &[u8],
         event_timestamp: u64,
     ) -> rln::StaticEventCheck {
-        use darkfi_sdk::{crypto::poseidon_hash, pasta::pallas};
-        use rln::{RLNNode, RegistrationBlob, SlashBlob, StaticEventCheck, MAX_MSG_LIMIT};
+        use darkfi_sdk::crypto::poseidon_hash;
+        use rln::{RLNNode, SlashBlob, StaticEventCheck};
 
         match rln_node {
             RLNNode::Registration(commitment) => {
@@ -2287,9 +2289,10 @@ impl EventGraph {
                     }
                 }
 
-                // Rejecting every account
+                // Accepting only genesis registeration, reject every
+                // other account.
                 return StaticEventCheck::Rejected;
-
+                /*
                 #[allow(unreachable_code)]
                 let reg: RegistrationBlob = match deserialize_async_partial(blob).await {
                     Ok((v, _)) => v,
@@ -2329,6 +2332,7 @@ impl EventGraph {
                 }
 
                 StaticEventCheck::AcceptedRegistration(*commitment)
+                */
             }
             RLNNode::Slashing(commitment) => {
                 let sl: SlashBlob = match deserialize_async_partial(blob).await {

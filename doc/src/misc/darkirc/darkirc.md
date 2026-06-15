@@ -206,7 +206,7 @@ You must specify an inbound accept address in your config file to configure a se
 
 ```toml
 ## P2P accept addresses
-inbound=["127.0.0.1:11001"]
+inbound=["127.0.0.1:9600"]
 ```
 
 Note that the above config doesn't specify an external address since
@@ -227,13 +227,13 @@ info:
 		
 ```toml
 ## P2P accept addresses
-inbound=["127.0.0.1:11002"]
+inbound=["127.0.0.1:9600"]
 
 ## P2P external addresses
-external_addr=["127.0.0.1:11002"]
+external_addr=["127.0.0.1:9600"]
 
 ## Seed nodes to connect to 
-seeds=["127.0.0.1:11001"]
+seeds=["127.0.0.1:9601"]
 ```
 ### Outbound Node
 
@@ -248,7 +248,7 @@ In your config file:
 outbound_connections=8
 
 ## Seed nodes to connect to 
-seeds=["127.0.0.1:11001"]
+seeds=["127.0.0.1:9601"]
 ```
 
 ### Attaching the IRC Frontend

@@ -3318,44 +3318,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "genev"
-version = "0.5.0"
-dependencies = [
- "clap 4.5.56",
- "darkfi",
- "darkfi-serial",
- "genevd",
- "smol",
- "tinyjson",
- "tracing",
- "tracing-subscriber",
- "url",
-]
-
-[[package]]
-name = "genevd"
-version = "0.5.0"
-dependencies = [
- "async-trait",
- "blake3",
- "darkfi",
- "darkfi-serial",
- "easy-parallel",
- "serde",
- "signal-hook",
- "signal-hook-async-std",
- "sled-overlay",
- "smol",
- "structopt",
- "structopt-toml",
- "tinyjson",
- "tracing",
- "tracing-appender",
- "tracing-subscriber",
- "url",
-]
-
-[[package]]
 name = "getifaddrs"
 version = "0.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"

@@ -207,9 +207,9 @@ impl JsonRpcInterface {
         let switch = params[0].get::<bool>().unwrap();
 
         if *switch {
-            self.event_graph.deg_enable().await;
+            self.event_graph.deg_enable();
         } else {
-            self.event_graph.deg_disable().await;
+            self.event_graph.deg_disable();
         }
 
         Ok(JsonValue::Boolean(true))
