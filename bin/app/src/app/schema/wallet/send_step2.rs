@@ -205,35 +205,6 @@ pub async fn make(
     let node = node.setup(|me| VectorArt::new(me, shape, app.renderer.clone())).await;
     send_step2_layer.link(node);
 
-    // Recipient placeholder
-    let recipient_placeholder_node = create_text("send_recipient_input_placeholder");
-    let prop = recipient_placeholder_node.get_property("rect").unwrap();
-    prop.set_f32(atom, Role::App, 0, RECIPIENT_INPUT_MARGIN + RECIPIENT_INPUT_PADDING_X).unwrap();
-    prop.set_f32(atom, Role::App, 1, y + (RECIPIENT_INPUT_HEIGHT - RECIPIENT_INPUT_FONTSIZE) / 2.).unwrap();
-    prop.set_f32(atom, Role::App, 2, 1000.).unwrap();
-    prop.set_f32(atom, Role::App, 3, 200.).unwrap();
-    recipient_placeholder_node.set_property_u32(atom, Role::App, "z_index", 1).unwrap();
-    recipient_placeholder_node.set_property_f32(atom, Role::App, "font_size", RECIPIENT_INPUT_FONTSIZE).unwrap();
-    recipient_placeholder_node.set_property_str(atom, Role::App, "text", "recipient address...").unwrap();
-    let prop = recipient_placeholder_node.get_property("text_color").unwrap();
-    prop.set_f32(atom, Role::App, 0, 1.).unwrap();
-    prop.set_f32(atom, Role::App, 1, 1.).unwrap();
-    prop.set_f32(atom, Role::App, 2, 1.).unwrap();
-    prop.set_f32(atom, Role::App, 3, 0.45).unwrap();
-    recipient_placeholder_node.set_property_u32(atom, Role::App, "z_index", 1).unwrap();
-
-    let recipient_placeholder_node = recipient_placeholder_node
-        .setup(|me| {
-            Text::new(
-                me,
-                window_scale.clone(),
-                app.renderer.clone(),
-                i18n_fish.clone(),
-            )
-        })
-        .await;
-    send_step2_layer.link(recipient_placeholder_node.clone());
-
     // Recipient input
     let recipient_input = create_singleline_edit("send_recipient_input");
     recipient_input.set_property_bool(atom, Role::App, "is_active", true).unwrap();
@@ -245,6 +216,12 @@ pub async fn make(
     prop.set_expr(atom, Role::App, 2, code).unwrap();
     prop.set_f32(atom, Role::App, 3, RECIPIENT_INPUT_HEIGHT).unwrap();
     recipient_input.set_property_f32(atom, Role::App, "font_size", RECIPIENT_INPUT_FONTSIZE).unwrap();
+    recipient_input.set_property_str(atom, Role::App, "placeholder_text", "recipient address...").unwrap();
+    let prop = recipient_input.get_property("placeholder_color").unwrap();
+    prop.set_f32(atom, Role::App, 0, 1.).unwrap();
+    prop.set_f32(atom, Role::App, 1, 1.).unwrap();
+    prop.set_f32(atom, Role::App, 2, 1.).unwrap();
+    prop.set_f32(atom, Role::App, 3, 0.45).unwrap();
     let prop = recipient_input.get_property("text_color").unwrap();
     if COLOR_SCHEME == ColorScheme::DarkMode {
         prop.set_f32(atom, Role::App, 0, 1.).unwrap();
@@ -321,14 +298,12 @@ pub async fn make(
     let listen_recipient_text = app.ex.spawn(async move {
         while let Ok(_) = recipient_text_sub.receive().await {
             let atom = &mut renderer.make_guard(gfxtag!("wallet recipient input recv"));
-            let text_color = recipient_placeholder_node.get_property("text_color").unwrap();
             let label_text_color = add_recipient_label_node.get_property("text_color").unwrap();
             let btn_bg_valid_visible = btn_bg_valid_clone.get_property("is_visible").unwrap();
             let btn_bg_invalid_visible = btn_bg_invalid_clone.get_property("is_visible").unwrap();
             let addr = recipient_input2.get_property_str("text").unwrap();
+            // Grey color for invalid
             if addr.is_empty() {
-                text_color.set_f32(atom, Role::App, 3, 0.45).unwrap();
-                // Grey color for invalid
                 label_text_color.set_f32(atom, Role::App, 0, 0.5).unwrap();
                 label_text_color.set_f32(atom, Role::App, 1, 0.5).unwrap();
                 label_text_color.set_f32(atom, Role::App, 2, 0.5).unwrap();
@@ -336,7 +311,6 @@ pub async fn make(
                 btn_bg_valid_visible.set_bool(atom, Role::App, 0, false).unwrap();
                 btn_bg_invalid_visible.set_bool(atom, Role::App, 0, true).unwrap();
             } else {
-                text_color.set_f32(atom, Role::App, 3, 0.).unwrap();
                 // Cyan color for valid
                 if addr.clone().parse::<Address>().is_ok() {
                     label_text_color.set_f32(atom, Role::App, 0, COLOR_CYAN[0]).unwrap();
