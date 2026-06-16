@@ -322,6 +322,14 @@ pub fn create_baseedit(name: &str) -> SceneNode {
     prop.set_range_f32(0., 1.);
     node.add_property(prop).unwrap();
 
+    let prop = Property::new("placeholder_text", PropertyType::Str, PropertySubType::Null);
+    node.add_property(prop).unwrap();
+
+    let mut prop = Property::new("placeholder_color", PropertyType::Float32, PropertySubType::Color);
+    prop.set_array_len(4);
+    prop.set_range_f32(0., 1.);
+    node.add_property(prop).unwrap();
+
     let mut prop = Property::new("text_cmd_color", PropertyType::Float32, PropertySubType::Color);
     prop.set_array_len(4);
     prop.set_range_f32(0., 1.);

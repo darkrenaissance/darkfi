@@ -177,6 +177,8 @@ pub struct BaseEdit {
     text: PropertyStr,
     text_color: PropertyColor,
     text_hi_color: PropertyColor,
+    placeholder_text: PropertyStr,
+    placeholder_color: PropertyColor,
     //text_cmd_color: PropertyColor,
     cursor_color: PropertyColor,
     cursor_width: PropertyFloat32,
@@ -243,6 +245,8 @@ impl BaseEdit {
         let text = PropertyStr::wrap(node_ref, Role::Internal, "text", 0).unwrap();
         let text_color = PropertyColor::wrap(node_ref, Role::Internal, "text_color").unwrap();
         let text_hi_color = PropertyColor::wrap(node_ref, Role::Internal, "text_hi_color").unwrap();
+        let placeholder_text = PropertyStr::wrap(node_ref, Role::Internal, "placeholder_text", 0).unwrap();
+        let placeholder_color = PropertyColor::wrap(node_ref, Role::Internal, "placeholder_color").unwrap();
         //let text_cmd_color =
         //    PropertyColor::wrap(node_ref, Role::Internal, "text_cmd_color").unwrap();
         let cursor_color = PropertyColor::wrap(node_ref, Role::Internal, "cursor_color").unwrap();
@@ -352,6 +356,8 @@ impl BaseEdit {
             text: text.clone(),
             text_color: text_color.clone(),
             text_hi_color,
+            placeholder_text,
+            placeholder_color,
             //text_cmd_color,
             cursor_color,
             cursor_width,
@@ -1184,6 +1190,37 @@ impl BaseEdit {
     fn regen_txt_mesh(&self) -> Vec<DrawInstruction> {
         let mut instrs = vec![DrawInstruction::Move(self.behave.inner_pos())];
 
+        // Render placeholder
+        let current_text = self.text.get();
+        if current_text.is_empty() {
+            let placeholder_text = self.placeholder_text.get();
+            if !placeholder_text.is_empty() {
+                let placeholder_color = self.placeholder_color.get();
+                let font_size = self.font_size.get();
+                let lineheight = self.lineheight.get();
+                let window_scale = self.window_scale.get();
+
+                let placeholder_layout = text::make_layout(
+                    &placeholder_text,
+                    placeholder_color,
+                    font_size,
+                    lineheight,
+                    window_scale,
+                    None,
+                    &[],
+                );
+
+                let mut render_instrs = text::render_layout(
+                    &placeholder_layout,
+                    &self.renderer,
+                    gfxtag!("chatedit_placeholder_mesh"),
+                );
+                instrs.append(&mut render_instrs);
+                return instrs;
+            }
+        }
+
+        // Render text
         let editor = self.editor.lock();
         let layout = editor.layout();
 
@@ -1524,6 +1561,8 @@ impl UIObject for BaseEdit {
         on_modify.when_change(self.font_size.prop(), redraw);
         on_modify.when_change(self.text.prop(), reset);
         on_modify.when_change(self.text_color.prop(), redraw);
+        on_modify.when_change(self.placeholder_text.prop(), redraw);
+        on_modify.when_change(self.placeholder_color.prop(), redraw);
         on_modify.when_change(self.hi_bg_color.prop(), redraw);
         //on_modify.when_change(selected.clone(), redraw);
         on_modify.when_change(self.z_index.prop(), redraw);
