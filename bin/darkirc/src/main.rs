@@ -16,7 +16,7 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::{collections::HashSet, io::Write, path::PathBuf, sync::Arc};
+use std::{io::Write, sync::Arc};
 
 use darkfi::{
     async_daemonize, cli_desc,
@@ -27,36 +27,28 @@ use darkfi::{
         server::{listen_and_serve, RequestHandler},
         settings::{RpcSettings, RpcSettingsOpt},
     },
-    system::{sleep, StoppableTask, StoppableTaskPtr, Subscription},
+    system::{sleep, StoppableTask, Subscription},
     util::path::{expand_path, get_config_path},
     Error, Result,
 };
 use darkfi_sdk::crypto::pasta_prelude::PrimeField;
 
+use irc2::{
+    crypto::{bcrypt::bcrypt_hash_password, rln::RlnIdentity},
+    irc::server::IrcServer,
+    settings::list_configured_contacts,
+    DarkIrc,
+};
+
 use rand::rngs::OsRng;
-use settings::list_configured_contacts;
 use sled_overlay::sled;
-use smol::{fs, lock::Mutex, stream::StreamExt, Executor};
+use smol::{fs, stream::StreamExt, Executor};
 use structopt_toml::{serde::Deserialize, structopt::StructOpt, StructOptToml};
 use tracing::{debug, error, info};
 use url::Url;
 
 const CONFIG_FILE: &str = "darkirc_config.toml";
 const CONFIG_FILE_CONTENTS: &str = include_str!("../darkirc_config.toml");
-
-/// IRC server and client handler implementation
-mod irc;
-use irc::server::IrcServer;
-
-/// Cryptography utilities
-mod crypto;
-use crypto::{bcrypt::bcrypt_hash_password, rln::RlnIdentity};
-
-/// JSON-RPC methods
-mod rpc;
-
-/// Settings utilities
-mod settings;
 
 fn panic_hook(panic_info: &std::panic::PanicHookInfo) {
     error!("panic occurred: {panic_info}");
@@ -153,44 +145,6 @@ struct Args {
     #[structopt(flatten)]
     /// JSON-RPC settings
     rpc: RpcSettingsOpt,
-}
-
-pub struct DarkIrc {
-    /// P2P network pointer
-    p2p: P2pPtr,
-    /// Sled DB (also used in event_graph and for RLN)
-    sled: sled::Db,
-    /// Event Graph instance
-    event_graph: EventGraphPtr,
-    /// JSON-RPC connection tracker
-    rpc_connections: Mutex<HashSet<StoppableTaskPtr>>,
-    /// dnet JSON-RPC subscriber
-    dnet_sub: JsonSubscriber,
-    /// deg JSON-RPC subscriber
-    deg_sub: JsonSubscriber,
-    /// Replay logs (DB) path
-    replay_datastore: PathBuf,
-}
-
-impl DarkIrc {
-    fn new(
-        p2p: P2pPtr,
-        sled: sled::Db,
-        event_graph: EventGraphPtr,
-        dnet_sub: JsonSubscriber,
-        deg_sub: JsonSubscriber,
-        replay_datastore: PathBuf,
-    ) -> Self {
-        Self {
-            p2p,
-            sled,
-            event_graph,
-            rpc_connections: Mutex::new(HashSet::new()),
-            dnet_sub,
-            deg_sub,
-            replay_datastore,
-        }
-    }
 }
 
 // #[global_allocator]

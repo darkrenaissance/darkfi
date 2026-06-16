@@ -51,9 +51,12 @@ use tracing::{debug, error, warn};
 
 use super::{
     server::{IrcServer, MAX_MSG_LEN},
-    NickServ, Privmsg, SERVER_NAME,
+    NickServ, SERVER_NAME,
 };
-use crate::crypto::rln::{RlnIdentity, RLN2_SIGNAL_ZKBIN};
+use crate::{
+    crypto::rln::{RlnIdentity, RLN2_SIGNAL_ZKBIN},
+    Privmsg,
+};
 
 const PENALTY_LIMIT: usize = 5;
 

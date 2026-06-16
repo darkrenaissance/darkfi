@@ -17,11 +17,13 @@
  */
 
 use std::{
+    collections::HashMap,
     io::Cursor,
     sync::{Arc, Mutex as SyncMutex, OnceLock, Weak},
     time::UNIX_EPOCH,
 };
 
+use async_lock::RwLock;
 use async_trait::async_trait;
 use darkfi::{
     event_graph::{
@@ -40,6 +42,11 @@ use darkfi::{
 use darkfi_serial::{
     deserialize_async, serialize, serialize_async, AsyncEncodable, Decodable, Encodable,
     SerialDecodable, SerialEncodable,
+};
+use irc2::{
+    crypto::saltbox,
+    irc::{server::MAX_NICK_LEN, IrcChannel, IrcContact},
+    pad, unpad, Privmsg,
 };
 use sled_overlay::sled;
 
@@ -123,30 +130,6 @@ macro_rules! i { ($($arg:tt)*) => { info!(target: "plugin::darkirc", $($arg)*); 
 macro_rules! e { ($($arg:tt)*) => { error!(target: "plugin::darkirc", $($arg)*); } }
 macro_rules! w { ($($arg:tt)*) => { warn!(target: "plugin::darkirc", $($arg)*); } }
 
-#[derive(Clone, Debug, SerialEncodable, SerialDecodable)]
-pub struct Privmsg {
-    pub channel: String,
-    pub nick: String,
-    pub msg: String,
-}
-
-impl Privmsg {
-    pub fn new(channel: String, nick: String, msg: String) -> Self {
-        Self { channel, nick, msg }
-    }
-
-    pub fn msg_id(&self, timest: u64) -> MessageId {
-        let mut hasher = blake3::Hasher::new();
-        0u8.encode(&mut hasher).unwrap();
-        0u8.encode(&mut hasher).unwrap();
-        timest.encode(&mut hasher).unwrap();
-        self.channel.encode(&mut hasher).unwrap();
-        self.nick.encode(&mut hasher).unwrap();
-        self.msg.encode(&mut hasher).unwrap();
-        MessageId(hasher.finalize().into())
-    }
-}
-
 struct SeenMsg {
     id: MessageId,
     is_self: bool,
@@ -182,6 +165,11 @@ pub struct DarkIrc {
 
     seen_msgs: SyncMutex<SeenMessages>,
     nick: PropertyStr,
+
+    /// Configured channels
+    pub channels: RwLock<HashMap<String, IrcChannel>>,
+    /// Configured contacts
+    pub contacts: RwLock<HashMap<String, IrcContact>>,
 
     settings: PluginSettings,
 }
@@ -266,7 +254,7 @@ impl DarkIrc {
             db.clone(),
             std::path::PathBuf::new(),
             false,
-            "darkirc_dag",
+            false, // TODO: should be configurable
             1,
             ex.clone(),
         )
@@ -292,6 +280,10 @@ impl DarkIrc {
 
             seen_msgs: SyncMutex::new(SeenMessages::new()),
             nick,
+
+            channels: RwLock::new(HashMap::new()),
+            contacts: RwLock::new(HashMap::new()),
+
             settings,
         });
         self_.clone().start(sg_root, ex).await;
@@ -337,7 +329,8 @@ impl DarkIrc {
             }
 
             i!("Syncing event DAG (attempt #{sync_attempt})");
-            match self.event_graph.dag_sync().await {
+            // TODO: sync_selected args should be configurable
+            match self.event_graph.sync_selected(24, false).await {
                 Ok(()) => break,
                 Err(e) => {
                     // TODO: Maybe at this point we should prune or something?
@@ -381,8 +374,11 @@ impl DarkIrc {
                 }
             };
 
-            let mut timest = ev.timestamp;
-            let msg_id = privmsg.msg_id(timest);
+            // TODO: decrypt messages here:
+            // self.try_decrypt(&mut privmsg, &self.nick.get()).await;
+
+            let mut timest = ev.header.timestamp;
+            let msg_id = msg_id(&privmsg, timest);
             t!(
                 "Relaying ev_id={:?}, ev={ev:?}, msg_id={msg_id}, privmsg={privmsg:?}, timest={timest}",
                 ev.id(),
@@ -396,7 +392,7 @@ impl DarkIrc {
                         is_self = msg.is_self;
 
                         if !msg.is_self || msg.seen_times > 1 {
-                            warn!(target: "plugin::darkirc", "Skipping duplicate seen message: {msg_id}");
+                            w!("Skipping duplicate seen message: {msg_id}");
                             continue
                         }
                     }
@@ -417,11 +413,11 @@ impl DarkIrc {
             // Strip off starting #
             let mut channel = privmsg.channel;
             if channel.is_empty() {
-                warn!(target: "plugin::darkirc", "Received privmsg with empty channel!");
+                w!("Received privmsg with empty channel!");
                 continue
             }
             if channel.chars().next().unwrap() != '#' {
-                warn!(target: "plugin::darkirc", "Skipping encrypted channel: {channel}");
+                w!("Skipping encrypted channel: {channel}");
                 continue
             }
             channel.remove(0);
@@ -481,11 +477,13 @@ impl DarkIrc {
 
         // Send text to channel
         d!("Sending privmsg: {timest} {channel}: <{nick}> {msg}");
-        let msg = Privmsg::new(channel, nick, msg);
+        let msg = Privmsg { version: 0, msg_type: 0, channel, nick, msg };
+        // TODO: messages should be encrypted here with:
+        // self.try_encrypt(&mut msg).await;
         let evgr = self.event_graph.clone();
         let mut event = event_graph::Event::new(serialize_async(&msg).await, &evgr).await;
-        event.timestamp = timest;
-        let msg_id = msg.msg_id(timest);
+        event.header.timestamp = timest;
+        let msg_id = msg_id(&msg, timest);
 
         // Keep track of our own messages so we don't apply timestamp correction to them
         // which messes up the msg id.
@@ -501,12 +499,13 @@ impl DarkIrc {
         msg.msg.encode_async(&mut arg_data).await.unwrap();
 
         // Broadcast the msg
-
-        if let Err(e) = evgr.dag_insert(&[event.clone()]).await {
+        let current_genesis = self.event_graph.current_genesis.read().await;
+        let dag_name = current_genesis.header.timestamp.to_string();
+        if let Err(e) = evgr.dag_insert(&[event.clone()], &dag_name).await {
             error!(target: "darkirc", "Failed inserting new event to DAG: {}", e);
         }
 
-        self.p2p.broadcast(&EventPut(event)).await;
+        self.p2p.broadcast(&EventPut(event, vec![])).await;
     }
 
     async fn apply_settings(self_: Arc<Self>, _: BatchGuardPtr) {
@@ -622,4 +621,115 @@ impl DarkIrc {
         tasks.append(&mut on_modify.tasks);
         self.tasks.set(tasks).unwrap();
     }
+
+    /// Try encrypting a given `Privmsg` if there is such a channel/contact.
+    pub async fn try_encrypt(&self, privmsg: &mut Privmsg) {
+        if let Some((name, channel)) = self.channels.read().await.get_key_value(&privmsg.channel) {
+            if let Some(saltbox) = &channel.saltbox {
+                // We will use a dummy channel value of MAX_NICK_LEN,
+                // since its not used, so all encrypted messages look the same.
+                privmsg.channel = saltbox::encrypt(saltbox, &[0x00; MAX_NICK_LEN]);
+                // We will pad the name to MAX_NICK_LEN so they all look the same
+                privmsg.nick = saltbox::encrypt(saltbox, &pad(&privmsg.nick));
+                privmsg.msg = saltbox::encrypt(saltbox, privmsg.msg.as_bytes());
+                d!("Successfully encrypted message for {name}");
+                return
+            }
+        };
+
+        if let Some((name, contact)) = self.contacts.read().await.get_key_value(&privmsg.channel) {
+            // We will use dummy channel and nick values of MAX_NICK_LEN,
+            // since they are not used, so all encrypted messages look the same.
+            privmsg.channel = saltbox::encrypt(&contact.saltbox, &[0x00; MAX_NICK_LEN]);
+            // We will encrypt the dummy nick value using our own self saltbox,
+            // so we can identify our messages.
+            privmsg.nick = saltbox::encrypt(&contact.self_saltbox, &[0x00; MAX_NICK_LEN]);
+            privmsg.msg = saltbox::encrypt(&contact.saltbox, privmsg.msg.as_bytes());
+            d!("Successfully encrypted message for {name}");
+        };
+    }
+
+    /// Try decrypting a given potentially encrypted `Privmsg` object.
+    pub async fn try_decrypt(&self, privmsg: &mut Privmsg, self_nickname: &str) {
+        // If all fields have base58, then we can consider decrypting.
+        let channel_ciphertext = match bs58::decode(&privmsg.channel).into_vec() {
+            Ok(v) => v,
+            Err(_) => return,
+        };
+
+        let nick_ciphertext = match bs58::decode(&privmsg.nick).into_vec() {
+            Ok(v) => v,
+            Err(_) => return,
+        };
+
+        let msg_ciphertext = match bs58::decode(&privmsg.msg).into_vec() {
+            Ok(v) => v,
+            Err(_) => return,
+        };
+
+        // Now go through all 3 ciphertexts. We'll use intermediate buffers
+        // for decryption, if all passes, we will return a modified
+        // (i.e. decrypted) privmsg, otherwise we return the original.
+        for (name, channel) in self.channels.read().await.iter() {
+            let Some(saltbox) = &channel.saltbox else { continue };
+
+            if saltbox::try_decrypt(saltbox, &channel_ciphertext).is_none() {
+                continue
+            };
+
+            let Some(mut nick_dec) = saltbox::try_decrypt(saltbox, &nick_ciphertext) else {
+                w!("Could not decrypt nick ciphertext for channel: {name}");
+                continue
+            };
+
+            let Some(msg_dec) = saltbox::try_decrypt(saltbox, &msg_ciphertext) else {
+                w!("Could not decrypt message ciphertext for channel: {name}");
+                continue
+            };
+
+            unpad(&mut nick_dec);
+
+            privmsg.channel = name.to_string();
+            privmsg.nick = String::from_utf8_lossy(&nick_dec).into();
+            privmsg.msg = String::from_utf8_lossy(&msg_dec).into();
+            d!("Successfully decrypted message for {name}");
+            return
+        }
+
+        for (name, contact) in self.contacts.read().await.iter() {
+            if saltbox::try_decrypt(&contact.saltbox, &channel_ciphertext).is_none() {
+                continue
+            };
+
+            // Since everyone encrypts the dummy nick value with their self saltbox,
+            // we try to decrypt using our, to identify our messages.
+            let nick = if saltbox::try_decrypt(&contact.self_saltbox, &nick_ciphertext).is_some() {
+                String::from(self_nickname)
+            } else {
+                name.to_string()
+            };
+
+            let Some(msg_dec) = saltbox::try_decrypt(&contact.saltbox, &msg_ciphertext) else {
+                w!("Could not decrypt message ciphertext for contact: {name}");
+                continue
+            };
+
+            privmsg.channel = name.to_string();
+            privmsg.nick = nick;
+            privmsg.msg = String::from_utf8_lossy(&msg_dec).into();
+            d!("Successfully decrypted message from {name}");
+            return
+        }
+    }
+}
+
+pub fn msg_id(privmsg: &Privmsg, timest: u64) -> MessageId {
+    let mut hasher = blake3::Hasher::new();
+    0u8.encode(&mut hasher).unwrap();
+    0u8.encode(&mut hasher).unwrap();
+    timest.encode(&mut hasher).unwrap();
+    privmsg.channel.encode(&mut hasher).unwrap();
+    privmsg.nick.encode(&mut hasher).unwrap();
+    privmsg.msg.encode(&mut hasher).unwrap();
+    MessageId(hasher.finalize().into())
 }

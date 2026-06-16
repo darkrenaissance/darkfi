@@ -6,6 +6,13 @@ CARGO = cargo
 RELEASE_APK = target/android-artifacts/release/apk/darkfi-app.apk
 DEBUG_APK = target/android-artifacts/debug/apk/darkfi-app.apk
 
+# zkas compiler binary
+ZKAS = ../../zkas
+
+# zkas circuits
+PROOFS_SRC = $(shell find ../../src/event_graph -type f -name '*.zk')
+PROOFS_BIN = $(PROOFS_SRC:=.bin)
+
 #ADB_DEVICE = -s DEVICE_ID
 ADB_DEVICE =
 

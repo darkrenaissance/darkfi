@@ -9,8 +9,8 @@ homepage = "https://dark.fi"
 repository = "https://codeberg.org/darkrenaissance/darkfi"
 
 [lib]
-name = "darkirc"
-crate-type = ["cdylib"]
+name = "irc2"
+crate-type = ["cdylib", "rlib"]
 path = "src/lib.rs"
 
 [[bin]]

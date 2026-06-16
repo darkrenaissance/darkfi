@@ -19,36 +19,25 @@
 use std::{collections::HashSet, sync::Arc};
 
 use crypto_box::ChaChaBox;
-use darkfi_serial::{async_trait, SerialDecodable, SerialEncodable};
 
 /// IRC client state
-pub(crate) mod client;
+pub mod client;
 
 /// IRC server implementation
-pub(crate) mod server;
+pub mod server;
 
 /// IRC command handler
-pub(crate) mod command;
+pub mod command;
 
 /// Services implementations
-pub(crate) mod services;
-pub(crate) use services::nickserv::NickServ;
+pub mod services;
+pub use services::nickserv::NickServ;
 
 /// IRC numerics and server replies
-pub(crate) mod rpl;
+pub mod rpl;
 
 /// Hardcoded server name
 const SERVER_NAME: &str = "irc.dark.fi";
-
-/// IRC PRIVMSG (new version)
-#[derive(Clone, Debug, SerialEncodable, SerialDecodable)]
-pub struct Privmsg {
-    pub version: u8,
-    pub msg_type: u8,
-    pub channel: String,
-    pub nick: String,
-    pub msg: String,
-}
 
 /// IRC channel definition
 #[derive(Clone)]

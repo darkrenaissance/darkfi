@@ -17,11 +17,11 @@
  */
 
 use darkfi_serial::Encodable;
+use irc2::Privmsg;
 use sled_overlay::sled;
 use std::{sync::Arc, time::UNIX_EPOCH};
 
 #[cfg(feature = "enable-plugins")]
-use crate::plugin::darkirc;
 use crate::{
     app::{
         node::{
@@ -958,7 +958,7 @@ pub async fn make(
             let nick = darkirc.get_property_str("nick").unwrap();
             #[cfg(feature = "enable-plugins")]
             {
-                let msg = darkirc::Privmsg::new(channel, nick, text);
+                let msg = Privmsg { version: 0, msg_type: 0, channel, nick, msg: text };
                 let mut data = vec![];
                 timest.encode(&mut data).unwrap();
                 msg.channel.encode(&mut data).unwrap();

@@ -65,7 +65,18 @@ pub fn make_layout(
     width: Option<f32>,
     underlines: &[Range<usize>],
 ) -> parley::Layout<Color> {
-    make_layout2(text, text_color, font_size, lineheight, window_scale, width, underlines, &[], "start", "normal")
+    make_layout2(
+        text,
+        text_color,
+        font_size,
+        lineheight,
+        window_scale,
+        width,
+        underlines,
+        &[],
+        "start",
+        "normal",
+    )
 }
 
 pub fn make_layout2(
@@ -117,7 +128,7 @@ pub fn make_layout2(
 
         let mut layout: parley::Layout<Color> = builder.build(text);
         layout.break_all_lines(width);
-        layout.align(width, text_align, parley::AlignmentOptions::default());
+        layout.align(text_align, parley::AlignmentOptions::default());
         layout
     })
 }

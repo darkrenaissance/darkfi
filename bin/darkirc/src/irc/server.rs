@@ -48,18 +48,19 @@ use url::Url;
 use super::{
     client::Client,
     services::nickserv::{ACCOUNTS_DB_PREFIX, ACCOUNTS_KEY_RLN_IDENTITY},
-    IrcChannel, IrcContact, Privmsg,
+    IrcChannel, IrcContact,
 };
 use crate::{
     crypto::{
         rln::{RlnIdentity, RLN2_REGISTER_ZKBIN, RLN2_SIGNAL_ZKBIN},
         saltbox,
     },
+    pad,
     settings::{
         parse_autojoin_channels, parse_configured_channels, parse_configured_contacts,
         parse_rln_identity,
     },
-    DarkIrc,
+    unpad, DarkIrc, Privmsg,
 };
 
 /// Max channel/nick length
@@ -369,19 +370,6 @@ impl IrcServer {
         Ok(())
     }
 
-    fn pad(string: &str) -> Vec<u8> {
-        let mut bytes = string.as_bytes().to_vec();
-        bytes.resize(MAX_NICK_LEN, 0x00);
-        bytes
-    }
-
-    fn unpad(vec: &mut Vec<u8>) {
-        if let Some(i) = vec.iter().rposition(|x| *x != 0) {
-            let new_len = i + 1;
-            vec.truncate(new_len);
-        }
-    }
-
     /// Try encrypting a given `Privmsg` if there is such a channel/contact.
     pub async fn try_encrypt(&self, privmsg: &mut Privmsg) {
         if let Some((name, channel)) = self.channels.read().await.get_key_value(&privmsg.channel) {
@@ -390,7 +378,7 @@ impl IrcServer {
                 // since its not used, so all encrypted messages look the same.
                 privmsg.channel = saltbox::encrypt(saltbox, &[0x00; MAX_NICK_LEN]);
                 // We will pad the name to MAX_NICK_LEN so they all look the same
-                privmsg.nick = saltbox::encrypt(saltbox, &Self::pad(&privmsg.nick));
+                privmsg.nick = saltbox::encrypt(saltbox, &pad(&privmsg.nick));
                 privmsg.msg = saltbox::encrypt(saltbox, privmsg.msg.as_bytes());
                 debug!("Successfully encrypted message for {name}");
                 return
@@ -447,7 +435,7 @@ impl IrcServer {
                 continue
             };
 
-            Self::unpad(&mut nick_dec);
+            unpad(&mut nick_dec);
 
             privmsg.channel = name.to_string();
             privmsg.nick = String::from_utf8_lossy(&nick_dec).into();
