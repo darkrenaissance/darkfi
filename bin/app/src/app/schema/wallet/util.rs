@@ -69,7 +69,8 @@ pub async fn update_amount_screen(
 ) {
     let mut cc = expr::Compiler::new();
 
-    let display_text = if amount_text.is_empty() { "0" } else { amount_text };
+    let amount_input_text = amount_input_node.get_property_str("text").unwrap();
+    let display_text = if amount_input_text.is_empty() { "0" } else { &amount_input_text };
     let char_count = display_text.chars().count() as f32;
     let token_char_count = token_symbol.chars().count() as f32;
 

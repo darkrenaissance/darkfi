@@ -31,7 +31,7 @@ use crate::{
     gfx::gfxtag,
     mesh::COLOR_CYAN,
     prop::{PropertyAtomicGuard, PropertyBool, PropertyFloat32, PropertyRect, Role},
-    scene::{Pimpl, SceneNodePtr, Slot},
+    scene::{SceneNodePtr, Slot},
     shape,
     ui::{BaseEdit, BaseEditType, Button, Layer, Text, VectorArt},
     util::i18n::I18nBabelFish,
@@ -358,6 +358,14 @@ pub async fn make(
     input_node.set_property_f32(atom, Role::App, "select_descent", AMOUNT_FONTSIZE/3.).unwrap();
     input_node.set_property_f32(atom, Role::App, "handle_descent", AMOUNT_FONTSIZE/2.5).unwrap();
     input_node.set_property_u32(atom, Role::App, "z_index", 2).unwrap();
+
+    input_node.set_property_str(atom, Role::App, "placeholder_text", "0").unwrap();
+    let prop = input_node.get_property("placeholder_color").unwrap();
+    prop.set_f32(atom, Role::App, 0, 0.5).unwrap();
+    prop.set_f32(atom, Role::App, 1, 0.5).unwrap();
+    prop.set_f32(atom, Role::App, 2, 0.5).unwrap();
+    prop.set_f32(atom, Role::App, 3, 1.).unwrap();
+
     let input_node = input_node
         .setup(|me| {
             BaseEdit::new(
@@ -370,14 +378,6 @@ pub async fn make(
         })
         .await;
     amount_wrapper.link(input_node.clone());
-
-    // Set initial text to "0" for the amount input
-    let input_text_prop = input_node.get_property("text").unwrap();
-    input_text_prop.set_str(atom, Role::App, 0, "0").unwrap();
-    // Update editor's internal state
-    if let Pimpl::Edit(edit) = input_node.pimpl() {
-        edit.on_text_prop_changed();
-    }
 
     // Token symbol text node (displayed next to amount)
     let token_symbol_node = create_text("send_amount_token_symbol");
@@ -440,80 +440,19 @@ pub async fn make(
     let btn_bg_invalid_clone = btn_bg_invalid.clone();
     let add_amount_label_node_for_validation = add_amount_label_node.clone();
     let listen_amount_text = app.ex.spawn(async move {
-        let mut old_amount_text = "0".to_string();
         while let Ok(_) = amount_text_sub.receive().await {
             let atom = &mut renderer.make_guard(gfxtag!("wallet amount input recv"));
             let label_text_color = add_amount_label_node_for_validation.get_property("text_color").unwrap();
             let btn_bg_valid_visible = btn_bg_valid_clone.get_property("is_visible").unwrap();
             let btn_bg_invalid_visible = btn_bg_invalid_clone.get_property("is_visible").unwrap();
-            let amount_input_text_color = amount_input2.get_property("text_color").unwrap();
             let amount = amount_input2.get_property_str("text").unwrap();
 
             let sanitized_amount = if amount.is_empty() {
                 "0".to_string()
             } else {
-                let mut result = String::new();
-                let mut dot_seen = false;
-                for c in amount.chars() {
-                    if c.is_ascii_digit() {
-                        result.push(c);
-                    } else if c == '.' && !dot_seen {
-                        dot_seen = true;
-                        result.push(c);
-                    }
-                }
-
-                // Strip leading zeros
-                let parts: Vec<&str> = result.split('.').collect();
-                let integer_part = if !parts.is_empty() && !parts[0].is_empty() {
-                    let trimmed = parts[0].trim_start_matches('0');
-                    let trimmed = if trimmed.is_empty() {
-                        "0".to_string()
-                    } else {
-                        trimmed.to_string()
-                    };
-
-                    // Forces removing "0" chars when the amount was previously "0".
-                    // This is so that when the input cursor is BEFORE the initial
-                    // "0" and you insert a digit, it removes the initial "0".
-                    if old_amount_text == "0" && trimmed != "0" && parts.len() == 1 {
-                        trimmed.chars().filter(|&c| c != '0').collect()
-                    } else {
-                        trimmed
-                    }
-                } else {
-                    "0".to_string()
-                };
-
-                if parts.len() > 1 {
-                    format!("{}.{}", integer_part, parts[1])
-                } else {
-                    integer_part
-                }
+                // Validate by parsing as f64, return "0" if invalid
+                amount.parse::<f64>().map_or("0".to_string(), |_| amount.clone())
             };
-
-            if sanitized_amount != amount {
-                let input_text_prop = amount_input2.get_property("text").unwrap();
-                input_text_prop.set_str(atom, Role::Ignored, 0, &sanitized_amount).unwrap();
-                if let Pimpl::Edit(edit) = amount_input2.pimpl() {
-                    edit.on_text_prop_changed();
-                }
-            }
-
-            // Set amount input text color: grey if "0", white otherwise
-            if sanitized_amount == "0" {
-                amount_input_text_color.set_f32(atom, Role::App, 0, 0.5).unwrap();
-                amount_input_text_color.set_f32(atom, Role::App, 1, 0.5).unwrap();
-                amount_input_text_color.set_f32(atom, Role::App, 2, 0.5).unwrap();
-                amount_input_text_color.set_f32(atom, Role::App, 3, 1.).unwrap();
-            } else {
-                amount_input_text_color.set_f32(atom, Role::App, 0, 1.).unwrap();
-                amount_input_text_color.set_f32(atom, Role::App, 1, 1.).unwrap();
-                amount_input_text_color.set_f32(atom, Role::App, 2, 1.).unwrap();
-                amount_input_text_color.set_f32(atom, Role::App, 3, 1.).unwrap();
-            }
-
-            old_amount_text = sanitized_amount.clone();
 
             let (token_id, token_symbol) = {
                 let data = send_tx_data5.lock().unwrap();
@@ -566,19 +505,19 @@ pub async fn make(
     let send_tx_data4 = send_tx_data.clone();
     let step3_is_visible2 = step3_is_visible.clone();
     let sg_root = app.sg_root.clone();
-    let add_amount_btn_node = node.clone();
-    let add_amount_label_node2 = add_amount_label_node.clone();
     let (slot, recvr) = Slot::new("send_add_amount_clicked");
     node.register("click", slot).unwrap();
     let listen_click = app.ex.spawn(async move {
         while let Ok(_) = recvr.recv().await {
             let text = amount_input2.get_property_str("text").unwrap();
+            // Use sanitized amount (empty text becomes "0")
+            let sanitized_text = if text.is_empty() { "0".to_string() } else { text.clone() };
             let token_id = send_tx_data4.lock().unwrap().token_id.clone().unwrap();
             let available_balance = get_balance(&sg_root, &token_id).await;
-            let is_valid = if text.is_empty() {
+            let is_valid = if sanitized_text.is_empty() {
                 false
             } else {
-                match decode_base10(&text, BALANCE_BASE10_DECIMALS, false) {
+                match decode_base10(&sanitized_text, BALANCE_BASE10_DECIMALS, false) {
                     Ok(v) if v > 0 && v <= available_balance => true,
                     _ => false,
                 }
@@ -586,9 +525,9 @@ pub async fn make(
             if is_valid {
                 let atom = &mut renderer.make_guard(gfxtag!("switch to step4 and show building"));
 
-                // Store the amount
+                // Store the amount (use sanitized value)
                 let mut data = send_tx_data4.lock().unwrap();
-                data.amount = Some(text.clone());
+                data.amount = Some(sanitized_text.clone());
 
                 // Update step4 display with transaction data
                 if let Some(token_symbol_node) = sg_root.lookup_node("/window/content/wallet/send_step4_layer/send_selected_token_symbol4") {
@@ -650,6 +589,7 @@ pub async fn make(
     let amount_wrapper_clone = amount_wrapper.clone();
     let input_node_clone = input_node.clone();
     let token_symbol_node_clone = token_symbol_node.clone();
+    let available_balance_node_clone = available_balance_node.clone();
     let send_tx_data_clone = send_tx_data.clone();
     let step3_is_visible_sub = step3_is_visible.prop().subscribe_modify();
     let listen_step3_visible = app.ex.spawn(async move {
@@ -683,7 +623,7 @@ pub async fn make(
                             &amount_wrapper_clone,
                             &input_node_clone,
                             &token_symbol_node_clone,
-                            Some(&available_balance_node),
+                            Some(&available_balance_node_clone),
                         ).await;
                     }
                 }
