@@ -18,10 +18,7 @@
 
 use darkfi::{
     event_graph::{
-        rln::{
-            epoch_of, hash_event, Blob, RegistrationAttestation, RegistrationBlob, MAX_MSG_LIMIT,
-            RLN2_REGISTER_ZKBIN, RLN2_SIGNAL_ZKBIN,
-        },
+        rln::{epoch_of, hash_event, Blob, RegistrationAttestation, RLN2_SIGNAL_ZKBIN},
         Event, EventGraphPtr,
     },
     zk::{
@@ -136,40 +133,40 @@ impl RlnIdentity {
     /// Build a [`RegistrationBlob`] suitable for broadcast as a
     /// `StaticPut`. The proving key comes from the EventGraph's
     /// shared `ZkKeys` cache.
-    pub fn create_registration(&self, eg: &EventGraphPtr) -> Result<RegistrationBlob> {
-        let zkbin = ZkBinary::decode(RLN2_REGISTER_ZKBIN, false)?;
+    // pub fn create_registration(&self, eg: &EventGraphPtr) -> Result<RegistrationBlob> {
+    //     let zkbin = ZkBinary::decode(RLN2_REGISTER_ZKBIN, false)?;
 
-        // Witness order MUST match the rlnv2-diff-register.zk circuit.
-        let witnesses = vec![
-            Witness::Base(Value::known(self.nullifier)),
-            Witness::Base(Value::known(self.trapdoor)),
-            Witness::Base(Value::known(pallas::Base::from(self.user_message_limit))),
-            Witness::Base(Value::known(pallas::Base::from(MAX_MSG_LIMIT))),
-        ];
-        // Public-input order MUST match `constrain_instance` in the
-        // same .zk file.
-        let pi = vec![
-            self.commitment(),
-            pallas::Base::from(self.user_message_limit),
-            pallas::Base::from(MAX_MSG_LIMIT),
-        ];
-        let circuit = ZkCircuit::new(witnesses, &zkbin);
-        let pk = eg.zk_keys.load_register_pk()?;
+    //     // Witness order MUST match the rlnv2-diff-register.zk circuit.
+    //     let witnesses = vec![
+    //         Witness::Base(Value::known(self.nullifier)),
+    //         Witness::Base(Value::known(self.trapdoor)),
+    //         Witness::Base(Value::known(pallas::Base::from(self.user_message_limit))),
+    //         Witness::Base(Value::known(pallas::Base::from(MAX_MSG_LIMIT))),
+    //     ];
+    //     // Public-input order MUST match `constrain_instance` in the
+    //     // same .zk file.
+    //     let pi = vec![
+    //         self.commitment(),
+    //         pallas::Base::from(self.user_message_limit),
+    //         pallas::Base::from(MAX_MSG_LIMIT),
+    //     ];
+    //     let circuit = ZkCircuit::new(witnesses, &zkbin);
+    //     let pk = eg.zk_keys.load_register_pk()?;
 
-        info!(
-            target: "darkirc::crypto::rln",
-            "[RLN] Creating registration proof for commitment {:?}",
-            self.commitment(),
-        );
-        let proof = Proof::create(&pk, &[circuit], &pi, &mut OsRng)?;
+    //     info!(
+    //         target: "darkirc::crypto::rln",
+    //         "[RLN] Creating registration proof for commitment {:?}",
+    //         self.commitment(),
+    //     );
+    //     let proof = Proof::create(&pk, &[circuit], &pi, &mut OsRng)?;
 
-        Ok(RegistrationBlob {
-            proof,
-            user_message_limit: self.user_message_limit,
-            max_message_limit: MAX_MSG_LIMIT,
-            attestation: RegistrationAttestation::SPECIAL,
-        })
-    }
+    //     Ok(RegistrationBlob {
+    //         proof,
+    //         user_message_limit: self.user_message_limit,
+    //         max_message_limit: MAX_MSG_LIMIT,
+    //         attestation: RegistrationAttestation::SPECIAL,
+    //     })
+    // }
 
     /// Build a signal [`Blob`] for the given event using `message_id`.
     ///
