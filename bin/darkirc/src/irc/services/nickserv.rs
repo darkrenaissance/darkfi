@@ -80,17 +80,17 @@ pub const ACCOUNTS_KEY_RLN_IDENTITY: &[u8] = b"rln_identity";
 /// `IrcServer::new` reads this on startup.
 pub const ACCOUNTS_DEFAULT_TREE: &str = "darkirc_account_default";
 
-/// Outcome of the `static_broadcast` call inside REGISTER. Used to
-/// pick which "what just happened" notice we send back to the user.
-#[derive(PartialEq, Eq)]
-enum BroadcastStatus {
-    /// Local node was synced; broadcast was issued immediately.
-    Sent,
-    /// Local node was unsynced; the (event, blob) pair was queued
-    /// in `IrcServer::pending_static_broadcasts` and a watcher task
-    /// will broadcast it once sync completes.
-    Deferred,
-}
+// /// Outcome of the `static_broadcast` call inside REGISTER. Used to
+// /// pick which "what just happened" notice we send back to the user.
+// #[derive(PartialEq, Eq)]
+// enum BroadcastStatus {
+//     /// Local node was synced; broadcast was issued immediately.
+//     Sent,
+//     /// Local node was unsynced; the (event, blob) pair was queued
+//     /// in `IrcServer::pending_static_broadcasts` and a watcher task
+//     /// will broadcast it once sync completes.
+//     Deferred,
+// }
 
 const NICKSERV_USAGE: &str = r#"***** NickServ Help *****
 
@@ -533,19 +533,11 @@ impl NickServ {
                 ));
             }
             return Ok(replies)
+        } else {
+            let replies =
+                vec![notice(nick, format!("Failed to register account \"{account_name}\""))];
+            return Ok(replies)
         }
-
-        // Build the static-DAG event and the registration blob.
-        // The blob format is `RegistrationBlob` (proof +
-        // user_message_limit + max_message_limit + attestation),
-        // verified by the EG via `rln_verify_static_event`.
-        let evgr = &self.server.darkirc.event_graph;
-        let rln_node = RLNNode::Registration(new_rln_identity.commitment());
-        let event = Event::new_static(serialize_async(&rln_node).await, evgr).await;
-
-        let registration_blob = new_rln_identity.create_registration(evgr)?;
-        let blob_bytes = serialize_async(&registration_blob).await;
-
         // Apply the registration through the canonical pipeline:
         //
         // 1. `apply_rln_static_event` mutates the SMT and records
@@ -568,6 +560,7 @@ impl NickServ {
         //    too). When unsynced, we defer the broadcast to a
         //    watcher task that drains the pending queue once sync
         //    completes.
+        /*
         evgr.apply_rln_static_event(&event, &rln_node).await?;
         evgr.static_blob_store(&event.id(), &blob_bytes)?;
         evgr.static_insert(&event).await?;
@@ -600,6 +593,7 @@ impl NickServ {
         }
 
         Ok(replies)
+        */
     }
 
     /// Handle the DEREGISTER command.
