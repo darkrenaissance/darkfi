@@ -2379,7 +2379,8 @@ impl EventGraph {
     /// itself is inserted. Idempotent - skips any commitment already
     /// present in the identity tree.
     pub async fn bootstrap_genesis_identities(&self) -> Result<()> {
-        let genesis_event = generate_genesis(&self.config);
+        let genesis_event =
+            generate_genesis(&EventGraphConfig { hours_rotation: 0, ..self.config.clone() });
         let genesis_id = genesis_event.id();
 
         let genesis_commitments = genesis_commitments();
