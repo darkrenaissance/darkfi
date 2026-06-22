@@ -22,6 +22,7 @@ use sled_overlay::sled;
 use std::{sync::Arc, time::UNIX_EPOCH};
 
 #[cfg(feature = "enable-plugins")]
+use crate::plugin::darkirc;
 use crate::{
     app::{
         node::{
