@@ -1,3 +1,5 @@
+Test commit
+
 # DarkFi - Anonymous, Uncensored, Sovereign
 
 ![Build Status](https://img.shields.io/github/actions/workflow/status/darkrenaissance/darkfi/ci.yml?branch=master&style=flat-square)
