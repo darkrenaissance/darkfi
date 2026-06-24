@@ -38,6 +38,33 @@ use crate::{
 
 use super::{super::ColorScheme, data::*, util::*};
 
+#[cfg(any(target_os = "android", feature = "emulate-android"))]
+mod android_ui_consts {
+    pub const PASTE_WIDTH: f32 = 200.;
+    pub const PASTE_SCALE: f32 = 30.;
+}
+
+#[cfg(target_os = "android")]
+mod ui_consts {
+    pub use super::android_ui_consts::*;
+}
+
+#[cfg(feature = "emulate-android")]
+mod ui_consts {
+    pub use super::android_ui_consts::*;
+}
+
+#[cfg(all(
+    any(target_os = "linux", target_os = "macos", target_os = "windows"),
+    not(feature = "emulate-android")
+))]
+mod ui_consts {
+    pub const PASTE_WIDTH: f32 = 100.;
+    pub const PASTE_SCALE: f32 = 15.;
+}
+
+pub use ui_consts::*;
+
 pub async fn make(
     app: &App,
     wallet_layer: SceneNodePtr,
@@ -59,6 +86,7 @@ pub async fn make(
     cc.add_const_f32("PADDING_Y", PADDING_Y);
     cc.add_const_f32("RECIPIENT_INPUT_MARGIN", RECIPIENT_INPUT_MARGIN);
     cc.add_const_f32("RECIPIENT_INPUT_PADDING_X", RECIPIENT_INPUT_PADDING_X);
+    cc.add_const_f32("PASTE_WIDTH", PASTE_WIDTH);
 
     // ============================================
     // Step 2: Recipient layer
@@ -212,7 +240,7 @@ pub async fn make(
     let prop = recipient_input.get_property("rect").unwrap();
     prop.set_f32(atom, Role::App, 0, RECIPIENT_INPUT_MARGIN + RECIPIENT_INPUT_PADDING_X).unwrap();
     prop.set_f32(atom, Role::App, 1, y).unwrap();
-    let code = cc.compile("parent_w - RECIPIENT_INPUT_MARGIN * 2 - RECIPIENT_INPUT_PADDING_X").unwrap();
+    let code = cc.compile("parent_w - RECIPIENT_INPUT_MARGIN * 2 - RECIPIENT_INPUT_PADDING_X - PASTE_WIDTH").unwrap();
     prop.set_expr(atom, Role::App, 2, code).unwrap();
     prop.set_f32(atom, Role::App, 3, RECIPIENT_INPUT_HEIGHT).unwrap();
     recipient_input.set_property_f32(atom, Role::App, "font_size", RECIPIENT_INPUT_FONTSIZE).unwrap();
@@ -274,6 +302,50 @@ pub async fn make(
         })
         .await;
     send_step2_layer.link(recipient_input.clone());
+
+    // Paste button
+    let node = create_vector_art("send_paste_btn_bg");
+    let prop = node.get_property("rect").unwrap();
+    let code = cc.compile("w - RECIPIENT_INPUT_MARGIN - PASTE_WIDTH / 2").unwrap();
+    prop.set_expr(atom, Role::App, 0, code).unwrap();
+    prop.set_f32(atom, Role::App, 1, y + RECIPIENT_INPUT_HEIGHT / 2.).unwrap();
+    prop.set_f32(atom, Role::App, 2, 500.).unwrap();
+    prop.set_f32(atom, Role::App, 3, 500.).unwrap();
+    node.set_property_u32(atom, Role::App, "z_index", 2).unwrap();
+    let shape = shape::create_copy(COLOR_CYAN).scaled(PASTE_SCALE);
+    let node = node.setup(|me| VectorArt::new(me, shape, app.renderer.clone())).await;
+    send_step2_layer.link(node);
+
+    let node = create_button("send_paste_btn");
+    node.set_property_bool(atom, Role::App, "is_active", true).unwrap();
+    let prop = node.get_property("rect").unwrap();
+    let code = cc.compile("w - RECIPIENT_INPUT_MARGIN - PASTE_WIDTH").unwrap();
+    prop.set_expr(atom, Role::App, 0, code).unwrap();
+    prop.set_f32(atom, Role::App, 1, y).unwrap();
+    prop.set_f32(atom, Role::App, 2, PASTE_WIDTH).unwrap();
+    prop.set_f32(atom, Role::App, 3, RECIPIENT_INPUT_HEIGHT).unwrap();
+    node.set_property_u32(atom, Role::App, "z_index", 3).unwrap();
+
+    let (slot, recvr) = Slot::new("send_paste_clicked");
+    node.register("click", slot).unwrap();
+    let recipient_input2 = recipient_input.clone();
+    let renderer_clone = app.renderer.clone();
+    let listen_click = app.ex.spawn(async move {
+        while let Ok(_) = recvr.recv().await {
+            if let Some(clipboard_text) = miniquad::window::clipboard_get() {
+                let text_prop = recipient_input2.get_property("text").unwrap();
+                let atom = &mut renderer_clone.make_guard(gfxtag!("step2 recipient paste"));
+                text_prop.set_str(atom, Role::App, 0, &clipboard_text).unwrap();
+                if let crate::scene::Pimpl::Edit(edit) = recipient_input2.pimpl() {
+                    edit.on_text_prop_changed();
+                }
+            }
+        }
+    });
+    app.tasks.lock().unwrap().push(listen_click);
+
+    let node = node.setup(|me| Button::new(me, app.renderer.clone())).await;
+    send_step2_layer.link(node);
 
     y += RECIPIENT_INPUT_MARGIN + RECIPIENT_INPUT_HEIGHT;
 
