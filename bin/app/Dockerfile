@@ -38,14 +38,14 @@ RUN ${ANDROID_HOME}/tools/bin/sdkmanager --update | grep -v = || true
 
 # Install Android NDK
 RUN cd /opt/ && \
-    wget -q http://dl.google.com/android/repository/android-ndk-r25-linux.zip && \
-    unzip -q android-ndk-r25-linux.zip && \
-    rm android-ndk-r25-linux.zip
-ENV NDK_HOME /opt/android-ndk-r25/
+    wget -q https://dl.google.com/android/repository/android-ndk-r29-linux.zip && \
+    unzip -q android-ndk-r29-linux.zip && \
+    rm android-ndk-r29-linux.zip
+ENV NDK_HOME /opt/android-ndk-r29/
 
 # Needed for cross compiling openssl which is used by bundled sqlcipher in drk
-ENV AR /opt/android-ndk-r25/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-ar
-ENV RANLIB /opt/android-ndk-r25/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-ranlib
+ENV AR /opt/android-ndk-r29/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-ar
+ENV RANLIB /opt/android-ndk-r29/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-ranlib
 
 # Copy contents to container. Should only use this on a clean directory
 WORKDIR /root/
