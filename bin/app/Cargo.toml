@@ -120,6 +120,7 @@ res = "data/res"
 icon = "@mipmap/ic_launcher"
 assets = "assets"
 build_targets = ["aarch64-linux-android", "x86_64-linux-android"]
+min_sdk_version = 26
 
 [[package.metadata.android.permission]]
 name = "android.permission.INTERNET"
