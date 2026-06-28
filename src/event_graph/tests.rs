@@ -36,7 +36,7 @@ use crate::{
         proto::{cap_layer_tips, count_layer_tips, EventPut, SyncDirection, MAX_RANGE_PAGE_SIZE},
         test_helpers::{
             archive_config, bounded_dag_store_config, init_logger, make_eg, make_network,
-            run_multi_node_test, shutdown_network, TestIdentity,
+            run_multi_node_test, shutdown_network, test_config, TestIdentity,
         },
         util::next_hour_timestamp,
         DagStore, Event, EventGraphPtr, LayerUTips, TimeIndex, NULL_ID, NULL_PARENTS,
@@ -152,6 +152,17 @@ fn evgr_layer_tip_cap_is_bounded() {
     let capped = cap_layer_tips(&tips, 2);
     assert_eq!(count_layer_tips(&capped), 2);
     assert!(capped.get(&0).is_some_and(|layer| layer.len() == 1));
+}
+
+#[test]
+fn evgr_parent_selection_does_not_wrap_saturated_layer() {
+    let tip = blake3::hash(b"saturated-tip");
+    let tips = LayerUTips::from([(u64::MAX, HashSet::from([tip]))]);
+
+    let (layer, parents) = super::select_parents_from_tips(&tips);
+
+    assert_eq!(layer, u64::MAX);
+    assert_eq!(parents[0], tip);
 }
 
 #[test]
@@ -347,6 +358,82 @@ fn evgr_dag_insert_without_header_skipped() {
         let event = Event::new(b"orphan".to_vec(), &eg).await;
         let ids = eg.dag_insert(slice::from_ref(&event), &dag_name).await.unwrap();
         assert!(ids.is_empty());
+    })
+}
+
+#[test]
+fn evgr_header_insert_rejects_layer_jump() {
+    smol::block_on(async {
+        let eg = make_eg().await;
+        let genesis = eg.current_genesis.read().await.clone();
+        let dag_name = genesis.header.timestamp.to_string();
+        let mut parents = [NULL_ID; N_EVENT_PARENTS];
+        parents[0] = genesis.id();
+
+        let event = Event {
+            header: Header {
+                timestamp: UNIX_EPOCH.elapsed().unwrap().as_millis() as u64,
+                parents,
+                layer: 2,
+                content_hash: blake3::hash(b"layer-jump"),
+            },
+            content: b"layer-jump".to_vec(),
+        };
+
+        let err = eg.header_dag_insert(vec![event.header], &dag_name).await.unwrap_err();
+        assert!(matches!(err, crate::Error::HeaderIsInvalid));
+    })
+}
+
+#[test]
+fn evgr_header_insert_rejects_duplicate_parents() {
+    smol::block_on(async {
+        let eg = make_eg().await;
+        let genesis = eg.current_genesis.read().await.clone();
+        let dag_name = genesis.header.timestamp.to_string();
+        let mut parents = [NULL_ID; N_EVENT_PARENTS];
+        parents[0] = genesis.id();
+        parents[1] = genesis.id();
+
+        let event = Event {
+            header: Header {
+                timestamp: UNIX_EPOCH.elapsed().unwrap().as_millis() as u64,
+                parents,
+                layer: 1,
+                content_hash: blake3::hash(b"duplicate-parents"),
+            },
+            content: b"duplicate-parents".to_vec(),
+        };
+
+        let err = eg.header_dag_insert(vec![event.header], &dag_name).await.unwrap_err();
+        assert!(matches!(err, crate::Error::HeaderIsInvalid));
+    })
+}
+
+#[test]
+fn evgr_header_validate_rejects_layer_overflow_parent() {
+    smol::block_on(async {
+        let db = sled::Config::new().temporary(true).open().unwrap();
+        let tree = db.open_tree("headers").unwrap();
+        let timestamp = UNIX_EPOCH.elapsed().unwrap().as_millis() as u64;
+        let parent = Header {
+            timestamp,
+            parents: NULL_PARENTS,
+            layer: u64::MAX,
+            content_hash: blake3::hash(b"overflow-parent"),
+        };
+        tree.insert(parent.id().as_bytes(), serialize_async(&parent).await).unwrap();
+
+        let mut parents = [NULL_ID; N_EVENT_PARENTS];
+        parents[0] = parent.id();
+        let child = Header {
+            timestamp,
+            parents,
+            layer: u64::MAX,
+            content_hash: blake3::hash(b"overflow-child"),
+        };
+
+        assert!(!child.validate(&tree, &test_config(), None).await.unwrap());
     })
 }
 

@@ -287,6 +287,10 @@ pub(crate) async fn compute_unreferenced_tips(dag: &sled::Tree) -> LayerUTips {
 }
 
 /// Pick up to N_EVENT_PARENTS tips from the highest layers.
+///
+/// If the highest local tip is already at `u64::MAX`, no valid child
+/// layer exists. Return `u64::MAX` rather than wrapping; header
+/// validation rejects any attempted child of that saturated layer.
 fn select_parents_from_tips(tips: &LayerUTips) -> (u64, [blake3::Hash; N_EVENT_PARENTS]) {
     let mut parents = [NULL_ID; N_EVENT_PARENTS];
     let mut i = 0;
@@ -300,7 +304,9 @@ fn select_parents_from_tips(tips: &LayerUTips) -> (u64, [blake3::Hash; N_EVENT_P
         }
     }
 
-    (tips.last_key_value().unwrap().0 + 1, parents)
+    let layer =
+        tips.last_key_value().and_then(|(layer, _)| layer.checked_add(1)).unwrap_or(u64::MAX);
+    (layer, parents)
 }
 
 /// Storage layer for all rotating DAGs.
