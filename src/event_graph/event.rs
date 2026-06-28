@@ -97,6 +97,7 @@ impl Header {
             initial_genesis: config.initial_genesis,
             hours_rotation: 1,
             genesis_contents: config.genesis_contents.clone(),
+            pregenerated_identity_commitments: Vec::new(),
             max_dags: config.max_dags,
         };
 

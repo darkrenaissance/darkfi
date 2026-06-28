@@ -46,7 +46,6 @@ use tracing::info;
 
 use super::Event;
 use crate::{
-    event_graph::genesis_commits::GENESIS_COMMITMENTS_REPR,
     zk::{empty_witnesses, Proof, ProvingKey, VerifyingKey, Witness, ZkCircuit},
     zkas::ZkBinary,
     Error, Result,
@@ -123,7 +122,7 @@ impl RlnAppId {
 
 /// Versioned attestation accompanying a registration.
 ///
-/// Runtime admission currently accepts only pregenerated genesis
+/// Runtime admission currently accepts only configured pregenerated
 /// identities. This enum is retained for the future staked tier,
 /// where a DarkFi smart-contract attestation must back new identity
 /// registration.
@@ -154,10 +153,9 @@ impl RegistrationAttestation {
 /// `(commitment, user_message_limit, max_message_limit)` tuple,
 /// and `attestation` carries the staking proof.
 ///
-/// Non-genesis registration is disabled until contract-backed
-/// staked admission is implemented; current production admission
-/// accepts only pregenerated commitments paired with
-/// [`GENESIS_BLOB_GUARD`].
+/// Non-pregenerated registration is disabled until contract-backed
+/// staked admission is implemented; current admission accepts only
+/// app-configured commitments paired with [`GENESIS_BLOB_GUARD`].
 #[derive(Clone, SerialEncodable, SerialDecodable)]
 pub struct RegistrationBlob {
     pub proof: Proof,
@@ -711,11 +709,4 @@ fn read_pk(sled_db: &sled::Db, key: &str, zkbin_bytes: &[u8]) -> Result<ProvingK
     let zkbin = ZkBinary::decode(zkbin_bytes, false)?;
     let circuit = ZkCircuit::new(empty_witnesses(&zkbin)?, &zkbin);
     Ok(ProvingKey::read(&mut Cursor::new(bytes), circuit)?)
-}
-
-pub fn genesis_commitments() -> Vec<pallas::Base> {
-    GENESIS_COMMITMENTS_REPR
-        .iter()
-        .filter_map(|repr| pallas::Base::from_repr(*repr).into())
-        .collect()
 }
