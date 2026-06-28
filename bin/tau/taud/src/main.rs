@@ -567,6 +567,7 @@ async fn realmain(settings: Args, executor: Arc<smol::Executor<'static>>) -> Res
         initial_genesis: TAUD_INITIAL_GENESIS,
         hours_rotation: TAUD_HOURS_ROTATION,
         genesis_contents: TAUD_GENESIS_CONTENTS.to_vec(),
+        pregenerated_identity_commitments: Vec::new(),
         max_dags: Some(TAUD_MAX_DAGS),
     };
     let event_graph = match EventGraph::new(

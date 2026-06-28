@@ -60,7 +60,6 @@ use std::{str::SplitAsciiWhitespace, sync::Arc};
 
 use darkfi::{
     event_graph::{
-        genesis_commits::GENESIS_COMMITMENTS_REPR,
         rln::{create_slash_proof, RLNNode, SlashBlob, GENESIS_USER_MSG_LIMIT},
         Event,
     },
@@ -71,7 +70,7 @@ use darkfi_serial::{deserialize_async, serialize_async};
 use smol::lock::RwLock;
 
 use super::super::{client::ReplyType, rpl::*};
-use crate::{crypto::rln::RlnIdentity, IrcServer};
+use crate::{crypto::rln::RlnIdentity, genesis_commits::is_pregenerated_commitment, IrcServer};
 
 pub const ACCOUNTS_DB_PREFIX: &str = "darkirc_account_";
 pub const ACCOUNTS_KEY_RLN_IDENTITY: &[u8] = b"rln_identity";
@@ -483,8 +482,7 @@ impl NickServ {
             last_epoch: 0,
         };
 
-        let is_genesis =
-            GENESIS_COMMITMENTS_REPR.contains(&new_rln_identity.commitment().to_repr());
+        let is_genesis = is_pregenerated_commitment(&new_rln_identity.commitment());
         if !is_genesis {
             return Ok(vec![notice(
                 nick,

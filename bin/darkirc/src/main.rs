@@ -39,6 +39,7 @@ use darkfi_sdk::crypto::pasta_prelude::PrimeField;
 
 use irc2::{
     crypto::{bcrypt::bcrypt_hash_password, rln::RlnIdentity},
+    genesis_commits,
     irc::server::IrcServer,
     rpc,
     settings::list_configured_contacts,
@@ -367,6 +368,7 @@ async fn realmain(args: Args, ex: Arc<Executor<'static>>) -> Result<()> {
         initial_genesis: DARKIRC_INITIAL_GENESIS,
         hours_rotation: DARKIRC_HOURS_ROTATION,
         genesis_contents: DARKIRC_GENESIS_CONTENTS.to_vec(),
+        pregenerated_identity_commitments: genesis_commits::pregenerated_identity_commitments(),
         max_dags: Some(DARKIRC_MAX_DAGS),
     };
     let event_graph = match EventGraph::new(

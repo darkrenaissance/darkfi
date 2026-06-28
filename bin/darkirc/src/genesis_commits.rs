@@ -16,7 +16,9 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-pub const GENESIS_COMMITMENTS_REPR: &[[u8; 32]] = &[
+use darkfi_sdk::{crypto::pasta_prelude::PrimeField, pasta::pallas};
+
+pub const DARKIRC_GENESIS_COMMITMENTS_REPR: &[[u8; 32]] = &[
     [
         131, 219, 95, 230, 186, 243, 69, 112, 39, 211, 74, 207, 93, 184, 73, 16, 123, 234, 173,
         122, 151, 74, 26, 138, 187, 46, 72, 160, 139, 74, 219, 0,
@@ -60018,3 +60020,13 @@ pub const GENESIS_COMMITMENTS_REPR: &[[u8; 32]] = &[
         129, 214, 148, 118, 196, 77, 69, 233, 86, 194, 108, 117, 31,
     ],
 ];
+
+/// Return DarkIRC's configured pregenerated RLN commitment set.
+pub fn pregenerated_identity_commitments() -> Vec<[u8; 32]> {
+    DARKIRC_GENESIS_COMMITMENTS_REPR.to_vec()
+}
+
+/// Check whether an RLN commitment belongs to DarkIRC's pregenerated set.
+pub fn is_pregenerated_commitment(commitment: &pallas::Base) -> bool {
+    DARKIRC_GENESIS_COMMITMENTS_REPR.contains(&commitment.to_repr())
+}

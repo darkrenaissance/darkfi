@@ -34,6 +34,9 @@ use crate::irc::server::MAX_NICK_LEN;
 /// Cryptography utilities
 pub mod crypto;
 
+/// Pregenerated DarkIRC RLN identity commitments.
+pub mod genesis_commits;
+
 /// JSON-RPC methods
 pub mod rpc;
 

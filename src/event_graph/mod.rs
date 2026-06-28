@@ -41,7 +41,6 @@ use tracing::{error, info, warn};
 use url::Url;
 
 use crate::{
-    event_graph::rln::genesis_commitments,
     net::{channel::Channel, P2pPtr},
     system::{msleep, Publisher, PublisherPtr, StoppableTask, StoppableTaskPtr, Subscription},
     Error, Result,
@@ -55,9 +54,6 @@ use proto::{EventRep, EventReq, HeaderRep, HeaderReq, StaticPut, SyncDirection, 
 
 pub mod rln;
 use rln::{IdentityState, RlnState, ZkKeys};
-
-pub mod genesis_commits;
-use genesis_commits::GENESIS_COMMITMENTS_REPR;
 
 pub mod util;
 use util::{
@@ -105,6 +101,13 @@ pub struct EventGraphConfig {
     /// Unique payload embedded in genesis events.
     /// Different protocols must use different values.
     pub genesis_contents: Vec<u8>,
+    /// App-provided pregenerated RLN identity commitments.
+    ///
+    /// EventGraph treats these as the only proof-less registration
+    /// commitments accepted with [`rln::GENESIS_BLOB_GUARD`]. Apps
+    /// that do not use pregenerated RLN identities should leave this
+    /// empty.
+    pub pregenerated_identity_commitments: Vec<[u8; 32]>,
     /// Maximum number of DAGs to keep in the rolling window.
     ///
     /// * `Some(n)` - keep n rotation periods.
@@ -126,7 +129,40 @@ pub type LayerUTips = BTreeMap<u64, HashSet<blake3::Hash>>;
 
 /// Generate the deterministic genesis event for the static DAG.
 fn generate_static_genesis(config: &EventGraphConfig) -> Event {
-    generate_genesis(&EventGraphConfig { hours_rotation: 0, ..config.clone() })
+    let header = Header {
+        timestamp: config.initial_genesis,
+        parents: NULL_PARENTS,
+        layer: 0,
+        content_hash: blake3::hash(&config.genesis_contents),
+    };
+
+    Event { header, content: config.genesis_contents.clone() }
+}
+
+fn validate_pregenerated_identity_commitments(
+    config: &EventGraphConfig,
+) -> Result<(Vec<pallas::Base>, HashSet<[u8; 32]>)> {
+    let mut commitments = Vec::with_capacity(config.pregenerated_identity_commitments.len());
+    let mut reprs = HashSet::with_capacity(config.pregenerated_identity_commitments.len());
+
+    for (index, repr) in config.pregenerated_identity_commitments.iter().enumerate() {
+        if !reprs.insert(*repr) {
+            return Err(Error::Custom(format!(
+                "duplicate pregenerated identity commitment at index {index}"
+            )))
+        }
+
+        let commitment: Option<pallas::Base> = pallas::Base::from_repr(*repr).into();
+        let Some(commitment) = commitment else {
+            return Err(Error::Custom(format!(
+                "invalid pregenerated identity commitment at index {index}"
+            )))
+        };
+
+        commitments.push(commitment);
+    }
+
+    Ok((commitments, reprs))
 }
 
 /// Bidirectional timestamp -> event-ID index.
@@ -462,6 +498,10 @@ pub struct EventGraph {
     pub static_pub: PublisherPtr<Event>,
     pub current_genesis: RwLock<Event>,
     pub config: EventGraphConfig,
+    /// Decoded app-provided pregenerated RLN commitments.
+    pregenerated_identity_commitments: Vec<pallas::Base>,
+    /// Canonical byte representations for fast admission checks.
+    pregenerated_identity_commitment_reprs: HashSet<[u8; 32]>,
     pub synced: AtomicBool,
     pub deg_enabled: AtomicBool,
     deg_publisher: PublisherPtr<DegEvent>,
@@ -508,6 +548,8 @@ impl EventGraph {
         let identity_state = IdentityState::new(&sled_db)?;
         let rln_app_id = rln::RlnAppId::from_genesis(&config.genesis_contents);
         let current_genesis = generate_genesis(&config);
+        let (pregenerated_identity_commitments, pregenerated_identity_commitment_reprs) =
+            validate_pregenerated_identity_commitments(&config)?;
         let dag_store = DagStore::new(sled_db.clone(), &config).await;
         let static_dag = Self::static_new(&sled_db, &config).await?;
         let static_dag_blobs = sled_db.open_tree("static-dag-blobs")?;
@@ -549,6 +591,8 @@ impl EventGraph {
             static_pub: Publisher::new(),
             current_genesis: RwLock::new(current_genesis.clone()),
             config: config.clone(),
+            pregenerated_identity_commitments,
+            pregenerated_identity_commitment_reprs,
             synced: AtomicBool::new(false),
             deg_enabled: AtomicBool::new(false),
             deg_publisher: Publisher::new(),
@@ -2279,12 +2323,12 @@ impl EventGraph {
         match rln_node {
             RLNNode::Registration(commitment) => {
                 // Current admission policy is pregenerated identities only.
-                // The guard blob is valid exclusively for commitments built
-                // into GENESIS_COMMITMENTS_REPR; pairing it with any other
-                // commitment is an unambiguous forgery attempt.
+                // The guard blob is valid exclusively for commitments supplied
+                // by the app config; pairing it with any other commitment is
+                // an unambiguous forgery attempt.
                 if blob == rln::GENESIS_BLOB_GUARD {
                     let repr = commitment.to_repr();
-                    if GENESIS_COMMITMENTS_REPR.contains(&repr) {
+                    if self.pregenerated_identity_commitment_reprs.contains(&repr) {
                         if self.identity_state.read().await.contains(commitment) {
                             return StaticEventCheck::Rejected
                         }
@@ -2294,7 +2338,7 @@ impl EventGraph {
                     }
                 }
 
-                // Free non-genesis registration is intentionally disabled:
+                // Free non-pregenerated registration is intentionally disabled:
                 // it is a sybil attack surface. Keep the proof scaffolding
                 // below for the future staked tier, where acceptance must be
                 // backed by a DarkFi smart-contract attestation.
@@ -2386,15 +2430,14 @@ impl EventGraph {
     /// event itself is inserted. Idempotent - skips any commitment
     /// already present in the identity tree.
     pub async fn bootstrap_genesis_identities(&self) -> Result<()> {
-        // Deterministic for premade identities.
+        // Deterministic for configured pregenerated identities.
         let genesis_event = generate_static_genesis(&self.config);
         let genesis_id = genesis_event.id();
         if !self.static_dag.contains_key(genesis_id.as_bytes())? {
             return Err(Error::Custom("static DAG genesis missing during bootstrap".into()))
         }
 
-        let genesis_commitments = genesis_commitments();
-        for commitment in genesis_commitments.iter() {
+        for commitment in self.pregenerated_identity_commitments.iter() {
             if self.identity_state.read().await.contains(commitment) {
                 continue
             }

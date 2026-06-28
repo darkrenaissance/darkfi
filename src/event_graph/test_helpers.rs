@@ -24,6 +24,7 @@ use std::{
     },
 };
 
+use darkfi_sdk::{crypto::pasta_prelude::PrimeField, pasta::pallas};
 use sled_overlay::sled;
 use smol::{channel, future, Executor};
 use url::Url;
@@ -34,11 +35,16 @@ use crate::{
     net::{session::SESSION_DEFAULT, settings::NetworkProfile, P2p, Settings},
 };
 
+pub fn test_pregenerated_identity_commitments() -> Vec<[u8; 32]> {
+    vec![pallas::Base::from(0x4556_4752_u64).to_repr()]
+}
+
 pub fn test_config() -> EventGraphConfig {
     EventGraphConfig {
         initial_genesis: 1_704_067_200_000, // 2024-01-01 UTC
         hours_rotation: 0,
         genesis_contents: b"darkfi-test-graph".to_vec(),
+        pregenerated_identity_commitments: test_pregenerated_identity_commitments(),
         max_dags: Some(24),
     }
 }

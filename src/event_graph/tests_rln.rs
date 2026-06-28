@@ -28,7 +28,6 @@ use smol::Executor;
 
 use crate::{
     event_graph::{
-        genesis_commits::GENESIS_COMMITMENTS_REPR,
         rln::{
             epoch_of, epoch_start_millis, sss_recover, Blob, IdentityState, MessageMetadata,
             RLNNode, RegistrationAttestation, RegistrationBlob, RlnAppId, SignalCheck, SlashBlob,
@@ -529,15 +528,17 @@ fn placeholder_slash_blob(ish: pallas::Base, root: pallas::Base) -> SlashBlob {
     }
 }
 
-fn genesis_commitment_at(index: usize) -> pallas::Base {
-    pallas::Base::from_repr(GENESIS_COMMITMENTS_REPR[index]).into_option().unwrap()
+fn genesis_commitment_at(eg: &EventGraphPtr, index: usize) -> pallas::Base {
+    pallas::Base::from_repr(eg.config.pregenerated_identity_commitments[index])
+        .into_option()
+        .unwrap()
 }
 
 #[test]
 fn rln_static_event_pregenerated_guard_accepted() {
     smol::block_on(async {
         let eg = make_eg().await;
-        let commitment = genesis_commitment_at(0);
+        let commitment = genesis_commitment_at(&eg, 0);
         let node = RLNNode::Registration(commitment);
 
         let outcome = eg.rln_verify_static_event(&node, GENESIS_BLOB_GUARD, 0).await;
@@ -550,7 +551,7 @@ fn rln_static_event_guard_with_unknown_commitment_is_malicious() {
     smol::block_on(async {
         let eg = make_eg().await;
         let commitment = pallas::Base::from(0xdead_beefu64);
-        assert!(!GENESIS_COMMITMENTS_REPR.contains(&commitment.to_repr()));
+        assert!(!eg.config.pregenerated_identity_commitments.contains(&commitment.to_repr()));
 
         let node = RLNNode::Registration(commitment);
         let outcome = eg.rln_verify_static_event(&node, GENESIS_BLOB_GUARD, 0).await;
