@@ -50,7 +50,11 @@ pub mod event;
 pub use event::{display_order, Event, Header};
 
 pub mod proto;
-use proto::{EventRep, EventReq, HeaderRep, HeaderReq, StaticPut, SyncDirection, TipRep, TipReq};
+use proto::{
+    cap_layer_tips, count_layer_tips, EventRep, EventReq, HeaderRep, HeaderReq, StaticPut,
+    SyncDirection, TipRep, TipReq, MAX_EVENT_REP_EVENTS, MAX_EVENT_REQ_IDS, MAX_HEADER_REP_HEADERS,
+    MAX_HEADER_REQ_TIPS, MAX_RANGE_PAGE_SIZE, MAX_TIP_REP_TIPS,
+};
 
 pub mod rln;
 use rln::{IdentityState, RlnState, ZkKeys};
@@ -1199,9 +1203,11 @@ impl EventGraph {
                 return Err(Error::DagSyncFailed)
             }
 
-            let batch: Vec<blake3::Hash> = want.iter().copied().collect();
+            let batch: Vec<blake3::Hash> = want.iter().take(MAX_EVENT_REQ_IDS).copied().collect();
+            for id in &batch {
+                want.remove(id);
+            }
             let mut pending: HashSet<blake3::Hash> = batch.iter().copied().collect();
-            want.clear();
 
             // Ask every peer for the same batch. We keep consuming
             // responses until the batch is complete or every peer has
@@ -1373,6 +1379,7 @@ impl EventGraph {
         dir: SyncDirection,
         limit: usize,
     ) -> Result<Vec<Event>> {
+        let limit = limit.min(MAX_RANGE_PAGE_SIZE);
         let mut out = vec![];
         let store = self.dag_store.read().await;
         let slots: Vec<_> = match dir {
@@ -1789,6 +1796,10 @@ impl EventGraph {
         dag_name: &str,
         tips: &LayerUTips,
     ) -> Result<Vec<Header>> {
+        if count_layer_tips(tips) > MAX_HEADER_REQ_TIPS {
+            return Err(Error::DagSyncFailed)
+        }
+
         let dag_ts = u64::from_str(dag_name)?;
         let store = self.dag_store.read().await;
         let slot = store.get_slot(&dag_ts).ok_or(Error::DagSyncFailed)?;
@@ -1814,6 +1825,9 @@ impl EventGraph {
             let (id, v) = item?;
             let h = blake3::Hash::from_bytes((&id as &[u8]).try_into()?);
             if !ancestors.contains(&h) {
+                if out.len() >= MAX_HEADER_REP_HEADERS {
+                    break
+                }
                 out.push(deserialize_async(&v).await?);
             }
         }
@@ -2608,6 +2622,9 @@ async fn request_tips(
         .await
         .map_err(|_| Error::EventNotFound("tip timeout".into()))?;
     sub.unsubscribe().await;
+    if count_layer_tips(&r.0) > MAX_TIP_REP_TIPS {
+        return Err(Error::DagSyncFailed)
+    }
     Ok(r.0.clone())
 }
 
@@ -2618,12 +2635,16 @@ async fn request_header(
     timeout: u64,
 ) -> Result<Vec<Header>> {
     let sub = peer.subscribe_msg::<HeaderRep>().await?;
+    let tips = cap_layer_tips(&tips, MAX_HEADER_REQ_TIPS);
     peer.send(&HeaderReq(name, tips)).await?;
     let r = sub
         .receive_with_timeout(timeout)
         .await
         .map_err(|_| Error::EventNotFound("hdr timeout".into()))?;
     sub.unsubscribe().await;
+    if r.0.len() > MAX_HEADER_REP_HEADERS {
+        return Err(Error::DagSyncFailed)
+    }
     Ok(r.0.to_vec())
 }
 
@@ -2633,6 +2654,10 @@ async fn request_event(
     cid: usize,
     timeout: u64,
 ) -> (Result<(Vec<Event>, Vec<Vec<u8>>)>, usize, Arc<Channel>) {
+    if ids.len() > MAX_EVENT_REQ_IDS {
+        return (Err(Error::DagSyncFailed), cid, peer)
+    }
+
     let sub = match peer.subscribe_msg::<EventRep>().await {
         Ok(s) => s,
         Err(e) => return (Err(e), cid, peer),
@@ -2645,6 +2670,9 @@ async fn request_event(
     match sub.receive_with_timeout(timeout).await {
         Ok(r) => {
             sub.unsubscribe().await;
+            if r.0.len() > MAX_EVENT_REP_EVENTS || r.1.len() > MAX_EVENT_REP_EVENTS {
+                return (Err(Error::DagSyncFailed), cid, peer)
+            }
             (Ok((r.0.clone(), r.1.clone())), cid, peer)
         }
         Err(_) => (Err(Error::EventNotFound("ev timeout".into())), cid, peer),

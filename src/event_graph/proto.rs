@@ -111,6 +111,44 @@ const MAX_PARENT_FETCH_DEPTH: usize = 1000;
 /// unbounded memory growth under sustained load.
 const BROADCASTER_CAPACITY: usize = 256;
 
+/// Maximum event bodies a peer may request in one `EventReq`.
+pub const MAX_EVENT_REQ_IDS: usize = 128;
+/// Maximum event bodies accepted in one `EventRep`.
+pub const MAX_EVENT_REP_EVENTS: usize = MAX_EVENT_REQ_IDS;
+/// Maximum tips a peer may include in one `HeaderReq`.
+pub const MAX_HEADER_REQ_TIPS: usize = 1024;
+/// Maximum headers returned in one `HeaderRep`.
+pub const MAX_HEADER_REP_HEADERS: usize = 4096;
+/// Maximum tips returned in one `TipRep`.
+pub const MAX_TIP_REP_TIPS: usize = 1024;
+/// Maximum events served for one paginated range request.
+pub const MAX_RANGE_PAGE_SIZE: usize = 100;
+
+pub(crate) fn count_layer_tips(tips: &LayerUTips) -> usize {
+    tips.values().map(HashSet::len).sum()
+}
+
+pub(crate) fn cap_layer_tips(tips: &LayerUTips, limit: usize) -> LayerUTips {
+    let mut out = BTreeMap::new();
+    let mut remaining = limit;
+
+    for (layer, hashes) in tips {
+        if remaining == 0 {
+            break
+        }
+
+        let mut sorted: Vec<_> = hashes.iter().copied().collect();
+        sorted.sort_unstable_by(|a, b| a.as_bytes().cmp(b.as_bytes()));
+        let take = sorted.len().min(remaining);
+        if take > 0 {
+            out.insert(*layer, sorted.into_iter().take(take).collect());
+            remaining -= take;
+        }
+    }
+
+    out
+}
+
 struct MovingWindow {
     times: VecDeque<NanoTimestamp>,
     expiry_time: NanoTimestamp,
@@ -773,6 +811,10 @@ impl ProtocolEventGraph {
             if !self.event_graph.is_synced() {
                 continue
             }
+            if ids.len() > MAX_EVENT_REQ_IDS {
+                self.clone().strike().await?;
+                continue
+            }
 
             // Only serve IDs we've previously broadcast (prevents
             // arbitrary DAG enumeration by malicious peers). The
@@ -844,6 +886,10 @@ impl ProtocolEventGraph {
                 continue
             }
             let (dag_name, tips) = (&v.0, &v.1);
+            if count_layer_tips(tips) > MAX_HEADER_REQ_TIPS {
+                self.clone().strike().await?;
+                continue
+            }
             let dag_ts = match u64::from_str(dag_name) {
                 Ok(v) => v,
                 Err(_) => continue,
@@ -906,6 +952,8 @@ impl ProtocolEventGraph {
                 }
             };
 
+            let layers = cap_layer_tips(&layers, MAX_TIP_REP_TIPS);
+
             let mut b = self.event_graph.broadcasted_ids.write().await;
             for tips in layers.values() {
                 for t in tips {
@@ -929,10 +977,9 @@ impl ProtocolEventGraph {
             if !self.event_graph.is_synced() {
                 continue
             }
-            let events = self
-                .event_graph
-                .fetch_page(req.cursor_ts, req.direction.clone(), req.limit as usize)
-                .await?;
+            let limit = (req.limit as usize).min(MAX_RANGE_PAGE_SIZE);
+            let events =
+                self.event_graph.fetch_page(req.cursor_ts, req.direction.clone(), limit).await?;
             self.channel.send(&RangeRep(events)).await?;
         }
     }
