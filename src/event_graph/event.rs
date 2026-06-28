@@ -21,10 +21,7 @@ use std::{cmp::Ordering, collections::HashSet, time::UNIX_EPOCH};
 use darkfi_serial::{async_trait, deserialize_async, Encodable, SerialDecodable, SerialEncodable};
 use sled_overlay::{sled, SledTreeOverlay};
 
-use super::{
-    util::{generate_genesis, next_rotation_timestamp},
-    EventGraph, EventGraphConfig, EVENT_TIME_DRIFT, NULL_ID, N_EVENT_PARENTS,
-};
+use super::{util::HOUR, EventGraph, EventGraphConfig, EVENT_TIME_DRIFT, NULL_ID, N_EVENT_PARENTS};
 use crate::Result;
 
 /// The fixed-size structural metadata of an event.
@@ -84,35 +81,17 @@ impl Header {
     }
 
     /// Full structural validation against a header DAG.
+    ///
+    /// `dag_genesis` is the timestamp/name of the target rotating DAG slot.
     pub async fn validate(
         &self,
         header_dag: &sled::Tree,
         config: &EventGraphConfig,
+        dag_genesis: u64,
         overlay: Option<&SledTreeOverlay>,
     ) -> Result<bool> {
-        // Lower bound: one day before the most recent hourly genesis.
-        // We build a temporary 1-hour config just to compute the
-        // reference timestamp.
-        let hourly_cfg = EventGraphConfig {
-            initial_genesis: config.initial_genesis,
-            hours_rotation: 1,
-            genesis_contents: config.genesis_contents.clone(),
-            pregenerated_identity_commitments: Vec::new(),
-            max_dags: config.max_dags,
-        };
-
-        let oldest_allowed = generate_genesis(&hourly_cfg).header.timestamp - 86_400_000;
-
-        if self.timestamp < oldest_allowed - EVENT_TIME_DRIFT {
+        if !self.timestamp_fits_slot(config, dag_genesis) {
             return Ok(false)
-        }
-
-        // Upper bound: next rotation boundary + drift
-        if config.hours_rotation > 0 {
-            let next = next_rotation_timestamp(config.initial_genesis, config.hours_rotation);
-            if self.timestamp > next + EVENT_TIME_DRIFT {
-                return Ok(false)
-            }
         }
 
         let mut seen = HashSet::new();
@@ -144,6 +123,26 @@ impl Header {
         let Some(expected_layer) = max_parent_layer.checked_add(1) else { return Ok(false) };
 
         Ok(self.layer == expected_layer)
+    }
+
+    /// Check whether this header timestamp belongs to the target DAG slot.
+    fn timestamp_fits_slot(&self, config: &EventGraphConfig, dag_genesis: u64) -> bool {
+        if self.timestamp < dag_genesis.saturating_sub(EVENT_TIME_DRIFT) {
+            return false
+        }
+
+        if config.hours_rotation == 0 {
+            let now = UNIX_EPOCH.elapsed().unwrap().as_millis() as u64;
+            return self.timestamp <= now.saturating_add(EVENT_TIME_DRIFT)
+        }
+
+        let Some(rotation_ms) = config.hours_rotation.checked_mul(HOUR as u64) else {
+            return false
+        };
+        let Some(next_slot) = dag_genesis.checked_add(rotation_ms) else { return false };
+        let Some(upper_bound) = next_slot.checked_add(EVENT_TIME_DRIFT) else { return false };
+
+        self.timestamp < upper_bound
     }
 }
 
@@ -185,10 +184,13 @@ impl Event {
     }
 
     /// Validate for insertion into a DAG.
+    ///
+    /// `dag_genesis` is the timestamp/name of the target rotating DAG slot.
     pub async fn dag_validate(
         &self,
         hdr_dag: &sled::Tree,
         config: &EventGraphConfig,
+        dag_genesis: u64,
     ) -> Result<bool> {
         if self.content.is_empty() {
             return Ok(false)
@@ -198,7 +200,7 @@ impl Event {
             return Ok(false)
         }
 
-        self.header.validate(hdr_dag, config, None).await
+        self.header.validate(hdr_dag, config, dag_genesis, None).await
     }
 
     /// Quick validation (no DAG lookup).
