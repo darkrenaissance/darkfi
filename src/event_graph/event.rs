@@ -116,6 +116,7 @@ impl Header {
         }
 
         let mut seen = HashSet::new();
+        let mut max_parent_layer = None;
         let self_id = self.id();
         for pid in self.parents.iter() {
             if pid == &NULL_ID {
@@ -134,13 +135,15 @@ impl Header {
 
             let Some(bytes) = bytes else { return Ok(false) };
             let parent: Header = deserialize_async(&bytes).await?;
-            if self.layer <= parent.layer {
-                return Ok(false)
-            }
+            max_parent_layer =
+                Some(max_parent_layer.map_or(parent.layer, |m: u64| m.max(parent.layer)));
             seen.insert(pid);
         }
 
-        Ok(!seen.is_empty())
+        let Some(max_parent_layer) = max_parent_layer else { return Ok(false) };
+        let Some(expected_layer) = max_parent_layer.checked_add(1) else { return Ok(false) };
+
+        Ok(self.layer == expected_layer)
     }
 }
 
