@@ -21,7 +21,9 @@ use std::{cmp::Ordering, collections::HashSet, time::UNIX_EPOCH};
 use darkfi_serial::{async_trait, deserialize_async, Encodable, SerialDecodable, SerialEncodable};
 use sled_overlay::{sled, SledTreeOverlay};
 
-use super::{util::HOUR, EventGraph, EventGraphConfig, EVENT_TIME_DRIFT, NULL_ID, N_EVENT_PARENTS};
+use super::{
+    util::HOUR_MS, EventGraph, EventGraphConfig, EVENT_TIME_DRIFT, NULL_ID, N_EVENT_PARENTS,
+};
 use crate::Result;
 
 /// The fixed-size structural metadata of an event.
@@ -136,9 +138,7 @@ impl Header {
             return self.timestamp <= now.saturating_add(EVENT_TIME_DRIFT)
         }
 
-        let Some(rotation_ms) = config.hours_rotation.checked_mul(HOUR as u64) else {
-            return false
-        };
+        let Some(rotation_ms) = config.hours_rotation.checked_mul(HOUR_MS) else { return false };
         let Some(next_slot) = dag_genesis.checked_add(rotation_ms) else { return false };
         let Some(upper_bound) = next_slot.checked_add(EVENT_TIME_DRIFT) else { return false };
 
