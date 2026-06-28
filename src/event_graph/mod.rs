@@ -224,7 +224,12 @@ impl TimeIndex {
     }
 
     pub fn insert(&mut self, ts: u64, id: blake3::Hash) {
-        self.index.entry(ts).or_default().push(id);
+        let ids = self.index.entry(ts).or_default();
+        if ids.contains(&id) {
+            return
+        }
+
+        ids.push(id);
         self.count += 1;
     }
 
@@ -1775,6 +1780,9 @@ impl EventGraph {
             }
 
             let hid = hdr.id();
+            if overlay.get(hid.as_bytes())?.is_some() {
+                continue
+            }
 
             if !hdr.validate(&slot.header_tree, &self.config, dag_ts, Some(&overlay)).await? {
                 return Err(Error::HeaderIsInvalid)
