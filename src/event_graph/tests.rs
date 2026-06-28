@@ -38,7 +38,7 @@ use crate::{
             archive_config, bounded_dag_store_config, init_logger, make_eg, make_eg_with_config,
             make_network, run_multi_node_test, shutdown_network, test_config, TestIdentity,
         },
-        util::next_hour_timestamp,
+        util::{millis_until_next_rotation, next_hour_timestamp, next_rotation_timestamp},
         DagStore, Event, EventGraphConfig, EventGraphPtr, LayerUTips, TimeIndex, NULL_ID,
         NULL_PARENTS, N_EVENT_PARENTS,
     },
@@ -166,6 +166,46 @@ fn evgr_parent_selection_does_not_wrap_saturated_layer() {
 }
 
 #[test]
+fn evgr_config_rejects_invalid_rotation_settings() {
+    let zero_dags = EventGraphConfig { max_dags: Some(0), ..test_config() };
+    assert!(zero_dags.validate().is_err());
+
+    let overflowing_rotation = EventGraphConfig { hours_rotation: u64::MAX, ..test_config() };
+    assert!(overflowing_rotation.validate().is_err());
+
+    let overflowing_genesis =
+        EventGraphConfig { initial_genesis: u64::MAX, hours_rotation: 1, ..test_config() };
+    assert!(overflowing_genesis.validate().is_err());
+}
+
+#[test]
+fn evgr_invalid_config_does_not_open_dag_trees() {
+    smol::block_on(async {
+        let sled_db = sled::Config::new().temporary(true).open().unwrap();
+        let before = sled_db.tree_names();
+        let config = EventGraphConfig { hours_rotation: 1, max_dags: Some(0), ..test_config() };
+
+        let result = DagStore::new(sled_db.clone(), &config).await;
+
+        assert!(matches!(result, Err(crate::Error::Custom(_))));
+        assert_eq!(sled_db.tree_names(), before);
+    })
+}
+
+#[test]
+fn evgr_rotation_helpers_are_total() {
+    const HOUR_MS: u64 = 3_600_000;
+
+    assert!(next_rotation_timestamp(0, 0).is_err());
+
+    let now = UNIX_EPOCH.elapsed().unwrap().as_millis() as u64;
+    let future_start = now + HOUR_MS;
+    assert_eq!(next_rotation_timestamp(future_start, 1).unwrap(), future_start);
+    assert!(millis_until_next_rotation(now.saturating_sub(1)).is_err());
+    assert_eq!(super::util::hours_since(future_start), 0);
+}
+
+#[test]
 fn evgr_time_index_queries_and_saturating_cursor() {
     // Forward, backward, newest, oldest queries plus the saturating
     // cursor at u64 boundaries.
@@ -190,7 +230,7 @@ fn evgr_time_index_queries_and_saturating_cursor() {
 
 async fn make_dag_store() -> Result<DagStore> {
     let sled_db = sled::Config::new().temporary(true).open().unwrap();
-    Ok(DagStore::new(sled_db, &bounded_dag_store_config()).await)
+    DagStore::new(sled_db, &bounded_dag_store_config()).await
 }
 
 #[test]
@@ -210,14 +250,14 @@ fn evgr_dag_store_eviction_policy() {
             content_hash: blake3::hash(b"test-graph-v1"),
         };
         let genesis = Event { header: hdr, content: b"test-graph-v1".to_vec() };
-        store.add_dag(&genesis, Some(24)).await;
+        store.add_dag(&genesis, Some(24)).await.unwrap();
         assert_eq!(store.dag_timestamps().len(), 24);
         assert!(store.get_slot(&new_ts).is_some());
         assert!(store.get_slot(&oldest_ts).is_none());
 
         // (b) archive
         let sled_db = sled::Config::new().temporary(true).open().unwrap();
-        let mut archive = DagStore::new(sled_db, &archive_config()).await;
+        let mut archive = DagStore::new(sled_db, &archive_config()).await.unwrap();
         let initial = archive.dag_timestamps().len();
         for i in 1..=30i64 {
             let ts = next_hour_timestamp(i);
@@ -228,7 +268,7 @@ fn evgr_dag_store_eviction_policy() {
                 content_hash: blake3::hash(b"test-graph-v1"),
             };
             let genesis = Event { header: hdr, content: b"test-graph-v1".to_vec() };
-            archive.add_dag(&genesis, None).await;
+            archive.add_dag(&genesis, None).await.unwrap();
         }
         assert_eq!(archive.dag_timestamps().len(), initial + 30);
     })
@@ -240,7 +280,7 @@ fn evgr_dag_store_archive_mode_discovers_existing_trees() {
         let sled_db = sled::Config::new().temporary(true).open().unwrap();
         let historical_ts = next_hour_timestamp(-100);
         {
-            let mut store = DagStore::new(sled_db.clone(), &archive_config()).await;
+            let mut store = DagStore::new(sled_db.clone(), &archive_config()).await.unwrap();
             let hdr = Header {
                 timestamp: historical_ts,
                 parents: NULL_PARENTS,
@@ -248,11 +288,11 @@ fn evgr_dag_store_archive_mode_discovers_existing_trees() {
                 content_hash: blake3::hash(b"test-graph-v1"),
             };
             let genesis = Event { header: hdr, content: b"test-graph-v1".to_vec() };
-            store.add_dag(&genesis, None).await;
+            store.add_dag(&genesis, None).await.unwrap();
             drop(store);
         }
 
-        let store = DagStore::new(sled_db, &archive_config()).await;
+        let store = DagStore::new(sled_db, &archive_config()).await.unwrap();
         assert!(
             store.get_slot(&historical_ts).is_some(),
             "Archive mode should discover historical DAGs on restart"

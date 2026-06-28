@@ -127,6 +127,37 @@ pub struct EventGraphConfig {
     pub max_dags: Option<usize>,
 }
 
+impl EventGraphConfig {
+    /// Validate consensus-critical event graph configuration.
+    pub fn validate(&self) -> Result<()> {
+        if self.max_dags == Some(0) {
+            return Err(Error::Custom("event graph max_dags must be greater than 0".into()))
+        }
+
+        self.rotation_period_millis()?;
+        Ok(())
+    }
+
+    /// Rotation period in milliseconds, or `None` for non-rotating graphs.
+    pub(crate) fn rotation_period_millis(&self) -> Result<Option<u64>> {
+        if self.hours_rotation == 0 {
+            return Ok(None)
+        }
+
+        let rotation_ms = self.hours_rotation.checked_mul(util::HOUR_MS).ok_or_else(|| {
+            Error::Custom("event graph rotation period overflows milliseconds".into())
+        })?;
+
+        if self.initial_genesis.checked_add(rotation_ms).is_none() {
+            return Err(Error::Custom(
+                "event graph initial genesis plus one rotation overflows".into(),
+            ))
+        }
+
+        Ok(Some(rotation_ms))
+    }
+}
+
 pub type EventGraphPtr = Arc<EventGraph>;
 /// Unreferenced tips grouped by layer.
 pub type LayerUTips = BTreeMap<u64, HashSet<blake3::Hash>>;
@@ -325,13 +356,14 @@ impl DagStore {
     /// * **Archive mode** (`max_dags = None`): discover *all*
     ///   existing DAG trees in sled and load them, plus ensure the
     ///   recent window exists. Nothing is ever dropped.
-    pub async fn new(sled_db: sled::Db, config: &EventGraphConfig) -> Self {
+    pub async fn new(sled_db: sled::Db, config: &EventGraphConfig) -> Result<Self> {
+        config.validate()?;
         let mut dags = BTreeMap::new();
 
         if config.hours_rotation == 0 {
             let genesis = generate_genesis(config);
             dags.insert(genesis.header.timestamp, Self::create_slot(&sled_db, &genesis).await);
-            return Self { db: sled_db, dags }
+            return Ok(Self { db: sled_db, dags })
         }
 
         // Determine how many recent DAGs to create/ensure exist.
@@ -380,7 +412,7 @@ impl DagStore {
             dags.insert(ts, Self::create_slot(&sled_db, &genesis).await);
         }
 
-        Self { db: sled_db, dags }
+        Ok(Self { db: sled_db, dags })
     }
 
     async fn create_slot(db: &sled::Db, genesis: &Event) -> DagSlot {
@@ -408,16 +440,23 @@ impl DagStore {
 
     /// Add a new DAG on rotation. In bounded mode, drops the oldest DAG
     /// when the limit is reached. In archive mode, never drops.
-    pub async fn add_dag(&mut self, genesis: &Event, max_dags: Option<usize>) {
+    pub async fn add_dag(&mut self, genesis: &Event, max_dags: Option<usize>) -> Result<()> {
         if let Some(limit) = max_dags {
+            if limit == 0 {
+                return Err(Error::Custom("event graph max_dags must be greater than 0".into()))
+            }
+
             if self.dags.len() >= limit {
-                let (_, old) = self.dags.pop_first().unwrap();
+                let Some((_, old)) = self.dags.pop_first() else {
+                    return Err(Error::Custom("event graph DAG store is empty".into()))
+                };
                 self.db.drop_tree(old.header_tree.name()).unwrap();
                 self.db.drop_tree(old.main_tree.name()).unwrap();
             }
         }
         let slot = Self::create_slot(&self.db, genesis).await;
         self.dags.insert(genesis.header.timestamp, slot);
+        Ok(())
     }
 
     pub fn get_slot(&self, ts: &u64) -> Option<&DagSlot> {
@@ -612,6 +651,7 @@ impl EventGraph {
         config: EventGraphConfig,
         ex: Arc<Executor<'_>>,
     ) -> Result<EventGraphPtr> {
+        config.validate()?;
         let zk_keys = Arc::new(ZkKeys::build_and_load(&sled_db)?);
         Self::with_zk_keys(p2p, sled_db, datastore, replay_mode, config, zk_keys, ex).await
     }
@@ -632,12 +672,13 @@ impl EventGraph {
         zk_keys: Arc<ZkKeys>,
         ex: Arc<Executor<'_>>,
     ) -> Result<EventGraphPtr> {
+        config.validate()?;
         let identity_state = IdentityState::new(&sled_db)?;
         let rln_app_id = rln::RlnAppId::from_genesis(&config.genesis_contents);
         let current_genesis = generate_genesis(&config);
         let (pregenerated_identity_commitments, pregenerated_identity_commitment_reprs) =
             validate_pregenerated_identity_commitments(&config)?;
-        let dag_store = DagStore::new(sled_db.clone(), &config).await;
+        let dag_store = DagStore::new(sled_db.clone(), &config).await?;
         let static_dag = Self::static_new(&sled_db, &config).await?;
         let static_dag_blobs = sled_db.open_tree("static-dag-blobs")?;
         let dag_blobs = sled_db.open_tree("dag-blobs")?;
@@ -1436,7 +1477,7 @@ impl EventGraph {
             }
         }
 
-        self.dag_store.write().await.add_dag(&genesis, self.config.max_dags).await;
+        self.dag_store.write().await.add_dag(&genesis, self.config.max_dags).await?;
         *cur = genesis;
         *bcast = HashSet::new();
         Ok(())
@@ -1445,7 +1486,7 @@ impl EventGraph {
     async fn dag_prune_task(self: Arc<Self>) -> Result<()> {
         loop {
             let next =
-                next_rotation_timestamp(self.config.initial_genesis, self.config.hours_rotation);
+                next_rotation_timestamp(self.config.initial_genesis, self.config.hours_rotation)?;
             let hdr = Header {
                 timestamp: next,
                 parents: NULL_PARENTS,
@@ -1453,7 +1494,7 @@ impl EventGraph {
                 content_hash: blake3::hash(&self.config.genesis_contents),
             };
             let genesis = Event { header: hdr, content: self.config.genesis_contents.clone() };
-            msleep(millis_until_next_rotation(next)).await;
+            msleep(millis_until_next_rotation(next)?).await;
             self.dag_prune(genesis).await?;
         }
     }

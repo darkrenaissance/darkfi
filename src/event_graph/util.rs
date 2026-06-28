@@ -36,7 +36,7 @@ use super::{
 };
 use crate::{
     util::{encoding::base64, file::load_file},
-    Result,
+    Error, Result,
 };
 
 #[cfg(feature = "rpc")]
@@ -46,48 +46,62 @@ use crate::rpc::{
 };
 
 /// Milliseconds in one hour.
-pub(super) const HOUR: i64 = 3_600_000;
+pub(super) const HOUR_MS: u64 = 3_600_000;
 
 /// Timestamp (millis) for the start of the hour `hours` offsets from now.
 pub(super) fn next_hour_timestamp(hours: i64) -> u64 {
-    let now = UNIX_EPOCH.elapsed().unwrap().as_millis() as i64;
-    ((now / HOUR) * HOUR + HOUR * hours) as u64
+    let now = UNIX_EPOCH.elapsed().unwrap().as_millis() as u64;
+    let base = (now / HOUR_MS) * HOUR_MS;
+    let offset = hours.unsigned_abs().saturating_mul(HOUR_MS);
+
+    if hours.is_negative() {
+        base.saturating_sub(offset)
+    } else {
+        base.saturating_add(offset)
+    }
 }
 
 /// Whole hours elapsed since `ts`.
 pub(super) fn hours_since(ts: u64) -> u64 {
     let now = UNIX_EPOCH.elapsed().unwrap().as_millis() as u64;
-    (now - ts) / HOUR as u64
+    now.saturating_sub(ts) / HOUR_MS
 }
 
 /// Timestamp of the next DAG rotation.
-///
-/// # Panics
-///
-/// Panics if `rotation_period` is zero.
-pub fn next_rotation_timestamp(starting_timestamp: u64, rotation_period: u64) -> u64 {
+pub fn next_rotation_timestamp(starting_timestamp: u64, rotation_period: u64) -> Result<u64> {
     if rotation_period == 0 {
-        panic!("Rotation period cannot be 0");
+        return Err(Error::Custom("event graph rotation period cannot be 0".into()))
     }
-    let passed = hours_since(starting_timestamp);
-    let rotations = passed.div_ceil(rotation_period);
-    let until: i64 = (rotations * rotation_period - passed).try_into().unwrap();
-    if until == 0 {
-        next_hour_timestamp(1)
-    } else {
-        next_hour_timestamp(until)
+
+    let rotation_ms = rotation_period.checked_mul(HOUR_MS).ok_or_else(|| {
+        Error::Custom("event graph rotation period overflows milliseconds".into())
+    })?;
+    let now = UNIX_EPOCH.elapsed().unwrap().as_millis() as u64;
+
+    if now < starting_timestamp {
+        return Ok(starting_timestamp)
     }
+
+    let elapsed = now.saturating_sub(starting_timestamp);
+    let periods = elapsed
+        .checked_div(rotation_ms)
+        .and_then(|p| p.checked_add(1))
+        .ok_or_else(|| Error::Custom("event graph rotation calculation overflowed".into()))?;
+    let offset = periods
+        .checked_mul(rotation_ms)
+        .ok_or_else(|| Error::Custom("event graph rotation offset overflowed".into()))?;
+
+    starting_timestamp
+        .checked_add(offset)
+        .ok_or_else(|| Error::Custom("event graph next rotation timestamp overflowed".into()))
 }
 
 /// Milliseconds remaining until `next_rotation`.
-///
-/// # Panics
-///
-/// Panics if `next_rotation` is in the past.
-pub fn millis_until_next_rotation(next_rotation: u64) -> u64 {
+pub fn millis_until_next_rotation(next_rotation: u64) -> Result<u64> {
     let now = UNIX_EPOCH.elapsed().unwrap().as_millis() as u64;
-    assert!(next_rotation >= now, "Next rotation is in the past");
-    next_rotation - now
+    next_rotation
+        .checked_sub(now)
+        .ok_or_else(|| Error::Custom("event graph next rotation is in the past".into()))
 }
 
 /// Generate the deterministic genesis event for the current rotation
@@ -102,7 +116,9 @@ pub fn generate_genesis(config: &EventGraphConfig) -> Event {
     } else {
         let passed = hours_since(config.initial_genesis);
         let rotations = passed / config.hours_rotation;
-        config.initial_genesis + (rotations * config.hours_rotation * HOUR as u64)
+        let offset_hours = rotations.saturating_mul(config.hours_rotation);
+        let offset_ms = offset_hours.saturating_mul(HOUR_MS);
+        config.initial_genesis.saturating_add(offset_ms)
     };
     let content_hash = blake3::hash(&config.genesis_contents);
     let header = Header { timestamp, parents: [NULL_ID; N_EVENT_PARENTS], layer: 0, content_hash };
