@@ -433,6 +433,47 @@ enum PeerStatus {
     Failed,
 }
 
+/// Match an `EventRep` against the exact IDs requested for one sync chunk.
+///
+/// The response may be partial, but every returned event must be unique and
+/// must belong to the outstanding request. Returned events and blobs are
+/// reordered to match the request order, and missing IDs are returned for
+/// retry with another peer.
+pub(crate) fn filter_requested_event_rep(
+    requested: &[blake3::Hash],
+    events: Vec<Event>,
+    blobs: Vec<Vec<u8>>,
+) -> Result<(Vec<Event>, Vec<Vec<u8>>, Vec<blake3::Hash>)> {
+    if events.len() != blobs.len() {
+        return Err(Error::DagSyncFailed)
+    }
+
+    let requested_set: HashSet<blake3::Hash> = requested.iter().copied().collect();
+    let mut by_id = HashMap::with_capacity(events.len());
+
+    for (event, blob) in events.into_iter().zip(blobs.into_iter()) {
+        let event_id = event.id();
+        if !requested_set.contains(&event_id) || by_id.insert(event_id, (event, blob)).is_some() {
+            return Err(Error::DagSyncFailed)
+        }
+    }
+
+    let mut matched_events = Vec::with_capacity(by_id.len());
+    let mut matched_blobs = Vec::with_capacity(by_id.len());
+    let mut missing = Vec::new();
+
+    for id in requested {
+        if let Some((event, blob)) = by_id.remove(id) {
+            matched_events.push(event);
+            matched_blobs.push(blob);
+        } else {
+            missing.push(*id);
+        }
+    }
+
+    Ok((matched_events, matched_blobs, missing))
+}
+
 /// The main Event Graph instance.
 ///
 /// Manages a rolling window of DAGs (one per rotation period), a
@@ -876,10 +917,10 @@ impl EventGraph {
         let mut peer_st: HashMap<Url, PeerStatus> = HashMap::new();
         let mut count = 0;
         let mut fs = FuturesUnordered::new();
-        // Each received chunk is (events, blobs) - blobs aligned
-        // index-wise with events. Empty `Vec<u8>` entries mean
-        // "this event has no blob from the serving peer".
-        let mut received: BTreeMap<usize, (Vec<Event>, Vec<Vec<u8>>)> = BTreeMap::new();
+        // Collected by event ID so partial chunk retries cannot disturb
+        // the final layer-sorted insertion order. Empty `Vec<u8>` entries
+        // mean "this event has no blob from the serving peer".
+        let mut received: HashMap<blake3::Hash, (Event, Vec<u8>)> = HashMap::new();
 
         while count < sorted.len() {
             let mut free = vec![];
@@ -896,6 +937,9 @@ impl EventGraph {
             if free.is_empty() && busy == 0 {
                 return Err(Error::DagSyncFailed)
             }
+            if remaining.is_empty() && fs.is_empty() {
+                return Err(Error::DagSyncFailed)
+            }
             let n = std::cmp::min(free.len(), remaining.len());
             let ids: Vec<usize> = remaining.iter().take(n).copied().collect();
             for (i, cid) in ids.iter().enumerate() {
@@ -904,23 +948,63 @@ impl EventGraph {
                 peer_st.insert(free[i].address().clone(), PeerStatus::Busy);
             }
             if let Some((evts, cid, ch)) = fs.next().await {
-                if let Ok((e, blobs)) = evts {
-                    count += e.len();
-                    received.insert(cid, (e, blobs));
-                    peer_st.insert(ch.address().clone(), PeerStatus::Free);
+                if let Ok((events, blobs)) = evts {
+                    let Some(requested) = chunks.get(&cid) else {
+                        peer_st.insert(ch.address().clone(), PeerStatus::Failed);
+                        continue
+                    };
+
+                    match filter_requested_event_rep(requested, events, blobs) {
+                        Ok((matched_events, matched_blobs, missing)) => {
+                            let matched = matched_events.len();
+                            for (event, blob) in matched_events.into_iter().zip(matched_blobs) {
+                                let event_id = event.id();
+                                if received.insert(event_id, (event, blob)).is_none() {
+                                    count += 1;
+                                }
+                            }
+
+                            if missing.is_empty() {
+                                peer_st.insert(ch.address().clone(), PeerStatus::Free);
+                            } else {
+                                chunks.insert(cid, missing);
+                                remaining.insert(cid);
+                                let status = if matched == 0 {
+                                    PeerStatus::Failed
+                                } else {
+                                    PeerStatus::Free
+                                };
+                                peer_st.insert(ch.address().clone(), status);
+                            }
+                        }
+                        Err(_) => {
+                            remaining.insert(cid);
+                            peer_st.insert(ch.address().clone(), PeerStatus::Failed);
+                        }
+                    }
                 } else {
                     remaining.insert(cid);
                     peer_st.insert(ch.address().clone(), PeerStatus::Failed);
                 }
             }
         }
-        for (_, (events_chunk, blobs_chunk)) in received {
-            // dag_insert_with_blobs handles RLN re-verification per
-            // event when blobs are present, and falls through to the
-            // trust-the-quorum path when they're not. See
-            // dag_insert_with_blobs's docstring for the policy.
-            self.dag_insert_with_blobs(&events_chunk, &blobs_chunk, dag_name).await?;
+
+        let mut events = Vec::with_capacity(sorted.len());
+        let mut blobs = Vec::with_capacity(sorted.len());
+        for hdr in sorted {
+            let event_id = hdr.id();
+            let Some((event, blob)) = received.remove(&event_id) else {
+                return Err(Error::DagSyncFailed)
+            };
+            events.push(event);
+            blobs.push(blob);
         }
+
+        // dag_insert_with_blobs handles RLN re-verification per event when
+        // blobs are present, and falls through to the trust-the-quorum path
+        // when they're not. See dag_insert_with_blobs's docstring for the
+        // policy.
+        self.dag_insert_with_blobs(&events, &blobs, dag_name).await?;
         Ok(())
     }
 

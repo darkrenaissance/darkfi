@@ -32,6 +32,7 @@ use crate::{
     event_graph::{
         compute_unreferenced_tips,
         event::Header,
+        filter_requested_event_rep,
         proto::{EventPut, SyncDirection},
         test_helpers::{
             archive_config, bounded_dag_store_config, init_logger, make_eg, make_network,
@@ -42,6 +43,49 @@ use crate::{
     },
     system::{sleep, timeout::timeout},
 };
+
+fn test_event(content: &[u8], layer: u64) -> Event {
+    Event {
+        header: Header {
+            timestamp: 1_704_067_200_000 + layer,
+            parents: NULL_PARENTS,
+            layer,
+            content_hash: blake3::hash(content),
+        },
+        content: content.to_vec(),
+    }
+}
+
+#[test]
+fn evgr_event_rep_filter_matches_only_requested_ids() {
+    let event_a = test_event(b"requested-a", 1);
+    let event_b = test_event(b"requested-b", 2);
+    let unrelated = test_event(b"unrelated", 3);
+    let requested = vec![event_a.id(), event_b.id()];
+
+    let (events, blobs, missing) =
+        filter_requested_event_rep(&requested, vec![event_b.clone()], vec![b"blob-b".to_vec()])
+            .unwrap();
+    assert_eq!(events.iter().map(Event::id).collect::<Vec<_>>(), vec![event_b.id()]);
+    assert_eq!(blobs, vec![b"blob-b".to_vec()]);
+    assert_eq!(missing, vec![event_a.id()]);
+
+    assert!(filter_requested_event_rep(
+        &requested,
+        vec![unrelated],
+        vec![b"unrelated-blob".to_vec()],
+    )
+    .is_err());
+
+    assert!(filter_requested_event_rep(
+        &requested,
+        vec![event_a.clone(), event_a.clone()],
+        vec![b"blob-a".to_vec(), b"duplicate-blob".to_vec()],
+    )
+    .is_err());
+
+    assert!(filter_requested_event_rep(&requested, vec![event_a], Vec::new()).is_err());
+}
 
 #[test]
 fn evgr_time_index_queries_and_saturating_cursor() {
