@@ -210,8 +210,8 @@ fn evgr_time_index_queries_and_saturating_cursor() {
     // Forward, backward, newest, oldest queries plus the saturating
     // cursor at u64 boundaries.
     let mut idx = TimeIndex::new();
-    for ts in [100_u64, 200, 200, 300, 400, 500] {
-        let id = blake3::hash(&ts.to_be_bytes());
+    for (i, ts) in [100_u64, 200, 200, 300, 400, 500].into_iter().enumerate() {
+        let id = blake3::hash(&[ts.to_be_bytes(), (i as u64).to_be_bytes()].concat());
         idx.insert(ts, id);
     }
     assert_eq!(idx.len(), 6);
@@ -219,6 +219,12 @@ fn evgr_time_index_queries_and_saturating_cursor() {
     assert_eq!(idx.oldest(2).len(), 2);
     assert_eq!(idx.before(300, 10).len(), 3);
     assert_eq!(idx.after(200, 10).len(), 3);
+
+    let duplicate = blake3::hash(b"duplicate-time-index-entry");
+    idx.insert(600, duplicate);
+    idx.insert(600, duplicate);
+    assert_eq!(idx.len(), 7);
+    assert_eq!(idx.newest(10).iter().filter(|id| **id == duplicate).count(), 1);
 
     // Saturating cursor: before(0) shouldn't underflow,
     // after(u64::MAX) shouldn't overflow.
@@ -387,6 +393,36 @@ fn evgr_dag_insert_valid_and_duplicate() {
 
         // Re-insert is a no-op.
         assert!(eg.dag_insert(slice::from_ref(&event), &dag_name).await.unwrap().is_empty());
+    })
+}
+
+#[test]
+fn evgr_duplicate_header_insert_does_not_duplicate_time_index() {
+    smol::block_on(async {
+        let eg = make_eg().await;
+        let dag_ts = eg.current_genesis.read().await.header.timestamp;
+        let dag_name = dag_ts.to_string();
+        let event = Event::new(b"time-index-dedup".to_vec(), &eg).await;
+
+        eg.header_dag_insert(vec![event.header.clone()], &dag_name).await.unwrap();
+        let indexed_after_first = {
+            let store = eg.dag_store.read().await;
+            store.get_slot(&dag_ts).unwrap().time_index.len()
+        };
+
+        eg.header_dag_insert(vec![event.header.clone(), event.header.clone()], &dag_name)
+            .await
+            .unwrap();
+        let indexed_after_duplicates = {
+            let store = eg.dag_store.read().await;
+            store.get_slot(&dag_ts).unwrap().time_index.len()
+        };
+        assert_eq!(indexed_after_duplicates, indexed_after_first);
+
+        let ids = eg.dag_insert(slice::from_ref(&event), &dag_name).await.unwrap();
+        assert_eq!(ids, vec![event.id()]);
+        let page = eg.fetch_page(u64::MAX, SyncDirection::Backward, 10).await.unwrap();
+        assert_eq!(page.iter().filter(|ev| ev.id() == event.id()).count(), 1);
     })
 }
 
