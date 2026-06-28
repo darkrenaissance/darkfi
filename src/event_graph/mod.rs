@@ -124,6 +124,11 @@ pub type EventGraphPtr = Arc<EventGraph>;
 /// Unreferenced tips grouped by layer.
 pub type LayerUTips = BTreeMap<u64, HashSet<blake3::Hash>>;
 
+/// Generate the deterministic genesis event for the static DAG.
+fn generate_static_genesis(config: &EventGraphConfig) -> Event {
+    generate_genesis(&EventGraphConfig { hours_rotation: 0, ..config.clone() })
+}
+
 /// Bidirectional timestamp -> event-ID index.
 #[derive(Clone, Debug, Default)]
 pub struct TimeIndex {
@@ -2273,9 +2278,10 @@ impl EventGraph {
 
         match rln_node {
             RLNNode::Registration(commitment) => {
-                // No ZK proofs, only commitments in the hardcoded genesis set
-                // are accepted this way, anything else falls through to
-                // normal proof verification.
+                // Current admission policy is pregenerated identities only.
+                // The guard blob is valid exclusively for commitments built
+                // into GENESIS_COMMITMENTS_REPR; pairing it with any other
+                // commitment is an unambiguous forgery attempt.
                 if blob == rln::GENESIS_BLOB_GUARD {
                     let repr = commitment.to_repr();
                     if GENESIS_COMMITMENTS_REPR.contains(&repr) {
@@ -2284,13 +2290,14 @@ impl EventGraph {
                         }
                         return StaticEventCheck::AcceptedRegistration(*commitment)
                     } else {
-                        // Guard blob with unknown commitment = malicious
                         return StaticEventCheck::Malicious
                     }
                 }
 
-                // Accepting only genesis registeration, reject every
-                // other account.
+                // Free non-genesis registration is intentionally disabled:
+                // it is a sybil attack surface. Keep the proof scaffolding
+                // below for the future staked tier, where acceptance must be
+                // backed by a DarkFi smart-contract attestation.
                 StaticEventCheck::Rejected
                 /*
                 #[allow(unreachable_code)]
@@ -2380,8 +2387,7 @@ impl EventGraph {
     /// already present in the identity tree.
     pub async fn bootstrap_genesis_identities(&self) -> Result<()> {
         // Deterministic for premade identities.
-        let genesis_event =
-            generate_genesis(&EventGraphConfig { hours_rotation: 0, ..self.config.clone() });
+        let genesis_event = generate_static_genesis(&self.config);
         let genesis_id = genesis_event.id();
         if !self.static_dag.contains_key(genesis_id.as_bytes())? {
             return Err(Error::Custom("static DAG genesis missing during bootstrap".into()))
