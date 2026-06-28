@@ -121,7 +121,12 @@ impl RlnAppId {
     }
 }
 
-/// Versioned attestation accompanying a registration
+/// Versioned attestation accompanying a registration.
+///
+/// Runtime admission currently accepts only pregenerated genesis
+/// identities. This enum is retained for the future staked tier,
+/// where a DarkFi smart-contract attestation must back new identity
+/// registration.
 #[derive(Clone, Debug, SerialEncodable, SerialDecodable)]
 pub enum RegistrationAttestation {
     SPECIAL,
@@ -147,7 +152,12 @@ impl RegistrationAttestation {
 /// The complete blob attached to a registration `EventPut` /
 /// `StaticPut`. The proof's public inputs commit to the
 /// `(commitment, user_message_limit, max_message_limit)` tuple,
-/// and `attestation` carries the (eventual) staking proof.
+/// and `attestation` carries the staking proof.
+///
+/// Non-genesis registration is disabled until contract-backed
+/// staked admission is implemented; current production admission
+/// accepts only pregenerated commitments paired with
+/// [`GENESIS_BLOB_GUARD`].
 #[derive(Clone, SerialEncodable, SerialDecodable)]
 pub struct RegistrationBlob {
     pub proof: Proof,

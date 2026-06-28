@@ -18,17 +18,21 @@
 
 use std::{sync::Arc, time::UNIX_EPOCH};
 
-use darkfi_sdk::{crypto::poseidon_hash, pasta::pallas};
+use darkfi_sdk::{
+    crypto::{pasta_prelude::PrimeField, poseidon_hash},
+    pasta::pallas,
+};
 use darkfi_serial::{deserialize_async, serialize_async};
 use sled_overlay::sled;
 use smol::Executor;
 
 use crate::{
     event_graph::{
+        genesis_commits::GENESIS_COMMITMENTS_REPR,
         rln::{
             epoch_of, epoch_start_millis, sss_recover, Blob, IdentityState, MessageMetadata,
             RLNNode, RegistrationAttestation, RegistrationBlob, RlnAppId, SignalCheck, SlashBlob,
-            MAX_MSG_LIMIT, RLN_EPOCH_LEN, RLN_GENESIS,
+            GENESIS_BLOB_GUARD, MAX_MSG_LIMIT, RLN_EPOCH_LEN, RLN_GENESIS,
         },
         test_helpers::{
             make_eg, make_eg_with_config, make_network, run_multi_node_test, shutdown_network,
@@ -525,13 +529,40 @@ fn placeholder_slash_blob(ish: pallas::Base, root: pallas::Base) -> SlashBlob {
     }
 }
 
+fn genesis_commitment_at(index: usize) -> pallas::Base {
+    pallas::Base::from_repr(GENESIS_COMMITMENTS_REPR[index]).into_option().unwrap()
+}
+
 #[test]
-fn rln_static_event_registration_invalid_limits_are_malicious() {
-    // A registration with structurally invalid `user_message_limit`
-    // (zero, above MAX_MSG_LIMIT, or above the attestation's
-    // permitted ceiling) is `Malicious`. Each case is one strike-
-    // worthy violation - peers that relay any of these are
-    // misbehaving.
+fn rln_static_event_pregenerated_guard_accepted() {
+    smol::block_on(async {
+        let eg = make_eg().await;
+        let commitment = genesis_commitment_at(0);
+        let node = RLNNode::Registration(commitment);
+
+        let outcome = eg.rln_verify_static_event(&node, GENESIS_BLOB_GUARD, 0).await;
+        assert!(matches!(outcome, StaticEventCheck::AcceptedRegistration(c) if c == commitment));
+    })
+}
+
+#[test]
+fn rln_static_event_guard_with_unknown_commitment_is_malicious() {
+    smol::block_on(async {
+        let eg = make_eg().await;
+        let commitment = pallas::Base::from(0xdead_beefu64);
+        assert!(!GENESIS_COMMITMENTS_REPR.contains(&commitment.to_repr()));
+
+        let node = RLNNode::Registration(commitment);
+        let outcome = eg.rln_verify_static_event(&node, GENESIS_BLOB_GUARD, 0).await;
+        assert!(matches!(outcome, StaticEventCheck::Malicious));
+    })
+}
+
+#[test]
+fn rln_static_event_free_registration_blobs_rejected() {
+    // Free registration is intentionally disabled: non-guard
+    // registration blobs are rejected before proof parsing until
+    // staked, contract-backed admission exists.
     smol::block_on(async {
         let eg = make_eg().await;
         let node = RLNNode::Registration(pallas::Base::from(1u64));
@@ -548,7 +579,7 @@ fn rln_static_event_registration_invalid_limits_are_malicious() {
             );
             let bytes = serialize_async(&blob).await;
             let outcome = eg.rln_verify_static_event(&node, &bytes, 0).await;
-            assert!(matches!(outcome, StaticEventCheck::Malicious), "{why}");
+            assert!(matches!(outcome, StaticEventCheck::Rejected), "{why}");
         }
     })
 }

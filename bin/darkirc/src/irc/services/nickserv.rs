@@ -459,17 +459,6 @@ impl NickServ {
             return Ok(vec![notice(nick, "Invalid user_msg_limit: must be at least 1.")])
         }
 
-        // Open the per-account sled tree
-        let db =
-            self.server.darkirc.sled.open_tree(format!("{ACCOUNTS_DB_PREFIX}{account_name}"))?;
-
-        if !db.is_empty() {
-            return Ok(vec![notice(nick, "This account name is already registered.")])
-        }
-
-        // Open the default-mirror sled tree
-        let db_default = self.server.darkirc.sled.open_tree(ACCOUNTS_DEFAULT_TREE)?;
-
         // Parse the secrets. The original code used `.unwrap()` on
         // the `try_into` for the byte-length check, which would
         // panic on any input that wasn't exactly 32 bytes. Convert
@@ -494,7 +483,33 @@ impl NickServ {
             last_epoch: 0,
         };
 
-        // Store account
+        let is_genesis =
+            GENESIS_COMMITMENTS_REPR.contains(&new_rln_identity.commitment().to_repr());
+        if !is_genesis {
+            return Ok(vec![notice(
+                nick,
+                "Registration is currently limited to pregenerated identities.",
+            )])
+        }
+
+        if user_msg_limit != GENESIS_USER_MSG_LIMIT {
+            return Ok(vec![notice(
+                nick,
+                format!("Genesis account must use user_msg_limit={}", GENESIS_USER_MSG_LIMIT),
+            )])
+        }
+
+        // Open the per-account sled tree only after the identity has
+        // passed the pregenerated-admission checks. Rejected identities
+        // must not leave account state behind or become active locally.
+        let db =
+            self.server.darkirc.sled.open_tree(format!("{ACCOUNTS_DB_PREFIX}{account_name}"))?;
+
+        if !db.is_empty() {
+            return Ok(vec![notice(nick, "This account name is already registered.")])
+        }
+
+        // Store account.
         db.insert(ACCOUNTS_KEY_RLN_IDENTITY, serialize_async(&new_rln_identity).await)?;
 
         // First-ever registration also becomes the active one. We
@@ -502,76 +517,11 @@ impl NickServ {
         // tree) because that's the source of truth at runtime.
         let became_active = self.server.rln_identity.read().await.is_none();
         if became_active {
+            let db_default = self.server.darkirc.sled.open_tree(ACCOUNTS_DEFAULT_TREE)?;
             db_default
                 .insert(ACCOUNTS_KEY_RLN_IDENTITY, serialize_async(&new_rln_identity).await)?;
             *self.server.rln_identity.write().await = Some(new_rln_identity);
         }
-
-        let is_genesis =
-            GENESIS_COMMITMENTS_REPR.contains(&new_rln_identity.commitment().to_repr());
-
-        if is_genesis {
-            if user_msg_limit != GENESIS_USER_MSG_LIMIT {
-                let mut replies = vec![notice(
-                    nick,
-                    format!("Genesis account must use user_msg_limit={}", GENESIS_USER_MSG_LIMIT),
-                )];
-                replies.push(notice(
-                    nick,
-                    format!("Use `DEREGISTER {account_name}` to remove this account."),
-                ));
-            }
-            let mut replies =
-                vec![notice(nick, format!("Successfully registered account \"{account_name}\""))];
-            if became_active {
-                replies
-                    .push(notice(nick, format!("\"{account_name}\" is now the active identity.")));
-            } else {
-                replies.push(notice(
-                    nick,
-                    format!("Use `SET {account_name}` to make this the active identity."),
-                ));
-            }
-            Ok(replies)
-        } else {
-            let replies =
-                vec![notice(nick, format!("Failed to register account \"{account_name}\""))];
-            Ok(replies)
-        }
-        // Apply the registration through the canonical pipeline:
-        //
-        // 1. `apply_rln_static_event` mutates the SMT and records
-        //    the post-mutation root in the historical-roots table.
-        //    Same entry point that `proto.rs::handle_static_put`
-        //    calls for events arriving over the wire, so locally-
-        //    originated and remote registrations end up in the
-        //    same canonical state.
-        // 2. `static_blob_store` persists the blob alongside the
-        //    event so a future late-joiner can re-verify the proof
-        //    during `static_sync`.
-        // 3. `static_insert` writes the event to the static DAG
-        //    and notifies `static_pub` (which the IRC client
-        //    subscription picks up for its own bookkeeping).
-        // 4. `static_broadcast` re-emits to peers - but ONLY if
-        //    the local DAG is synced. A pre-sync broadcast just
-        //    vanishes (peers gate `handle_static_put` on their own
-        //    is_synced state, and we can't serve our tips for
-        //    pulls because `handle_tip_req` gates on is_synced
-        //    too). When unsynced, we defer the broadcast to a
-        //    watcher task that drains the pending queue once sync
-        //    completes.
-        /*
-        evgr.apply_rln_static_event(&event, &rln_node).await?;
-        evgr.static_blob_store(&event.id(), &blob_bytes)?;
-        evgr.static_insert(&event).await?;
-
-        let broadcast_status = if evgr.is_synced() {
-            evgr.static_broadcast(event, blob_bytes).await?;
-            BroadcastStatus::Sent
-        } else {
-            self.server.pending_static_broadcasts.lock().await.push((event, blob_bytes));
-            BroadcastStatus::Deferred
-        };
 
         let mut replies =
             vec![notice(nick, format!("Successfully registered account \"{account_name}\""))];
@@ -583,17 +533,10 @@ impl NickServ {
                 format!("Use `SET {account_name}` to make this the active identity."),
             ));
         }
-
-        if broadcast_status == BroadcastStatus::Deferred {
-            replies.push(notice(
-                nick,
-                "Note: local DAG is not yet synced; the registration is stored \
-                 locally and will be broadcast to peers once sync completes.",
-            ));
-        }
-
+        // Pregenerated identities are already bootstrapped into
+        // the static DAG. Future staked registration will need to
+        // add a contract-backed network broadcast path here.
         Ok(replies)
-        */
     }
 
     /// Handle the DEREGISTER command.
