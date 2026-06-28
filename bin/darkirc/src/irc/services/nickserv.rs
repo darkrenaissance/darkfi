@@ -532,11 +532,11 @@ impl NickServ {
                     format!("Use `SET {account_name}` to make this the active identity."),
                 ));
             }
-            return Ok(replies)
+            Ok(replies)
         } else {
             let replies =
                 vec![notice(nick, format!("Failed to register account \"{account_name}\""))];
-            return Ok(replies)
+            Ok(replies)
         }
         // Apply the registration through the canonical pipeline:
         //
@@ -792,7 +792,7 @@ impl NickServ {
         // any non-empty arg, so a fat-fingered "SLASH alice yes"
         // doesn't go through.
         match tokens.next() {
-            Some(t) if t == "CONFIRM" => {}
+            Some("CONFIRM") => {}
             _ => {
                 return Ok(notices(
                     nick,
@@ -873,7 +873,7 @@ impl NickServ {
         let slash_pk = evgr.zk_keys.load_slash_pk()?;
         let (proof, root) = {
             let mut id_state = evgr.identity_state.write().await;
-            create_slash_proof(identity_secret_hash, &mut *id_state, &slash_pk)?
+            create_slash_proof(identity_secret_hash, &mut id_state, &slash_pk)?
         };
 
         let slash_blob = SlashBlob { proof, identity_secret_hash, merkle_root: root };

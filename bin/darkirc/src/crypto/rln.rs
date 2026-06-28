@@ -130,9 +130,9 @@ impl RlnIdentity {
         Some(m)
     }
 
-    /// Build a [`RegistrationBlob`] suitable for broadcast as a
-    /// `StaticPut`. The proving key comes from the EventGraph's
-    /// shared `ZkKeys` cache.
+    // /// Build a [`RegistrationBlob`] suitable for broadcast as a
+    // /// `StaticPut`. The proving key comes from the EventGraph's
+    // /// shared `ZkKeys` cache.
     // pub fn create_registration(&self, eg: &EventGraphPtr) -> Result<RegistrationBlob> {
     //     let zkbin = ZkBinary::decode(RLN2_REGISTER_ZKBIN, false)?;
 

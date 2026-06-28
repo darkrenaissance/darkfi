@@ -109,20 +109,17 @@ fn shared_zk_keys() -> Arc<crate::event_graph::rln::ZkKeys> {
 }
 
 pub async fn make_eg() -> EventGraphPtr {
+    make_eg_with_config(test_config()).await
+}
+
+/// Construct an [`EventGraph`] with a caller-provided test config.
+pub async fn make_eg_with_config(config: EventGraphConfig) -> EventGraphPtr {
     let ex = Arc::new(Executor::new());
     let p2p = P2p::new(Settings::default(), ex.clone()).await.unwrap();
     let sled_db = sled::Config::new().temporary(true).open().unwrap();
-    EventGraph::with_zk_keys(
-        p2p,
-        sled_db,
-        "/tmp".into(),
-        false,
-        test_config(),
-        shared_zk_keys(),
-        ex,
-    )
-    .await
-    .unwrap()
+    EventGraph::with_zk_keys(p2p, sled_db, "/tmp".into(), false, config, shared_zk_keys(), ex)
+        .await
+        .unwrap()
 }
 
 /// Number of nodes a `make_network` call brings up.
