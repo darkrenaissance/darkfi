@@ -33,13 +33,14 @@ use crate::{
         compute_unreferenced_tips,
         event::Header,
         filter_requested_event_rep, merge_static_sync_event_rep,
-        proto::{EventPut, SyncDirection},
+        proto::{cap_layer_tips, count_layer_tips, EventPut, SyncDirection, MAX_RANGE_PAGE_SIZE},
         test_helpers::{
             archive_config, bounded_dag_store_config, init_logger, make_eg, make_network,
             run_multi_node_test, shutdown_network, TestIdentity,
         },
         util::next_hour_timestamp,
-        DagStore, Event, EventGraphPtr, TimeIndex, NULL_ID, NULL_PARENTS, N_EVENT_PARENTS,
+        DagStore, Event, EventGraphPtr, LayerUTips, TimeIndex, NULL_ID, NULL_PARENTS,
+        N_EVENT_PARENTS,
     },
     system::{sleep, timeout::timeout},
 };
@@ -139,6 +140,18 @@ fn evgr_static_sync_merge_tracks_partial_requested_batches() {
 
     let fetched_ids: HashSet<_> = fetched.iter().map(|(ev, _)| ev.id()).collect();
     assert_eq!(fetched_ids, HashSet::from([event_a.id(), event_b.id()]));
+}
+
+#[test]
+fn evgr_layer_tip_cap_is_bounded() {
+    let mut tips = LayerUTips::new();
+    tips.entry(0).or_default().insert(blake3::hash(b"tip-0"));
+    tips.entry(1).or_default().insert(blake3::hash(b"tip-1"));
+    tips.entry(1).or_default().insert(blake3::hash(b"tip-2"));
+
+    let capped = cap_layer_tips(&tips, 2);
+    assert_eq!(count_layer_tips(&capped), 2);
+    assert!(capped.get(&0).is_some_and(|layer| layer.len() == 1));
 }
 
 #[test]
@@ -343,8 +356,8 @@ fn evgr_fetch_page_both_directions() {
         let eg = make_eg().await;
         let dag_name = eg.current_genesis.read().await.header.timestamp.to_string();
         let base = UNIX_EPOCH.elapsed().unwrap().as_millis() as u64;
-        for i in 0..10u64 {
-            let ev = Event::with_timestamp(base + i, vec![i as u8], &eg).await;
+        for i in 0..(MAX_RANGE_PAGE_SIZE as u64 + 10) {
+            let ev = Event::with_timestamp(base + i, vec![(i % 251) as u8], &eg).await;
             eg.header_dag_insert(vec![ev.header.clone()], &dag_name).await.unwrap();
             eg.dag_insert(slice::from_ref(&ev), &dag_name).await.unwrap();
         }
@@ -360,6 +373,12 @@ fn evgr_fetch_page_both_directions() {
         for w in page.windows(2) {
             assert!(w[0].header.timestamp <= w[1].header.timestamp);
         }
+
+        let capped = eg
+            .fetch_page(u64::MAX, SyncDirection::Backward, MAX_RANGE_PAGE_SIZE + 10)
+            .await
+            .unwrap();
+        assert_eq!(capped.len(), MAX_RANGE_PAGE_SIZE);
     })
 }
 
