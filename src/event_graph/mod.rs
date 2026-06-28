@@ -1618,7 +1618,7 @@ impl EventGraph {
             if !slot.header_tree.contains_key(eid.as_bytes())? {
                 continue
             }
-            if !ev.dag_validate(&slot.header_tree, &self.config).await? {
+            if !ev.dag_validate(&slot.header_tree, &self.config, dag_ts).await? {
                 return Err(Error::EventIsInvalid)
             }
             let se = serialize_async(ev).await;
@@ -1735,7 +1735,7 @@ impl EventGraph {
 
             let hid = hdr.id();
 
-            if !hdr.validate(&slot.header_tree, &self.config, Some(&overlay)).await? {
+            if !hdr.validate(&slot.header_tree, &self.config, dag_ts, Some(&overlay)).await? {
                 return Err(Error::HeaderIsInvalid)
             }
 

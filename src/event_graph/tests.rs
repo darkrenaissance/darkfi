@@ -35,12 +35,12 @@ use crate::{
         filter_requested_event_rep, merge_static_sync_event_rep,
         proto::{cap_layer_tips, count_layer_tips, EventPut, SyncDirection, MAX_RANGE_PAGE_SIZE},
         test_helpers::{
-            archive_config, bounded_dag_store_config, init_logger, make_eg, make_network,
-            run_multi_node_test, shutdown_network, test_config, TestIdentity,
+            archive_config, bounded_dag_store_config, init_logger, make_eg, make_eg_with_config,
+            make_network, run_multi_node_test, shutdown_network, test_config, TestIdentity,
         },
         util::next_hour_timestamp,
-        DagStore, Event, EventGraphPtr, LayerUTips, TimeIndex, NULL_ID, NULL_PARENTS,
-        N_EVENT_PARENTS,
+        DagStore, Event, EventGraphConfig, EventGraphPtr, LayerUTips, TimeIndex, NULL_ID,
+        NULL_PARENTS, N_EVENT_PARENTS,
     },
     system::{sleep, timeout::timeout},
 };
@@ -433,7 +433,144 @@ fn evgr_header_validate_rejects_layer_overflow_parent() {
             content_hash: blake3::hash(b"overflow-child"),
         };
 
-        assert!(!child.validate(&tree, &test_config(), None).await.unwrap());
+        assert!(!child.validate(&tree, &test_config(), timestamp, None).await.unwrap());
+    })
+}
+
+#[test]
+fn evgr_header_validate_uses_target_slot_bounds() {
+    smol::block_on(async {
+        const HOUR_MS: u64 = 3_600_000;
+
+        let db = sled::Config::new().temporary(true).open().unwrap();
+        let tree = db.open_tree("headers").unwrap();
+        let dag_ts = 1_704_067_200_000;
+        let drift = crate::event_graph::EVENT_TIME_DRIFT;
+        let config = EventGraphConfig { hours_rotation: 6, ..test_config() };
+        let genesis = Header {
+            timestamp: dag_ts,
+            parents: NULL_PARENTS,
+            layer: 0,
+            content_hash: blake3::hash(&config.genesis_contents),
+        };
+        tree.insert(genesis.id().as_bytes(), serialize_async(&genesis).await).unwrap();
+
+        let mut parents = [NULL_ID; N_EVENT_PARENTS];
+        parents[0] = genesis.id();
+        let make_header = |timestamp, content: &[u8]| Header {
+            timestamp,
+            parents,
+            layer: 1,
+            content_hash: blake3::hash(content),
+        };
+
+        let lower_edge = make_header(dag_ts.saturating_sub(drift), b"lower-edge");
+        assert!(lower_edge.validate(&tree, &config, dag_ts, None).await.unwrap());
+
+        let upper_edge = make_header(dag_ts + 6 * HOUR_MS + drift - 1, b"upper-edge");
+        assert!(upper_edge.validate(&tree, &config, dag_ts, None).await.unwrap());
+
+        let too_early = make_header(dag_ts - drift - 1, b"too-early");
+        assert!(!too_early.validate(&tree, &config, dag_ts, None).await.unwrap());
+
+        let too_late = make_header(dag_ts + 6 * HOUR_MS + drift, b"too-late");
+        assert!(!too_late.validate(&tree, &config, dag_ts, None).await.unwrap());
+    })
+}
+
+#[test]
+fn evgr_header_validate_ignores_future_initial_genesis() {
+    smol::block_on(async {
+        const HOUR_MS: u64 = 3_600_000;
+
+        let db = sled::Config::new().temporary(true).open().unwrap();
+        let tree = db.open_tree("headers").unwrap();
+        let now = UNIX_EPOCH.elapsed().unwrap().as_millis() as u64;
+        let dag_ts = now.saturating_sub(HOUR_MS);
+        let config =
+            EventGraphConfig { initial_genesis: now + HOUR_MS, hours_rotation: 1, ..test_config() };
+        let genesis = Header {
+            timestamp: dag_ts,
+            parents: NULL_PARENTS,
+            layer: 0,
+            content_hash: blake3::hash(&config.genesis_contents),
+        };
+        tree.insert(genesis.id().as_bytes(), serialize_async(&genesis).await).unwrap();
+
+        let mut parents = [NULL_ID; N_EVENT_PARENTS];
+        parents[0] = genesis.id();
+        let child = Header {
+            timestamp: dag_ts + 1,
+            parents,
+            layer: 1,
+            content_hash: blake3::hash(b"future-initial-genesis"),
+        };
+
+        assert!(child.validate(&tree, &config, dag_ts, None).await.unwrap());
+    })
+}
+
+#[test]
+fn evgr_header_validate_no_rotation_rejects_far_future() {
+    smol::block_on(async {
+        let db = sled::Config::new().temporary(true).open().unwrap();
+        let tree = db.open_tree("headers").unwrap();
+        let config = test_config();
+        let dag_ts = config.initial_genesis;
+        let genesis = Header {
+            timestamp: dag_ts,
+            parents: NULL_PARENTS,
+            layer: 0,
+            content_hash: blake3::hash(&config.genesis_contents),
+        };
+        tree.insert(genesis.id().as_bytes(), serialize_async(&genesis).await).unwrap();
+
+        let mut parents = [NULL_ID; N_EVENT_PARENTS];
+        parents[0] = genesis.id();
+        let old_history = Header {
+            timestamp: dag_ts + 1,
+            parents,
+            layer: 1,
+            content_hash: blake3::hash(b"old-no-rotation-history"),
+        };
+        assert!(old_history.validate(&tree, &config, dag_ts, None).await.unwrap());
+
+        let future = Header {
+            timestamp: UNIX_EPOCH.elapsed().unwrap().as_millis() as u64 +
+                crate::event_graph::EVENT_TIME_DRIFT +
+                1,
+            parents,
+            layer: 1,
+            content_hash: blake3::hash(b"future-no-rotation-header"),
+        };
+        assert!(!future.validate(&tree, &config, dag_ts, None).await.unwrap());
+    })
+}
+
+#[test]
+fn evgr_header_insert_rejects_unloaded_dag_slot() {
+    smol::block_on(async {
+        let config = EventGraphConfig { hours_rotation: 1, max_dags: Some(2), ..test_config() };
+        let eg = make_eg_with_config(config).await;
+        let dag_ts = next_hour_timestamp(-100);
+        let dag_name = dag_ts.to_string();
+        let genesis = Header {
+            timestamp: dag_ts,
+            parents: NULL_PARENTS,
+            layer: 0,
+            content_hash: blake3::hash(&eg.config.genesis_contents),
+        };
+        let mut parents = [NULL_ID; N_EVENT_PARENTS];
+        parents[0] = genesis.id();
+        let header = Header {
+            timestamp: dag_ts + 1,
+            parents,
+            layer: 1,
+            content_hash: blake3::hash(b"unloaded-slot"),
+        };
+
+        let err = eg.header_dag_insert(vec![header], &dag_name).await.unwrap_err();
+        assert!(matches!(err, crate::Error::DagSyncFailed));
     })
 }
 
