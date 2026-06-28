@@ -474,6 +474,42 @@ pub(crate) fn filter_requested_event_rep(
     Ok((matched_events, matched_blobs, missing))
 }
 
+/// Merge one static-sync `EventRep` into the current batch state.
+///
+/// Returns the number of still-pending requested IDs satisfied by this
+/// response. Invalid responses are rejected before any state is mutated.
+pub(crate) fn merge_static_sync_event_rep(
+    requested: &[blake3::Hash],
+    pending: &mut HashSet<blake3::Hash>,
+    known: &mut HashSet<blake3::Hash>,
+    want: &mut HashSet<blake3::Hash>,
+    fetched: &mut Vec<(Event, Vec<u8>)>,
+    events: Vec<Event>,
+    blobs: Vec<Vec<u8>>,
+) -> Result<usize> {
+    let (matched_events, matched_blobs, _) = filter_requested_event_rep(requested, events, blobs)?;
+    let mut matched = 0;
+
+    for (ev, blob) in matched_events.into_iter().zip(matched_blobs) {
+        let eid = ev.id();
+        if !pending.remove(&eid) {
+            continue
+        }
+
+        matched += 1;
+        if known.insert(eid) {
+            for p in ev.header.parents.iter() {
+                if *p != NULL_ID && !known.contains(p) {
+                    want.insert(*p);
+                }
+            }
+            fetched.push((ev, blob));
+        }
+    }
+
+    Ok(matched)
+}
+
 /// The main Event Graph instance.
 ///
 /// Manages a rolling window of DAGs (one per rotation period), a
@@ -1149,6 +1185,11 @@ impl EventGraph {
         let mut fetched: Vec<(Event, Vec<u8>)> = vec![];
 
         while !want.is_empty() {
+            want.retain(|id| !known.contains(id));
+            if want.is_empty() {
+                break
+            }
+
             if fetched.len() >= SYNC_MAX_STATIC_EVENTS {
                 error!(
                     target: "event_graph::static_sync",
@@ -1159,50 +1200,50 @@ impl EventGraph {
             }
 
             let batch: Vec<blake3::Hash> = want.iter().copied().collect();
+            let mut pending: HashSet<blake3::Hash> = batch.iter().copied().collect();
             want.clear();
 
-            // Race the batch against all peers; first to respond
-            // with valid events wins. A peer that returns events we
-            // didn't ask for is striked via its protocol handler,
-            // not here - this is a best-effort pull.
+            // Ask every peer for the same batch. We keep consuming
+            // responses until the batch is complete or every peer has
+            // failed to help. Irrelevant, duplicate, or blob-misaligned
+            // replies do not satisfy the request.
             let mut req_futs = FuturesUnordered::new();
             for (i, ch) in channels.iter().enumerate() {
                 req_futs.push(request_event(ch.clone(), batch.clone(), i, timeout));
             }
 
-            let mut got_any = false;
-            while let Some((res, _, _)) = req_futs.next().await {
+            let mut made_progress = false;
+            while !pending.is_empty() {
+                let Some((res, _, _)) = req_futs.next().await else { break };
                 let Ok((evs, blobs)) = res else { continue };
                 if evs.is_empty() {
                     continue
                 }
-                got_any = true;
-                for (i, ev) in evs.into_iter().enumerate() {
-                    let eid = ev.id();
-                    if !batch.contains(&eid) {
-                        // Peer sent something we didn't ask for;
-                        // ignore the rest of this reply.
-                        break
-                    }
-                    if known.insert(eid) {
-                        // New parents to chase next round.
-                        for p in ev.header.parents.iter() {
-                            if *p != NULL_ID && !known.contains(p) {
-                                want.insert(*p);
-                            }
-                        }
-                        // Pair the event with its blob (or empty if
-                        // the peer didn't supply one - that's not an
-                        // error, see EventRep doc and the fall-through
-                        // in the apply loop below).
-                        let blob = blobs.get(i).cloned().unwrap_or_default();
-                        fetched.push((ev, blob));
-                    }
+
+                let Ok(matched) = merge_static_sync_event_rep(
+                    &batch,
+                    &mut pending,
+                    &mut known,
+                    &mut want,
+                    &mut fetched,
+                    evs,
+                    blobs,
+                ) else {
+                    continue
+                };
+
+                if matched > 0 {
+                    made_progress = true;
                 }
-                break
             }
 
-            if !got_any {
+            if !pending.is_empty() {
+                want.extend(pending.iter().copied().filter(|id| !known.contains(id)));
+            }
+
+            want.retain(|id| !known.contains(id));
+
+            if !made_progress {
                 // Nobody responded usefully. Give up so we don't
                 // loop forever on an unreachable ancestor.
                 error!(

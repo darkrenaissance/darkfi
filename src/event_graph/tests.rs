@@ -32,7 +32,7 @@ use crate::{
     event_graph::{
         compute_unreferenced_tips,
         event::Header,
-        filter_requested_event_rep,
+        filter_requested_event_rep, merge_static_sync_event_rep,
         proto::{EventPut, SyncDirection},
         test_helpers::{
             archive_config, bounded_dag_store_config, init_logger, make_eg, make_network,
@@ -85,6 +85,60 @@ fn evgr_event_rep_filter_matches_only_requested_ids() {
     .is_err());
 
     assert!(filter_requested_event_rep(&requested, vec![event_a], Vec::new()).is_err());
+}
+
+#[test]
+fn evgr_static_sync_merge_tracks_partial_requested_batches() {
+    let event_a = test_event(b"static-requested-a", 11);
+    let event_b = test_event(b"static-requested-b", 12);
+    let unrelated = test_event(b"static-unrelated", 13);
+    let requested = vec![event_a.id(), event_b.id()];
+    let mut pending: HashSet<_> = requested.iter().copied().collect();
+    let mut known = HashSet::new();
+    let mut want = HashSet::new();
+    let mut fetched = Vec::new();
+
+    assert!(merge_static_sync_event_rep(
+        &requested,
+        &mut pending,
+        &mut known,
+        &mut want,
+        &mut fetched,
+        vec![unrelated],
+        vec![b"unrelated-blob".to_vec()],
+    )
+    .is_err());
+    assert_eq!(pending.len(), 2);
+    assert!(fetched.is_empty());
+
+    let matched = merge_static_sync_event_rep(
+        &requested,
+        &mut pending,
+        &mut known,
+        &mut want,
+        &mut fetched,
+        vec![event_b.clone()],
+        vec![b"blob-b".to_vec()],
+    )
+    .unwrap();
+    assert_eq!(matched, 1);
+    assert_eq!(pending, HashSet::from([event_a.id()]));
+
+    let matched = merge_static_sync_event_rep(
+        &requested,
+        &mut pending,
+        &mut known,
+        &mut want,
+        &mut fetched,
+        vec![event_a.clone()],
+        vec![b"blob-a".to_vec()],
+    )
+    .unwrap();
+    assert_eq!(matched, 1);
+    assert!(pending.is_empty());
+
+    let fetched_ids: HashSet<_> = fetched.iter().map(|(ev, _)| ev.id()).collect();
+    assert_eq!(fetched_ids, HashSet::from([event_a.id(), event_b.id()]));
 }
 
 #[test]
