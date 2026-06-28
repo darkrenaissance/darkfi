@@ -964,18 +964,16 @@ async fn static_sync_registration(ex: Arc<Executor<'static>>) {
     //
     // `static_sync` re-verifies historical RLN blobs (see the
     // `rln_verify_static_event` call in its body), so seeded
-    // nodes MUST persist a real blob - a missing blob causes
-    // the late-joiner to skip the event with a "no blob
-    // available" log. We build a real registration blob on
-    // node 0 (using the shared ZK keys, so the cost is amortized)
-    // and broadcast-equivalent it to the other three.
+    // nodes MUST persist the configured pregenerated guard blob -
+    // a missing blob causes the late-joiner to skip the event with
+    // a "no blob available" log. Free registration is disabled,
+    // so this test uses the app-configured pregenerated identity.
     let nodes = make_network(ex).await;
 
-    let id = TestIdentity::new();
-    let commitment = id.commitment();
-
-    let blob = id.create_registration(&nodes[0]).expect("build registration blob");
-    let blob_bytes = serialize_async(&blob).await;
+    let commitment = pallas::Base::from_repr(nodes[0].config.pregenerated_identity_commitments[0])
+        .into_option()
+        .unwrap();
+    let blob_bytes = GENESIS_BLOB_GUARD.to_vec();
 
     let rln_node = RLNNode::Registration(commitment);
     let content = serialize_async(&rln_node).await;
