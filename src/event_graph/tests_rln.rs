@@ -19,7 +19,7 @@
 use std::{sync::Arc, time::UNIX_EPOCH};
 
 use darkfi_sdk::{crypto::poseidon_hash, pasta::pallas};
-use darkfi_serial::serialize_async;
+use darkfi_serial::{deserialize_async, serialize_async};
 use sled_overlay::sled;
 use smol::Executor;
 
@@ -31,9 +31,11 @@ use crate::{
             MAX_MSG_LIMIT, RLN_EPOCH_LEN, RLN_GENESIS,
         },
         test_helpers::{
-            make_eg, make_network, run_multi_node_test, shutdown_network, TestIdentity,
+            make_eg, make_eg_with_config, make_network, run_multi_node_test, shutdown_network,
+            TestIdentity,
         },
-        Event, EventGraphPtr, NULL_PARENTS,
+        util::generate_genesis,
+        Event, EventGraphConfig, EventGraphPtr, NULL_ID, NULL_PARENTS,
     },
     system::sleep,
     zk::Proof,
@@ -347,6 +349,44 @@ fn synthesize_placeholder_proof() -> Proof {
     // serialization. `verify()` will of course reject an empty
     // proof - that's exactly what these tests want.
     Proof::new(vec![])
+}
+
+#[test]
+fn rln_bootstrapped_identities_parent_static_genesis() {
+    smol::block_on(async {
+        let config = EventGraphConfig {
+            hours_rotation: 1,
+            ..crate::event_graph::test_helpers::test_config()
+        };
+        let eg = make_eg_with_config(config).await;
+        let static_genesis =
+            generate_genesis(&EventGraphConfig { hours_rotation: 0, ..eg.config.clone() });
+        let static_genesis_id = static_genesis.id();
+        let rotating_genesis_id = eg.current_genesis.read().await.id();
+
+        assert_ne!(
+            static_genesis_id, rotating_genesis_id,
+            "rotating test config must expose the old static-parent bug",
+        );
+        assert!(eg.static_dag.contains_key(static_genesis_id.as_bytes()).unwrap());
+
+        let mut bootstrapped = 0usize;
+        for item in eg.static_dag.iter() {
+            let (_, bytes) = item.unwrap();
+            let ev: Event = deserialize_async(&bytes).await.unwrap();
+            if ev.header.parents == NULL_PARENTS {
+                continue
+            }
+
+            bootstrapped += 1;
+            assert_eq!(ev.header.layer, 1);
+            assert_eq!(ev.header.parents[0], static_genesis_id);
+            assert!(ev.header.parents[1..].iter().all(|p| *p == NULL_ID));
+            assert!(eg.static_dag.contains_key(ev.header.parents[0].as_bytes()).unwrap());
+        }
+
+        assert!(bootstrapped > 0, "expected pregenerated identities to be bootstrapped");
+    })
 }
 
 async fn make_static_event(content: &[u8], eg: &EventGraphPtr) -> Event {

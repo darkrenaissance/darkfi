@@ -1672,7 +1672,7 @@ impl EventGraph {
 
     async fn static_new(sled_db: &sled::Db, config: &EventGraphConfig) -> Result<sled::Tree> {
         let tree = sled_db.open_tree("static-dag")?;
-        let genesis = generate_genesis(&EventGraphConfig { hours_rotation: 0, ..config.clone() });
+        let genesis = generate_static_genesis(config);
         let mut ov = SledTreeOverlay::new(&tree);
         ov.insert(genesis.id().as_bytes(), &serialize_async(&genesis).await).unwrap();
 
@@ -2291,7 +2291,7 @@ impl EventGraph {
 
                 // Accepting only genesis registeration, reject every
                 // other account.
-                return StaticEventCheck::Rejected;
+                StaticEventCheck::Rejected
                 /*
                 #[allow(unreachable_code)]
                 let reg: RegistrationBlob = match deserialize_async_partial(blob).await {
@@ -2374,14 +2374,18 @@ impl EventGraph {
         }
     }
 
-    /// Insert proof-less genesis registration events commitments into
-    /// the static DAG, called once at startup after the genesis event
-    /// itself is inserted. Idempotent - skips any commitment already
-    /// present in the identity tree.
+    /// Insert proof-less pregenerated identity commitments into the
+    /// static DAG, called once at startup after the static genesis
+    /// event itself is inserted. Idempotent - skips any commitment
+    /// already present in the identity tree.
     pub async fn bootstrap_genesis_identities(&self) -> Result<()> {
+        // Deterministic for premade identities.
         let genesis_event =
             generate_genesis(&EventGraphConfig { hours_rotation: 0, ..self.config.clone() });
         let genesis_id = genesis_event.id();
+        if !self.static_dag.contains_key(genesis_id.as_bytes())? {
+            return Err(Error::Custom("static DAG genesis missing during bootstrap".into()))
+        }
 
         let genesis_commitments = genesis_commitments();
         for commitment in genesis_commitments.iter() {
