@@ -120,42 +120,56 @@ impl RlnAppId {
     }
 }
 
-/// Versioned attestation accompanying a registration.
+/// Versioned attestation accompanying a registration proof.
 ///
-/// Runtime admission currently accepts only configured pregenerated
-/// identities. This enum is retained for the future staked tier,
-/// where a DarkFi smart-contract attestation must back new identity
-/// registration.
+/// Runtime admission currently accepts only app-configured pregenerated
+/// commitments paired with [`GENESIS_BLOB_GUARD`]. No serialized
+/// [`RegistrationBlob`] is accepted from the network today; the enum is
+/// retained as scaffolding for the future staked tier, where the
+/// `Staked` variant must carry a DarkFi smart-contract attestation that
+/// event graph can verify before admitting a new identity.
 #[derive(Clone, Debug, SerialEncodable, SerialDecodable)]
 pub enum RegistrationAttestation {
+    /// Dormant proof-path scaffold for the currently disabled
+    /// non-pregenerated registration flow. This is not an active public
+    /// free tier; live admission bypasses `RegistrationBlob` entirely and
+    /// accepts only pregenerated guard registrations.
     SPECIAL,
-    /// Reserved for the future staking integration.
+    /// Reserved for the future staking integration. The bytes are opaque
+    /// until the DarkFi contract attestation format and verifier exist.
     Staked(Vec<u8>),
 }
 
 impl RegistrationAttestation {
-    /// In special-tier mode.
+    /// Message limit used by the dormant SPECIAL proof scaffold.
     pub const SPECIAL_TIER_LIMIT: u64 = 100;
 
-    /// Validate the attestation against a claimed limit.
+    /// Validate the attestation against a claimed limit in the dormant
+    /// registration-proof path.
+    ///
+    /// This helper is not sufficient for live admission. The live path
+    /// rejects all serialized registration blobs until staked admission is
+    /// backed by a verifiable DarkFi contract attestation.
     pub fn permits(&self, user_message_limit: u64) -> bool {
         match self {
             Self::SPECIAL => user_message_limit <= Self::SPECIAL_TIER_LIMIT,
-            // Until staking is implemented, refuse to honor any
-            // "Staked" attestation
             Self::Staked(_) => false,
         }
     }
 }
 
-/// The complete blob attached to a registration `EventPut` /
-/// `StaticPut`. The proof's public inputs commit to the
-/// `(commitment, user_message_limit, max_message_limit)` tuple,
-/// and `attestation` carries the staking proof.
+/// The complete blob for the disabled registration-proof path.
 ///
-/// Non-pregenerated registration is disabled until contract-backed
-/// staked admission is implemented; current admission accepts only
-/// app-configured commitments paired with [`GENESIS_BLOB_GUARD`].
+/// The proof's public inputs commit to the
+/// `(commitment, user_message_limit, max_message_limit)` tuple, and
+/// `attestation` is reserved for the future staking proof. Runtime
+/// verification intentionally rejects these blobs today because an
+/// unstaked public registration tier is a sybil attack surface.
+///
+/// Current admission accepts only app-configured pregenerated
+/// commitments paired with [`GENESIS_BLOB_GUARD`]. Future staked
+/// admission must deserialize this type only after it can verify the
+/// DarkFi contract attestation carried by [`RegistrationAttestation::Staked`].
 #[derive(Clone, SerialEncodable, SerialDecodable)]
 pub struct RegistrationBlob {
     pub proof: Proof,

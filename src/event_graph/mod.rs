@@ -2752,10 +2752,12 @@ impl EventGraph {
                     }
                 }
 
-                // Free non-pregenerated registration is intentionally disabled:
-                // it is a sybil attack surface. Keep the proof scaffolding
-                // below for the future staked tier, where acceptance must be
-                // backed by a DarkFi smart-contract attestation.
+                // Non-pregenerated registration is intentionally disabled:
+                // an unstaked public tier is a sybil attack surface. Keep
+                // the proof scaffold below for the future staked tier, where
+                // acceptance must be backed by a DarkFi smart-contract
+                // attestation verified by event graph before mutating the
+                // identity tree.
                 StaticEventCheck::Rejected
                 /*
                 #[allow(unreachable_code)]
@@ -2773,8 +2775,8 @@ impl EventGraph {
                 }
 
                 // Attestation must permit the claimed limit.
-                // (Free-tier cap; `Staked` rejected until the stake
-                // contract is online.)
+                // (Dormant SPECIAL proof cap; `Staked` rejected until
+                // the DarkFi contract verifier is online.)
                 if !reg.attestation.permits(reg.user_message_limit) {
                     return StaticEventCheck::Malicious
                 }
