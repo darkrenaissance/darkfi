@@ -1113,10 +1113,10 @@ impl EventGraph {
             blobs.push(blob);
         }
 
-        // dag_insert_with_blobs handles RLN re-verification per event when
-        // blobs are present, and falls through to the trust-the-quorum path
-        // when they're not. See dag_insert_with_blobs's docstring for the
-        // policy.
+        // dag_insert_with_blobs handles RLN re-verification for every
+        // non-genesis event and rejects any event whose blob is missing,
+        // malformed, or invalid. This preserves the invariant that synced
+        // rotating DAG events remain independently verifiable.
         self.dag_insert_with_blobs(&events, &blobs, dag_name).await?;
         Ok(())
     }
@@ -1166,11 +1166,11 @@ impl EventGraph {
     /// `handle_event_req`), because static-DAG state is public
     /// consensus information. Registration-event proof verification,
     /// duplicate detection, and commitment-tree updates are all done
-    /// through the normal `StaticPut` ingestion path
-    /// (`handle_static_put`) - but `static_sync` uses direct-insert
-    /// via [`Self::static_insert`] plus on-the-fly identity-state
-    /// application, because we're catching up rather than processing
-    /// broadcasts.
+    /// through the normal verified static-event pipeline.
+    /// `static_sync` also commits fetched events through
+    /// [`Self::commit_verified_static_event`], because catch-up must
+    /// preserve the same blob-before-event-before-RLN-state ordering as
+    /// live broadcast processing.
     ///
     /// Note: for security, this method ONLY applies events whose
     /// blob/RLN verification passes. We do not trust peers blindly
