@@ -17,13 +17,13 @@
  */
 
 use std::{
-    collections::HashSet,
+    collections::{BTreeMap, HashMap, HashSet},
     slice,
     sync::Arc,
     time::{Duration, UNIX_EPOCH},
 };
 
-use darkfi_serial::serialize_async;
+use darkfi_serial::{deserialize_async, serialize_async};
 use sled_overlay::sled;
 use smol::Executor;
 
@@ -359,6 +359,38 @@ fn evgr_dag_store_eviction_policy() {
 }
 
 #[test]
+fn evgr_dag_store_window_matches_generated_config_limits() {
+    smol::block_on(async {
+        for limit in 1..=6_usize {
+            let config =
+                EventGraphConfig { hours_rotation: 1, max_dags: Some(limit), ..test_config() };
+            let sled_db = sled::Config::new().temporary(true).open().unwrap();
+            let mut store = DagStore::new(sled_db, &config).await.unwrap();
+            assert_eq!(store.dag_timestamps().len(), limit);
+
+            let mut expected = store.dag_timestamps();
+            for offset in 1..=(limit + 3) {
+                let ts = next_hour_timestamp(offset as i64).unwrap();
+                let hdr = Header {
+                    timestamp: ts,
+                    parents: NULL_PARENTS,
+                    layer: 0,
+                    content_hash: blake3::hash(&config.genesis_contents),
+                };
+                let genesis = Event { header: hdr, content: config.genesis_contents.clone() };
+                store.add_dag(&genesis, config.max_dags).await.unwrap();
+
+                expected.push(ts);
+                if expected.len() > limit {
+                    expected.remove(0);
+                }
+                assert_eq!(store.dag_timestamps(), expected, "max_dags={limit} offset={offset}");
+            }
+        }
+    })
+}
+
+#[test]
 fn evgr_dag_store_archive_mode_discovers_existing_trees() {
     smol::block_on(async {
         let sled_db = sled::Config::new().temporary(true).open().unwrap();
@@ -500,6 +532,172 @@ fn evgr_compute_unreferenced_tips_single_pass() {
         assert!(tips.get(&2).unwrap().contains(&e3.id()));
         assert!(tips.get(&1).unwrap().contains(&e4.id()));
         assert!(!tips.values().any(|set| set.contains(&e2.id())));
+    })
+}
+
+fn generated_dag_mix(seed: u64, event_index: usize, candidate_index: usize) -> u64 {
+    let mut x = seed ^ (event_index as u64).wrapping_mul(0x9E37_79B9_7F4A_7C15);
+    x ^= (candidate_index as u64).wrapping_mul(0xBF58_476D_1CE4_E5B9);
+    x ^= x >> 30;
+    x = x.wrapping_mul(0xBF58_476D_1CE4_E5B9);
+    x ^= x >> 27;
+    x = x.wrapping_mul(0x94D0_49BB_1331_11EB);
+    x ^ (x >> 31)
+}
+
+fn generated_parent_indices(seed: u64, event_index: usize, known_len: usize) -> Vec<usize> {
+    let max_parents = known_len.min(N_EVENT_PARENTS);
+    let parent_count = 1 + (generated_dag_mix(seed, event_index, known_len) as usize % max_parents);
+    let mut candidates: Vec<_> = (0..known_len).collect();
+    candidates.sort_by_key(|idx| generated_dag_mix(seed, event_index, *idx));
+    candidates.truncate(parent_count);
+    candidates
+}
+
+async fn insert_generated_dag_shape(
+    eg: &EventGraphPtr,
+    seed: u64,
+    event_count: usize,
+) -> (u64, Vec<Event>) {
+    let dag_ts = eg.current_genesis.read().await.header.timestamp;
+    let dag_name = dag_ts.to_string();
+    let genesis = eg.current_genesis.read().await.clone();
+    let mut known = vec![(genesis.id(), genesis.header.layer)];
+    let mut events = Vec::with_capacity(event_count);
+
+    for i in 0..event_count {
+        let mut parents = [NULL_ID; N_EVENT_PARENTS];
+        let mut max_parent_layer = 0;
+        for (slot, known_index) in
+            generated_parent_indices(seed, i, known.len()).into_iter().enumerate()
+        {
+            let (parent_id, parent_layer) = known[known_index];
+            parents[slot] = parent_id;
+            max_parent_layer = max_parent_layer.max(parent_layer);
+        }
+
+        let content = format!("generated-dag-{seed}-{i}").into_bytes();
+        let header = Header {
+            timestamp: dag_ts + 1 + ((seed + i as u64) % 7),
+            parents,
+            layer: max_parent_layer + 1,
+            content_hash: blake3::hash(&content),
+        };
+        let event = Event { header, content };
+        known.push((event.id(), event.header.layer));
+        events.push(event);
+    }
+
+    eg.header_dag_insert(events.iter().map(|ev| ev.header.clone()).collect(), &dag_name)
+        .await
+        .unwrap();
+    let inserted = eg.dag_insert(&events, &dag_name).await.unwrap();
+    assert_eq!(inserted.len(), events.len(), "seed={seed}");
+    (dag_ts, events)
+}
+
+async fn assert_rotating_dag_storage_invariants(eg: &EventGraphPtr, dag_ts: u64, seed: u64) {
+    let (event_ids, indexed_ids) = {
+        let store = eg.dag_store.read().await;
+        let slot = store.get_slot(&dag_ts).unwrap();
+        let mut events = HashMap::new();
+
+        for item in slot.main_tree.iter() {
+            let (id_bytes, event_bytes) = item.unwrap();
+            let id = blake3::Hash::from_bytes((&id_bytes as &[u8]).try_into().unwrap());
+            let event: Event = deserialize_async(&event_bytes).await.unwrap();
+            assert_eq!(id, event.id(), "event tree key must match event id; seed={seed}");
+            events.insert(id, event);
+        }
+
+        let mut referenced = HashSet::new();
+        for (id, event) in &events {
+            if event.header.parents == NULL_PARENTS {
+                assert_eq!(
+                    event.header.layer, 0,
+                    "genesis-shaped event must be layer 0; seed={seed}"
+                );
+                continue
+            }
+
+            let mut seen_parents = HashSet::new();
+            let mut max_parent_layer = None;
+            for parent_id in event.header.parents.iter().copied().filter(|p| *p != NULL_ID) {
+                assert!(
+                    seen_parents.insert(parent_id),
+                    "duplicate parent {parent_id:?} in event {id:?}; seed={seed}",
+                );
+                let parent = events.get(&parent_id).unwrap_or_else(|| {
+                    panic!("missing parent {parent_id:?} for event {id:?}; seed={seed}")
+                });
+                max_parent_layer = Some(
+                    max_parent_layer
+                        .map_or(parent.header.layer, |layer: u64| layer.max(parent.header.layer)),
+                );
+                referenced.insert(parent_id);
+            }
+
+            let expected_layer = max_parent_layer.expect("non-genesis event has no parents") + 1;
+            assert_eq!(
+                event.header.layer, expected_layer,
+                "event layer must be max parent layer plus one; event={id:?} seed={seed}",
+            );
+        }
+
+        let mut expected_tips: LayerUTips = BTreeMap::new();
+        for (id, event) in &events {
+            if !referenced.contains(id) {
+                expected_tips.entry(event.header.layer).or_default().insert(*id);
+            }
+        }
+        assert_eq!(
+            slot.tips, expected_tips,
+            "incremental tips diverged from graph scan; seed={seed}"
+        );
+
+        let mut header_ids = HashSet::new();
+        for item in slot.header_tree.iter() {
+            let (id_bytes, header_bytes) = item.unwrap();
+            let id = blake3::Hash::from_bytes((&id_bytes as &[u8]).try_into().unwrap());
+            let header: Header = deserialize_async(&header_bytes).await.unwrap();
+            assert_eq!(id, header.id(), "header tree key must match header id; seed={seed}");
+            assert!(header_ids.insert(id), "duplicate header id in header tree; seed={seed}");
+        }
+
+        assert_eq!(
+            slot.time_index.len(),
+            header_ids.len(),
+            "TimeIndex length mismatch; seed={seed}"
+        );
+        let indexed = slot.time_index.oldest(slot.time_index.len());
+        let indexed_set: HashSet<_> = indexed.iter().copied().collect();
+        assert_eq!(
+            indexed_set.len(),
+            indexed.len(),
+            "TimeIndex returned duplicate ids; seed={seed}"
+        );
+        assert_eq!(indexed_set, header_ids, "TimeIndex ids diverged from header tree; seed={seed}");
+
+        (events.keys().copied().collect::<HashSet<_>>(), indexed_set)
+    };
+
+    assert_eq!(event_ids, indexed_ids, "header and event trees diverged; seed={seed}");
+
+    let page = eg.fetch_page(0, SyncDirection::Forward, MAX_RANGE_PAGE_SIZE).await.unwrap();
+    let page_ids: Vec<_> = page.iter().map(Event::id).collect();
+    let page_set: HashSet<_> = page_ids.iter().copied().collect();
+    assert_eq!(page_ids.len(), page_set.len(), "fetch_page returned duplicate events; seed={seed}");
+    assert_eq!(page_set, event_ids, "fetch_page ids diverged from event tree; seed={seed}");
+}
+
+#[test]
+fn evgr_generated_dags_preserve_storage_invariants() {
+    smol::block_on(async {
+        for (seed, event_count) in [(1_u64, 18_usize), (7, 27), (19, 36)] {
+            let eg = make_eg().await;
+            let (dag_ts, _) = insert_generated_dag_shape(&eg, seed, event_count).await;
+            assert_rotating_dag_storage_invariants(&eg, dag_ts, seed).await;
+        }
     })
 }
 
