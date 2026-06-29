@@ -821,7 +821,7 @@ impl NickServ {
         let blob_bytes = serialize_async(&slash_blob).await;
 
         let rln_node = RLNNode::Slashing(identity.commitment());
-        let event = Event::new_static(serialize_async(&rln_node).await, evgr).await;
+        let event = Event::new_static(serialize_async(&rln_node).await, evgr).await?;
 
         // Commit through the verified static-event pipeline so durable event
         // storage stays ahead of RLN side tables, while subscribers still see

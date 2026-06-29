@@ -460,7 +460,7 @@ fn rln_rebuild_detects_stale_leaf_with_same_count() {
 async fn make_static_event(content: &[u8], eg: &EventGraphPtr) -> Event {
     use crate::event_graph::event::Header;
     let timestamp = eg.current_genesis.read().await.header.timestamp;
-    let (layer, parents) = eg.get_next_layer_with_parents_static().await;
+    let (layer, parents) = eg.get_next_layer_with_parents_static().await.unwrap();
     let header = Header { timestamp, parents, layer, content_hash: blake3::hash(content) };
     Event { header, content: content.to_vec() }
 }
@@ -946,8 +946,9 @@ async fn concurrent_slashes(ex: Arc<Executor<'static>>) {
         )
         .expect("proof");
         let blob = SlashBlob { proof, identity_secret_hash: ish, merkle_root: root };
-        let event =
-            Event::new_static(serialize_async(&RLNNode::Slashing(commitment)).await, eg).await;
+        let event = Event::new_static(serialize_async(&RLNNode::Slashing(commitment)).await, eg)
+            .await
+            .unwrap();
         (event, serialize_async(&blob).await)
     }
 
@@ -1103,7 +1104,7 @@ async fn static_sync_registration(ex: Arc<Executor<'static>>) {
 
     let rln_node = RLNNode::Registration(commitment);
     let content = serialize_async(&rln_node).await;
-    let event = Event::new_static(content, &nodes[0]).await;
+    let event = Event::new_static(content, &nodes[0]).await.unwrap();
 
     // Seed nodes 0..=3 the same way a real verified static event is
     // committed: blob and event become durable before RLN side tables,
@@ -1176,7 +1177,7 @@ async fn static_sync_blob_propagation(ex: Arc<Executor<'static>>) {
     let commitment = id.commitment();
 
     let content = serialize_async(&RLNNode::Registration(commitment)).await;
-    let event = Event::new_static(content.clone(), &nodes[0]).await;
+    let event = Event::new_static(content.clone(), &nodes[0]).await.unwrap();
     // Synthetic blob - content doesn't matter for propagation
     // testing, only that it's non-empty so static_sync's
     // verification path takes the "blob present" branch.

@@ -738,7 +738,13 @@ impl ProtocolEventGraph {
         let slash_blob = SlashBlob { proof, identity_secret_hash, merkle_root: root };
         let blob = serialize_async(&slash_blob).await;
         let node = RLNNode::Slashing(commitment);
-        let ev = Event::new_static(serialize_async(&node).await, &self.event_graph).await;
+        let ev = match Event::new_static(serialize_async(&node).await, &self.event_graph).await {
+            Ok(ev) => ev,
+            Err(e) => {
+                error!(target: "event_graph::protocol", "[RLN] Slash event creation failed: {e}");
+                return
+            }
+        };
         if let Err(e) = self.event_graph.commit_verified_static_event(&ev, &blob, &node).await {
             error!(target: "event_graph::protocol", "[RLN] Slash static commit failed: {e}");
             return
@@ -963,7 +969,13 @@ impl ProtocolEventGraph {
             }
 
             let layers = match dag_name.as_str() {
-                "static-dag" => self.event_graph.static_unreferenced_tips().await,
+                "static-dag" => match self.event_graph.static_unreferenced_tips().await {
+                    Ok(tips) => tips,
+                    Err(e) => {
+                        warn!(target: "event_graph::protocol", "failed to scan static DAG tips: {e}");
+                        continue
+                    }
+                },
                 _ => {
                     let ts = match u64::from_str(&dag_name) {
                         Ok(v) => v,
