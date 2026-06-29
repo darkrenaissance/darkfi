@@ -1326,6 +1326,82 @@ fn evgr_fetch_missing_events_rejects_corrupt_header_record() {
     })
 }
 
+async fn make_parent_child_with_child_blob(
+    source: &EventGraphPtr,
+    alice: &mut TestIdentity,
+    parent_content: &[u8],
+    child_content: &[u8],
+) -> (Event, Event, Vec<u8>) {
+    let dag_ts = source.current_genesis.read().await.header.timestamp;
+    let dag_name = dag_ts.to_string();
+
+    let parent = Event::new(parent_content.to_vec(), source).await.unwrap();
+    source.header_dag_insert(vec![parent.header.clone()], &dag_name).await.unwrap();
+    source.dag_insert(slice::from_ref(&parent), &dag_name).await.unwrap();
+
+    let child = Event::new(child_content.to_vec(), source).await.unwrap();
+    assert!(child.header.parents.contains(&parent.id()));
+    let message_id = alice.next_message_id(child.header.timestamp).expect("budget");
+    let child_blob = alice.create_signal(&child, message_id, source).await.unwrap();
+
+    (parent, child, serialize_async(&child_blob).await)
+}
+
+async fn seed_rotating_event_unchecked(
+    eg: &EventGraphPtr,
+    event: &Event,
+    blob: &[u8],
+    dag_name: &str,
+) {
+    eg.header_dag_insert(vec![event.header.clone()], dag_name).await.unwrap();
+    eg.dag_insert(slice::from_ref(event), dag_name).await.unwrap();
+    eg.dag_blob_store(&event.id(), blob).unwrap();
+    eg.broadcasted_ids.write().await.insert(event.id());
+}
+
+#[test]
+fn evgr_dag_insert_rejects_child_when_parent_body_rejected() {
+    smol::block_on(async {
+        let source = make_eg().await;
+        let recipient = make_eg().await;
+        let mut alice = TestIdentity::new();
+        alice.register_directly(&source).await.unwrap();
+        alice.register_directly(&recipient).await.unwrap();
+
+        let dag_ts = source.current_genesis.read().await.header.timestamp;
+        let dag_name = dag_ts.to_string();
+        let (parent, child, child_blob) = make_parent_child_with_child_blob(
+            &source,
+            &mut alice,
+            b"parent-body-closure-direct",
+            b"child-body-closure-direct",
+        )
+        .await;
+        let bad_parent_blob = b"bad-parent-rln-blob".to_vec();
+
+        recipient
+            .header_dag_insert(vec![child.header.clone(), parent.header.clone()], &dag_name)
+            .await
+            .unwrap();
+        let inserted = recipient
+            .dag_insert_with_blobs(
+                &[child.clone(), parent.clone()],
+                &[child_blob.clone(), bad_parent_blob],
+                &dag_name,
+            )
+            .await
+            .unwrap();
+        assert!(inserted.is_empty());
+
+        let store = recipient.dag_store.read().await;
+        let slot = store.get_slot(&dag_ts).unwrap();
+        assert!(!slot.main_tree.contains_key(parent.id().as_bytes()).unwrap());
+        assert!(!slot.main_tree.contains_key(child.id().as_bytes()).unwrap());
+        drop(store);
+        assert!(recipient.dag_blob_fetch(&child.id()).unwrap().is_none());
+    })
+}
+
 #[test]
 fn evgr_multi_node_dag_sync_with_blob() {
     init_logger();
@@ -1383,6 +1459,52 @@ async fn dag_sync_with_blob(ex: Arc<Executor<'static>>) {
 }
 
 #[test]
+fn evgr_multi_node_dag_sync_rejects_child_when_parent_body_rejected() {
+    init_logger();
+    run_multi_node_test(dag_sync_rejects_child_when_parent_body_rejected);
+}
+async fn dag_sync_rejects_child_when_parent_body_rejected(ex: Arc<Executor<'static>>) {
+    let nodes = make_network(ex).await;
+
+    let mut alice = TestIdentity::new();
+    for eg in &nodes {
+        alice.register_directly(eg).await.unwrap();
+    }
+
+    let dag_ts = nodes[0].current_genesis.read().await.header.timestamp;
+    let dag_name = dag_ts.to_string();
+    let (parent, child, child_blob) = make_parent_child_with_child_blob(
+        &nodes[0],
+        &mut alice,
+        b"parent-body-closure-sync",
+        b"child-body-closure-sync",
+    )
+    .await;
+    let bad_parent_blob = b"bad-parent-rln-blob-sync".to_vec();
+
+    for eg in nodes.iter().take(4) {
+        seed_rotating_event_unchecked(eg, &parent, &bad_parent_blob, &dag_name).await;
+        seed_rotating_event_unchecked(eg, &child, &child_blob, &dag_name).await;
+    }
+
+    nodes[4].dag_sync(dag_ts).await.unwrap();
+    sleep(2).await;
+
+    let store = nodes[4].dag_store.read().await;
+    let slot = store.get_slot(&dag_ts).unwrap();
+    assert!(
+        !slot.main_tree.contains_key(parent.id().as_bytes()).unwrap(),
+        "sync accepted a parent whose blob failed RLN verification",
+    );
+    assert!(
+        !slot.main_tree.contains_key(child.id().as_bytes()).unwrap(),
+        "sync accepted a child body whose parent body was rejected",
+    );
+
+    shutdown_network(&nodes).await;
+}
+
+#[test]
 fn evgr_multi_node_dag_sync_rejects_bad_blob() {
     init_logger();
     run_multi_node_test(dag_sync_rejects_bad_blob);
@@ -1422,6 +1544,51 @@ async fn dag_sync_rejects_bad_blob(ex: Arc<Executor<'static>>) {
     assert!(
         !slot.main_tree.contains_key(event.id().as_bytes()).unwrap(),
         "Vector-2 breach: node 4 accepted an event with a tampered blob during sync",
+    );
+
+    shutdown_network(&nodes).await;
+}
+
+#[test]
+fn evgr_multi_node_fetch_parents_rejects_child_when_parent_body_rejected() {
+    init_logger();
+    run_multi_node_test(fetch_parents_rejects_child_when_parent_body_rejected);
+}
+async fn fetch_parents_rejects_child_when_parent_body_rejected(ex: Arc<Executor<'static>>) {
+    let nodes = make_network(ex).await;
+
+    let mut alice = TestIdentity::new();
+    for eg in &nodes {
+        alice.register_directly(eg).await.unwrap();
+    }
+
+    let dag_ts = nodes[0].current_genesis.read().await.header.timestamp;
+    let dag_name = dag_ts.to_string();
+    let (parent, child, child_blob) = make_parent_child_with_child_blob(
+        &nodes[0],
+        &mut alice,
+        b"parent-body-closure-fetch",
+        b"child-body-closure-fetch",
+    )
+    .await;
+    let bad_parent_blob = b"bad-parent-rln-blob-fetch".to_vec();
+
+    for eg in nodes.iter().take(4) {
+        seed_rotating_event_unchecked(eg, &parent, &bad_parent_blob, &dag_name).await;
+    }
+
+    nodes[0].p2p.broadcast(&EventPut(child.clone(), child_blob)).await;
+    sleep(5).await;
+
+    let store = nodes[4].dag_store.read().await;
+    let slot = store.get_slot(&dag_ts).unwrap();
+    assert!(
+        !slot.main_tree.contains_key(parent.id().as_bytes()).unwrap(),
+        "fetch_parents accepted a parent whose blob failed RLN verification",
+    );
+    assert!(
+        !slot.main_tree.contains_key(child.id().as_bytes()).unwrap(),
+        "live EventPut accepted a child whose fetched parent body was rejected",
     );
 
     shutdown_network(&nodes).await;
