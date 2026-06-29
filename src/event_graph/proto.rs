@@ -24,7 +24,6 @@
 
 use std::{
     collections::{BTreeMap, HashSet, VecDeque},
-    slice,
     str::FromStr,
     sync::{
         atomic::{AtomicUsize, Ordering::SeqCst},
@@ -490,36 +489,15 @@ impl ProtocolEventGraph {
                 continue
             }
 
-            // Insert the event itself. We use plain dag_insert
-            // (not dag_insert_with_blobs) because the blob has
-            // already been verified above (the verify_rln_signal
-            // gate). Re-verifying via dag_insert_with_blobs would
-            // produce a spurious "duplicate share" rejection,
-            // because rln_verify_signal recorded the share on the
-            // first call.
-            //
-            // We store the blob in the side-table separately, so
-            // future late-joiners can re-verify it during sync.
-            // This mirrors the originator path in nickserv.rs that
-            // calls static_blob_store after static_insert.
-            if self
-                .event_graph
-                .header_dag_insert(vec![event.header.clone()], &dag_name)
-                .await
-                .is_err()
-            {
+            // Commit the already-verified signal without re-running RLN proof
+            // verification. `verify_rln_signal` above recorded the share, so
+            // the post-verification helper stores the blob, inserts the header,
+            // and then inserts the event body without calling the verifier a
+            // second time.
+            if self.event_graph.insert_verified_signal(&event, &blob, &dag_name).await.is_err() {
                 self.clone().strike().await?;
                 continue
             }
-
-            if self.event_graph.dag_insert(slice::from_ref(&event), &dag_name).await.is_err() {
-                self.clone().strike().await?;
-                continue
-            }
-
-            // Persist the verified blob alongside the event for
-            // sync-time re-verification by future late-joiners.
-            let _ = self.event_graph.dag_blob_store(&event.id(), &blob);
 
             // Relay to other peers (bounded - drops if channel full)
             let _ = self.broadcaster_push.try_send(EventPut(event, blob));

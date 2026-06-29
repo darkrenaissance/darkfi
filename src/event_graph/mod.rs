@@ -1519,23 +1519,87 @@ impl EventGraph {
         }
     }
 
+    /// Public insertion path for a rotating-DAG signal event.
+    ///
+    /// Non-genesis rotating events must carry an RLN signal blob. This method
+    /// inserts the header, re-verifies the blob, records RLN metadata, stores
+    /// the blob for future sync, and only then commits the event body. External
+    /// applications should use this instead of the unchecked post-verification
+    /// insertion path.
+    pub async fn insert_signal_with_blob(
+        &self,
+        event: &Event,
+        blob: &[u8],
+        dag_name: &str,
+    ) -> Result<Vec<blake3::Hash>> {
+        if event.header.parents != NULL_PARENTS && blob.is_empty() {
+            return Err(Error::Custom("rotating-DAG signal event blob must not be empty".into()))
+        }
+
+        let dag_ts = u64::from_str(dag_name)?;
+        let already_known = if event.header.parents == NULL_PARENTS {
+            false
+        } else {
+            let store = self.dag_store.read().await;
+            match store.get_slot(&dag_ts) {
+                Some(slot) => slot.main_tree.contains_key(event.id().as_bytes())?,
+                None => false,
+            }
+        };
+
+        self.header_dag_insert(vec![event.header.clone()], dag_name).await?;
+        let blobs = if blob.is_empty() { vec![] } else { vec![blob.to_vec()] };
+        let ids = self.dag_insert_with_blobs(std::slice::from_ref(event), &blobs, dag_name).await?;
+        let accepted = ids.contains(&event.id()) || already_known || {
+            let store = self.dag_store.read().await;
+            match store.get_slot(&dag_ts) {
+                Some(slot) => slot.main_tree.contains_key(event.id().as_bytes())?,
+                None => false,
+            }
+        };
+        if event.header.parents != NULL_PARENTS && !accepted {
+            return Err(Error::Custom("rotating-DAG signal event was not accepted".into()))
+        }
+
+        Ok(ids)
+    }
+
     /// Insert events into a rotating DAG **without RLN verification**.
     ///
-    /// This is the post-verification entry point for callers that
-    /// have already verified the proof separately. Two legitimate
-    /// callers in production:
-    ///
-    /// * `handle_event_put` - already ran `rln_verify_signal` and
-    ///   recorded the share. Calling `dag_insert_with_blobs` would
-    ///   trigger the duplicate-share rejection.
-    /// * The IRC client's own outbound flow - same shape.
-    pub async fn dag_insert(&self, events: &[Event], dag_name: &str) -> Result<Vec<blake3::Hash>> {
-        // Implementation just runs the structural-insert path;
-        // dag_insert_with_blobs reaches the same shared inner code
-        // when called with a `skip_verify=true` shortcut, which is
-        // what an empty `blobs` slice now means after the strictness
-        // tightening below - but only via this private wrapper.
+    /// This is the crate-internal post-verification entry point for callers
+    /// that have already verified the proof separately and recorded RLN
+    /// metadata. Public callers must use [`Self::insert_signal_with_blob`] or
+    /// [`Self::dag_insert_with_blobs`] so non-genesis events cannot be inserted
+    /// without their proof blob.
+    pub(crate) async fn dag_insert(
+        &self,
+        events: &[Event],
+        dag_name: &str,
+    ) -> Result<Vec<blake3::Hash>> {
         self.dag_insert_inner(events, &[], /* require_blobs */ false, dag_name).await
+    }
+
+    /// Commit a rotating-DAG signal event whose RLN proof has already been
+    /// verified and recorded by the caller.
+    ///
+    /// Used by live protocol ingestion after `verify_rln_signal()` accepts the
+    /// event. The blob is persisted before the event body so late joiners never
+    /// observe a locally committed non-genesis event without its proof blob.
+    pub(crate) async fn insert_verified_signal(
+        &self,
+        event: &Event,
+        blob: &[u8],
+        dag_name: &str,
+    ) -> Result<Vec<blake3::Hash>> {
+        if event.header.parents != NULL_PARENTS && blob.is_empty() {
+            return Err(Error::Custom("verified signal event blob must not be empty".into()))
+        }
+
+        self.header_dag_insert(vec![event.header.clone()], dag_name).await?;
+        if event.header.parents != NULL_PARENTS {
+            self.dag_blob_store(&event.id(), blob)?;
+        }
+        self.dag_insert(std::slice::from_ref(event), dag_name).await
     }
 
     /// Insert events into a rotating DAG, with mandatory RLN
@@ -1957,7 +2021,8 @@ impl EventGraph {
         Ok(())
     }
 
-    pub async fn static_insert(&self, ev: &Event) -> Result<()> {
+    #[cfg(test)]
+    pub(crate) async fn static_insert(&self, ev: &Event) -> Result<()> {
         self.static_persist(ev).await?;
         self.static_pub.notify(ev.clone()).await;
         Ok(())
