@@ -58,22 +58,22 @@ pub(super) fn unix_timestamp_millis() -> Result<u64> {
 }
 
 /// Timestamp (millis) for the start of the hour `hours` offsets from now.
-pub(super) fn next_hour_timestamp(hours: i64) -> u64 {
-    let now = UNIX_EPOCH.elapsed().unwrap().as_millis() as u64;
+pub(super) fn next_hour_timestamp(hours: i64) -> Result<u64> {
+    let now = unix_timestamp_millis()?;
     let base = (now / HOUR_MS) * HOUR_MS;
     let offset = hours.unsigned_abs().saturating_mul(HOUR_MS);
 
     if hours.is_negative() {
-        base.saturating_sub(offset)
+        Ok(base.saturating_sub(offset))
     } else {
-        base.saturating_add(offset)
+        Ok(base.saturating_add(offset))
     }
 }
 
 /// Whole hours elapsed since `ts`.
-pub(super) fn hours_since(ts: u64) -> u64 {
-    let now = UNIX_EPOCH.elapsed().unwrap().as_millis() as u64;
-    now.saturating_sub(ts) / HOUR_MS
+pub(super) fn hours_since(ts: u64) -> Result<u64> {
+    let now = unix_timestamp_millis()?;
+    Ok(now.saturating_sub(ts) / HOUR_MS)
 }
 
 /// Timestamp of the next DAG rotation.
@@ -85,7 +85,7 @@ pub fn next_rotation_timestamp(starting_timestamp: u64, rotation_period: u64) ->
     let rotation_ms = rotation_period.checked_mul(HOUR_MS).ok_or_else(|| {
         Error::Custom("event graph rotation period overflows milliseconds".into())
     })?;
-    let now = UNIX_EPOCH.elapsed().unwrap().as_millis() as u64;
+    let now = unix_timestamp_millis()?;
 
     if now < starting_timestamp {
         return Ok(starting_timestamp)
@@ -107,7 +107,7 @@ pub fn next_rotation_timestamp(starting_timestamp: u64, rotation_period: u64) ->
 
 /// Milliseconds remaining until `next_rotation`.
 pub fn millis_until_next_rotation(next_rotation: u64) -> Result<u64> {
-    let now = UNIX_EPOCH.elapsed().unwrap().as_millis() as u64;
+    let now = unix_timestamp_millis()?;
     next_rotation
         .checked_sub(now)
         .ok_or_else(|| Error::Custom("event graph next rotation is in the past".into()))
@@ -119,11 +119,11 @@ pub fn millis_until_next_rotation(next_rotation: u64) -> Result<u64> {
 /// * `hours_rotation == 0` -> timestamp is `initial_genesis`.
 /// * `hours_rotation > 0`  -> timestamp is the most recent
 ///   multiple-of-N boundary since `initial_genesis`.
-pub fn generate_genesis(config: &EventGraphConfig) -> Event {
+pub fn generate_genesis(config: &EventGraphConfig) -> Result<Event> {
     let timestamp = if config.hours_rotation == 0 {
         config.initial_genesis
     } else {
-        let passed = hours_since(config.initial_genesis);
+        let passed = hours_since(config.initial_genesis)?;
         let rotations = passed / config.hours_rotation;
         let offset_hours = rotations.saturating_mul(config.hours_rotation);
         let offset_ms = offset_hours.saturating_mul(HOUR_MS);
@@ -131,7 +131,7 @@ pub fn generate_genesis(config: &EventGraphConfig) -> Event {
     };
     let content_hash = blake3::hash(&config.genesis_contents);
     let header = Header { timestamp, parents: [NULL_ID; N_EVENT_PARENTS], layer: 0, content_hash };
-    Event { header, content: config.genesis_contents.clone() }
+    Ok(Event { header, content: config.genesis_contents.clone() })
 }
 
 /// Append a replayer log entry for DAG state recreation.
@@ -156,21 +156,53 @@ pub async fn recreate_from_replayer_log(datastore: &Path) -> JsonResult {
             1,
         ))
     }
-    let reader = load_file(&log_path).unwrap();
-    let sled_db = sled::open(datastore.join("replayed_db")).unwrap();
-    let dag = sled_db.open_tree("replayer").unwrap();
+    let replay_error =
+        |e: String| JsonResult::Error(JsonError::new(ErrorCode::ParseError, Some(e), 1));
+    let reader = match load_file(&log_path) {
+        Ok(reader) => reader,
+        Err(e) => return replay_error(e.to_string()),
+    };
+    let sled_db = match sled::open(datastore.join("replayed_db")) {
+        Ok(db) => db,
+        Err(e) => return replay_error(e.to_string()),
+    };
+    let dag = match sled_db.open_tree("replayer") {
+        Ok(tree) => tree,
+        Err(e) => return replay_error(e.to_string()),
+    };
     for line in reader.lines() {
         let parts = line.split(' ').collect::<Vec<&str>>();
-        if parts[0] == "insert" {
-            let v: Event = deserialize(&base64::decode(parts[1]).unwrap()).unwrap();
-            dag.insert(v.header.id().as_bytes(), serialize(&v)).unwrap();
+        if parts.first() == Some(&"insert") {
+            let Some(encoded) = parts.get(1) else {
+                return replay_error("malformed event graph replay insert entry".into())
+            };
+            let Some(bytes) = base64::decode(encoded) else {
+                return replay_error("invalid base64 in event graph replay log".into())
+            };
+            let v: Event = match deserialize(&bytes) {
+                Ok(event) => event,
+                Err(e) => return replay_error(e.to_string()),
+            };
+            if let Err(e) = dag.insert(v.header.id().as_bytes(), serialize(&v)) {
+                return replay_error(e.to_string())
+            }
         }
     }
     let mut graph = HashMap::new();
     for item in dag.iter() {
-        let (id, val) = item.unwrap();
-        let id = blake3::Hash::from_bytes((&id as &[u8]).try_into().unwrap());
-        graph.insert(id, deserialize_async::<Event>(&val).await.unwrap());
+        let (id, val) = match item {
+            Ok(item) => item,
+            Err(e) => return replay_error(e.to_string()),
+        };
+        let id = match <[u8; 32]>::try_from(&id as &[u8]) {
+            Ok(bytes) => blake3::Hash::from_bytes(bytes),
+            Err(e) => return replay_error(e.to_string()),
+        };
+        let event = match deserialize_async::<Event>(&val).await {
+            Ok(event) => event,
+            Err(e) => return replay_error(e.to_string()),
+        };
+        graph.insert(id, event);
     }
     let json_graph = graph.into_iter().map(|(k, v)| (k.to_string(), JsonValue::from(v))).collect();
     let values = json_map([("dag", JsonValue::Object(json_graph))]);

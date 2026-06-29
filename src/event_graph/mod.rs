@@ -366,7 +366,7 @@ impl DagStore {
         let mut dags = BTreeMap::new();
 
         if config.hours_rotation == 0 {
-            let genesis = generate_genesis(config);
+            let genesis = generate_genesis(config)?;
             dags.insert(genesis.header.timestamp, Self::create_slot(&sled_db, &genesis).await?);
             return Ok(Self { db: sled_db, dags })
         }
@@ -402,7 +402,7 @@ impl DagStore {
         // Ensure the recent window of DAGs exists.
         // Creates them if they're not already loaded from the discovery step.
         for i in 1..=window {
-            let ts = next_hour_timestamp((i as i64) - (window as i64));
+            let ts = next_hour_timestamp((i as i64) - (window as i64))?;
             if dags.contains_key(&ts) {
                 // Already loaded from sled discovery
                 continue
@@ -682,7 +682,7 @@ impl EventGraph {
         config.validate()?;
         let identity_state = IdentityState::new(&sled_db)?;
         let rln_app_id = rln::RlnAppId::from_genesis(&config.genesis_contents);
-        let current_genesis = generate_genesis(&config);
+        let current_genesis = generate_genesis(&config)?;
         let (pregenerated_identity_commitments, pregenerated_identity_commitment_reprs) =
             validate_pregenerated_identity_commitments(&config)?;
         let dag_store = DagStore::new(sled_db.clone(), &config).await?;

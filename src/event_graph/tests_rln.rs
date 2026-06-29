@@ -366,7 +366,7 @@ fn rln_bootstrapped_identities_parent_static_genesis() {
         };
         let eg = make_eg_with_config(config).await;
         let static_genesis =
-            generate_genesis(&EventGraphConfig { hours_rotation: 0, ..eg.config.clone() });
+            generate_genesis(&EventGraphConfig { hours_rotation: 0, ..eg.config.clone() }).unwrap();
         let static_genesis_id = static_genesis.id();
         let rotating_genesis_id = eg.current_genesis.read().await.id();
 
@@ -1045,7 +1045,8 @@ async fn old_static_event_propagates(ex: Arc<Executor<'static>>) {
     let content = serialize_async(&rln_node).await;
 
     let static_genesis =
-        generate_genesis(&EventGraphConfig { hours_rotation: 0, ..nodes[0].config.clone() });
+        generate_genesis(&EventGraphConfig { hours_rotation: 0, ..nodes[0].config.clone() })
+            .unwrap();
     let mut parents = NULL_PARENTS;
     parents[0] = static_genesis.id();
     let header = crate::event_graph::event::Header {
