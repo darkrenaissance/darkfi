@@ -731,8 +731,8 @@ impl ProtocolEventGraph {
         };
         // Note: create_slash_proof itself does NOT mutate the SMT -
         // it only reads the membership path. The actual removal happens
-        // when `static_insert` propagates the slashing event through
-        // `handle_static_put`, the same code path remote slashes use.
+        // when commit_verified_static_event applies the verified slashing
+        // event, the same state transition remote slashes use.
         drop(id);
 
         let slash_blob = SlashBlob { proof, identity_secret_hash, merkle_root: root };
