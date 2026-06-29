@@ -3461,10 +3461,21 @@ impl EventGraph {
             return Err(Error::Custom("static DAG genesis missing during bootstrap".into()))
         }
 
+        let configured = self.pregenerated_identity_commitments.len();
+        let mut inserted = 0usize;
+        let mut skipped_active = 0usize;
+        let mut skipped_slashed = 0usize;
+        let mut skipped_existing_event = 0usize;
+
         for commitment in self.pregenerated_identity_commitments.iter() {
             {
                 let state = self.identity_state.read().await;
-                if state.contains(commitment) || state.is_slashed(commitment) {
+                if state.contains(commitment) {
+                    skipped_active += 1;
+                    continue
+                }
+                if state.is_slashed(commitment) {
+                    skipped_slashed += 1;
                     continue
                 }
             }
@@ -3485,12 +3496,23 @@ impl EventGraph {
             let event = Event { header, content };
 
             if self.static_dag.contains_key(event.id().as_bytes())? {
+                skipped_existing_event += 1;
                 continue
             }
 
             let blob = rln::GENESIS_BLOB_GUARD.to_vec();
             self.commit_verified_static_event(&event, &blob, &rln_node).await?;
+            inserted += 1;
         }
+
+        info!(
+            target: "event_graph::new",
+            concat!(
+                "[EVENTGRAPH] Genesis RLN bootstrap: configured={} inserted={} ",
+                "skipped_active={} skipped_slashed={} skipped_existing_event={}",
+            ),
+            configured, inserted, skipped_active, skipped_slashed, skipped_existing_event,
+        );
 
         Ok(())
     }
