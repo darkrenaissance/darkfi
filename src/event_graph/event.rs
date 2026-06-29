@@ -22,7 +22,8 @@ use darkfi_serial::{async_trait, deserialize_async, Encodable, SerialDecodable, 
 use sled_overlay::{sled, SledTreeOverlay};
 
 use super::{
-    util::HOUR_MS, EventGraph, EventGraphConfig, EVENT_TIME_DRIFT, NULL_ID, N_EVENT_PARENTS,
+    util::{unix_timestamp_millis, HOUR_MS},
+    EventGraph, EventGraphConfig, EVENT_TIME_DRIFT, NULL_ID, N_EVENT_PARENTS,
 };
 use crate::Result;
 
@@ -45,31 +46,31 @@ pub struct Header {
 }
 
 impl Header {
-    pub async fn new(content: &[u8], eg: &EventGraph) -> Self {
+    pub async fn new(content: &[u8], eg: &EventGraph) -> Result<Self> {
         let dag_ts = eg.current_genesis.read().await.header.timestamp;
-        let (layer, parents) = eg.get_next_layer_with_parents(&dag_ts).await;
-        Self {
-            timestamp: UNIX_EPOCH.elapsed().unwrap().as_millis() as u64,
-            parents,
-            layer,
-            content_hash: blake3::hash(content),
-        }
-    }
-
-    pub async fn new_static(content: &[u8], eg: &EventGraph) -> Result<Self> {
-        let (layer, parents) = eg.get_next_layer_with_parents_static().await?;
+        let (layer, parents) = eg.get_next_layer_with_parents(&dag_ts).await?;
         Ok(Self {
-            timestamp: UNIX_EPOCH.elapsed().unwrap().as_millis() as u64,
+            timestamp: unix_timestamp_millis()?,
             parents,
             layer,
             content_hash: blake3::hash(content),
         })
     }
 
-    pub async fn with_timestamp(timestamp: u64, content: &[u8], eg: &EventGraph) -> Self {
+    pub async fn new_static(content: &[u8], eg: &EventGraph) -> Result<Self> {
+        let (layer, parents) = eg.get_next_layer_with_parents_static().await?;
+        Ok(Self {
+            timestamp: unix_timestamp_millis()?,
+            parents,
+            layer,
+            content_hash: blake3::hash(content),
+        })
+    }
+
+    pub async fn with_timestamp(timestamp: u64, content: &[u8], eg: &EventGraph) -> Result<Self> {
         let dag_ts = eg.current_genesis.read().await.header.timestamp;
-        let (layer, parents) = eg.get_next_layer_with_parents(&dag_ts).await;
-        Self { timestamp, parents, layer, content_hash: blake3::hash(content) }
+        let (layer, parents) = eg.get_next_layer_with_parents(&dag_ts).await?;
+        Ok(Self { timestamp, parents, layer, content_hash: blake3::hash(content) })
     }
 
     /// Blake3 hash of `(timestamp, parents, layer, content_hash)`.
@@ -155,9 +156,9 @@ pub struct Event {
 }
 
 impl Event {
-    pub async fn new(data: Vec<u8>, eg: &EventGraph) -> Self {
-        let header = Header::new(&data, eg).await;
-        Self { header, content: data }
+    pub async fn new(data: Vec<u8>, eg: &EventGraph) -> Result<Self> {
+        let header = Header::new(&data, eg).await?;
+        Ok(Self { header, content: data })
     }
 
     pub async fn new_static(data: Vec<u8>, eg: &EventGraph) -> Result<Self> {
@@ -169,9 +170,9 @@ impl Event {
         self.header.id()
     }
 
-    pub async fn with_timestamp(ts: u64, data: Vec<u8>, eg: &EventGraph) -> Self {
-        let header = Header::with_timestamp(ts, &data, eg).await;
-        Self { header, content: data }
+    pub async fn with_timestamp(ts: u64, data: Vec<u8>, eg: &EventGraph) -> Result<Self> {
+        let header = Header::with_timestamp(ts, &data, eg).await?;
+        Ok(Self { header, content: data })
     }
 
     pub fn content(&self) -> &[u8] {

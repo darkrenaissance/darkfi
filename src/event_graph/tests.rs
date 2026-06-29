@@ -421,6 +421,18 @@ fn evgr_dag_store_rejects_corrupt_event_tree_on_open() {
 }
 
 #[test]
+fn evgr_rotating_event_creation_rejects_missing_current_dag_slot() {
+    smol::block_on(async {
+        let eg = make_eg().await;
+        let dag_ts = eg.current_genesis.read().await.header.timestamp;
+        eg.dag_store.write().await.dags.remove(&dag_ts);
+
+        let result = Event::new(b"missing-current-slot".to_vec(), &eg).await;
+        assert!(matches!(result, Err(crate::Error::Custom(_))));
+    })
+}
+
+#[test]
 fn evgr_static_event_creation_rejects_corrupt_static_dag() {
     smol::block_on(async {
         let eg = make_eg().await;
@@ -502,7 +514,7 @@ fn evgr_dag_insert_valid_and_duplicate() {
         let dag_name = dag_ts.to_string();
         let sub = eg.event_pub.clone().subscribe().await;
 
-        let event = Event::new(b"hello".to_vec(), &eg).await;
+        let event = Event::new(b"hello".to_vec(), &eg).await.unwrap();
         eg.header_dag_insert(vec![event.header.clone()], &dag_name).await.unwrap();
         let ids = eg.dag_insert(slice::from_ref(&event), &dag_name).await.unwrap();
         assert_eq!(ids.len(), 1);
@@ -528,7 +540,7 @@ fn evgr_duplicate_header_insert_does_not_duplicate_time_index() {
         let eg = make_eg().await;
         let dag_ts = eg.current_genesis.read().await.header.timestamp;
         let dag_name = dag_ts.to_string();
-        let event = Event::new(b"time-index-dedup".to_vec(), &eg).await;
+        let event = Event::new(b"time-index-dedup".to_vec(), &eg).await.unwrap();
 
         eg.header_dag_insert(vec![event.header.clone()], &dag_name).await.unwrap();
         let indexed_after_first = {
@@ -557,7 +569,7 @@ fn evgr_dag_insert_without_header_skipped() {
     smol::block_on(async {
         let eg = make_eg().await;
         let dag_name = eg.current_genesis.read().await.header.timestamp.to_string();
-        let event = Event::new(b"orphan".to_vec(), &eg).await;
+        let event = Event::new(b"orphan".to_vec(), &eg).await.unwrap();
         let ids = eg.dag_insert(slice::from_ref(&event), &dag_name).await.unwrap();
         assert!(ids.is_empty());
     })
@@ -820,7 +832,7 @@ fn evgr_fetch_page_both_directions() {
         let dag_name = eg.current_genesis.read().await.header.timestamp.to_string();
         let base = UNIX_EPOCH.elapsed().unwrap().as_millis() as u64;
         for i in 0..(MAX_RANGE_PAGE_SIZE as u64 + 10) {
-            let ev = Event::with_timestamp(base + i, vec![(i % 251) as u8], &eg).await;
+            let ev = Event::with_timestamp(base + i, vec![(i % 251) as u8], &eg).await.unwrap();
             eg.header_dag_insert(vec![ev.header.clone()], &dag_name).await.unwrap();
             eg.dag_insert(slice::from_ref(&ev), &dag_name).await.unwrap();
         }
@@ -938,7 +950,7 @@ async fn propagation_with_real_blob(ex: Arc<Executor<'static>>) {
 
     let dag_ts = nodes[0].current_genesis.read().await.header.timestamp;
     let dag_name = dag_ts.to_string();
-    let event = Event::new(b"hello-via-rln".to_vec(), &nodes[0]).await;
+    let event = Event::new(b"hello-via-rln".to_vec(), &nodes[0]).await.unwrap();
 
     let message_id =
         alice.next_message_id(event.header.timestamp).expect("budget available on first signal");
@@ -980,7 +992,7 @@ async fn empty_blob_rejected(ex: Arc<Executor<'static>>) {
     let nodes = make_network(ex).await;
 
     let dag_ts = nodes[0].current_genesis.read().await.header.timestamp;
-    let event = Event::new(b"unauthenticated".to_vec(), &nodes[0]).await;
+    let event = Event::new(b"unauthenticated".to_vec(), &nodes[0]).await.unwrap();
 
     nodes[0].p2p.broadcast(&EventPut(event.clone(), vec![])).await;
     sleep(5).await;
@@ -1011,7 +1023,7 @@ async fn malformed_event_rejected_before_rln(ex: Arc<Executor<'static>>) {
     }
 
     let dag_ts = nodes[0].current_genesis.read().await.header.timestamp;
-    let event = Event::new(b"preflight-live".to_vec(), &nodes[0]).await;
+    let event = Event::new(b"preflight-live".to_vec(), &nodes[0]).await.unwrap();
     let message_id = alice.next_message_id(event.header.timestamp).expect("budget");
     let blob = alice.create_signal(&event, message_id, &nodes[0]).await.unwrap();
     let internal_nullifier = blob.internal_nullifier;
@@ -1102,7 +1114,7 @@ async fn dag_sync_with_blob(ex: Arc<Executor<'static>>) {
     let dag_ts = nodes[0].current_genesis.read().await.header.timestamp;
     let dag_name = dag_ts.to_string();
 
-    let event = Event::new(b"synced-message".to_vec(), &nodes[0]).await;
+    let event = Event::new(b"synced-message".to_vec(), &nodes[0]).await.unwrap();
     let message_id = alice.next_message_id(event.header.timestamp).expect("budget");
     let blob_struct = alice.create_signal(&event, message_id, &nodes[0]).await.unwrap();
     let blob = serialize_async(&blob_struct).await;
@@ -1156,7 +1168,7 @@ async fn dag_sync_rejects_bad_blob(ex: Arc<Executor<'static>>) {
 
     let dag_ts = nodes[0].current_genesis.read().await.header.timestamp;
     let dag_name = dag_ts.to_string();
-    let event = Event::new(b"crafted-injection".to_vec(), &nodes[0]).await;
+    let event = Event::new(b"crafted-injection".to_vec(), &nodes[0]).await.unwrap();
 
     // Garbage bytes - won't deserialize as a real RLN signal, won't
     // verify. We don't need a real (failing) proof to exercise the
@@ -1215,7 +1227,7 @@ async fn dormant_user_can_post_after_long_silence(ex: Arc<Executor<'static>>) {
         }
     }
 
-    let event = Event::new(b"long-silent-but-still-registered".to_vec(), &nodes[0]).await;
+    let event = Event::new(b"long-silent-but-still-registered".to_vec(), &nodes[0]).await.unwrap();
     let message_id = alice.next_message_id(event.header.timestamp).expect("budget");
     let blob_struct = alice.create_signal(&event, message_id, &nodes[0]).await.unwrap();
     let blob = serialize_async(&blob_struct).await;

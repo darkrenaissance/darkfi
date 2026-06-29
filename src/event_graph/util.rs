@@ -48,6 +48,15 @@ use crate::rpc::{
 /// Milliseconds in one hour.
 pub(super) const HOUR_MS: u64 = 3_600_000;
 
+/// Current UNIX timestamp in milliseconds.
+pub(super) fn unix_timestamp_millis() -> Result<u64> {
+    let elapsed = UNIX_EPOCH
+        .elapsed()
+        .map_err(|_| Error::Custom("system clock is before UNIX epoch".into()))?;
+    u64::try_from(elapsed.as_millis())
+        .map_err(|_| Error::Custom("system clock milliseconds exceed u64".into()))
+}
+
 /// Timestamp (millis) for the start of the hour `hours` offsets from now.
 pub(super) fn next_hour_timestamp(hours: i64) -> u64 {
     let now = UNIX_EPOCH.elapsed().unwrap().as_millis() as u64;

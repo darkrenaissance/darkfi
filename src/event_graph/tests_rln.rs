@@ -1254,7 +1254,7 @@ async fn dag_injection_rejected(ex: Arc<Executor<'static>>) {
     // node 0's tip set) but has a garbage blob. We pre-insert
     // its header so the structural validation passes on the
     // recipient.
-    let injected = Event::new(b"injected by malicious peer".to_vec(), &nodes[0]).await;
+    let injected = Event::new(b"injected by malicious peer".to_vec(), &nodes[0]).await.unwrap();
     let bad_blob = b"not-a-real-rln-blob".to_vec();
 
     // Node 0 records the bad event in its own DAG and stashes
@@ -1371,7 +1371,7 @@ fn rln_dag_insert_with_blobs_already_known_skips_verification() {
         let dag_name = eg.current_genesis.read().await.header.timestamp.to_string();
 
         // Build a real event so it passes structural validation.
-        let event = Event::new(b"already-known".to_vec(), &eg).await;
+        let event = Event::new(b"already-known".to_vec(), &eg).await.unwrap();
         eg.header_dag_insert(vec![event.header.clone()], &dag_name).await.unwrap();
 
         // First insert via dag_insert (no blob -> trust-the-quorum
@@ -1414,7 +1414,7 @@ fn rln_dag_insert_with_blobs_rejects_missing_blob_on_non_genesis() {
     smol::block_on(async {
         let eg = make_eg().await;
         let dag_name = eg.current_genesis.read().await.header.timestamp.to_string();
-        let event = Event::new(b"missing-blob".to_vec(), &eg).await;
+        let event = Event::new(b"missing-blob".to_vec(), &eg).await.unwrap();
         eg.header_dag_insert(vec![event.header.clone()], &dag_name).await.unwrap();
 
         // Empty blobs slice -> empty blob for every event -> reject.
@@ -1448,7 +1448,7 @@ fn rln_dag_insert_with_blobs_rejects_bad_content_before_verification() {
 
         let dag_ts = eg.current_genesis.read().await.header.timestamp;
         let dag_name = dag_ts.to_string();
-        let event = Event::new(b"preflight-sync".to_vec(), &eg).await;
+        let event = Event::new(b"preflight-sync".to_vec(), &eg).await.unwrap();
         let message_id = alice.next_message_id(event.header.timestamp).expect("budget");
         let blob = alice.create_signal(&event, message_id, &eg).await.unwrap();
         let internal_nullifier = blob.internal_nullifier;
@@ -1487,7 +1487,7 @@ fn rln_insert_signal_with_blob_rejects_missing_blob_on_non_genesis() {
         let eg = make_eg().await;
         let dag_ts = eg.current_genesis.read().await.header.timestamp;
         let dag_name = dag_ts.to_string();
-        let event = Event::new(b"public-missing-blob".to_vec(), &eg).await;
+        let event = Event::new(b"public-missing-blob".to_vec(), &eg).await.unwrap();
         assert_ne!(event.header.parents, NULL_PARENTS);
 
         let result = eg.insert_signal_with_blob(&event, &[], &dag_name).await;
@@ -1560,7 +1560,7 @@ fn rln_dag_blobs_pruned_with_dag_rotation() {
         let dag_name = original_dag_ts.to_string();
 
         // Insert a real event in the current DAG.
-        let event = Event::new(b"to-be-evicted".to_vec(), &eg).await;
+        let event = Event::new(b"to-be-evicted".to_vec(), &eg).await.unwrap();
         eg.header_dag_insert(vec![event.header.clone()], &dag_name).await.unwrap();
         eg.dag_insert(std::slice::from_ref(&event), &dag_name).await.unwrap();
 
