@@ -41,13 +41,10 @@ use smol::{
 use tracing::{debug, error, warn};
 
 use super::{
-    server::{IrcServer, MAX_MSG_LEN},
+    server::{IrcServer, RlnMessageReservation, MAX_MSG_LEN},
     NickServ, SERVER_NAME,
 };
-use crate::{
-    crypto::rln::{RlnIdentity, RLN2_SIGNAL_ZKBIN},
-    Privmsg,
-};
+use crate::{crypto::rln::RLN2_SIGNAL_ZKBIN, Privmsg};
 
 const PENALTY_LIMIT: usize = 5;
 
@@ -213,20 +210,24 @@ impl Client {
                                 // honestly to syncing peers and that
                                 // peers would strict-reject anyway.
                                 let blob = {
-                                    let mut id_guard = self.server.rln_identity.write().await;
-                                    let Some(rln_identity) = id_guard.as_mut() else {
-                                        warn!(
-                                            "[IRC CLIENT] No RLN identity registered; \
-                                             refusing to send. Use \
-                                             `/msg NickServ REGISTER ...` to register."
-                                        );
-                                        continue
-                                    };
-                                    let mid = match rln_identity
-                                        .next_message_id(event.header.timestamp)
+                                    let (rln_identity, mid) = match self
+                                        .server
+                                        .reserve_rln_message_id(event.header.timestamp)
+                                        .await?
                                     {
-                                        Some(v) => v,
-                                        None => {
+                                        RlnMessageReservation::Reserved {
+                                            identity,
+                                            message_id,
+                                        } => (identity, message_id),
+                                        RlnMessageReservation::MissingIdentity => {
+                                            warn!(
+                                                "[IRC CLIENT] No RLN identity registered; \
+                                                 refusing to send. Use \
+                                                 `/msg NickServ REGISTER ...` to register."
+                                            );
+                                            continue
+                                        }
+                                        RlnMessageReservation::BudgetExhausted => {
                                             warn!(
                                                 "[IRC CLIENT] RLN message budget \
                                                  exhausted for this epoch; dropping \
