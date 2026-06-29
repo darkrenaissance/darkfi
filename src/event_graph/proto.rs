@@ -449,11 +449,13 @@ impl ProtocolEventGraph {
             let dag_name = genesis_ts.to_string();
             let eid = event.id();
 
-            // Already known?
+            // Already known means the body is present. A header-only sync can
+            // populate `header_tree` without `main_tree`; a later live EventPut
+            // must still be allowed to deliver the body and blob.
             {
                 let store = self.event_graph.dag_store.read().await;
                 if let Some(slot) = store.get_slot(&genesis_ts) {
-                    if slot.header_tree.contains_key(eid.as_bytes()).unwrap_or(false) {
+                    if slot.main_tree.contains_key(eid.as_bytes()).unwrap_or(false) {
                         continue
                     }
                 }
