@@ -56,14 +56,14 @@ impl Header {
         }
     }
 
-    pub async fn new_static(content: &[u8], eg: &EventGraph) -> Self {
-        let (layer, parents) = eg.get_next_layer_with_parents_static().await;
-        Self {
+    pub async fn new_static(content: &[u8], eg: &EventGraph) -> Result<Self> {
+        let (layer, parents) = eg.get_next_layer_with_parents_static().await?;
+        Ok(Self {
             timestamp: UNIX_EPOCH.elapsed().unwrap().as_millis() as u64,
             parents,
             layer,
             content_hash: blake3::hash(content),
-        }
+        })
     }
 
     pub async fn with_timestamp(timestamp: u64, content: &[u8], eg: &EventGraph) -> Self {
@@ -160,9 +160,9 @@ impl Event {
         Self { header, content: data }
     }
 
-    pub async fn new_static(data: Vec<u8>, eg: &EventGraph) -> Self {
-        let header = Header::new_static(&data, eg).await;
-        Self { header, content: data }
+    pub async fn new_static(data: Vec<u8>, eg: &EventGraph) -> Result<Self> {
+        let header = Header::new_static(&data, eg).await?;
+        Ok(Self { header, content: data })
     }
 
     pub fn id(&self) -> blake3::Hash {

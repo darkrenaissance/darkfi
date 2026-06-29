@@ -385,6 +385,54 @@ fn evgr_dag_store_archive_mode_discovers_existing_trees() {
 }
 
 #[test]
+fn evgr_dag_store_rejects_corrupt_header_index_on_open() {
+    smol::block_on(async {
+        let sled_db = sled::Config::new().temporary(true).open().unwrap();
+        let config = bounded_dag_store_config();
+        let store = DagStore::new(sled_db.clone(), &config).await.unwrap();
+        let ts = *store.dag_timestamps().last().unwrap();
+        drop(store);
+
+        let bad_id = [0u8; 32];
+        let headers = sled_db.open_tree(format!("headers_{ts}")).unwrap();
+        headers.insert(bad_id.as_slice(), b"not-a-header".as_slice()).unwrap();
+
+        let result = DagStore::new(sled_db, &config).await;
+        assert!(result.is_err(), "corrupt header bytes should fail DAG startup");
+    })
+}
+
+#[test]
+fn evgr_dag_store_rejects_corrupt_event_tree_on_open() {
+    smol::block_on(async {
+        let sled_db = sled::Config::new().temporary(true).open().unwrap();
+        let config = bounded_dag_store_config();
+        let store = DagStore::new(sled_db.clone(), &config).await.unwrap();
+        let ts = *store.dag_timestamps().last().unwrap();
+        drop(store);
+
+        let bad_id = [0u8; 32];
+        let events = sled_db.open_tree(ts.to_string()).unwrap();
+        events.insert(bad_id.as_slice(), b"not-an-event".as_slice()).unwrap();
+
+        let result = DagStore::new(sled_db, &config).await;
+        assert!(result.is_err(), "corrupt event bytes should fail DAG startup");
+    })
+}
+
+#[test]
+fn evgr_static_event_creation_rejects_corrupt_static_dag() {
+    smol::block_on(async {
+        let eg = make_eg().await;
+        let bad_id = [0u8; 32];
+        eg.static_dag.insert(bad_id.as_slice(), b"not-an-event".as_slice()).unwrap();
+
+        let result = Event::new_static(b"static-after-corruption".to_vec(), &eg).await;
+        assert!(result.is_err(), "corrupt static DAG should fail static event creation");
+    })
+}
+
+#[test]
 fn evgr_compute_unreferenced_tips_single_pass() {
     smol::block_on(async {
         let store = make_dag_store().await.unwrap();
@@ -435,7 +483,7 @@ fn evgr_compute_unreferenced_tips_single_pass() {
 
         assert_ne!(e2.id(), e4.id(), "e2 and e4 must have distinct IDs");
 
-        let tips = compute_unreferenced_tips(&slot.main_tree).await;
+        let tips = compute_unreferenced_tips(&slot.main_tree).await.unwrap();
 
         assert!(tips.get(&2).unwrap().contains(&e3.id()));
         assert!(tips.get(&1).unwrap().contains(&e4.id()));

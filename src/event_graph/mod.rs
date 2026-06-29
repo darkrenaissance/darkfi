@@ -212,15 +212,15 @@ impl TimeIndex {
         Self::default()
     }
 
-    pub async fn from_header_dag(tree: &sled::Tree) -> Self {
+    pub async fn from_header_dag(tree: &sled::Tree) -> Result<Self> {
         let mut idx = Self::new();
         for item in tree.iter() {
-            let (id, hdr) = item.unwrap();
-            let id = blake3::Hash::from_bytes((&id as &[u8]).try_into().unwrap());
-            let hdr: Header = deserialize_async(&hdr).await.unwrap();
+            let (id, hdr) = item?;
+            let id = blake3::Hash::from_bytes((&id as &[u8]).try_into()?);
+            let hdr: Header = deserialize_async(&hdr).await?;
             idx.insert(hdr.timestamp, id);
         }
-        idx
+        Ok(idx)
     }
 
     pub fn insert(&mut self, ts: u64, id: blake3::Hash) {
@@ -295,14 +295,14 @@ pub struct DagSlot {
 /// Full-scan tip computation.
 /// Compute unreferenced tips - events that exist in the DAG but are
 /// not referenced as a parent by any other event - grouped by layer.
-pub(crate) async fn compute_unreferenced_tips(dag: &sled::Tree) -> LayerUTips {
+pub(crate) async fn compute_unreferenced_tips(dag: &sled::Tree) -> Result<LayerUTips> {
     let mut candidates: HashMap<blake3::Hash, u64> = HashMap::new();
     let mut referenced: HashSet<blake3::Hash> = HashSet::new();
 
     for item in dag.iter() {
-        let (id_bytes, val_bytes) = item.unwrap();
-        let id = blake3::Hash::from_bytes((&id_bytes as &[u8]).try_into().unwrap());
-        let ev: Event = deserialize_async(&val_bytes).await.unwrap();
+        let (id_bytes, val_bytes) = item?;
+        let id = blake3::Hash::from_bytes((&id_bytes as &[u8]).try_into()?);
+        let ev: Event = deserialize_async(&val_bytes).await?;
 
         candidates.insert(id, ev.header.layer);
         for p in ev.header.parents.iter() {
@@ -319,7 +319,7 @@ pub(crate) async fn compute_unreferenced_tips(dag: &sled::Tree) -> LayerUTips {
             map.entry(layer).or_default().insert(id);
         }
     }
-    map
+    Ok(map)
 }
 
 /// Pick up to N_EVENT_PARENTS tips from the highest layers.
@@ -367,7 +367,7 @@ impl DagStore {
 
         if config.hours_rotation == 0 {
             let genesis = generate_genesis(config);
-            dags.insert(genesis.header.timestamp, Self::create_slot(&sled_db, &genesis).await);
+            dags.insert(genesis.header.timestamp, Self::create_slot(&sled_db, &genesis).await?);
             return Ok(Self { db: sled_db, dags })
         }
 
@@ -393,7 +393,7 @@ impl DagStore {
                         content_hash: blake3::hash(&config.genesis_contents),
                     };
                     let genesis = Event { header: hdr, content: config.genesis_contents.clone() };
-                    let slot = Self::create_slot(&sled_db, &genesis).await;
+                    let slot = Self::create_slot(&sled_db, &genesis).await?;
                     dags.insert(ts, slot);
                 }
             }
@@ -414,33 +414,33 @@ impl DagStore {
                 content_hash: blake3::hash(&config.genesis_contents),
             };
             let genesis = Event { header: hdr, content: config.genesis_contents.clone() };
-            dags.insert(ts, Self::create_slot(&sled_db, &genesis).await);
+            dags.insert(ts, Self::create_slot(&sled_db, &genesis).await?);
         }
 
         Ok(Self { db: sled_db, dags })
     }
 
-    async fn create_slot(db: &sled::Db, genesis: &Event) -> DagSlot {
+    async fn create_slot(db: &sled::Db, genesis: &Event) -> Result<DagSlot> {
         let name = genesis.header.timestamp.to_string();
-        let ht = db.open_tree(format!("headers_{name}")).unwrap();
-        let mt = db.open_tree(&name).unwrap();
+        let ht = db.open_tree(format!("headers_{name}"))?;
+        let mt = db.open_tree(&name)?;
         for (tree, data) in
             [(&ht, serialize_async(&genesis.header).await), (&mt, serialize_async(genesis).await)]
         {
             if tree.is_empty() {
                 let mut ov = SledTreeOverlay::new(tree);
-                ov.insert(genesis.id().as_bytes(), &data).unwrap();
+                ov.insert(genesis.id().as_bytes(), &data)?;
                 if let Some(b) = ov.aggregate() {
-                    tree.apply_batch(b).unwrap();
+                    tree.apply_batch(b)?;
                 }
             }
         }
-        DagSlot {
-            tips: compute_unreferenced_tips(&mt).await,
-            time_index: TimeIndex::from_header_dag(&ht).await,
+        Ok(DagSlot {
+            tips: compute_unreferenced_tips(&mt).await?,
+            time_index: TimeIndex::from_header_dag(&ht).await?,
             header_tree: ht,
             main_tree: mt,
-        }
+        })
     }
 
     /// Add a new DAG on rotation. In bounded mode, drops the oldest DAG
@@ -455,11 +455,11 @@ impl DagStore {
                 let Some((_, old)) = self.dags.pop_first() else {
                     return Err(Error::Custom("event graph DAG store is empty".into()))
                 };
-                self.db.drop_tree(old.header_tree.name()).unwrap();
-                self.db.drop_tree(old.main_tree.name()).unwrap();
+                self.db.drop_tree(old.header_tree.name())?;
+                self.db.drop_tree(old.main_tree.name())?;
             }
         }
-        let slot = Self::create_slot(&self.db, genesis).await;
+        let slot = Self::create_slot(&self.db, genesis).await?;
         self.dags.insert(genesis.header.timestamp, slot);
         Ok(())
     }
@@ -1935,8 +1935,9 @@ impl EventGraph {
 
     pub(crate) async fn get_next_layer_with_parents_static(
         &self,
-    ) -> (u64, [blake3::Hash; N_EVENT_PARENTS]) {
-        select_parents_from_tips(&compute_unreferenced_tips(&self.static_dag).await)
+    ) -> Result<(u64, [blake3::Hash; N_EVENT_PARENTS])> {
+        let tips = compute_unreferenced_tips(&self.static_dag).await?;
+        Ok(select_parents_from_tips(&tips))
     }
 
     pub async fn order_events(&self) -> Vec<Event> {
@@ -2098,7 +2099,7 @@ impl EventGraph {
             None => None,
         })
     }
-    pub async fn static_unreferenced_tips(&self) -> LayerUTips {
+    pub async fn static_unreferenced_tips(&self) -> Result<LayerUTips> {
         compute_unreferenced_tips(&self.static_dag).await
     }
 
