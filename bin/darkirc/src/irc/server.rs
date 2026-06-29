@@ -24,7 +24,7 @@ use darkfi::{
     util::path::expand_path,
     Error, Result,
 };
-use darkfi_serial::deserialize_async;
+use darkfi_serial::{deserialize_async, serialize_async};
 use futures_rustls::{
     rustls::{self, pki_types::PrivateKeyDer},
     TlsAcceptor,
@@ -42,7 +42,7 @@ use url::Url;
 
 use super::{
     client::Client,
-    services::nickserv::{ACCOUNTS_DB_PREFIX, ACCOUNTS_KEY_RLN_IDENTITY},
+    services::nickserv::{ACCOUNTS_DB_PREFIX, ACCOUNTS_DEFAULT_TREE, ACCOUNTS_KEY_RLN_IDENTITY},
     IrcChannel, IrcContact,
 };
 use crate::{
@@ -57,6 +57,73 @@ pub const MAX_NICK_LEN: usize = 24;
 
 /// Max message length
 pub const MAX_MSG_LEN: usize = 512;
+
+/// Result of attempting to reserve the next RLN message slot.
+pub enum RlnMessageReservation {
+    /// No active RLN identity is configured.
+    MissingIdentity,
+    /// The active identity has already used its epoch budget.
+    BudgetExhausted,
+    /// A message slot was persisted and can be used to build a proof.
+    Reserved { identity: RlnIdentity, message_id: u64 },
+}
+
+/// Persist the active RLN counter to the default mirror and matching account tree.
+async fn persist_rln_identity_counter(sled_db: &sled::Db, identity: &RlnIdentity) -> Result<()> {
+    let encoded = serialize_async(identity).await;
+    let active_commitment = identity.commitment();
+    let mut updated_account = false;
+
+    for raw in sled_db.tree_names() {
+        let bytes: &[u8] = raw.as_ref();
+        let Ok(name) = std::str::from_utf8(bytes) else { continue };
+        let Some(account_name) = name.strip_prefix(ACCOUNTS_DB_PREFIX) else { continue };
+        if account_name == "default" || account_name.is_empty() {
+            continue
+        }
+
+        let tree = sled_db.open_tree(name)?;
+        let Some(blob) = tree.get(ACCOUNTS_KEY_RLN_IDENTITY)? else { continue };
+        let Ok(stored): std::result::Result<RlnIdentity, _> = deserialize_async(&blob).await else {
+            continue
+        };
+        if stored.commitment() == active_commitment {
+            tree.insert(ACCOUNTS_KEY_RLN_IDENTITY, encoded.clone())?;
+            updated_account = true;
+        }
+    }
+
+    if !updated_account {
+        warn!(
+            target: "darkirc::irc::server",
+            "active RLN identity has no matching account tree; persisting default mirror only",
+        );
+    }
+
+    let default_db = sled_db.open_tree(ACCOUNTS_DEFAULT_TREE)?;
+    default_db.insert(ACCOUNTS_KEY_RLN_IDENTITY, encoded)?;
+    sled_db.flush_async().await?;
+    Ok(())
+}
+
+/// Reserve the next RLN message ID and persist it before proof creation.
+pub(crate) async fn reserve_rln_message_id_in_store(
+    sled_db: &sled::Db,
+    active: &mut Option<RlnIdentity>,
+    now_millis: u64,
+) -> Result<RlnMessageReservation> {
+    let Some(current) = active else { return Ok(RlnMessageReservation::MissingIdentity) };
+
+    let mut updated = *current;
+    let Some(message_id) = updated.next_message_id(now_millis) else {
+        return Ok(RlnMessageReservation::BudgetExhausted)
+    };
+
+    persist_rln_identity_counter(sled_db, &updated).await?;
+    *current = updated;
+
+    Ok(RlnMessageReservation::Reserved { identity: updated, message_id })
+}
 
 /// IRC server instance
 pub struct IrcServer {
@@ -88,6 +155,12 @@ pub struct IrcServer {
 }
 
 impl IrcServer {
+    /// Reserve and persist the next RLN message slot before proof creation.
+    pub async fn reserve_rln_message_id(&self, now_millis: u64) -> Result<RlnMessageReservation> {
+        let mut active = self.rln_identity.write().await;
+        reserve_rln_message_id_in_store(&self.darkirc.sled, &mut active, now_millis).await
+    }
+
     /// Instantiate a new IRC server. This function will try to bind a TCP socket,
     /// and optionally load a TLS certificate and key. To start the listening loop,
     /// call `IrcServer::listen()`.
@@ -422,5 +495,73 @@ impl IrcServer {
             debug!("Successfully decrypted message from {name}");
             return
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use darkfi::event_graph::rln::epoch_of;
+    use darkfi_sdk::pasta::pallas;
+    use darkfi_serial::deserialize_async;
+
+    use super::*;
+
+    fn test_identity(limit: u64) -> RlnIdentity {
+        RlnIdentity {
+            nullifier: pallas::Base::from(0xabc_u64),
+            trapdoor: pallas::Base::from(0xdef_u64),
+            user_message_limit: limit,
+            message_id: 0,
+            last_epoch: 0,
+        }
+    }
+
+    #[test]
+    fn rln_message_reservation_persists_default_and_account_counters() {
+        smol::block_on(async {
+            let sled_db = sled::Config::new().temporary(true).open().unwrap();
+            let account = sled_db.open_tree(format!("{ACCOUNTS_DB_PREFIX}alice")).unwrap();
+            let default = sled_db.open_tree(ACCOUNTS_DEFAULT_TREE).unwrap();
+            let identity = test_identity(2);
+            let encoded = serialize_async(&identity).await;
+            account.insert(ACCOUNTS_KEY_RLN_IDENTITY, encoded.clone()).unwrap();
+            default.insert(ACCOUNTS_KEY_RLN_IDENTITY, encoded).unwrap();
+
+            let now = 1_704_067_800_000;
+            let mut active = Some(identity);
+            let reservation =
+                reserve_rln_message_id_in_store(&sled_db, &mut active, now).await.unwrap();
+            let RlnMessageReservation::Reserved { identity: reserved, message_id } = reservation
+            else {
+                panic!("expected reservation")
+            };
+            assert_eq!(message_id, 0);
+            assert_eq!(reserved.message_id, 1);
+            assert_eq!(reserved.last_epoch, epoch_of(now));
+
+            let stored_default: RlnIdentity =
+                deserialize_async(&default.get(ACCOUNTS_KEY_RLN_IDENTITY).unwrap().unwrap())
+                    .await
+                    .unwrap();
+            let stored_account: RlnIdentity =
+                deserialize_async(&account.get(ACCOUNTS_KEY_RLN_IDENTITY).unwrap().unwrap())
+                    .await
+                    .unwrap();
+            assert_eq!(stored_default.message_id, 1);
+            assert_eq!(stored_account.message_id, 1);
+            assert_eq!(stored_default.last_epoch, epoch_of(now));
+            assert_eq!(stored_account.last_epoch, epoch_of(now));
+
+            let reservation =
+                reserve_rln_message_id_in_store(&sled_db, &mut active, now).await.unwrap();
+            let RlnMessageReservation::Reserved { message_id, .. } = reservation else {
+                panic!("expected second reservation")
+            };
+            assert_eq!(message_id, 1);
+
+            let exhausted =
+                reserve_rln_message_id_in_store(&sled_db, &mut active, now).await.unwrap();
+            assert!(matches!(exhausted, RlnMessageReservation::BudgetExhausted));
+        })
     }
 }

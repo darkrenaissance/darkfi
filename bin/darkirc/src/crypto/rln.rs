@@ -37,25 +37,16 @@ use tracing::info;
 pub const RLN_TRAPDOOR_DERIVATION_PATH: pallas::Base = pallas::Base::from_raw([4211, 0, 0, 0]);
 pub const RLN_NULLIFIER_DERIVATION_PATH: pallas::Base = pallas::Base::from_raw([4212, 0, 0, 0]);
 
-/// A user-side RLN identity: long-lived secrets plus an in-memory
-/// per-epoch send counter.
+/// A user-side RLN identity: long-lived secrets plus a per-epoch
+/// send counter.
 ///
-/// The struct is `Copy` so it can be cheaply duplicated when handed
-/// off to client tasks; the per-epoch counter (`message_id`,
-/// `last_epoch`) is therefore expected to be tracked by whichever
-/// task owns the canonical mutable copy. In the typical DarkIRC
-/// configuration that's the `IrcServer::rln_identity` field
-/// (`RwLock<Option<RlnIdentity>>`).
-///
-/// `message_id` and `last_epoch` are not persisted to disk on
-/// shutdown. An RLN epoch is `RLN_EPOCH_LEN` (10 minutes); the
-/// worst case of a node restart is that the counter resets to 0
-/// for the current epoch, which only risks a slash if the user
-/// actually sent distinct messages with the same message_id in the
-/// same epoch - which generally requires hot-restarting at sub-
-/// second cadence. If/when that becomes an operational concern,
-/// persist the counter through a `next_message_id_persisted`-style
-/// helper at the call site.
+/// The struct is `Copy` so it can be cheaply duplicated after a
+/// message slot has been reserved. The canonical mutable copy lives
+/// in `IrcServer::rln_identity` and outbound sends must reserve a
+/// slot through `IrcServer::reserve_rln_message_id()`, which persists
+/// `message_id` and `last_epoch` before proof creation. Persisting
+/// first means a crash can burn a slot, but cannot roll the counter
+/// back and self-slash the identity on restart.
 #[derive(Copy, Clone, SerialEncodable, SerialDecodable)]
 pub struct RlnIdentity {
     pub nullifier: pallas::Base,

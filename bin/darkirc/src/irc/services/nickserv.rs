@@ -473,7 +473,7 @@ impl NickServ {
         };
 
         // Create a new RLN identity. `last_epoch` is initialised to
-        // 0 deterministically - the first call to `next_message_id`
+        // 0 deterministically - the first persisted send reservation
         // will detect the rollover to the current wall-clock epoch.
         let new_rln_identity = RlnIdentity {
             nullifier: identity_nullifier,
@@ -670,12 +670,9 @@ impl NickServ {
         let db_default = self.server.darkirc.sled.open_tree(ACCOUNTS_DEFAULT_TREE)?;
         db_default.insert(ACCOUNTS_KEY_RLN_IDENTITY, blob.as_ref())?;
 
-        // Swap in-memory. The new identity comes in with
-        // message_id=0 / last_epoch=0; the first send reconciles
-        // last_epoch to the current wall-clock epoch and proceeds.
-        // The behaviour matches what happens at startup when the
-        // default tree is loaded by `IrcServer::new`, so this
-        // doesn't introduce a new failure mode.
+        // Swap in-memory. The loaded identity includes any persisted
+        // counter state from its account tree; future sends reserve and
+        // flush the next slot before proof creation.
         *self.server.rln_identity.write().await = Some(identity);
 
         Ok(notices(
