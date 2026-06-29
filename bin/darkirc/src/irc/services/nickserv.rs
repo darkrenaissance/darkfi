@@ -69,11 +69,12 @@ use darkfi_sdk::{crypto::pasta_prelude::PrimeField, pasta::pallas};
 use darkfi_serial::{deserialize_async, serialize_async};
 use smol::lock::RwLock;
 
-use super::super::{client::ReplyType, rpl::*};
+use super::super::{client::ReplyType, rpl::*, server::MAX_NICK_LEN};
 use crate::{crypto::rln::RlnIdentity, genesis_commits::is_pregenerated_commitment, IrcServer};
 
 pub const ACCOUNTS_DB_PREFIX: &str = "darkirc_account_";
 pub const ACCOUNTS_KEY_RLN_IDENTITY: &[u8] = b"rln_identity";
+const MAX_ACCOUNT_NAME_LEN: usize = MAX_NICK_LEN;
 
 /// Name of the sled tree that mirrors the currently-active identity.
 /// `IrcServer::new` reads this on startup.
@@ -313,7 +314,7 @@ impl NickServ {
             // want to list the mirror as if it were a separate
             // account.
             let Some(account_name) = name.strip_prefix(ACCOUNTS_DB_PREFIX) else { continue };
-            if account_name == "default" || account_name.is_empty() {
+            if !is_valid_account_name(account_name) {
                 continue
             }
 
@@ -359,7 +360,7 @@ impl NickServ {
     /// reconstruct the identity elsewhere.
     async fn handle_info_account(&self, nick: &str, account_name: &str) -> Result<Vec<ReplyType>> {
         let tree_name = format!("{ACCOUNTS_DB_PREFIX}{account_name}");
-        if account_name == "default" || account_name.is_empty() {
+        if !is_valid_account_name(account_name) {
             return Ok(vec![notice(nick, "Invalid account name.")])
         }
 
@@ -431,7 +432,7 @@ impl NickServ {
         };
 
         // Reserved name. We use `default` for the mirror tree.
-        if account_name == "default" || account_name.is_empty() {
+        if !is_valid_account_name(account_name) {
             return Ok(vec![notice(nick, "Invalid account name.")])
         }
 
@@ -543,7 +544,7 @@ impl NickServ {
         let Some(account_name) = tokens.next() else {
             return Ok(vec![notice(nick, "Invalid syntax. Use `DEREGISTER <account_name>`.")])
         };
-        if account_name == "default" || account_name.is_empty() {
+        if !is_valid_account_name(account_name) {
             return Ok(vec![notice(nick, "Invalid account name.")])
         }
 
@@ -612,7 +613,7 @@ impl NickServ {
         let Some(account_name) = tokens.next() else {
             return Ok(vec![notice(nick, "Invalid syntax. Use `SET <account_name>`.")])
         };
-        if account_name == "default" || account_name.is_empty() {
+        if !is_valid_account_name(account_name) {
             return Ok(vec![notice(nick, "Invalid account name.")])
         }
 
@@ -713,7 +714,7 @@ impl NickServ {
                 ],
             ))
         };
-        if account_name == "default" || account_name.is_empty() {
+        if !is_valid_account_name(account_name) {
             return Ok(vec![notice(nick, "Invalid account name.")])
         }
 
@@ -874,6 +875,18 @@ impl NickServ {
     }
 }
 
+fn is_account_name_char(byte: u8) -> bool {
+    byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_')
+}
+
+/// Return true when a local account name is safe as a sled tree suffix.
+fn is_valid_account_name(account_name: &str) -> bool {
+    account_name != "default" &&
+        !account_name.is_empty() &&
+        account_name.len() <= MAX_ACCOUNT_NAME_LEN &&
+        account_name.bytes().all(is_account_name_char)
+}
+
 /// Parse a NickServ PRIVMSG body into the service command and remaining arguments.
 fn parse_nickserv_command(query: &str) -> Option<(&str, SplitAsciiWhitespace<'_>)> {
     let mut tokens = query.split_ascii_whitespace();
@@ -918,5 +931,14 @@ mod tests {
     #[test]
     fn parse_nickserv_command_rejects_empty_command() {
         assert!(parse_nickserv_command("NickServ :").is_none());
+    }
+
+    #[test]
+    fn account_name_validation_rejects_reserved_and_unsafe_names() {
+        assert!(super::is_valid_account_name("alice_1"));
+        assert!(!super::is_valid_account_name("default"));
+        assert!(!super::is_valid_account_name(""));
+        assert!(!super::is_valid_account_name("../alice"));
+        assert!(!super::is_valid_account_name(&"a".repeat(super::MAX_ACCOUNT_NAME_LEN + 1)));
     }
 }

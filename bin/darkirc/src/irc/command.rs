@@ -58,10 +58,47 @@ use tracing::{error, info};
 use super::{
     client::{Client, ReplyType},
     rpl::*,
-    server::MAX_NICK_LEN,
+    server::{MAX_MSG_LEN, MAX_NICK_LEN},
     IrcChannel, SERVER_NAME,
 };
 use crate::crypto::bcrypt::bcrypt_hash_password;
+
+const MAX_TOPIC_LEN: usize = MAX_MSG_LEN;
+
+fn is_identifier_char(byte: u8) -> bool {
+    byte.is_ascii_alphanumeric() ||
+        matches!(byte, b'-' | b'_' | b'[' | b']' | b'\\' | b'`' | b'^' | b'{' | b'}' | b'|')
+}
+
+/// Return true when a client-supplied nickname is safe to store and echo.
+fn is_valid_nickname(nickname: &str) -> bool {
+    !nickname.is_empty() &&
+        nickname.len() <= MAX_NICK_LEN &&
+        nickname.bytes().all(is_identifier_char)
+}
+
+/// Return true when a client-supplied username is safe for local state keys.
+fn is_valid_username(username: &str) -> bool {
+    is_valid_nickname(username)
+}
+
+/// Return true when a channel name is bounded and cannot split IRC replies.
+fn is_valid_channel_name(channel: &str) -> bool {
+    channel.len() >= 2 &&
+        channel.len() <= MAX_NICK_LEN &&
+        channel.starts_with('#') &&
+        !channel[1..].starts_with('#') &&
+        channel.bytes().all(|b| b.is_ascii_graphic() && b != b',')
+}
+
+/// Return true when a topic is bounded and line-safe.
+fn is_valid_topic(topic: &str) -> bool {
+    topic.len() <= MAX_TOPIC_LEN && !topic.bytes().any(|b| matches!(b, b'\0' | b'\r' | b'\n'))
+}
+
+fn invalid_syntax(nick: &str, command: &str) -> Vec<ReplyType> {
+    vec![ReplyType::Server((ERR_NEEDMOREPARAMS, format!("{nick} {command} :{INVALID_SYNTAX}")))]
+}
 
 #[derive(Debug, PartialEq, Eq)]
 enum TopicRequest<'a> {
@@ -262,41 +299,27 @@ impl Client {
         // Here we'll hold valid channel names.
         let mut channels = HashSet::new();
 
-        // Let's scan through our channels. For now we'll only support
-        // channel names starting with a single '#' character.
+        // Weechat sends channels as `#chan1,#chan2,#chan3`. Handle both
+        // comma-separated and whitespace-separated channel lists uniformly.
         let nick = self.nickname.read().await.to_string();
-        let tokens = args.split_ascii_whitespace();
-        for channel in tokens {
-            if !channel.starts_with('#') {
-                self.penalty.fetch_add(1, SeqCst);
-                return Ok(vec![ReplyType::Server((
-                    ERR_NEEDMOREPARAMS,
-                    format!("{nick} JOIN :{INVALID_SYNTAX}"),
-                ))])
-            }
-
-            if !active_channels.contains(channel) {
-                channels.insert(channel.to_string());
-            }
-        }
-
-        // Weechat sends channels as `#chan1,#chan2,#chan3`. Handle it.
-        if channels.len() == 1 {
-            let list = channels.iter().next().unwrap().clone();
-            channels.remove(list.as_str());
-
+        let mut saw_channel = false;
+        for list in args.split_ascii_whitespace() {
             for channel in list.split(',') {
-                if !channel.starts_with('#') || channel.len() > MAX_NICK_LEN {
+                saw_channel = true;
+                if !is_valid_channel_name(channel) {
                     self.penalty.fetch_add(1, SeqCst);
-                    return Ok(vec![ReplyType::Server((
-                        ERR_NEEDMOREPARAMS,
-                        format!("{nick} JOIN :{INVALID_SYNTAX}"),
-                    ))])
+                    return Ok(invalid_syntax(&nick, "JOIN"))
                 }
+
                 if !active_channels.contains(channel) {
                     channels.insert(channel.to_string());
                 }
             }
+        }
+
+        if !saw_channel {
+            self.penalty.fetch_add(1, SeqCst);
+            return Ok(invalid_syntax(&nick, "JOIN"))
         }
 
         // Create new channels for this client and construct replies.
@@ -405,6 +428,11 @@ impl Client {
             ))])
         }
 
+        if !is_valid_channel_name(target) {
+            self.penalty.fetch_add(1, SeqCst);
+            return Ok(invalid_syntax(&nick, "MODE"))
+        }
+
         if !self.server.channels.read().await.contains_key(target) {
             return Ok(vec![ReplyType::Server((
                 ERR_NOSUCHNICK,
@@ -451,6 +479,11 @@ impl Client {
         // If a channel was requested, reply only with that one.
         // Otherwise, return info for all known channels.
         if let Some(req_chan) = tokens.next() {
+            if !is_valid_channel_name(req_chan) {
+                self.penalty.fetch_add(1, SeqCst);
+                return Ok(invalid_syntax(&nick, "NAMES"))
+            }
+
             if let Some(chan) = self.server.channels.read().await.get(req_chan) {
                 let nicks: Vec<String> = chan.nicks.iter().cloned().collect();
 
@@ -503,20 +536,11 @@ impl Client {
 
         // Forbid disallowed characters.
         // The next() call is done to check for ASCII whitespace in the nick.
-        if tokens.next().is_some() || nickname.starts_with(':') || nickname.starts_with('#') {
+        if tokens.next().is_some() || !is_valid_nickname(nickname) {
             self.penalty.fetch_add(1, SeqCst);
             return Ok(vec![ReplyType::Server((
                 ERR_ERRONEOUSNICKNAME,
                 format!("{old_nick} {nickname} :Erroneous nickname"),
-            ))])
-        }
-
-        // Disallow too long nicks
-        if nickname.len() > MAX_NICK_LEN {
-            self.penalty.fetch_add(1, SeqCst);
-            return Ok(vec![ReplyType::Server((
-                ERR_ERRONEOUSNICKNAME,
-                format!("{old_nick} {nickname} :Nickname too long"),
             ))])
         }
 
@@ -565,12 +589,9 @@ impl Client {
             ))])
         };
 
-        if !channel.starts_with('#') {
+        if !is_valid_channel_name(channel) {
             self.penalty.fetch_add(1, SeqCst);
-            return Ok(vec![ReplyType::Server((
-                ERR_NEEDMOREPARAMS,
-                format!("{nick} PART :{INVALID_SYNTAX}"),
-            ))])
+            return Ok(invalid_syntax(&nick, "PART"))
         }
 
         let mut active_channels = self.channels.write().await;
@@ -679,6 +700,19 @@ impl Client {
             ))])
         }
 
+        if target.starts_with('#') {
+            if !is_valid_channel_name(target) {
+                self.penalty.fetch_add(1, SeqCst);
+                return Ok(vec![ReplyType::Server((
+                    ERR_NORECIPIENT,
+                    format!("{nick} :Invalid recipient given (PRIVMSG)"),
+                ))])
+            }
+        } else if !target.eq_ignore_ascii_case("nickserv") && !is_valid_nickname(target) {
+            self.penalty.fetch_add(1, SeqCst);
+            return Ok(vec![ReplyType::Server((ERR_NOSUCHNICK, format!("{nick} :{target}")))])
+        }
+
         // We only send a client reply if the message is for ourself or if
         // we're trying to communicate with IRC services.
         // Anything else is rendered by the IRC client and not supposed
@@ -737,6 +771,11 @@ impl Client {
 
         match request {
             TopicRequest::Get { channel } => {
+                if !is_valid_channel_name(channel) {
+                    self.penalty.fetch_add(1, SeqCst);
+                    return Ok(invalid_syntax(&nick, "TOPIC"))
+                }
+
                 let channels = self.server.channels.read().await;
                 let Some(channel_state) = channels.get(channel) else {
                     return Ok(vec![ReplyType::Server((
@@ -758,6 +797,11 @@ impl Client {
                 }
             }
             TopicRequest::Set { channel, topic } => {
+                if !is_valid_channel_name(channel) || !is_valid_topic(topic) {
+                    self.penalty.fetch_add(1, SeqCst);
+                    return Ok(invalid_syntax(&nick, "TOPIC"))
+                }
+
                 let mut channels = self.server.channels.write().await;
                 let Some(channel_state) = channels.get_mut(channel) else {
                     return Ok(vec![ReplyType::Server((
@@ -834,10 +878,13 @@ impl Client {
 
         if !realname.starts_with(':') {
             self.penalty.fetch_add(1, SeqCst);
-            return Ok(vec![ReplyType::Server((
-                ERR_NEEDMOREPARAMS,
-                format!("{nick} USER :{INVALID_SYNTAX}"),
-            ))])
+            return Ok(invalid_syntax(&nick, "USER"))
+        }
+
+        let realname_body = &realname[1..];
+        if !is_valid_username(username) || !is_valid_topic(realname_body) {
+            self.penalty.fetch_add(1, SeqCst);
+            return Ok(invalid_syntax(&nick, "USER"))
         }
 
         *self.username.write().await = username.to_string();
@@ -1046,5 +1093,28 @@ mod tests {
     #[test]
     fn parse_topic_request_rejects_bare_topic_body() {
         assert_eq!(parse_topic_request("#chan value"), None);
+    }
+
+    #[test]
+    fn channel_name_validation_rejects_empty_nested_and_overlong_names() {
+        assert!(super::is_valid_channel_name("#chan"));
+        assert!(!super::is_valid_channel_name("#"));
+        assert!(!super::is_valid_channel_name("##chan"));
+        assert!(!super::is_valid_channel_name(&format!("#{}", "a".repeat(24))));
+    }
+
+    #[test]
+    fn nickname_validation_rejects_unsafe_identifier_chars() {
+        assert!(super::is_valid_nickname("alice_1"));
+        assert!(!super::is_valid_nickname("bad!nick"));
+        assert!(!super::is_valid_nickname("bad@nick"));
+        assert!(!super::is_valid_nickname("bad.nick"));
+    }
+
+    #[test]
+    fn topic_validation_has_fixed_bound() {
+        assert!(super::is_valid_topic(&"a".repeat(super::MAX_TOPIC_LEN)));
+        assert!(!super::is_valid_topic(&"a".repeat(super::MAX_TOPIC_LEN + 1)));
+        assert!(!super::is_valid_topic("bad\nline"));
     }
 }
