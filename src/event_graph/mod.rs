@@ -1009,8 +1009,8 @@ impl EventGraph {
         let slot = store.get_slot(&dag_ts).ok_or(Error::DagSyncFailed)?;
         let mut sorted = vec![];
         for item in slot.header_tree.iter() {
-            let (hb, val) = item.unwrap();
-            let hdr: Header = deserialize_async(&val).await.unwrap();
+            let (hb, val) = item?;
+            let hdr: Header = deserialize_async(&val).await?;
             if hdr.parents != NULL_PARENTS && !slot.main_tree.contains_key(hb)? {
                 sorted.push(hdr);
             }

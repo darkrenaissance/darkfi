@@ -1111,6 +1111,24 @@ async fn genesis_with_blob_rejected(ex: Arc<Executor<'static>>) {
 }
 
 #[test]
+fn evgr_fetch_missing_events_rejects_corrupt_header_record() {
+    smol::block_on(async {
+        let eg = make_eg().await;
+        let dag_ts = eg.current_genesis.read().await.header.timestamp;
+        let dag_name = dag_ts.to_string();
+        let bad_id = [0u8; 32];
+        {
+            let store = eg.dag_store.read().await;
+            let slot = store.get_slot(&dag_ts).unwrap();
+            slot.header_tree.insert(bad_id.as_slice(), b"not-a-header".as_slice()).unwrap();
+        }
+
+        let result = eg.fetch_missing_events(dag_ts, &dag_name, 1).await;
+        assert!(result.is_err(), "corrupt header records should fail DAG content sync");
+    })
+}
+
+#[test]
 fn evgr_multi_node_dag_sync_with_blob() {
     init_logger();
     run_multi_node_test(dag_sync_with_blob);
