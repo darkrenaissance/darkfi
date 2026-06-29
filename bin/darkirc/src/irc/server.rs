@@ -226,8 +226,6 @@ pub struct IrcServer {
     clients: Mutex<HashMap<u16, StoppableTaskPtr>>,
     /// IRC server Password
     pub password: String,
-    /// Persistent server storage
-    pub server_store: sled::Tree,
 }
 
 impl IrcServer {
@@ -277,9 +275,6 @@ impl IrcServer {
             _ => None,
         };
 
-        // Open persistent dbs
-        let server_store = darkirc.sled.open_tree("server_store")?;
-
         // Set the default RLN account if any
         let rln_identity = load_default_rln_identity(&darkirc.sled).await?;
         if rln_identity.is_some() {
@@ -298,7 +293,6 @@ impl IrcServer {
             pending_static_broadcasts: Mutex::new(Vec::new()),
             clients: Mutex::new(HashMap::new()),
             password,
-            server_store,
         });
 
         // Load any channel/contact configuration.
