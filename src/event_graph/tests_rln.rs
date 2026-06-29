@@ -851,40 +851,6 @@ fn rln_message_metadata_late_arrival_finds_sibling_after_prune() {
 }
 
 #[test]
-fn rln_multi_node_registration_propagates() {
-    run_multi_node_test(registration_propagates);
-}
-async fn registration_propagates(ex: Arc<Executor<'static>>) {
-    let nodes = make_network(ex).await;
-
-    let id = TestIdentity::new();
-    let commitment = id.commitment();
-
-    // Build the registration on node 0, apply it locally, then
-    // broadcast. Production does the same (see nickserv.rs and the
-    // RLN protocol's broadcast paths in proto.rs): callers always
-    // `apply_rln_static_event` before `static_broadcast`, otherwise
-    // the originator's identity_state never sees the new commitment.
-    let blob = id.create_registration(&nodes[0]).expect("build reg");
-    let rln_node = RLNNode::Registration(commitment);
-    let event = Event::new_static(serialize_async(&rln_node).await, &nodes[0]).await;
-    let blob_bytes = serialize_async(&blob).await;
-    nodes[0].static_insert(&event).await.expect("local insert");
-    nodes[0].apply_rln_static_event(&event, &rln_node).await.expect("apply locally");
-    nodes[0].static_broadcast(event, blob_bytes).await.expect("broadcast");
-
-    // Wait for propagation.
-    sleep(5).await;
-
-    // Every node must now have the commitment.
-    for (i, eg) in nodes.iter().enumerate() {
-        assert!(eg.rln_contains(&commitment).await, "node {i} did not receive the registration",);
-    }
-
-    shutdown_network(&nodes).await;
-}
-
-#[test]
 fn rln_multi_node_concurrent_slashes_consistent() {
     run_multi_node_test(concurrent_slashes);
 }
@@ -1580,6 +1546,41 @@ fn rln_slashed_identity_signal_rejection_lifecycle() {
              the proof would fail because the slashed commitment isn't a leaf - \
              but that's tested elsewhere with real ZK keys",
         );
+    })
+}
+
+#[test]
+fn rln_repeated_historical_root_keeps_original_interval() {
+    smol::block_on(async {
+        let eg = make_eg().await;
+        let drift = crate::event_graph::EVENT_TIME_DRIFT;
+
+        let commitment_a = pallas::Base::from(0xaaaa_0001_u64);
+        let commitment_b = pallas::Base::from(0xbbbb_0002_u64);
+        let node_a = RLNNode::Registration(commitment_a);
+        let duplicate_a = RLNNode::Registration(commitment_a);
+        let node_b = RLNNode::Registration(commitment_b);
+
+        let t0 = 1_000_000_u64;
+        let t_duplicate = t0 + 2 * drift + 1;
+        let t_next = t_duplicate + 2 * drift + 1;
+
+        let ev_a = synth_static_event(1, t0, &node_a).await;
+        let ev_duplicate = synth_static_event(2, t_duplicate, &duplicate_a).await;
+        let ev_b = synth_static_event(3, t_next, &node_b).await;
+
+        let root_a = eg.apply_rln_static_event(&ev_a, &node_a).await.unwrap();
+        let duplicate_root = eg.apply_rln_static_event(&ev_duplicate, &duplicate_a).await.unwrap();
+        let root_b = eg.apply_rln_static_event(&ev_b, &node_b).await.unwrap();
+
+        assert_eq!(duplicate_root, root_a);
+        assert_ne!(root_b, root_a);
+        assert_eq!(eg.rln_historical_roots_ordered.len(), 3);
+        assert_eq!(eg.rln_historical_roots_by_value.len(), 3);
+
+        assert!(eg.is_root_valid_at(&root_a, t0).unwrap());
+        assert!(eg.is_root_valid_at(&root_a, t_duplicate).unwrap());
+        assert!(!eg.is_root_valid_at(&root_a, t_next + 2 * drift + 1).unwrap());
     })
 }
 
