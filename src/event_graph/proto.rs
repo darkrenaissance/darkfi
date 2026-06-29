@@ -701,14 +701,10 @@ impl ProtocolEventGraph {
         let blob = serialize_async(&slash_blob).await;
         let node = RLNNode::Slashing(commitment);
         let ev = Event::new_static(serialize_async(&node).await, &self.event_graph).await;
-        let _ = self.event_graph.static_insert(&ev).await;
-        // Apply the slash to our own SMT and historical-roots
-        // tables. Like the nickserv originator path, the slasher
-        // doesn't receive its own broadcast back, so we'd never
-        // see the SMT update otherwise. apply_rln_static_event
-        // canonicalizes the SMT mutation and the root recording.
-        let _ = self.event_graph.apply_rln_static_event(&ev, &node).await;
-        let _ = self.event_graph.static_blob_store(&ev.id(), &blob);
+        if let Err(e) = self.event_graph.commit_verified_static_event(&ev, &blob, &node).await {
+            error!(target: "event_graph::protocol", "[RLN] Slash static commit failed: {e}");
+            return
+        }
         let _ = self.event_graph.static_broadcast(ev, blob).await;
     }
 
@@ -759,16 +755,10 @@ impl ProtocolEventGraph {
             }
 
             // Decision is made by EventGraph::rln_verify_static_event,
-            // a pure verification function (no state mutation). We
-            // translate the outcome to: SMT mutation via apply_rln_static_event
-            // (which also records the post-mutation root), or strike,
-            // or drop silently.
-            //
-            // The unified `apply_rln_static_event` is essential to
-            // keep the SMT and historical-roots tables in lockstep.
-            // Bypassing it (e.g. calling .register() directly) would
-            // break sync-time signal verification because the
-            // historical-roots table wouldn't get the new entry.
+            // a pure verification function (no state mutation). Accepted events
+            // are committed through one helper so the static DAG is durable
+            // before RLN state, while subscribers are notified only after the
+            // RLN apply step.
             match self
                 .event_graph
                 .rln_verify_static_event(&rln_node, &blob, event.header.timestamp)
@@ -776,11 +766,14 @@ impl ProtocolEventGraph {
             {
                 rln::StaticEventCheck::AcceptedRegistration(_) |
                 rln::StaticEventCheck::AcceptedSlash(_) => {
-                    if let Err(e) = self.event_graph.apply_rln_static_event(&event, &rln_node).await
+                    if let Err(e) = self
+                        .event_graph
+                        .commit_verified_static_event(&event, &blob, &rln_node)
+                        .await
                     {
                         warn!(
                             target: "event_graph::protocol",
-                            "[RLN] apply_rln_static_event failed: {e}",
+                            "[RLN] commit_verified_static_event failed: {e}",
                         );
                         continue
                     }
@@ -792,12 +785,6 @@ impl ProtocolEventGraph {
                 }
             }
 
-            // Persist the original RLN blob (proof + public inputs +
-            // attestation) alongside the event so `static_sync` on
-            // a future late-joiner can re-verify the proof.
-            self.event_graph.static_blob_store(&event.id(), &blob)?;
-
-            self.event_graph.static_insert(&event).await?;
             self.event_graph.static_broadcast(event, blob).await?;
         }
     }

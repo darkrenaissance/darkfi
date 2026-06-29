@@ -823,13 +823,10 @@ impl NickServ {
         let rln_node = RLNNode::Slashing(identity.commitment());
         let event = Event::new_static(serialize_async(&rln_node).await, evgr).await;
 
-        // Apply the slash through the canonical pipeline. The order
-        // (apply -> blob_store -> insert -> broadcast) matches the
-        // REGISTER path and the receive-side path in
-        // proto.rs::handle_static_put.
-        evgr.apply_rln_static_event(&event, &rln_node).await?;
-        evgr.static_blob_store(&event.id(), &blob_bytes)?;
-        evgr.static_insert(&event).await?;
+        // Commit through the verified static-event pipeline so durable event
+        // storage stays ahead of RLN side tables, while subscribers still see
+        // the event only after the local RLN state has been updated.
+        evgr.commit_verified_static_event(&event, &blob_bytes, &rln_node).await?;
         evgr.static_broadcast(event, blob_bytes).await?;
 
         // Drop the local account tree. The on-network slash makes

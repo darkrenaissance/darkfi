@@ -420,14 +420,11 @@ impl Client {
                         }
                     }
 
-                    // Static-event arrival path. Under the new
-                    // EventGraph, by the time `static_pub` notifies us
-                    // here the SMT mutation has ALREADY been applied
-                    // (see `handle_static_put` in event_graph::proto:
-                    // it calls `apply_rln_static_event` BEFORE
-                    // `static_insert`, and `static_insert` is what
-                    // pushes onto `static_pub`). So all we need to do
-                    // is bookkeeping for this client's seen-set.
+                    // Static-event arrival path. EventGraph notifies
+                    // `static_pub` only after `commit_verified_static_event`
+                    // has durably stored the event/blob and applied the RLN
+                    // state change. So all we need to do is bookkeeping for
+                    // this client's seen-set.
 
                     // Mark the message as seen for this USER
                     if let Err(e) = self.mark_seen(&event_id).await {
