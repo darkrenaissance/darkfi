@@ -1435,6 +1435,48 @@ fn rln_dag_insert_with_blobs_rejects_missing_blob_on_non_genesis() {
 }
 
 #[test]
+fn rln_dag_insert_with_blobs_rejects_bad_content_before_verification() {
+    // RLN proofs bind to the event header ID. If the body no longer matches
+    // the header content hash, the event is structurally invalid even though a
+    // proof for that header would verify. This must be rejected before RLN
+    // verification so the share is never recorded.
+    smol::block_on(async {
+        let eg = make_eg().await;
+        let mut alice = TestIdentity::new();
+        alice.register_directly(&eg).await.unwrap();
+
+        let dag_ts = eg.current_genesis.read().await.header.timestamp;
+        let dag_name = dag_ts.to_string();
+        let event = Event::new(b"preflight-sync".to_vec(), &eg).await;
+        let message_id = alice.next_message_id(event.header.timestamp).expect("budget");
+        let blob = alice.create_signal(&event, message_id, &eg).await.unwrap();
+        let internal_nullifier = blob.internal_nullifier;
+        let blob = serialize_async(&blob).await;
+
+        let mut malformed = event.clone();
+        malformed.content.extend_from_slice(b"-tampered");
+        assert!(!malformed.content_matches_header());
+
+        eg.header_dag_insert(vec![malformed.header.clone()], &dag_name).await.unwrap();
+        let result = eg
+            .dag_insert_with_blobs(
+                std::slice::from_ref(&malformed),
+                std::slice::from_ref(&blob),
+                &dag_name,
+            )
+            .await
+            .unwrap();
+        assert!(result.is_empty(), "malformed event must not be inserted");
+
+        let state = eg.rln_state.read().await;
+        assert!(
+            !state.metadata.is_reused(epoch_of(malformed.header.timestamp), &internal_nullifier),
+            "structural rejection must happen before RLN metadata is recorded",
+        );
+    })
+}
+
+#[test]
 fn rln_insert_signal_with_blob_rejects_missing_blob_on_non_genesis() {
     // The public insertion API must not expose the internal
     // post-verification trust path. A non-genesis signal without a
