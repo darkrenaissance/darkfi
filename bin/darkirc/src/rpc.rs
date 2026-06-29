@@ -34,7 +34,7 @@ use smol::lock::MutexGuard;
 use tracing::debug;
 
 use super::DarkIrc;
-use crate::irc::Privmsg;
+use crate::Privmsg;
 
 #[async_trait]
 impl RequestHandler<()> for DarkIrc {

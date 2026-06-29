@@ -3036,7 +3036,7 @@ impl EventGraph {
     #[cfg(feature = "rpc")]
     pub async fn eventgraph_info(
         &self,
-        id: u16,
+        id: i64,
         _params: crate::rpc::util::JsonValue,
     ) -> crate::rpc::jsonrpc::JsonResult {
         use crate::rpc::{
