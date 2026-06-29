@@ -1944,12 +1944,12 @@ impl EventGraph {
         Ok(select_parents_from_tips(&tips))
     }
 
-    pub async fn order_events(&self) -> Vec<Event> {
+    pub async fn order_events(&self) -> Result<Vec<Event>> {
         let mut all = vec![];
         for (_, slot) in self.dag_store.read().await.dags.iter() {
             for item in slot.main_tree.iter() {
-                let (_, b) = item.unwrap();
-                let ev: Event = deserialize_async(&b).await.unwrap();
+                let (_, b) = item?;
+                let ev: Event = deserialize_async(&b).await?;
                 if ev.header.parents != NULL_PARENTS {
                     all.push(ev);
                 }
@@ -1957,7 +1957,7 @@ impl EventGraph {
         }
 
         all.sort_unstable_by(display_order);
-        all
+        Ok(all)
     }
 
     pub async fn fetch_headers_with_tips(
