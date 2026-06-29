@@ -78,11 +78,10 @@ impl RlnIdentity {
                 pallas::Base::random(&mut rng),
             ]),
             trapdoor: poseidon_hash([RLN_TRAPDOOR_DERIVATION_PATH, pallas::Base::random(&mut rng)]),
-            // Default to the free-tier cap. The operator can request
-            // a higher limit at registration time (subject to the
-            // attestation gating in `RegistrationAttestation::permits`,
-            // which currently only honours the free-tier cap until
-            // staking lands).
+            // Default to the pregenerated-identity budget. Fresh
+            // identities are useful for generating future genesis bundles,
+            // but the live network currently admits only commitments already
+            // present in the configured pregenerated set.
             user_message_limit: RegistrationAttestation::SPECIAL_TIER_LIMIT,
             message_id: 0,
             last_epoch: 0,
@@ -130,9 +129,10 @@ impl RlnIdentity {
         Some(m)
     }
 
-    // /// Build a [`RegistrationBlob`] suitable for broadcast as a
-    // /// `StaticPut`. The proving key comes from the EventGraph's
-    // /// shared `ZkKeys` cache.
+    // /// Build a [`RegistrationBlob`] for the dormant registration-proof
+    // /// path. Do not broadcast this on the live network until event graph
+    // /// verifies DarkFi contract-backed staked attestations; current
+    // /// admission accepts only pregenerated guard registrations.
     // pub fn create_registration(&self, eg: &EventGraphPtr) -> Result<RegistrationBlob> {
     //     let zkbin = ZkBinary::decode(RLN2_REGISTER_ZKBIN, false)?;
 

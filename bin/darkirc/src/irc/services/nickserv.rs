@@ -128,22 +128,23 @@ scrollback or logs.
 
 const NICKSERV_REGISTER_HELP: &str = r#"***** NickServ Help: REGISTER *****
 
-REGISTER creates a new RLN identity from the supplied secrets,
-broadcasts a registration proof to the network, and stores the
-account locally. The first account registered also becomes the
-active one.
+REGISTER stores one of this network's pregenerated RLN identities
+under a local account name. Pregenerated identities are already
+bootstrapped into the static DAG; this command does not broadcast a
+public free-tier registration proof. The first account registered
+also becomes the active one.
 
-To generate a fresh nullifier/trapdoor pair, run:
-
-  darkirc --gen-rln-identity
+Use the nullifier/trapdoor pair from the network's pregenerated
+identity bundle. A freshly generated identity is rejected unless its
+commitment is already present in the configured pregenerated set.
 
   REGISTER <account_name> <nullifier> <trapdoor> <user_msg_limit>
 
   account_name      - any local label, e.g. "alice" or "throwaway"
   nullifier         - base58-encoded pallas::Base scalar
   trapdoor          - base58-encoded pallas::Base scalar
-  user_msg_limit    - per-epoch message budget; max 10 on the free
-                      tier (RegistrationAttestation::FREE_TIER_LIMIT)
+  user_msg_limit    - pregenerated account budget; must match the
+                      configured genesis limit
 
 ***** End of Help *****
 "#;
@@ -532,8 +533,9 @@ impl NickServ {
             ));
         }
         // Pregenerated identities are already bootstrapped into
-        // the static DAG. Future staked registration will need to
-        // add a contract-backed network broadcast path here.
+        // the static DAG. Future staked registration must add a
+        // contract-backed network broadcast path here, after event
+        // graph can verify the DarkFi attestation.
         Ok(replies)
     }
 

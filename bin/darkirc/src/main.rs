@@ -233,7 +233,13 @@ async fn realmain(args: Args, ex: Arc<Executor<'static>>) -> Result<()> {
         let user_msg_limit: u64 = 10;
 
         println!("Generated a fresh RLN identity.\n");
-        println!("To register on the network, paste this into your IRC client:\n");
+        println!(
+            "Current DarkIRC registration accepts only identities whose commitments are in \
+             the configured pregenerated set. Use this output for a genesis bundle or future \
+             staked-registration testing; it will not register on the live network unless its \
+             commitment is pregenerated.\n"
+        );
+        println!("Local account import command:\n");
         println!(
             "  /msg NickServ REGISTER <account_name> {nullifier} {trapdoor} {user_msg_limit}\n"
         );
