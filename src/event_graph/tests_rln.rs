@@ -324,7 +324,7 @@ fn rln_all_blob_types_serial_round_trip() {
         assert_eq!(decoded.user_msg_limit, signal.user_msg_limit);
         assert_eq!(decoded.merkle_root, signal.merkle_root);
 
-        // Registration blob.
+        // Dormant registration-proof blob scaffold.
         let reg = RegistrationBlob {
             proof: synthesize_placeholder_proof(),
             user_message_limit: 7,
@@ -625,10 +625,10 @@ fn rln_static_event_guard_with_unknown_commitment_is_malicious() {
 }
 
 #[test]
-fn rln_static_event_free_registration_blobs_rejected() {
-    // Free registration is intentionally disabled: non-guard
-    // registration blobs are rejected before proof parsing until
-    // staked, contract-backed admission exists.
+fn rln_static_event_non_guard_registration_blobs_rejected() {
+    // Non-pregenerated admission is intentionally disabled: serialized
+    // registration blobs are rejected before proof parsing until staked,
+    // contract-backed admission exists.
     smol::block_on(async {
         let eg = make_eg().await;
         let node = RLNNode::Registration(pallas::Base::from(1u64));
@@ -667,8 +667,9 @@ fn rln_static_event_registration_duplicate_commitment_soft_reject() {
         let node = RLNNode::Registration(commitment);
         let outcome = eg.rln_verify_static_event(&node, &bytes, 0).await;
         assert!(matches!(outcome, StaticEventCheck::Rejected));
-        // Critically: NOT Malicious, even though we never even
-        // looked at the proof.
+        // Critically: NOT Malicious. Non-guard registration blobs are disabled
+        // for now, but duplicate registration attempts should remain a soft
+        // reject because peers may relay the same known event concurrently.
         assert!(!matches!(outcome, StaticEventCheck::Malicious));
     })
 }
@@ -1094,8 +1095,8 @@ async fn static_sync_registration(ex: Arc<Executor<'static>>) {
     // `rln_verify_static_event` call in its body), so seeded
     // nodes MUST persist the configured pregenerated guard blob -
     // a missing blob causes the late-joiner to skip the event with
-    // a "no blob available" log. Free registration is disabled,
-    // so this test uses the app-configured pregenerated identity.
+    // a "no blob available" log. Non-pregenerated admission is
+    // disabled, so this test uses an app-configured pregenerated identity.
     let nodes = make_network(ex).await;
 
     let commitment = pallas::Base::from_repr(nodes[0].config.pregenerated_identity_commitments[0])

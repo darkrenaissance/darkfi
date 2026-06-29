@@ -274,8 +274,7 @@ mod test_identity {
         event_graph::{
             event::Header,
             rln::{
-                epoch_of, hash_event, Blob, RLNNode, RegistrationAttestation, RegistrationBlob,
-                MAX_MSG_LIMIT, RLN2_REGISTER_ZKBIN, RLN2_SIGNAL_ZKBIN,
+                epoch_of, hash_event, Blob, RLNNode, RegistrationAttestation, RLN2_SIGNAL_ZKBIN,
             },
             NULL_PARENTS,
         },
@@ -351,31 +350,6 @@ mod test_identity {
             Some(m)
         }
 
-        /// Build a real registration proof and blob.
-        pub fn create_registration(&self, eg: &EventGraphPtr) -> Result<RegistrationBlob> {
-            let witnesses = vec![
-                Witness::Base(Value::known(self.nullifier)),
-                Witness::Base(Value::known(self.trapdoor)),
-                Witness::Base(Value::known(pallas::Base::from(self.user_message_limit))),
-                Witness::Base(Value::known(pallas::Base::from(MAX_MSG_LIMIT))),
-            ];
-            let pi = vec![
-                self.commitment(),
-                pallas::Base::from(self.user_message_limit),
-                pallas::Base::from(MAX_MSG_LIMIT),
-            ];
-            let zkbin = ZkBinary::decode(RLN2_REGISTER_ZKBIN, false)?;
-            let circuit = ZkCircuit::new(witnesses, &zkbin);
-            let pk = eg.zk_keys.load_register_pk()?;
-            let proof = Proof::create(&pk, &[circuit], &pi, &mut OsRng)?;
-            Ok(RegistrationBlob {
-                proof,
-                user_message_limit: self.user_message_limit,
-                max_message_limit: MAX_MSG_LIMIT,
-                attestation: RegistrationAttestation::SPECIAL,
-            })
-        }
-
         /// Build a real signal proof and blob.
         pub async fn create_signal(
             &self,
@@ -429,10 +403,13 @@ mod test_identity {
             })
         }
 
-        /// Register this identity directly into `eg` (skipping the
-        /// gossip layer).
+        /// Seed this identity directly into `eg` for signal-verifier tests.
+        ///
+        /// This bypasses network registration admission. Live admission only
+        /// accepts app-configured pregenerated guard registrations; arbitrary
+        /// test identities are seeded here so signal, slashing, and root-history
+        /// behavior can be tested independently.
         pub async fn register_directly(&self, eg: &EventGraphPtr) -> Result<()> {
-            let _blob = self.create_registration(eg)?;
             let commitment = self.commitment();
             let node = RLNNode::Registration(commitment);
             let content = darkfi_serial::serialize_async(&node).await;
