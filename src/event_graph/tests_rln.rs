@@ -1435,6 +1435,31 @@ fn rln_dag_insert_with_blobs_rejects_missing_blob_on_non_genesis() {
 }
 
 #[test]
+fn rln_insert_signal_with_blob_rejects_missing_blob_on_non_genesis() {
+    // The public insertion API must not expose the internal
+    // post-verification trust path. A non-genesis signal without a
+    // blob is rejected before any header, body, or blob side-table
+    // state is persisted.
+    smol::block_on(async {
+        let eg = make_eg().await;
+        let dag_ts = eg.current_genesis.read().await.header.timestamp;
+        let dag_name = dag_ts.to_string();
+        let event = Event::new(b"public-missing-blob".to_vec(), &eg).await;
+        assert_ne!(event.header.parents, NULL_PARENTS);
+
+        let result = eg.insert_signal_with_blob(&event, &[], &dag_name).await;
+        assert!(result.is_err(), "missing blob must be rejected");
+
+        let store = eg.dag_store.read().await;
+        let slot = store.get_slot(&dag_ts).unwrap();
+        assert!(!slot.header_tree.contains_key(event.id().as_bytes()).unwrap());
+        assert!(!slot.main_tree.contains_key(event.id().as_bytes()).unwrap());
+        drop(store);
+        assert!(eg.dag_blob_fetch(&event.id()).unwrap().is_none());
+    })
+}
+
+#[test]
 fn rln_dag_insert_with_blobs_genesis_skips_verification() {
     // Genesis-shaped events (parents == NULL_PARENTS) are consensus
     // inputs, not user signals. They never carry blobs, and

@@ -18,7 +18,6 @@
 
 use std::{
     collections::{HashMap, HashSet, VecDeque},
-    slice,
     sync::{
         atomic::{AtomicBool, AtomicUsize, Ordering::SeqCst},
         Arc,
@@ -255,19 +254,21 @@ impl Client {
                                     }
                                 };
 
-                                // Only now do we insert the header
-                                // and event into our local DAG. If
-                                // either insert fails we still log
-                                // and pass - the broadcast is a
-                                // best-effort fan-out anyway, and
-                                // the receiving peers' own validation
-                                // doesn't depend on our successful
-                                // local insert.
-                                if let Err(e) = self.server.darkirc.event_graph.header_dag_insert(vec![event.header.clone()], &dag_name).await {
-                                    error!("[IRC CLIENT] Failed inserting new header to Header DAG: {}", e);
-                                }
-                                if let Err(e) = self.server.darkirc.event_graph.dag_insert(slice::from_ref(&event), &dag_name).await {
-                                    error!("[IRC CLIENT] Failed inserting new event to DAG: {e}");
+                                // Commit our outbound signal through
+                                // the safe public API. It inserts the
+                                // header, verifies and stores the RLN
+                                // blob, then commits the event body.
+                                if let Err(e) = self
+                                    .server
+                                    .darkirc
+                                    .event_graph
+                                    .insert_signal_with_blob(&event, &blob, &dag_name)
+                                    .await
+                                {
+                                    error!(
+                                        "[IRC CLIENT] Failed inserting verified \
+                                         signal event: {e}"
+                                    );
                                     continue
                                 }
 
@@ -275,27 +276,6 @@ impl Client {
                                 if let Err(e) = self.mark_seen(&event_id).await {
                                     error!("[IRC CLIENT] (multiplex_connection) self.mark_seen({event_id}) failed: {e}");
                                     return Err(e)
-                                }
-
-                                // Persist the blob locally so that a
-                                // late-joining peer EventReq-ing us
-                                // for this event gets a real blob in
-                                // the EventRep, not an empty one.
-                                // The receive-side path
-                                // (proto::handle_event_put) does the
-                                // analogous store after RLN
-                                // verification; this is the matching
-                                // step on the originator side.
-                                if let Err(e) = self
-                                    .server
-                                    .darkirc
-                                    .event_graph
-                                    .dag_blob_store(&event_id, &blob)
-                                {
-                                    error!(
-                                        "[IRC CLIENT] Failed persisting outbound \
-                                         RLN blob for {event_id}: {e}"
-                                    );
                                 }
 
                                 self.server.darkirc.p2p.broadcast(&EventPut(event, blob)).await;
