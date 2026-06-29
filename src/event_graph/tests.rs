@@ -33,7 +33,10 @@ use crate::{
         compute_unreferenced_tips,
         event::Header,
         filter_requested_event_rep, merge_static_sync_event_rep,
-        proto::{cap_layer_tips, count_layer_tips, EventPut, SyncDirection, MAX_RANGE_PAGE_SIZE},
+        proto::{
+            cap_layer_tips, count_layer_tips, filter_parent_event_rep, EventPut, SyncDirection,
+            MAX_RANGE_PAGE_SIZE,
+        },
         rln::epoch_of,
         test_helpers::{
             archive_config, bounded_dag_store_config, init_logger, make_eg, make_eg_with_config,
@@ -87,6 +90,80 @@ fn evgr_event_rep_filter_matches_only_requested_ids() {
     .is_err());
 
     assert!(filter_requested_event_rep(&requested, vec![event_a], Vec::new()).is_err());
+}
+
+#[test]
+fn evgr_parent_event_rep_requires_progress() {
+    let parent_a = test_event(b"parent-a", 21);
+    let parent_b = test_event(b"parent-b", 22);
+    let unrelated = test_event(b"unrelated-parent", 23);
+    let requested = vec![parent_a.id(), parent_b.id()];
+
+    let mut missing: HashSet<_> = requested.iter().copied().collect();
+    let mut known = HashSet::new();
+    assert!(filter_parent_event_rep(&requested, &mut missing, &mut known, vec![], vec![]).is_err());
+    assert_eq!(missing.len(), 2);
+    assert!(known.is_empty());
+
+    assert!(filter_parent_event_rep(
+        &requested,
+        &mut missing,
+        &mut known,
+        vec![unrelated],
+        vec![b"blob".to_vec()],
+    )
+    .is_err());
+    assert_eq!(missing.len(), 2);
+    assert!(known.is_empty());
+
+    assert!(filter_parent_event_rep(
+        &requested,
+        &mut missing,
+        &mut known,
+        vec![parent_a.clone(), parent_a.clone()],
+        vec![b"blob-a".to_vec(), b"blob-a-duplicate".to_vec()],
+    )
+    .is_err());
+    assert_eq!(missing.len(), 2);
+    assert!(known.is_empty());
+
+    let resolved = filter_parent_event_rep(
+        &requested,
+        &mut missing,
+        &mut known,
+        vec![parent_a.clone()],
+        vec![b"blob-a".to_vec()],
+    )
+    .unwrap();
+    assert_eq!(
+        resolved.iter().map(|(event, _)| event.id()).collect::<Vec<_>>(),
+        vec![parent_a.id()]
+    );
+    assert!(!missing.contains(&parent_a.id()));
+    assert!(missing.contains(&parent_b.id()));
+    assert!(known.contains(&parent_a.id()));
+
+    let current_request = vec![parent_b.id()];
+    assert!(filter_parent_event_rep(
+        &current_request,
+        &mut missing,
+        &mut known,
+        vec![parent_a.clone()],
+        vec![b"stale-blob-a".to_vec()],
+    )
+    .is_err());
+    assert!(missing.contains(&parent_b.id()));
+
+    let mut empty_missing = HashSet::new();
+    let mut empty_known = HashSet::new();
+    assert!(filter_parent_event_rep(
+        &[parent_a.id()],
+        &mut empty_missing,
+        &mut empty_known,
+        vec![parent_a],
+        vec![b"blob-a".to_vec()],
+    )
+    .is_err());
 }
 
 #[test]
