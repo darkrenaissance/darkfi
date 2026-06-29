@@ -20,6 +20,7 @@
 //! and periodic DAG rotation.
 
 use std::{
+    cmp::Ordering as CmpOrdering,
     collections::{BTreeMap, BTreeSet, HashMap, HashSet, VecDeque},
     path::PathBuf,
     str::FromStr,
@@ -51,9 +52,10 @@ pub use event::{display_order, Event, Header};
 
 pub mod proto;
 use proto::{
-    cap_layer_tips, count_layer_tips, EventRep, EventReq, HeaderRep, HeaderReq, StaticPut,
-    SyncDirection, TipRep, TipReq, MAX_EVENT_REP_EVENTS, MAX_EVENT_REQ_IDS, MAX_HEADER_REP_HEADERS,
-    MAX_HEADER_REQ_TIPS, MAX_RANGE_PAGE_SIZE, MAX_TIP_REP_TIPS,
+    cap_layer_tips, count_layer_tips, EventRep, EventReq, HeaderRep, HeaderReq, RangeCursor,
+    RangeRep, RangeReq, StaticPut, SyncDirection, TipRep, TipReq, MAX_EVENT_REP_EVENTS,
+    MAX_EVENT_REQ_IDS, MAX_HEADER_REP_HEADERS, MAX_HEADER_REQ_TIPS, MAX_RANGE_PAGE_SIZE,
+    MAX_TIP_REP_TIPS,
 };
 
 pub mod rln;
@@ -79,6 +81,9 @@ mod test_helpers;
 
 /// Number of parent references each event carries.
 pub const N_EVENT_PARENTS: usize = 5;
+
+/// Multiplier for TimeIndex entries scanned to fill one blob-backed range page.
+const RANGE_BLOB_SCAN_FACTOR: usize = 4;
 
 /// Allowed timestamp drift in milliseconds.
 const EVENT_TIME_DRIFT: u64 = 60_000;
@@ -230,6 +235,7 @@ impl TimeIndex {
         }
 
         ids.push(id);
+        ids.sort_by_key(hash_order_key);
         self.count += 1;
     }
 
@@ -247,6 +253,39 @@ impl TimeIndex {
 
     pub fn after(&self, cursor: u64, n: usize) -> Vec<blake3::Hash> {
         self.fwd(cursor.saturating_add(1), n)
+    }
+
+    pub fn before_cursor(&self, cursor: RangeCursor, n: usize) -> Vec<blake3::Hash> {
+        let mut out = Vec::with_capacity(n);
+        for (ts, ids) in self.index.range(..=cursor.timestamp).rev() {
+            for id in ids.iter().rev() {
+                if *ts == cursor.timestamp && hash_cmp(id, &cursor.event_id) != CmpOrdering::Less {
+                    continue
+                }
+                out.push(*id);
+                if out.len() >= n {
+                    return out
+                }
+            }
+        }
+        out
+    }
+
+    pub fn after_cursor(&self, cursor: RangeCursor, n: usize) -> Vec<blake3::Hash> {
+        let mut out = Vec::with_capacity(n);
+        for (ts, ids) in self.index.range(cursor.timestamp..) {
+            for id in ids {
+                if *ts == cursor.timestamp && hash_cmp(id, &cursor.event_id) != CmpOrdering::Greater
+                {
+                    continue
+                }
+                out.push(*id);
+                if out.len() >= n {
+                    return out
+                }
+            }
+        }
+        out
     }
 
     fn rev(&self, start: u64, n: usize) -> Vec<blake3::Hash> {
@@ -487,6 +526,26 @@ enum PeerStatus {
     Failed,
 }
 
+#[derive(Clone)]
+struct PendingLazyEvent {
+    event: Event,
+    blob: Vec<u8>,
+}
+
+/// Result of one lazy range sync page.
+#[derive(Clone, Debug)]
+pub struct RangeSyncPage {
+    /// Verified events returned for immediate application display.
+    pub events: Vec<Event>,
+    /// Event IDs durably committed to the local body tree after draining
+    /// ready pending bodies.
+    pub committed: Vec<blake3::Hash>,
+    /// Cursor to pass to the next range request in the same direction.
+    pub next_cursor: RangeCursor,
+    /// True when the serving peers reported no more indexed events in this DAG.
+    pub exhausted: bool,
+}
+
 /// Match an `EventRep` against the exact IDs requested for one sync chunk.
 ///
 /// The response may be partial, but every returned event must be unique and
@@ -564,6 +623,33 @@ pub(crate) fn merge_static_sync_event_rep(
     Ok(matched)
 }
 
+fn hash_order_key(id: &blake3::Hash) -> [u8; blake3::OUT_LEN] {
+    *id.as_bytes()
+}
+
+fn hash_cmp(a: &blake3::Hash, b: &blake3::Hash) -> CmpOrdering {
+    a.as_bytes().cmp(b.as_bytes())
+}
+
+fn range_cursor_for_event(event: &Event) -> RangeCursor {
+    RangeCursor { timestamp: event.header.timestamp, event_id: event.id() }
+}
+
+fn range_cursor_cmp(a: RangeCursor, b: RangeCursor) -> CmpOrdering {
+    match a.timestamp.cmp(&b.timestamp) {
+        CmpOrdering::Equal => hash_cmp(&a.event_id, &b.event_id),
+        ordering => ordering,
+    }
+}
+
+fn range_cursor_before_event(cursor: RangeCursor, event: &Event, dir: SyncDirection) -> bool {
+    let event_cursor = range_cursor_for_event(event);
+    match dir {
+        SyncDirection::Forward => range_cursor_cmp(event_cursor, cursor) == CmpOrdering::Greater,
+        SyncDirection::Backward => range_cursor_cmp(event_cursor, cursor) == CmpOrdering::Less,
+    }
+}
+
 /// The main Event Graph instance.
 ///
 /// Manages a rolling window of DAGs (one per rotation period), a
@@ -593,6 +679,9 @@ pub struct EventGraph {
     /// Pruned by `dag_prune` when the corresponding rotating DAG
     /// rolls out of the retention window.
     pub(crate) dag_blobs: sled::Tree,
+    /// Verified range-sync bodies waiting for older parent bodies before they
+    /// can be durably committed to the rotating DAG body tree.
+    lazy_pending: RwLock<HashMap<u64, HashMap<blake3::Hash, PendingLazyEvent>>>,
     /// Historical SMT roots, in canonical apply order.
     ///
     /// Key: `(layer:u64_be, event_id:32) = 40 bytes`. Value:
@@ -730,6 +819,7 @@ impl EventGraph {
             static_dag,
             static_dag_blobs,
             dag_blobs,
+            lazy_pending: RwLock::new(HashMap::new()),
             rln_historical_roots_ordered,
             rln_historical_roots_by_value,
             datastore,
@@ -959,10 +1049,10 @@ impl EventGraph {
         Ok(true)
     }
 
-    /// After header sync, event content can be fetched lazily via
-    /// [`fetch_page`] or peer [`RangeReq`] - the application pulls
-    /// the events it actually wants to display or process, without
-    /// downloading the entire content on every sync.
+    /// After header sync, event content can be fetched lazily via local
+    /// [`fetch_page`] or peer [`RangeReq`] responses with aligned blobs - the
+    /// application pulls the events it actually wants to display or process,
+    /// without downloading the entire content on every sync.
     pub async fn dag_sync_headers(&self, dag_ts: u64) -> Result<()> {
         self.sync_impl(dag_ts, false).await
     }
@@ -1201,6 +1291,86 @@ impl EventGraph {
         }
         self.synced.store(true, Ordering::Release);
         Ok(())
+    }
+
+    /// Lazily sync one body page for a DAG in the requested direction.
+    ///
+    /// This is the receiver-side API for mobile history loading. It first
+    /// syncs headers for `dag_ts`, then requests a blob-backed range page from
+    /// peers. Returned events are structurally checked against the synced
+    /// header DAG and RLN-verified before they are returned to the caller.
+    /// Events whose parent bodies are not loaded yet are held in a verified
+    /// pending queue and are committed automatically after later pages bring in
+    /// the missing parents.
+    pub async fn dag_sync_range(
+        &self,
+        dag_ts: u64,
+        cursor: RangeCursor,
+        direction: SyncDirection,
+        limit: usize,
+    ) -> Result<RangeSyncPage> {
+        let limit = limit.min(MAX_RANGE_PAGE_SIZE);
+        if limit == 0 {
+            return Ok(RangeSyncPage {
+                events: vec![],
+                committed: self.drain_lazy_pending(dag_ts, &dag_ts.to_string()).await?,
+                next_cursor: cursor,
+                exhausted: true,
+            })
+        }
+
+        self.dag_sync_headers(dag_ts).await?;
+
+        let peers = self.p2p.hosts().peers();
+        if peers.is_empty() {
+            return Err(Error::DagSyncFailed)
+        }
+
+        let dag_name = dag_ts.to_string();
+        let timeout = self.p2p.settings().read().await.outbound_connect_timeout_max();
+        let mut futs = FuturesUnordered::new();
+        for peer in peers {
+            futs.push(request_range(
+                peer,
+                dag_name.clone(),
+                cursor,
+                direction.clone(),
+                limit,
+                timeout,
+            ));
+        }
+
+        let mut empty_page = None;
+        while let Some((result, peer)) = futs.next().await {
+            let Ok((events, blobs, peer_next_cursor, exhausted)) = result else { continue };
+
+            match self
+                .accept_range_page(
+                    dag_ts,
+                    &dag_name,
+                    cursor,
+                    direction.clone(),
+                    limit,
+                    events,
+                    blobs,
+                    peer_next_cursor,
+                    exhausted,
+                )
+                .await
+            {
+                Ok(page) if !page.events.is_empty() => return Ok(page),
+                Ok(page) => empty_page = Some(page),
+                Err(e) => {
+                    warn!(
+                        target: "event_graph::range",
+                        "[EVENTGRAPH] rejected RangeRep from {}: {e}",
+                        peer.address(),
+                    );
+                }
+            }
+        }
+
+        empty_page.ok_or(Error::DagSyncFailed)
     }
 
     /// Sync the static DAG from peers.
@@ -1565,6 +1735,254 @@ impl EventGraph {
         }
         out.truncate(limit);
         Ok(out)
+    }
+
+    /// Fetch a DAG-scoped page with aligned RLN blobs for peer range sync.
+    ///
+    /// Non-genesis events without a stored blob are skipped because a requester
+    /// cannot safely insert lazy-loaded bodies without re-verifying their RLN
+    /// proofs. The scan is bounded separately from the reply size so sparse
+    /// missing blobs cannot turn one range request into an unbounded local walk.
+    pub async fn fetch_page_with_blobs(
+        &self,
+        dag_name: &str,
+        cursor: RangeCursor,
+        dir: SyncDirection,
+        limit: usize,
+    ) -> Result<(Vec<Event>, Vec<Vec<u8>>, RangeCursor, bool)> {
+        let limit = limit.min(MAX_RANGE_PAGE_SIZE);
+        if limit == 0 {
+            return Ok((vec![], vec![], cursor, true))
+        }
+
+        let dag_ts = u64::from_str(dag_name)?;
+        let scan_limit = limit.saturating_mul(RANGE_BLOB_SCAN_FACTOR);
+        let mut events = Vec::with_capacity(limit);
+        let mut blobs = Vec::with_capacity(limit);
+        let mut next_cursor = cursor;
+        let store = self.dag_store.read().await;
+        let Some(slot) = store.get_slot(&dag_ts) else { return Ok((events, blobs, cursor, true)) };
+        let ids = match dir {
+            SyncDirection::Forward => slot.time_index.after_cursor(cursor, scan_limit),
+            SyncDirection::Backward => slot.time_index.before_cursor(cursor, scan_limit),
+        };
+        let index_exhausted = ids.len() < scan_limit;
+
+        for id in ids {
+            if events.len() >= limit {
+                break
+            }
+
+            let Some(bytes) = slot.main_tree.get(id.as_bytes())? else { continue };
+            let event: Event = deserialize_async(&bytes).await?;
+            next_cursor = range_cursor_for_event(&event);
+            if event.header.parents == NULL_PARENTS {
+                continue
+            }
+            if event.id() != id || !event.content_matches_header() {
+                warn!(
+                    target: "event_graph::range",
+                    "[EVENTGRAPH] refusing to serve corrupt range event {id}",
+                );
+                continue
+            }
+
+            let blob = match self.dag_blob_fetch(&id)? {
+                Some(blob) if !blob.is_empty() => blob,
+                _ => {
+                    warn!(
+                        target: "event_graph::range",
+                        "[EVENTGRAPH] refusing to serve range event {id} without blob",
+                    );
+                    continue
+                }
+            };
+
+            events.push(event);
+            blobs.push(blob);
+        }
+
+        let exhausted = index_exhausted && events.len() < limit;
+        Ok((events, blobs, next_cursor, exhausted))
+    }
+
+    async fn accept_range_page(
+        &self,
+        dag_ts: u64,
+        dag_name: &str,
+        cursor: RangeCursor,
+        direction: SyncDirection,
+        limit: usize,
+        events: Vec<Event>,
+        blobs: Vec<Vec<u8>>,
+        peer_next_cursor: RangeCursor,
+        exhausted: bool,
+    ) -> Result<RangeSyncPage> {
+        if events.len() != blobs.len() || events.len() > limit || events.len() > MAX_RANGE_PAGE_SIZE
+        {
+            return Err(Error::DagSyncFailed)
+        }
+
+        let pending_ids: HashSet<blake3::Hash> = self
+            .lazy_pending
+            .read()
+            .await
+            .get(&dag_ts)
+            .map(|pending| pending.keys().copied().collect())
+            .unwrap_or_default();
+
+        let mut seen = HashSet::with_capacity(events.len());
+        let mut prev = cursor;
+        let mut candidates = Vec::with_capacity(events.len());
+        {
+            let store = self.dag_store.read().await;
+            let slot = store.get_slot(&dag_ts).ok_or(Error::DagSyncFailed)?;
+            for (event, blob) in events.into_iter().zip(blobs.into_iter()) {
+                if event.header.parents == NULL_PARENTS {
+                    continue
+                }
+
+                let event_id = event.id();
+                if !seen.insert(event_id) {
+                    return Err(Error::DagSyncFailed)
+                }
+                if !range_cursor_before_event(prev, &event, direction.clone()) {
+                    return Err(Error::DagSyncFailed)
+                }
+                prev = range_cursor_for_event(&event);
+
+                let already_have = slot.main_tree.contains_key(event_id.as_bytes())?;
+                let already_pending = pending_ids.contains(&event_id);
+                if !already_have && !slot.header_tree.contains_key(event_id.as_bytes())? {
+                    return Err(Error::DagSyncFailed)
+                }
+                if !event.dag_validate(&slot.header_tree, &self.config, dag_ts).await? {
+                    return Err(Error::DagSyncFailed)
+                }
+                if !already_have && !already_pending && blob.is_empty() {
+                    return Err(Error::DagSyncFailed)
+                }
+
+                candidates.push((event, blob, already_have, already_pending));
+            }
+        }
+
+        let mut accepted_events = Vec::with_capacity(candidates.len());
+        let mut newly_pending = Vec::new();
+        for (event, blob, already_have, already_pending) in candidates {
+            if already_have || already_pending {
+                accepted_events.push(event);
+                continue
+            }
+
+            match self.rln_verify_signal(&event, &blob).await {
+                rln::SignalCheck::Accepted => {
+                    newly_pending.push(PendingLazyEvent { event: event.clone(), blob });
+                    accepted_events.push(event);
+                }
+                rln::SignalCheck::Rejected | rln::SignalCheck::Slashable(_) => {
+                    warn!(
+                        target: "event_graph::range",
+                        "[EVENTGRAPH] range event {} failed RLN verification",
+                        event.id(),
+                    );
+                }
+            }
+        }
+
+        if !newly_pending.is_empty() {
+            let mut pending = self.lazy_pending.write().await;
+            let pending = pending.entry(dag_ts).or_default();
+            for item in newly_pending {
+                pending.entry(item.event.id()).or_insert(item);
+            }
+        }
+
+        let committed = self.drain_lazy_pending(dag_ts, dag_name).await?;
+        let next_cursor =
+            accepted_events.last().map(range_cursor_for_event).unwrap_or(peer_next_cursor);
+
+        Ok(RangeSyncPage { events: accepted_events, committed, next_cursor, exhausted })
+    }
+
+    async fn event_body_exists(&self, dag_ts: u64, event_id: &blake3::Hash) -> Result<bool> {
+        let store = self.dag_store.read().await;
+        let Some(slot) = store.get_slot(&dag_ts) else { return Ok(false) };
+        Ok(slot.main_tree.contains_key(event_id.as_bytes())?)
+    }
+
+    async fn drain_lazy_pending(&self, dag_ts: u64, dag_name: &str) -> Result<Vec<blake3::Hash>> {
+        let mut committed = Vec::new();
+
+        loop {
+            let mut pending_items: Vec<_> = self
+                .lazy_pending
+                .read()
+                .await
+                .get(&dag_ts)
+                .map(|pending| pending.values().cloned().collect())
+                .unwrap_or_default();
+            if pending_items.is_empty() {
+                break
+            }
+
+            pending_items
+                .sort_by_key(|item| (item.event.header.layer, hash_order_key(&item.event.id())));
+
+            let mut ready = Vec::new();
+            let mut already_committed = Vec::new();
+            for item in pending_items {
+                let event_id = item.event.id();
+                if self.event_body_exists(dag_ts, &event_id).await? {
+                    already_committed.push(event_id);
+                    continue
+                }
+                if self.parents_have_bodies(&item.event, dag_ts, &HashSet::new()).await? {
+                    ready.push(item);
+                }
+            }
+
+            if !already_committed.is_empty() {
+                let mut pending = self.lazy_pending.write().await;
+                if let Some(by_id) = pending.get_mut(&dag_ts) {
+                    for event_id in already_committed {
+                        by_id.remove(&event_id);
+                    }
+                    if by_id.is_empty() {
+                        pending.remove(&dag_ts);
+                    }
+                }
+            }
+
+            if ready.is_empty() {
+                break
+            }
+
+            let mut progressed = false;
+            for item in ready {
+                let event_id = item.event.id();
+                let ids = self.insert_verified_signal(&item.event, &item.blob, dag_name).await?;
+                if ids.contains(&event_id) || self.event_body_exists(dag_ts, &event_id).await? {
+                    let mut pending = self.lazy_pending.write().await;
+                    if let Some(by_id) = pending.get_mut(&dag_ts) {
+                        by_id.remove(&event_id);
+                        if by_id.is_empty() {
+                            pending.remove(&dag_ts);
+                        }
+                    }
+                    if ids.contains(&event_id) {
+                        committed.push(event_id);
+                    }
+                    progressed = true;
+                }
+            }
+
+            if !progressed {
+                break
+            }
+        }
+
+        Ok(committed)
     }
 
     async fn dag_prune(&self, genesis: Event) -> Result<()> {
@@ -3114,6 +3532,42 @@ async fn request_header(
         return Err(Error::DagSyncFailed)
     }
     Ok(r.0.to_vec())
+}
+
+async fn request_range(
+    peer: Arc<Channel>,
+    dag_name: String,
+    cursor: RangeCursor,
+    direction: SyncDirection,
+    limit: usize,
+    timeout: u64,
+) -> (Result<(Vec<Event>, Vec<Vec<u8>>, RangeCursor, bool)>, Arc<Channel>) {
+    let limit = limit.min(MAX_RANGE_PAGE_SIZE);
+    let Ok(limit) = u32::try_from(limit) else { return (Err(Error::DagSyncFailed), peer) };
+
+    let sub = match peer.subscribe_msg::<RangeRep>().await {
+        Ok(s) => s,
+        Err(e) => return (Err(e), peer),
+    };
+
+    if let Err(e) = peer.send(&RangeReq { dag_name, cursor, direction, limit }).await {
+        sub.unsubscribe().await;
+        return (Err(e), peer)
+    }
+
+    match sub.receive_with_timeout(timeout).await {
+        Ok(r) => {
+            sub.unsubscribe().await;
+            if r.0.len() > MAX_RANGE_PAGE_SIZE || r.1.len() > MAX_RANGE_PAGE_SIZE {
+                return (Err(Error::DagSyncFailed), peer)
+            }
+            (Ok((r.0.clone(), r.1.clone(), r.2, r.3)), peer)
+        }
+        Err(_) => {
+            sub.unsubscribe().await;
+            (Err(Error::EventNotFound("range timeout".into())), peer)
+        }
+    }
 }
 
 async fn request_event(

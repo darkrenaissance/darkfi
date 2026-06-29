@@ -282,19 +282,42 @@ pub enum SyncDirection {
     Backward,
 }
 
+/// Exclusive cursor for bidirectional range pagination.
+///
+/// The event ID makes pagination stable when several events share the same
+/// millisecond timestamp and a page cuts through that timestamp bucket.
+#[derive(Clone, Copy, Debug, SerialEncodable, SerialDecodable)]
+pub struct RangeCursor {
+    /// Event timestamp in milliseconds.
+    pub timestamp: u64,
+    /// Event ID within the timestamp bucket.
+    pub event_id: blake3::Hash,
+}
+
+impl RangeCursor {
+    /// Cursor for loading from the newest event backwards.
+    pub fn newest() -> Self {
+        Self { timestamp: u64::MAX, event_id: blake3::Hash::from_bytes([0; 32]) }
+    }
+
+    /// Cursor for loading from the oldest event forwards.
+    pub fn oldest() -> Self {
+        Self { timestamp: 0, event_id: blake3::Hash::from_bytes([0; 32]) }
+    }
+}
+
 /// Bidirectional content pagination request.
 ///
-/// The responder uses its [`TimeIndex`] to serve events around
-/// `cursor_ts` in the requested direction, up to `limit` events.
-/// This is the primary message for lazy content fetching - the
-/// requester already has headers (DAG structure) and wants bodies.
+/// The responder uses its [`TimeIndex`] to serve events after the exclusive
+/// cursor in the requested direction, up to `limit` events. This is the
+/// primary message for lazy content fetching - the requester already has
+/// headers (DAG structure) and wants bodies.
 #[derive(Clone, SerialEncodable, SerialDecodable)]
 pub struct RangeReq {
     /// Which DAG to query (genesis timestamp as string).
     pub dag_name: String,
-    /// Timestamp cursor. Use `u64::MAX` for "start from newest"
-    /// or `0` for "start from oldest".
-    pub cursor_ts: u64,
+    /// Exclusive pagination cursor.
+    pub cursor: RangeCursor,
     /// Which direction to paginate.
     pub direction: SyncDirection,
     /// Maximum number of events to return.
@@ -302,9 +325,16 @@ pub struct RangeReq {
 }
 impl_p2p_message!(RangeReq, "EventGraph::RangeReq", 0, 0, DEFAULT_METERING_CONFIGURATION);
 
-/// Reply to a [`RangeReq`] with events in the requested order.
+/// Reply to a [`RangeReq`] with events and aligned RLN blobs.
+///
+/// `events` and `blobs` follow the same alignment rule as [`EventRep`]:
+/// `blobs[i]` is the original RLN blob for `events[i]`. Non-genesis
+/// events must carry a non-empty blob so the requester can re-verify
+/// lazy-loaded content before inserting it. `next_cursor` is the exclusive
+/// cursor for the next page; `exhausted` means this peer had no more indexed
+/// events in the requested direction.
 #[derive(Clone, SerialEncodable, SerialDecodable)]
-pub struct RangeRep(pub Vec<Event>);
+pub struct RangeRep(pub Vec<Event>, pub Vec<Vec<u8>>, pub RangeCursor, pub bool);
 impl_p2p_message!(RangeRep, "EventGraph::RangeRep", 0, 0, DEFAULT_METERING_CONFIGURATION);
 
 /// Per-connection protocol handler for the Event Graph.
@@ -1013,9 +1043,7 @@ impl ProtocolEventGraph {
         }
     }
 
-    /// Serve a paginated content request. Uses the local
-    /// [`TimeIndex`] to find events around the cursor, then
-    /// returns their full content.
+    /// Serve a DAG-scoped paginated content request with aligned RLN blobs.
     async fn handle_range_req(self: Arc<Self>) -> Result<()> {
         loop {
             let req = match self.range_req_sub.receive().await {
@@ -1026,9 +1054,22 @@ impl ProtocolEventGraph {
                 continue
             }
             let limit = (req.limit as usize).min(MAX_RANGE_PAGE_SIZE);
-            let events =
-                self.event_graph.fetch_page(req.cursor_ts, req.direction.clone(), limit).await?;
-            self.channel.send(&RangeRep(events)).await?;
+            let (events, blobs, next_cursor, exhausted) = match self
+                .event_graph
+                .fetch_page_with_blobs(&req.dag_name, req.cursor, req.direction.clone(), limit)
+                .await
+            {
+                Ok(page) => page,
+                Err(e) => {
+                    warn!(
+                        target: "event_graph::protocol",
+                        "[EVENTGRAPH] refusing invalid RangeReq for dag={}: {e}",
+                        req.dag_name,
+                    );
+                    (vec![], vec![], req.cursor, true)
+                }
+            };
+            self.channel.send(&RangeRep(events, blobs, next_cursor, exhausted)).await?;
         }
     }
 

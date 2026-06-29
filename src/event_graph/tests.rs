@@ -34,8 +34,8 @@ use crate::{
         event::Header,
         filter_requested_event_rep, merge_static_sync_event_rep,
         proto::{
-            cap_layer_tips, count_layer_tips, filter_parent_event_rep, EventPut, SyncDirection,
-            MAX_HEADER_REP_HEADERS, MAX_RANGE_PAGE_SIZE,
+            cap_layer_tips, count_layer_tips, filter_parent_event_rep, EventPut, RangeCursor,
+            RangeRep, RangeReq, SyncDirection, MAX_HEADER_REP_HEADERS, MAX_RANGE_PAGE_SIZE,
         },
         rln::epoch_of,
         test_helpers::{
@@ -1053,6 +1053,253 @@ fn evgr_fetch_page_both_directions() {
             .unwrap();
         assert_eq!(capped.len(), MAX_RANGE_PAGE_SIZE);
     })
+}
+
+#[test]
+fn evgr_fetch_page_with_blobs_is_dag_scoped_and_blob_aligned() {
+    smol::block_on(async {
+        let eg = make_eg().await;
+        let dag_ts = eg.current_genesis.read().await.header.timestamp;
+        let dag_name = dag_ts.to_string();
+        let base = UNIX_EPOCH.elapsed().unwrap().as_millis() as u64;
+        let mut events = vec![];
+        let mut blobs = vec![];
+
+        for i in 0..3_u64 {
+            let event = Event::with_timestamp(
+                base + i,
+                format!("range-page-with-blobs-{i}").into_bytes(),
+                &eg,
+            )
+            .await
+            .unwrap();
+            eg.header_dag_insert(vec![event.header.clone()], &dag_name).await.unwrap();
+            eg.dag_insert(slice::from_ref(&event), &dag_name).await.unwrap();
+            if i < 2 {
+                let blob = format!("blob-{i}").into_bytes();
+                eg.dag_blob_store(&event.id(), &blob).unwrap();
+                blobs.push(blob);
+            }
+            events.push(event);
+        }
+
+        let (page, page_blobs, next_cursor, exhausted) = eg
+            .fetch_page_with_blobs(&dag_name, RangeCursor::newest(), SyncDirection::Backward, 2)
+            .await
+            .unwrap();
+        assert_eq!(
+            page.iter().map(Event::id).collect::<Vec<_>>(),
+            vec![events[1].id(), events[0].id()]
+        );
+        assert_eq!(page_blobs, vec![blobs[1].clone(), blobs[0].clone()]);
+        assert_eq!(next_cursor.event_id, events[0].id());
+        assert!(!exhausted);
+
+        let (wrong_dag, wrong_blobs, _, wrong_exhausted) = eg
+            .fetch_page_with_blobs(
+                &dag_ts.saturating_add(1).to_string(),
+                RangeCursor::newest(),
+                SyncDirection::Backward,
+                2,
+            )
+            .await
+            .unwrap();
+        assert!(wrong_dag.is_empty());
+        assert!(wrong_blobs.is_empty());
+        assert!(wrong_exhausted);
+    })
+}
+
+#[test]
+fn evgr_fetch_page_with_blobs_keeps_same_timestamp_cursor_position() {
+    smol::block_on(async {
+        let eg = make_eg().await;
+        let dag_name = eg.current_genesis.read().await.header.timestamp.to_string();
+        let ts = UNIX_EPOCH.elapsed().unwrap().as_millis() as u64;
+        let mut events = vec![];
+
+        for i in 0..3_u8 {
+            let event =
+                Event::with_timestamp(ts, vec![b's', b'a', b'm', b'e', i], &eg).await.unwrap();
+            eg.header_dag_insert(vec![event.header.clone()], &dag_name).await.unwrap();
+            eg.dag_insert(slice::from_ref(&event), &dag_name).await.unwrap();
+            eg.dag_blob_store(&event.id(), &[i]).unwrap();
+            events.push(event);
+        }
+
+        events.sort_by(|a, b| b.id().as_bytes().cmp(a.id().as_bytes()));
+
+        let (first, _, cursor, exhausted) = eg
+            .fetch_page_with_blobs(&dag_name, RangeCursor::newest(), SyncDirection::Backward, 2)
+            .await
+            .unwrap();
+        assert_eq!(
+            first.iter().map(Event::id).collect::<Vec<_>>(),
+            events.iter().take(2).map(Event::id).collect::<Vec<_>>()
+        );
+        assert_eq!(cursor.event_id, events[1].id());
+        assert!(!exhausted);
+
+        let (second, _, _, exhausted) =
+            eg.fetch_page_with_blobs(&dag_name, cursor, SyncDirection::Backward, 2).await.unwrap();
+        assert_eq!(second.iter().map(Event::id).collect::<Vec<_>>(), vec![events[2].id()]);
+        assert!(exhausted);
+    })
+}
+
+#[test]
+fn evgr_multi_node_range_req_returns_blob_aligned_backward_page() {
+    init_logger();
+    run_multi_node_test(range_req_returns_blob_aligned_backward_page);
+}
+async fn range_req_returns_blob_aligned_backward_page(ex: Arc<Executor<'static>>) {
+    let nodes = make_network(ex).await;
+
+    let mut alice = TestIdentity::new();
+    for eg in &nodes {
+        alice.register_directly(eg).await.unwrap();
+    }
+
+    let dag_ts = nodes[0].current_genesis.read().await.header.timestamp;
+    let dag_name = dag_ts.to_string();
+    let base = UNIX_EPOCH.elapsed().unwrap().as_millis() as u64;
+    let mut events = vec![];
+    let mut blobs = vec![];
+
+    for i in 0..3_u8 {
+        let event = Event::with_timestamp(
+            base + u64::from(i),
+            vec![b'r', b'a', b'n', b'g', b'e', i],
+            &nodes[0],
+        )
+        .await
+        .unwrap();
+        let message_id = alice.next_message_id(event.header.timestamp).expect("budget");
+        let blob_struct = alice.create_signal(&event, message_id, &nodes[0]).await.unwrap();
+        let blob = serialize_async(&blob_struct).await;
+
+        for eg in nodes.iter().take(4) {
+            eg.insert_signal_with_blob(&event, &blob, &dag_name).await.unwrap();
+        }
+
+        events.push(event);
+        blobs.push(blob);
+    }
+
+    nodes[4]
+        .header_dag_insert(events.iter().map(|event| event.header.clone()).collect(), &dag_name)
+        .await
+        .unwrap();
+
+    let peer = nodes[4].p2p.hosts().peers().into_iter().next().expect("connected peer");
+    let sub = peer.subscribe_msg::<RangeRep>().await.unwrap();
+    peer.send(&RangeReq {
+        dag_name: dag_name.clone(),
+        cursor: RangeCursor::newest(),
+        direction: SyncDirection::Backward,
+        limit: 2,
+    })
+    .await
+    .unwrap();
+
+    let rep = timeout(Duration::from_secs(5), sub.receive())
+        .await
+        .expect("RangeRep timeout")
+        .expect("RangeRep receive failed");
+    sub.unsubscribe().await;
+
+    assert_eq!(
+        rep.0.iter().map(Event::id).collect::<Vec<_>>(),
+        vec![events[2].id(), events[1].id()]
+    );
+    assert_eq!(rep.1, vec![blobs[2].clone(), blobs[1].clone()]);
+    assert_eq!(rep.2.event_id, events[1].id());
+    assert!(!rep.3);
+    for (event, blob) in rep.0.iter().zip(rep.1.iter()) {
+        assert!(matches!(
+            nodes[4].rln_verify_signal(event, blob).await,
+            crate::event_graph::rln::SignalCheck::Accepted
+        ));
+    }
+
+    shutdown_network(&nodes).await;
+}
+
+#[test]
+fn evgr_multi_node_dag_sync_range_drains_pending_backward_page() {
+    init_logger();
+    run_multi_node_test(dag_sync_range_drains_pending_backward_page);
+}
+async fn dag_sync_range_drains_pending_backward_page(ex: Arc<Executor<'static>>) {
+    let nodes = make_network(ex).await;
+
+    let mut alice = TestIdentity::new();
+    for eg in &nodes {
+        alice.register_directly(eg).await.unwrap();
+    }
+
+    let dag_ts = nodes[0].current_genesis.read().await.header.timestamp;
+    let dag_name = dag_ts.to_string();
+    let base = UNIX_EPOCH.elapsed().unwrap().as_millis() as u64;
+    let mut events = vec![];
+
+    for i in 0..3_u8 {
+        let event = Event::with_timestamp(
+            base + u64::from(i),
+            vec![b'l', b'a', b'z', b'y', b'-', i],
+            &nodes[0],
+        )
+        .await
+        .unwrap();
+        let message_id = alice.next_message_id(event.header.timestamp).expect("budget");
+        let blob_struct = alice.create_signal(&event, message_id, &nodes[0]).await.unwrap();
+        let blob = serialize_async(&blob_struct).await;
+
+        for eg in nodes.iter().take(4) {
+            eg.insert_signal_with_blob(&event, &blob, &dag_name).await.unwrap();
+        }
+
+        events.push(event);
+    }
+
+    let first = nodes[4]
+        .dag_sync_range(dag_ts, RangeCursor::newest(), SyncDirection::Backward, 2)
+        .await
+        .unwrap();
+    assert_eq!(
+        first.events.iter().map(Event::id).collect::<Vec<_>>(),
+        vec![events[2].id(), events[1].id()]
+    );
+    assert!(first.committed.is_empty());
+    assert!(!first.exhausted);
+
+    {
+        let store = nodes[4].dag_store.read().await;
+        let slot = store.get_slot(&dag_ts).unwrap();
+        for event in &events {
+            assert!(!slot.main_tree.contains_key(event.id().as_bytes()).unwrap());
+        }
+    }
+
+    let second = nodes[4]
+        .dag_sync_range(dag_ts, first.next_cursor, SyncDirection::Backward, 2)
+        .await
+        .unwrap();
+    assert_eq!(second.events.iter().map(Event::id).collect::<Vec<_>>(), vec![events[0].id()]);
+    assert!(second.exhausted);
+    for event in &events {
+        assert!(second.committed.contains(&event.id()));
+    }
+
+    let store = nodes[4].dag_store.read().await;
+    let slot = store.get_slot(&dag_ts).unwrap();
+    for event in &events {
+        assert!(slot.main_tree.contains_key(event.id().as_bytes()).unwrap());
+        assert!(nodes[4].dag_blob_fetch(&event.id()).unwrap().is_some());
+    }
+    drop(store);
+
+    shutdown_network(&nodes).await;
 }
 
 #[test]
