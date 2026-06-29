@@ -1197,6 +1197,50 @@ async fn propagation_with_real_blob(ex: Arc<Executor<'static>>) {
 }
 
 #[test]
+fn evgr_multi_node_event_put_ingests_body_after_header_only_sync() {
+    init_logger();
+    run_multi_node_test(event_put_ingests_body_after_header_only_sync);
+}
+async fn event_put_ingests_body_after_header_only_sync(ex: Arc<Executor<'static>>) {
+    let nodes = make_network(ex).await;
+
+    let mut alice = TestIdentity::new();
+    for eg in &nodes {
+        alice.register_directly(eg).await.unwrap();
+    }
+
+    let dag_ts = nodes[0].current_genesis.read().await.header.timestamp;
+    let dag_name = dag_ts.to_string();
+    let event = Event::new(b"header-only-then-live-body".to_vec(), &nodes[0]).await.unwrap();
+    let message_id = alice.next_message_id(event.header.timestamp).expect("budget");
+    let blob_struct = alice.create_signal(&event, message_id, &nodes[0]).await.unwrap();
+    let blob = serialize_async(&blob_struct).await;
+
+    nodes[4].header_dag_insert(vec![event.header.clone()], &dag_name).await.unwrap();
+    {
+        let store = nodes[4].dag_store.read().await;
+        let slot = store.get_slot(&dag_ts).unwrap();
+        assert!(slot.header_tree.contains_key(event.id().as_bytes()).unwrap());
+        assert!(!slot.main_tree.contains_key(event.id().as_bytes()).unwrap());
+    }
+    assert!(nodes[4].dag_blob_fetch(&event.id()).unwrap().is_none());
+
+    nodes[0].p2p.broadcast(&EventPut(event.clone(), blob.clone())).await;
+    sleep(5).await;
+
+    let store = nodes[4].dag_store.read().await;
+    let slot = store.get_slot(&dag_ts).unwrap();
+    assert!(
+        slot.main_tree.contains_key(event.id().as_bytes()).unwrap(),
+        "EventPut should fill a body when only the header was known",
+    );
+    drop(store);
+    assert_eq!(nodes[4].dag_blob_fetch(&event.id()).unwrap().unwrap(), blob);
+
+    shutdown_network(&nodes).await;
+}
+
+#[test]
 fn evgr_multi_node_empty_blob_rejected() {
     init_logger();
     run_multi_node_test(empty_blob_rejected);
