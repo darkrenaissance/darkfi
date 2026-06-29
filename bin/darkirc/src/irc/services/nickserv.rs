@@ -255,16 +255,12 @@ impl NickServ {
     /// Called from `command::handle_cmd_privmsg`.
     pub async fn handle_query(&self, query: &str) -> Result<Vec<ReplyType>> {
         let nick = self.nickname.read().await.to_string();
-        let mut tokens = query.split_ascii_whitespace();
-
-        tokens.next();
-        let Some(command) = tokens.next() else {
+        let Some((command, mut tokens)) = parse_nickserv_command(query) else {
             return Ok(vec![ReplyType::Server((
                 ERR_NOTEXTTOSEND,
                 format!("{nick} :No text to send"),
             ))])
         };
-        let command = command.strip_prefix(':').unwrap();
 
         match command.to_uppercase().as_str() {
             "INFO" => self.handle_info(&nick, &mut tokens).await,
@@ -416,16 +412,13 @@ impl NickServ {
         tokens: &mut SplitAsciiWhitespace<'_>,
     ) -> Result<Vec<ReplyType>> {
         // Gather the tokens
-        let account_name = tokens.next();
-        let identity_nullifier = tokens.next();
-        let identity_trapdoor = tokens.next();
-        let user_msg_limit = tokens.next();
-
-        if account_name.is_none() ||
-            identity_nullifier.is_none() ||
-            identity_trapdoor.is_none() ||
-            user_msg_limit.is_none()
-        {
+        let (
+            Some(account_name),
+            Some(identity_nullifier),
+            Some(identity_trapdoor),
+            Some(user_msg_limit),
+        ) = (tokens.next(), tokens.next(), tokens.next(), tokens.next())
+        else {
             return Ok(notices(
                 nick,
                 [
@@ -437,10 +430,6 @@ impl NickServ {
             ))
         };
 
-        let account_name = account_name.unwrap();
-        let identity_nullifier = identity_nullifier.unwrap();
-        let identity_trapdoor = identity_trapdoor.unwrap();
-
         // Reserved name. We use `default` for the mirror tree.
         if account_name == "default" || account_name.is_empty() {
             return Ok(vec![notice(nick, "Invalid account name.")])
@@ -449,7 +438,7 @@ impl NickServ {
         // Parse user_msg_limit defensively. The original code
         // panicked here, which would tear down the whole IRC
         // session on a typo.
-        let user_msg_limit: u64 = match user_msg_limit.unwrap().parse() {
+        let user_msg_limit: u64 = match user_msg_limit.parse() {
             Ok(v) => v,
             Err(_) => {
                 return Ok(vec![notice(nick, "Invalid user_msg_limit: must be a positive integer.")])
@@ -885,6 +874,19 @@ impl NickServ {
     }
 }
 
+/// Parse a NickServ PRIVMSG body into the service command and remaining arguments.
+fn parse_nickserv_command(query: &str) -> Option<(&str, SplitAsciiWhitespace<'_>)> {
+    let mut tokens = query.split_ascii_whitespace();
+    tokens.next()?;
+
+    let command = tokens.next()?.strip_prefix(':')?;
+    if command.is_empty() {
+        return None
+    }
+
+    Some((command, tokens))
+}
+
 /// Decode a base58-encoded `pallas::Base` scalar. Returns `None`
 /// for any malformed input rather than panicking - this is called
 /// on user-supplied IRC tokens.
@@ -892,4 +894,29 @@ fn parse_pallas_b58(s: &str) -> Option<pallas::Base> {
     let bytes = bs58::decode(s).into_vec().ok()?;
     let arr: [u8; 32] = bytes.try_into().ok()?;
     pallas::Base::from_repr(arr).into_option()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::parse_nickserv_command;
+
+    #[test]
+    fn parse_nickserv_command_accepts_colon_prefixed_command() {
+        let (command, mut tokens) =
+            parse_nickserv_command("NickServ :REGISTER alice n t 100").unwrap();
+
+        assert_eq!(command, "REGISTER");
+        assert_eq!(tokens.next(), Some("alice"));
+        assert_eq!(tokens.next(), Some("n"));
+    }
+
+    #[test]
+    fn parse_nickserv_command_rejects_bare_command() {
+        assert!(parse_nickserv_command("NickServ REGISTER alice").is_none());
+    }
+
+    #[test]
+    fn parse_nickserv_command_rejects_empty_command() {
+        assert!(parse_nickserv_command("NickServ :").is_none());
+    }
 }
