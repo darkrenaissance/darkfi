@@ -730,7 +730,7 @@ impl ProtocolEventGraph {
                 self.channel.ban().await;
                 return Err(Error::MaliciousFlood)
             }
-            if !event.validate_new() {
+            if !event.validate_new_static() {
                 self.clone().strike().await?;
                 continue
             }

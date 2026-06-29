@@ -1031,6 +1031,48 @@ fn rln_static_blob_audit_does_not_fabricate_slash_blob() {
 }
 
 #[test]
+fn rln_multi_node_old_static_event_propagates() {
+    run_multi_node_test(old_static_event_propagates);
+}
+async fn old_static_event_propagates(ex: Arc<Executor<'static>>) {
+    let nodes = make_network(ex).await;
+
+    let commitment = pallas::Base::from_repr(nodes[0].config.pregenerated_identity_commitments[0])
+        .into_option()
+        .unwrap();
+    let rln_node = RLNNode::Registration(commitment);
+    let content = serialize_async(&rln_node).await;
+
+    let static_genesis =
+        generate_genesis(&EventGraphConfig { hours_rotation: 0, ..nodes[0].config.clone() });
+    let mut parents = NULL_PARENTS;
+    parents[0] = static_genesis.id();
+    let header = crate::event_graph::event::Header {
+        timestamp: nodes[0].config.initial_genesis + 1,
+        parents,
+        layer: 1,
+        content_hash: blake3::hash(&content),
+    };
+    let event = Event { header, content };
+    let blob = GENESIS_BLOB_GUARD.to_vec();
+
+    assert!(!event.validate_new(), "precondition: event is outside live drift window");
+    assert!(event.validate_new_static(), "precondition: static structural validation passes");
+
+    nodes[0].commit_verified_static_event(&event, &blob, &rln_node).await.unwrap();
+    nodes[0].static_broadcast(event.clone(), blob).await.unwrap();
+
+    sleep(5).await;
+
+    for (i, eg) in nodes.iter().enumerate() {
+        assert!(eg.rln_contains(&commitment).await, "node {i} did not accept old static event");
+        assert!(eg.static_fetch(&event.id()).await.unwrap().is_some());
+    }
+
+    shutdown_network(&nodes).await;
+}
+
+#[test]
 fn rln_multi_node_static_sync_registration() {
     run_multi_node_test(static_sync_registration);
 }
