@@ -983,6 +983,54 @@ async fn concurrent_slashes(ex: Arc<Executor<'static>>) {
 }
 
 #[test]
+fn rln_static_blob_audit_repairs_pregenerated_guard() {
+    smol::block_on(async {
+        let config = EventGraphConfig { hours_rotation: 1, ..test_config() };
+        let eg = make_eg_with_config(config).await;
+        let commitment = genesis_commitment_at(&eg, 0);
+
+        let mut registration_event = None;
+        for item in eg.static_dag.iter() {
+            let (_, bytes) = item.unwrap();
+            let ev: Event = deserialize_async(&bytes).await.unwrap();
+            if ev.header.parents == NULL_PARENTS {
+                continue
+            }
+            let node: RLNNode = deserialize_async(ev.content()).await.unwrap();
+            if matches!(node, RLNNode::Registration(c) if c == commitment) {
+                registration_event = Some(ev);
+                break
+            }
+        }
+        let ev = registration_event.expect("bootstrapped pregenerated registration event");
+
+        eg.static_dag_blobs.remove(ev.id().as_bytes()).unwrap();
+        assert!(eg.static_blob_fetch(&ev.id()).unwrap().is_none());
+
+        eg.audit_static_blobs().await.unwrap();
+
+        assert_eq!(eg.static_blob_fetch(&ev.id()).unwrap().unwrap(), GENESIS_BLOB_GUARD);
+    })
+}
+
+#[test]
+fn rln_static_blob_audit_does_not_fabricate_slash_blob() {
+    smol::block_on(async {
+        let eg = make_eg().await;
+        let commitment = pallas::Base::from(0x515a_5b_u64);
+        let node = RLNNode::Slashing(commitment);
+        let ev = synth_static_event(1, 400_000, &node).await;
+
+        eg.static_insert(&ev).await.unwrap();
+        assert!(eg.static_blob_fetch(&ev.id()).unwrap().is_none());
+
+        eg.audit_static_blobs().await.unwrap();
+
+        assert!(eg.static_blob_fetch(&ev.id()).unwrap().is_none());
+    })
+}
+
+#[test]
 fn rln_multi_node_static_sync_registration() {
     run_multi_node_test(static_sync_registration);
 }

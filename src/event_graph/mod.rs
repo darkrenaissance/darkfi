@@ -757,6 +757,8 @@ impl EventGraph {
             self_.bootstrap_genesis_identities().await?;
         }
 
+        self_.audit_static_blobs().await?;
+
         if config.hours_rotation > 0 {
             let task = StoppableTask::new();
             let _ = self_.prune_task.set(task.clone()).await;
@@ -1994,6 +1996,69 @@ impl EventGraph {
     }
     pub async fn static_unreferenced_tips(&self) -> LayerUTips {
         compute_unreferenced_tips(&self.static_dag).await
+    }
+
+    /// Audit static-DAG blob coverage and repair deterministic guard blobs.
+    ///
+    /// A static DAG event without its RLN blob cannot be served to late
+    /// joiners because they must re-verify historical static events. The only
+    /// blob we can safely reconstruct is the pregenerated-registration guard:
+    /// it is valid exactly for commitments supplied by this app config. Slash
+    /// blobs and future staked registration proofs are not reconstructible and
+    /// are logged for operator intervention.
+    async fn audit_static_blobs(&self) -> Result<()> {
+        let mut repaired = 0usize;
+        let mut unrecoverable = 0usize;
+        let mut malformed = 0usize;
+
+        for item in self.static_dag.iter() {
+            let (_, val) = item?;
+            let ev: Event = deserialize_async(&val).await?;
+            if ev.header.parents == NULL_PARENTS {
+                continue
+            }
+
+            if matches!(self.static_blob_fetch(&ev.id())?, Some(blob) if !blob.is_empty()) {
+                continue
+            }
+
+            let rln_node: rln::RLNNode = match deserialize_async_partial(ev.content()).await {
+                Ok((node, _)) => node,
+                Err(_) => {
+                    malformed += 1;
+                    continue
+                }
+            };
+
+            match rln_node {
+                rln::RLNNode::Registration(commitment)
+                    if self
+                        .pregenerated_identity_commitment_reprs
+                        .contains(&commitment.to_repr()) =>
+                {
+                    self.static_blob_store(&ev.id(), rln::GENESIS_BLOB_GUARD)?;
+                    repaired += 1;
+                }
+                _ => {
+                    unrecoverable += 1;
+                    warn!(
+                        target: "event_graph::new",
+                        "[EVENTGRAPH] static event {} is missing its RLN blob and cannot be reconstructed",
+                        ev.id(),
+                    );
+                }
+            }
+        }
+
+        if repaired > 0 || unrecoverable > 0 || malformed > 0 {
+            info!(
+                target: "event_graph::new",
+                "[EVENTGRAPH] static blob audit: repaired={} unrecoverable={} malformed={}",
+                repaired, unrecoverable, malformed,
+            );
+        }
+
+        Ok(())
     }
 
     /// Persist the original RLN blob for a static-DAG event. The
