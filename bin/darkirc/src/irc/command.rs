@@ -180,7 +180,7 @@ impl Client {
                 self.reg_paused.store(false, SeqCst);
                 if self.registered.load(SeqCst) && !self.is_cap_end.load(SeqCst) {
                     self.is_cap_end.store(true, SeqCst);
-                    return Ok(self.welcome().await)
+                    return self.welcome().await
                 }
 
                 return Ok(vec![])
@@ -305,7 +305,7 @@ impl Client {
 
         if hist {
             // Potentially extend the replies with channel history
-            replies.extend(self.get_history(&channels).await.unwrap());
+            replies.extend(self.get_history(&channels).await?);
         }
 
         Ok(replies)
@@ -500,7 +500,7 @@ impl Client {
             if self.reg_paused.load(SeqCst) {
                 return Ok(vec![])
             } else {
-                return Ok(self.welcome().await)
+                return self.welcome().await
             }
         }
 
@@ -820,7 +820,7 @@ impl Client {
             if self.reg_paused.load(SeqCst) {
                 return Ok(vec![])
             } else {
-                return Ok(self.welcome().await)
+                return self.welcome().await
             }
         }
 
@@ -850,7 +850,7 @@ impl Client {
     }
 
     /// Internal function that constructs the welcome message.
-    async fn welcome(&self) -> Vec<ReplyType> {
+    async fn welcome(&self) -> Result<Vec<ReplyType>> {
         let nick = self.nickname.read().await.to_string();
 
         let mut replies = vec![
@@ -865,7 +865,7 @@ impl Client {
         ];
 
         // Append the MOTD
-        replies.append(&mut self.handle_cmd_motd("").await.unwrap());
+        replies.append(&mut self.handle_cmd_motd("").await?);
 
         let mut channels = HashSet::new();
 
@@ -873,13 +873,13 @@ impl Client {
         // and set their topics, if any.
         if !*self.caps.read().await.get("no-autojoin").unwrap() {
             for channel in self.server.autojoin.read().await.iter() {
-                replies.extend(self.handle_cmd_join(channel, false).await.unwrap());
+                replies.extend(self.handle_cmd_join(channel, false).await?);
                 channels.insert(channel.to_string());
             }
         }
 
         // Potentially extend the replies with channel history
-        replies.extend(self.get_history(&channels).await.unwrap());
+        replies.extend(self.get_history(&channels).await?);
 
         // And request NAMES list.
         if !*self.caps.read().await.get("no-autojoin").unwrap() {
@@ -900,7 +900,7 @@ impl Client {
             }
         }
 
-        replies
+        Ok(replies)
     }
 
     /// Internal function that scans the DAG and returns events for
@@ -914,7 +914,7 @@ impl Client {
         }
 
         // Fetch and order all the events from the DAG
-        let dag_events = self.server.darkirc.event_graph.order_events().await;
+        let dag_events = self.server.darkirc.event_graph.order_events().await?;
 
         // Here we'll hold the events in order we'll push to the client
         let mut replies = vec![];

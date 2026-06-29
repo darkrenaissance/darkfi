@@ -857,6 +857,23 @@ fn evgr_fetch_page_both_directions() {
     })
 }
 
+#[test]
+fn evgr_order_events_rejects_corrupt_event_record() {
+    smol::block_on(async {
+        let eg = make_eg().await;
+        let dag_ts = eg.current_genesis.read().await.header.timestamp;
+        let bad_id = [0u8; 32];
+        {
+            let store = eg.dag_store.read().await;
+            let slot = store.get_slot(&dag_ts).unwrap();
+            slot.main_tree.insert(bad_id.as_slice(), b"not-an-event".as_slice()).unwrap();
+        }
+
+        let result = eg.order_events().await;
+        assert!(result.is_err(), "corrupt event records should fail history ordering");
+    })
+}
+
 async fn build_graph() -> Result<(EventGraphPtr, std::collections::HashMap<&'static str, Event>)> {
     let eg = make_eg().await;
     let dag_name = eg.current_genesis.read().await.header.timestamp.to_string();
