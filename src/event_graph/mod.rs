@@ -472,8 +472,8 @@ impl DagStore {
         self.dags.get_mut(ts)
     }
 
-    pub fn get_header_tree(&self, dag_name: &str) -> sled::Tree {
-        self.db.open_tree(format!("headers_{dag_name}")).unwrap()
+    pub fn get_header_tree(&self, dag_name: &str) -> Result<sled::Tree> {
+        Ok(self.db.open_tree(format!("headers_{dag_name}"))?)
     }
 
     pub fn dag_timestamps(&self) -> Vec<u64> {
@@ -1794,7 +1794,7 @@ impl EventGraph {
         }
 
         if let Some(b) = overlay.aggregate() {
-            slot.main_tree.apply_batch(b).unwrap();
+            slot.main_tree.apply_batch(b)?;
         } else {
             return Ok(vec![])
         }
@@ -1864,6 +1864,7 @@ impl EventGraph {
         let mut store = self.dag_store.write().await;
         let slot = store.get_slot_mut(&dag_ts).ok_or(Error::DagSyncFailed)?;
         let mut overlay = SledTreeOverlay::new(&slot.header_tree);
+        let mut staged_headers = Vec::new();
         let mut hdrs = headers;
         hdrs.sort_by_key(|h| h.layer);
 
@@ -1898,11 +1899,14 @@ impl EventGraph {
             }
 
             overlay.insert(hid.as_bytes(), &serialize_async(hdr).await)?;
-            slot.time_index.insert(hdr.timestamp, hid);
+            staged_headers.push((hdr.timestamp, hid));
         }
 
         if let Some(b) = overlay.aggregate() {
-            slot.header_tree.apply_batch(b).unwrap();
+            slot.header_tree.apply_batch(b)?;
+            for (timestamp, hid) in staged_headers {
+                slot.time_index.insert(timestamp, hid);
+            }
         }
         Ok(())
     }
@@ -2040,10 +2044,10 @@ impl EventGraph {
         let tree = sled_db.open_tree("static-dag")?;
         let genesis = generate_static_genesis(config);
         let mut ov = SledTreeOverlay::new(&tree);
-        ov.insert(genesis.id().as_bytes(), &serialize_async(&genesis).await).unwrap();
+        ov.insert(genesis.id().as_bytes(), &serialize_async(&genesis).await)?;
 
         if let Some(b) = ov.aggregate() {
-            tree.apply_batch(b).unwrap();
+            tree.apply_batch(b)?;
         }
 
         Ok(tree)
@@ -2056,10 +2060,10 @@ impl EventGraph {
 
     async fn static_persist(&self, ev: &Event) -> Result<()> {
         let mut ov = SledTreeOverlay::new(&self.static_dag);
-        ov.insert(ev.id().as_bytes(), &serialize_async(ev).await).unwrap();
+        ov.insert(ev.id().as_bytes(), &serialize_async(ev).await)?;
 
         if let Some(b) = ov.aggregate() {
-            self.static_dag.apply_batch(b).unwrap();
+            self.static_dag.apply_batch(b)?;
         }
 
         Ok(())
