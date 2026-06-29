@@ -1403,13 +1403,7 @@ impl EventGraph {
             match outcome {
                 rln::StaticEventCheck::AcceptedRegistration(_) |
                 rln::StaticEventCheck::AcceptedSlash(_) => {
-                    // apply_rln_static_event handles both Registration
-                    // and Slashing branches and also records the
-                    // post-mutation root in the historical-roots
-                    // side-tables.
-                    let _ = self.apply_rln_static_event(&ev, &rln_node).await;
-                    self.static_blob_store(&ev.id(), &blob)?;
-                    self.static_insert(&ev).await?;
+                    self.commit_verified_static_event(&ev, &blob, &rln_node).await?;
                     applied += 1;
                 }
                 rln::StaticEventCheck::Rejected | rln::StaticEventCheck::Malicious => {
@@ -1950,7 +1944,7 @@ impl EventGraph {
         Ok(())
     }
 
-    pub async fn static_insert(&self, ev: &Event) -> Result<()> {
+    async fn static_persist(&self, ev: &Event) -> Result<()> {
         let mut ov = SledTreeOverlay::new(&self.static_dag);
         ov.insert(ev.id().as_bytes(), &serialize_async(ev).await).unwrap();
 
@@ -1958,8 +1952,38 @@ impl EventGraph {
             self.static_dag.apply_batch(b).unwrap();
         }
 
+        Ok(())
+    }
+
+    pub async fn static_insert(&self, ev: &Event) -> Result<()> {
+        self.static_persist(ev).await?;
         self.static_pub.notify(ev.clone()).await;
         Ok(())
+    }
+
+    /// Durably commit a verified static RLN event.
+    ///
+    /// The write order is intentional: blob first, static DAG second, RLN
+    /// state last. If a process crashes after the static event becomes
+    /// durable but before the identity tree or historical-root indexes are
+    /// updated, startup recovery can rebuild those RLN side tables from the
+    /// static DAG. Subscribers are notified only after the RLN apply step, so
+    /// applications observe the same post-state semantics as the receive path.
+    pub async fn commit_verified_static_event(
+        &self,
+        ev: &Event,
+        blob: &[u8],
+        rln_node: &rln::RLNNode,
+    ) -> Result<pallas::Base> {
+        if blob.is_empty() {
+            return Err(Error::Custom("static RLN event blob must not be empty".into()))
+        }
+
+        self.static_blob_store(&ev.id(), blob)?;
+        self.static_persist(ev).await?;
+        let root = self.apply_rln_static_event(ev, rln_node).await?;
+        self.static_pub.notify(ev.clone()).await;
+        Ok(root)
     }
 
     pub async fn static_fetch(&self, eid: &blake3::Hash) -> Result<Option<Event>> {
@@ -2674,9 +2698,7 @@ impl EventGraph {
             }
 
             let blob = rln::GENESIS_BLOB_GUARD.to_vec();
-            self.static_blob_store(&event.id(), &blob)?;
-            self.apply_rln_static_event(&event, &rln_node).await?;
-            self.static_insert(&event).await?;
+            self.commit_verified_static_event(&event, &blob, &rln_node).await?;
         }
 
         Ok(())

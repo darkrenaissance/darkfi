@@ -16,7 +16,10 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::{sync::Arc, time::UNIX_EPOCH};
+use std::{
+    sync::Arc,
+    time::{Duration, UNIX_EPOCH},
+};
 
 use darkfi_sdk::{
     crypto::{pasta_prelude::PrimeField, poseidon_hash},
@@ -40,7 +43,7 @@ use crate::{
         util::generate_genesis,
         Event, EventGraphConfig, EventGraphPtr, NULL_ID, NULL_PARENTS,
     },
-    system::sleep,
+    system::{sleep, timeout::timeout},
     zk::Proof,
 };
 
@@ -952,11 +955,16 @@ async fn concurrent_slashes(ex: Arc<Executor<'static>>) {
     let (ev0, bytes0) = build_slash(&nodes[0], ish, commitment).await;
     let (ev1, bytes1) = build_slash(&nodes[1], ish, commitment).await;
 
-    // Apply locally to each origin.
-    nodes[0].identity_state.write().await.slash(commitment).expect("s0");
-    nodes[1].identity_state.write().await.slash(commitment).expect("s1");
-    nodes[0].static_insert(&ev0).await.expect("ins0");
-    nodes[1].static_insert(&ev1).await.expect("ins1");
+    // Commit locally to each origin through the verified static-event path.
+    let slash_node = RLNNode::Slashing(commitment);
+    nodes[0]
+        .commit_verified_static_event(&ev0, &bytes0, &slash_node)
+        .await
+        .expect("commit slash 0");
+    nodes[1]
+        .commit_verified_static_event(&ev1, &bytes1, &slash_node)
+        .await
+        .expect("commit slash 1");
 
     // Broadcast concurrently.
     let f0 = nodes[0].static_broadcast(ev0, bytes0);
@@ -1007,14 +1015,11 @@ async fn static_sync_registration(ex: Arc<Executor<'static>>) {
     let content = serialize_async(&rln_node).await;
     let event = Event::new_static(content, &nodes[0]).await;
 
-    // Seed nodes 0..=3 the same way a real broadcast pipeline
-    // would: persist the blob, insert the static event, then
-    // apply the RLN node so identity_state, the SMT root, and
-    // historical-roots all stay consistent.
+    // Seed nodes 0..=3 the same way a real verified static event is
+    // committed: blob and event become durable before RLN side tables,
+    // and subscribers are notified after the RLN apply step.
     for eg in nodes.iter().take(4) {
-        eg.static_blob_store(&event.id(), &blob_bytes).unwrap();
-        eg.static_insert(&event).await.unwrap();
-        eg.apply_rln_static_event(&event, &rln_node).await.unwrap();
+        eg.commit_verified_static_event(&event, &blob_bytes, &rln_node).await.unwrap();
     }
 
     // Node 4 knows nothing. Verify the precondition.
@@ -1643,6 +1648,59 @@ fn rln_repeated_historical_root_keeps_original_interval() {
         assert!(eg.is_root_valid_at(&root_a, t0).unwrap());
         assert!(eg.is_root_valid_at(&root_a, t_duplicate).unwrap());
         assert!(!eg.is_root_valid_at(&root_a, t_next + 2 * drift + 1).unwrap());
+    })
+}
+
+#[test]
+fn rln_commit_verified_static_event_notifies_after_rln_apply() {
+    smol::block_on(async {
+        let eg = make_eg().await;
+        let sub = eg.static_subscribe().await;
+
+        let commitment = pallas::Base::from(0xc0de_0001_u64);
+        let node = RLNNode::Registration(commitment);
+        let ev = synth_static_event(1, 300_000, &node).await;
+        let blob = b"verified-static-blob".to_vec();
+
+        let root = eg.commit_verified_static_event(&ev, &blob, &node).await.unwrap();
+
+        let Ok(notified) = timeout(Duration::from_secs(1), sub.receive()).await else {
+            panic!("static event notification not received")
+        };
+        assert_eq!(notified.id(), ev.id());
+        assert!(eg.rln_contains(&commitment).await);
+        assert!(eg.is_root_valid_at(&root, ev.header.timestamp).unwrap());
+        assert!(eg.static_fetch(&ev.id()).await.unwrap().is_some());
+        assert_eq!(eg.static_blob_fetch(&ev.id()).unwrap().unwrap(), blob);
+    })
+}
+
+#[test]
+fn rln_rebuild_restores_static_event_committed_before_rln_apply() {
+    smol::block_on(async {
+        let eg = make_eg().await;
+
+        let commitment = pallas::Base::from(0xc0de_0002_u64);
+        let node = RLNNode::Registration(commitment);
+        let ev = synth_static_event(1, 300_001, &node).await;
+        let blob = b"crash-before-rln-apply".to_vec();
+
+        // Simulate a process crash after the blob and static event were made
+        // durable, but before `apply_rln_static_event` updated identity leaves
+        // and historical-root indexes.
+        eg.static_blob_store(&ev.id(), &blob).unwrap();
+        eg.static_insert(&ev).await.unwrap();
+        assert!(!eg.rln_contains(&commitment).await);
+        assert_eq!(eg.rln_historical_roots_ordered.len(), 0);
+
+        eg.rebuild_historical_roots_if_needed().await.unwrap();
+
+        assert!(eg.rln_contains(&commitment).await);
+        assert_eq!(eg.static_blob_fetch(&ev.id()).unwrap().unwrap(), blob);
+        assert_eq!(eg.rln_historical_roots_ordered.len(), 1);
+        assert_eq!(eg.rln_historical_roots_by_value.len(), 1);
+        let state = eg.identity_state.read().await;
+        assert!(state.is_known_root(&state.root()));
     })
 }
 
