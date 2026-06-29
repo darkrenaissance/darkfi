@@ -63,6 +63,38 @@ use super::{
 };
 use crate::crypto::bcrypt::bcrypt_hash_password;
 
+#[derive(Debug, PartialEq, Eq)]
+enum TopicRequest<'a> {
+    Get { channel: &'a str },
+    Set { channel: &'a str, topic: &'a str },
+}
+
+/// Parse a TOPIC command without accepting ambiguous topic bodies.
+fn parse_topic_request(args: &str) -> Option<TopicRequest<'_>> {
+    let args = args.trim_start_matches(|c: char| c.is_ascii_whitespace());
+    if args.is_empty() {
+        return None
+    }
+
+    let (channel, rest) = match args.find(|c: char| c.is_ascii_whitespace()) {
+        Some(idx) => {
+            (&args[..idx], args[idx..].trim_start_matches(|c: char| c.is_ascii_whitespace()))
+        }
+        None => (args, ""),
+    };
+
+    if channel.is_empty() {
+        return None
+    }
+
+    if rest.is_empty() {
+        return Some(TopicRequest::Get { channel })
+    }
+
+    let topic = rest.strip_prefix(':')?;
+    Some(TopicRequest::Set { channel, topic })
+}
+
 impl Client {
     /// `ADMIN [<server>]`
     ///
@@ -695,9 +727,7 @@ impl Client {
         }
 
         let nick = self.nickname.read().await.to_string();
-        let mut tokens = args.split_ascii_whitespace();
-
-        let Some(channel) = tokens.next() else {
+        let Some(request) = parse_topic_request(args) else {
             self.penalty.fetch_add(1, SeqCst);
             return Ok(vec![ReplyType::Server((
                 ERR_NEEDMOREPARAMS,
@@ -705,37 +735,42 @@ impl Client {
             ))])
         };
 
-        if !self.server.channels.read().await.contains_key(channel) {
-            return Ok(vec![ReplyType::Server((
-                ERR_NOSUCHCHANNEL,
-                format!("{nick} {channel} :No such channel"),
-            ))])
-        }
+        match request {
+            TopicRequest::Get { channel } => {
+                let channels = self.server.channels.read().await;
+                let Some(channel_state) = channels.get(channel) else {
+                    return Ok(vec![ReplyType::Server((
+                        ERR_NOSUCHCHANNEL,
+                        format!("{nick} {channel} :No such channel"),
+                    ))])
+                };
 
-        // If there's a topic, we'll set it, otherwise return the set topic.
-        let Some(topic) = tokens.next() else {
-            let topic = self.server.channels.read().await.get(channel).unwrap().topic.clone();
-            if topic.is_empty() {
-                return Ok(vec![ReplyType::Server((
-                    RPL_NOTOPIC,
-                    format!("{nick} {channel} :No topic is set"),
-                ))])
-            } else {
-                return Ok(vec![ReplyType::Server((
-                    RPL_TOPIC,
-                    format!("{nick} {channel} :{topic}"),
-                ))])
+                if channel_state.topic.is_empty() {
+                    Ok(vec![ReplyType::Server((
+                        RPL_NOTOPIC,
+                        format!("{nick} {channel} :No topic is set"),
+                    ))])
+                } else {
+                    Ok(vec![ReplyType::Server((
+                        RPL_TOPIC,
+                        format!("{nick} {channel} :{}", channel_state.topic),
+                    ))])
+                }
             }
-        };
+            TopicRequest::Set { channel, topic } => {
+                let mut channels = self.server.channels.write().await;
+                let Some(channel_state) = channels.get_mut(channel) else {
+                    return Ok(vec![ReplyType::Server((
+                        ERR_NOSUCHCHANNEL,
+                        format!("{nick} {channel} :No such channel"),
+                    ))])
+                };
 
-        // Set the new topic
-        self.server.channels.write().await.get_mut(channel).unwrap().topic =
-            topic.strip_prefix(':').unwrap().to_string();
+                channel_state.topic = topic.to_string();
 
-        // Send reply
-        let replies = vec![ReplyType::Client((nick, format!("TOPIC {channel} {topic}")))];
-
-        Ok(replies)
+                Ok(vec![ReplyType::Client((nick, format!("TOPIC {channel} :{topic}")))])
+            }
+        }
     }
 
     /// `USER <user> <mode> <unused> <realname>`
@@ -980,5 +1015,36 @@ impl Client {
         }
 
         Ok(replies)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{parse_topic_request, TopicRequest};
+
+    #[test]
+    fn parse_topic_request_gets_current_topic() {
+        assert_eq!(parse_topic_request("#chan"), Some(TopicRequest::Get { channel: "#chan" }));
+    }
+
+    #[test]
+    fn parse_topic_request_sets_colon_prefixed_topic() {
+        assert_eq!(
+            parse_topic_request("#chan :hello world"),
+            Some(TopicRequest::Set { channel: "#chan", topic: "hello world" })
+        );
+    }
+
+    #[test]
+    fn parse_topic_request_allows_empty_topic() {
+        assert_eq!(
+            parse_topic_request("#chan :"),
+            Some(TopicRequest::Set { channel: "#chan", topic: "" })
+        );
+    }
+
+    #[test]
+    fn parse_topic_request_rejects_bare_topic_body() {
+        assert_eq!(parse_topic_request("#chan value"), None);
     }
 }
