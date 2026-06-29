@@ -546,14 +546,14 @@ impl Client {
             if !args_queue.is_empty() {
                 for _ in 0..args_queue.len() {
                     let privmsg = args_queue.pop_front().unwrap();
-                    pending_events.push(self.privmsg_to_event(privmsg).await);
+                    pending_events.push(self.privmsg_to_event(privmsg).await?);
                 }
                 return Ok(Some(pending_events))
             }
 
             // If queue is empty, create an event and return it
             let privmsg = self.args_to_privmsg(args).await;
-            let event = self.privmsg_to_event(privmsg).await;
+            let event = self.privmsg_to_event(privmsg).await?;
 
             return Ok(Some(vec![event]))
         }
@@ -574,7 +574,7 @@ impl Client {
     }
 
     // Internal helper function that creates an Event from PRIVMSG arguments
-    async fn privmsg_to_event(&self, mut privmsg: Privmsg) -> Event {
+    async fn privmsg_to_event(&self, mut privmsg: Privmsg) -> Result<Event> {
         // Encrypt the Privmsg if an encryption method is available.
         self.server.try_encrypt(&mut privmsg).await;
 

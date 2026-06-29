@@ -1929,8 +1929,12 @@ impl EventGraph {
     pub(crate) async fn get_next_layer_with_parents(
         &self,
         dag_ts: &u64,
-    ) -> (u64, [blake3::Hash; N_EVENT_PARENTS]) {
-        select_parents_from_tips(&self.dag_store.read().await.get_slot(dag_ts).unwrap().tips)
+    ) -> Result<(u64, [blake3::Hash; N_EVENT_PARENTS])> {
+        let store = self.dag_store.read().await;
+        let slot = store
+            .get_slot(dag_ts)
+            .ok_or_else(|| Error::Custom(format!("event graph DAG slot {dag_ts} not found")))?;
+        Ok(select_parents_from_tips(&slot.tips))
     }
 
     pub(crate) async fn get_next_layer_with_parents_static(
