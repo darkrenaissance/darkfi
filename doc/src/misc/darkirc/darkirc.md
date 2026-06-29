@@ -359,9 +359,24 @@ Note that your nick is temporary. If you want to claim a nick, you will need to
 
 ## Troubleshooting
 
-If you encounter connectivity issues refer to 
+If you encounter connectivity issues refer to
 [Network troubleshooting](../network-troubleshooting.md)
 for further troubleshooting resources.
+
+## Operator Security Notes
+
+DarkIRC's datastore contains both public event graph state and local account
+secrets. Back up the whole `--datastore` directory before recovery work, and
+export important local accounts with `NickServ INFO <account_name>` before
+discarding a store. A clean event graph resync can recover public DAG state from
+peers, but it cannot recover nullifiers and trapdoors that were only stored
+locally.
+
+Do not edit RLN counters or static DAG state by hand. DarkIRC persists the next
+RLN `message_id` before proof creation so a crash cannot roll the counter back
+and self-slash the account on restart. The static DAG is also the source of
+truth for network registrations and slashes. For the full set of invariants, see
+[Event Graph Security Invariants](../event_graph/security_invariants.md).
 
 ## Hosting Instances
 
