@@ -44,7 +44,7 @@ use super::{
     server::{IrcServer, RlnMessageReservation, MAX_MSG_LEN},
     NickServ, SERVER_NAME,
 };
-use crate::{crypto::rln::RLN2_SIGNAL_ZKBIN, Privmsg};
+use crate::Privmsg;
 
 const PENALTY_LIMIT: usize = 5;
 const MAX_IRC_LINE_LEN: usize = 1024;
@@ -688,7 +688,7 @@ mod tests {
     use super::{
         enqueue_pending_privmsg, read_bounded_line, MAX_IRC_LINE_LEN, MAX_PENDING_PRIVMSGS,
     };
-    use crate::irc::Privmsg;
+    use crate::Privmsg;
 
     #[test]
     fn read_bounded_line_accepts_line_within_limit() {
