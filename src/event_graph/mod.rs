@@ -648,6 +648,20 @@ pub struct EventGraph {
     rln_app_id: rln::RlnAppId,
 }
 
+fn sort_event_indices(events: &[Event], indices: &mut [usize]) {
+    indices.sort_by(|a, b| {
+        let a_event = &events[*a];
+        let b_event = &events[*b];
+        let a_id = a_event.id();
+        let b_id = b_event.id();
+        a_event
+            .header
+            .layer
+            .cmp(&b_event.header.layer)
+            .then_with(|| a_id.as_bytes().cmp(b_id.as_bytes()))
+    });
+}
+
 impl EventGraph {
     /// Create a new Event Graph.
     pub async fn new(
@@ -1714,13 +1728,19 @@ impl EventGraph {
             (already_have, structurally_valid)
         };
 
+        let mut candidates: Vec<usize> = (0..events.len()).collect();
+        sort_event_indices(events, &mut candidates);
+
         let mut accepted: Vec<usize> = Vec::with_capacity(events.len());
-        for (i, ev) in events.iter().enumerate() {
+        let mut accepted_body_ids = HashSet::with_capacity(events.len());
+        for i in candidates {
+            let ev = &events[i];
+            let eid = ev.id();
             if !structurally_valid[i] {
                 error!(
                     target: "event_graph::dag_insert",
                     "[DAG_INSERT] event {} failed structural validation before RLN verification; skipping",
-                    ev.id(),
+                    eid,
                 );
                 continue
             }
@@ -1731,6 +1751,7 @@ impl EventGraph {
             // (epoch, internal_nullifier, x, y) tuple.
             if already_have[i] {
                 accepted.push(i);
+                accepted_body_ids.insert(eid);
                 continue
             }
             // Genesis-shaped events have no blob and no proof - they're
@@ -1739,29 +1760,45 @@ impl EventGraph {
                 accepted.push(i);
                 continue
             }
+
+            if !self.parents_have_bodies(ev, dag_ts, &accepted_body_ids).await? {
+                error!(
+                    target: "event_graph::dag_insert",
+                    "[DAG_INSERT] event {} has a missing parent body; skipping before RLN verification",
+                    eid,
+                );
+                continue
+            }
+
             let blob = blobs.get(i).cloned().unwrap_or_default();
             if blob.is_empty() {
                 if require_blobs {
                     error!(
                         target: "event_graph::dag_insert",
-                        "[DAG_INSERT] sync event {} arrived without an RLN blob; rejecting. \
-                         Every non-genesis rotating-DAG event must carry a blob.",
-                        ev.id(),
+                        concat!(
+                            "[DAG_INSERT] sync event {} arrived without an RLN blob; rejecting. ",
+                            "Every non-genesis rotating-DAG event must carry a blob.",
+                        ),
+                        eid,
                     );
                     continue
                 }
                 // Lenient path: caller pre-verified. Accept the event
                 // structurally without running the RLN verifier on it.
                 accepted.push(i);
+                accepted_body_ids.insert(eid);
                 continue
             }
             match self.rln_verify_signal(ev, &blob).await {
-                rln::SignalCheck::Accepted => accepted.push(i),
+                rln::SignalCheck::Accepted => {
+                    accepted.push(i);
+                    accepted_body_ids.insert(eid);
+                }
                 rln::SignalCheck::Rejected => {
                     error!(
                         target: "event_graph::dag_insert",
                         "[DAG_INSERT] sync event {} failed RLN re-verification; skipping",
-                        ev.id(),
+                        eid,
                     );
                 }
                 rln::SignalCheck::Slashable(_) => {
@@ -1774,7 +1811,7 @@ impl EventGraph {
                     error!(
                         target: "event_graph::dag_insert",
                         "[DAG_INSERT] sync event {} is slashable (slot reuse); skipping",
-                        ev.id(),
+                        eid,
                     );
                 }
             }
@@ -1784,16 +1821,22 @@ impl EventGraph {
         let mut store = self.dag_store.write().await;
         let slot = store.get_slot_mut(&dag_ts).ok_or(Error::DagSyncFailed)?;
 
-        let mut ids = Vec::with_capacity(accepted.len());
-        let mut overlay = SledTreeOverlay::new(&slot.main_tree);
+        let mut accepted = accepted;
+        sort_event_indices(events, &mut accepted);
 
-        for &i in &accepted {
+        let mut ids = Vec::with_capacity(accepted.len());
+        let mut committed_indices = Vec::with_capacity(accepted.len());
+        let mut overlay = SledTreeOverlay::new(&slot.main_tree);
+        let mut staged_body_ids = HashSet::with_capacity(accepted.len());
+
+        'commit: for &i in &accepted {
             let ev = &events[i];
             let eid = ev.id();
             if ev.header.parents == NULL_PARENTS {
                 continue
             }
             if slot.main_tree.contains_key(eid.as_bytes())? {
+                staged_body_ids.insert(eid);
                 continue
             }
             if !slot.header_tree.contains_key(eid.as_bytes())? {
@@ -1802,8 +1845,20 @@ impl EventGraph {
             if !ev.dag_validate(&slot.header_tree, &self.config, dag_ts).await? {
                 return Err(Error::EventIsInvalid)
             }
+            for pid in ev.header.parents.iter().filter(|pid| **pid != NULL_ID) {
+                if !staged_body_ids.contains(pid) && !slot.main_tree.contains_key(pid.as_bytes())? {
+                    error!(
+                        target: "event_graph::dag_insert",
+                        "[DAG_INSERT] event {} has parent header {} but no committed parent body; skipping",
+                        eid, pid,
+                    );
+                    continue 'commit
+                }
+            }
+
             let se = serialize_async(ev).await;
             overlay.insert(eid.as_bytes(), &se)?;
+            staged_body_ids.insert(eid);
             if self.replay_mode {
                 replayer_log(&self.datastore, "insert".into(), se)?;
             }
@@ -1817,6 +1872,7 @@ impl EventGraph {
             }
 
             ids.push(eid);
+            committed_indices.push(i);
         }
 
         if let Some(b) = overlay.aggregate() {
@@ -1825,7 +1881,7 @@ impl EventGraph {
             return Ok(vec![])
         }
 
-        for &i in &accepted {
+        for &i in &committed_indices {
             let ev = &events[i];
             let eid = ev.id();
             if ev.header.parents == NULL_PARENTS {
@@ -1847,6 +1903,24 @@ impl EventGraph {
         }
 
         Ok(ids)
+    }
+
+    async fn parents_have_bodies(
+        &self,
+        ev: &Event,
+        dag_ts: u64,
+        accepted_body_ids: &HashSet<blake3::Hash>,
+    ) -> Result<bool> {
+        let store = self.dag_store.read().await;
+        let Some(slot) = store.get_slot(&dag_ts) else { return Ok(false) };
+
+        for pid in ev.header.parents.iter().filter(|pid| **pid != NULL_ID) {
+            if !accepted_body_ids.contains(pid) && !slot.main_tree.contains_key(pid.as_bytes())? {
+                return Ok(false)
+            }
+        }
+
+        Ok(true)
     }
 
     pub async fn header_dag_insert(&self, headers: Vec<Header>, dag_name: &str) -> Result<()> {

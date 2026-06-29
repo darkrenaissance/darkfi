@@ -649,11 +649,20 @@ impl ProtocolEventGraph {
             return false
         }
 
-        // dag_insert_with_blobs verifies each event's blob (when
-        // present) and skips events that fail RLN re-verification.
-        // This closes sync-time injection via fetch_parents.
+        // dag_insert_with_blobs verifies each event's blob and skips events
+        // that fail RLN re-verification or parent-body closure. Parent fetch is
+        // strict: if any fetched parent body failed to commit, the original
+        // child must not proceed to RLN verification.
         if self.event_graph.dag_insert_with_blobs(&events, &blobs, dag_name).await.is_err() {
             return false
+        }
+
+        let store = self.event_graph.dag_store.read().await;
+        let Some(slot) = store.get_slot(&dag_ts) else { return false };
+        for event in &events {
+            if !slot.main_tree.contains_key(event.id().as_bytes()).unwrap_or(false) {
+                return false
+            }
         }
 
         true
