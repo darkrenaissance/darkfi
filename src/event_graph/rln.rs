@@ -442,9 +442,16 @@ impl IdentityState {
         Ok(commitments)
     }
 
+    /// Check whether `root` matches the current SMT root.
+    pub fn is_current_root(&self, root: &pallas::Base) -> bool {
+        self.smt.root() == *root
+    }
+
     /// Check whether `root` matches the current root or any recent
-    /// historical root. Used during signal proof verification to
-    /// tolerate propagation delays.
+    /// historical root kept in the count-based cache.
+    ///
+    /// This is only an introspection/cache helper. Verifier paths must
+    /// still apply timestamp validity to non-current roots.
     pub fn is_known_root(&self, root: &pallas::Base) -> bool {
         self.recent_roots.contains(root)
     }
