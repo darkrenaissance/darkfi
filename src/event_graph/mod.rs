@@ -608,11 +608,13 @@ pub struct EventGraph {
     /// rationale and [`Self::is_root_valid_at`] for how this is
     /// consulted during signal verification.
     pub(crate) rln_historical_roots_ordered: sled::Tree,
-    /// Reverse index: `root:32 -> (layer:u64_be, event_id:32) = 40 bytes`.
+    /// Reverse index: `(root:32, ordered_key:40) -> []`.
     ///
-    /// Lets us answer "is this root historical?" with a single
-    /// `Tree::get(root)`, then chase the returned key into
-    /// `rln_historical_roots_ordered` to get the timestamp interval.
+    /// A root can appear more than once when static events are no-ops
+    /// (duplicate registrations, idempotent slashes), so the value
+    /// index stores every canonical occurrence rather than a single
+    /// root-to-key mapping. [`Self::is_root_valid_at`] scans this
+    /// prefix and accepts if any interval for the root matches.
     pub(crate) rln_historical_roots_by_value: sled::Tree,
     pub(crate) static_dag: sled::Tree,
     /// Side-table mapping `event_id -> original RLN blob` for static
@@ -2064,7 +2066,8 @@ impl EventGraph {
         let key = encode_historical_root_key(ev.header.layer, &ev.id());
         let value = encode_historical_root_value(&new_root, ev.header.timestamp);
         self.rln_historical_roots_ordered.insert(key, value.as_slice())?;
-        self.rln_historical_roots_by_value.insert(new_root.to_repr(), key.as_slice())?;
+        let by_value_key = encode_historical_root_by_value_key(&new_root, &key);
+        self.rln_historical_roots_by_value.insert(by_value_key, &[])?;
 
         Ok(new_root)
     }
@@ -2090,12 +2093,12 @@ impl EventGraph {
     ///   a registration that hadn't fully propagated yet. We tolerate
     ///   up to DRIFT of backward skew.
     ///
-    /// The check uses `rln_historical_roots_by_value` to find the
-    /// canonical position of `root`, then `rln_historical_roots_ordered`
-    /// to bracket the time interval during which `root` was live.
-    /// The interval starts at the timestamp of the event that
-    /// produced `root` and ends just before the next event's
-    /// timestamp (or `u64::MAX` if `root` is currently live).
+    /// The check uses `rln_historical_roots_by_value` to find every
+    /// canonical position where `root` appears, then
+    /// `rln_historical_roots_ordered` to bracket each interval during
+    /// which `root` was live. Each interval starts at the timestamp
+    /// of an event that produced `root` and ends just before the next
+    /// event timestamp (or `u64::MAX` if `root` is currently live).
     ///
     /// This subsumes the old `recent_roots` window as a special case
     /// (live verification = signal_timestamp ~= now). The in-memory
@@ -2103,53 +2106,44 @@ impl EventGraph {
     /// path for the live-broadcast hot loop; this method is consulted
     /// when the cache misses.
     pub fn is_root_valid_at(&self, root: &pallas::Base, signal_timestamp: u64) -> Result<bool> {
-        // Reverse lookup: where in the canonical sequence is `root`?
-        let Some(key_bytes) = self.rln_historical_roots_by_value.get(root.to_repr())? else {
-            return Ok(false)
-        };
-
-        // Read the entry that produced this root.
-        let Some(value_bytes) = self.rln_historical_roots_ordered.get(&key_bytes)? else {
-            // Inconsistency between the two tables (shouldn't happen
-            // under normal operation; might happen if a write was
-            // partially applied during a crash). Treat as not-found.
-            return Ok(false)
-        };
-        let (recorded_root, root_timestamp) = decode_historical_root_value(&value_bytes)?;
-        if &recorded_root != root {
-            // Same key collision - should be impossible because the
-            // by_value index is keyed on the root itself, but defend
-            // against future code changes.
-            return Ok(false)
-        }
-
-        // The interval during which `root` was live ends at the
-        // timestamp of the next event in canonical order, or
-        // u64::MAX if `root` is the current live root.
-        //
-        // We need the strictly-greater key. sled's range-from-exclusive
-        // pattern is range((Excluded(key), Unbounded)).next().
-        let next_timestamp: u64 = {
-            use std::ops::Bound::{Excluded, Unbounded};
-            match self
-                .rln_historical_roots_ordered
-                .range::<&[u8], _>((Excluded(key_bytes.as_ref()), Unbounded))
-                .next()
-            {
-                Some(Ok((_, val))) => decode_historical_root_value(&val)?.1,
-                Some(Err(_)) | None => u64::MAX,
-            }
-        };
-
-        // Drift window. Reuse EVENT_TIME_DRIFT for consistency with
-        // event-graph timestamp validation.
         let drift = EVENT_TIME_DRIFT;
         let lo = signal_timestamp.saturating_sub(drift);
         let hi = signal_timestamp.saturating_add(drift);
 
-        // `root` was live during [root_timestamp, next_timestamp).
-        // Acceptable iff this interval intersects [lo, hi].
-        Ok(root_timestamp <= hi && next_timestamp > lo)
+        for item in self.rln_historical_roots_by_value.scan_prefix(root.to_repr()) {
+            let (by_value_key, _) = item?;
+            if by_value_key.len() != 72 {
+                continue
+            }
+            let ordered_key = &by_value_key[32..];
+
+            let Some(value_bytes) = self.rln_historical_roots_ordered.get(ordered_key)? else {
+                continue
+            };
+            let (recorded_root, root_timestamp) = decode_historical_root_value(&value_bytes)?;
+            if &recorded_root != root {
+                continue
+            }
+
+            let next_timestamp: u64 = {
+                use std::ops::Bound::{Excluded, Unbounded};
+                match self
+                    .rln_historical_roots_ordered
+                    .range::<&[u8], _>((Excluded(ordered_key), Unbounded))
+                    .next()
+                {
+                    Some(Ok((_, val))) => decode_historical_root_value(&val)?.1,
+                    Some(Err(e)) => return Err(e.into()),
+                    None => u64::MAX,
+                }
+            };
+
+            if root_timestamp <= hi && next_timestamp > lo {
+                return Ok(true)
+            }
+        }
+
+        Ok(false)
     }
 }
 
@@ -2164,6 +2158,13 @@ fn encode_historical_root_value(root: &pallas::Base, timestamp: u64) -> [u8; 40]
     let mut buf = [0u8; 40];
     buf[..32].copy_from_slice(&root.to_repr());
     buf[32..].copy_from_slice(&timestamp.to_be_bytes());
+    buf
+}
+
+fn encode_historical_root_by_value_key(root: &pallas::Base, ordered_key: &[u8; 40]) -> [u8; 72] {
+    let mut buf = [0u8; 72];
+    buf[..32].copy_from_slice(&root.to_repr());
+    buf[32..].copy_from_slice(ordered_key);
     buf
 }
 
