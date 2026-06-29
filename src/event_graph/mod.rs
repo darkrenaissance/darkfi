@@ -815,19 +815,29 @@ impl EventGraph {
         });
 
         let mut expected_commitments = BTreeSet::new();
+        let mut expected_slashed = BTreeSet::new();
         for (_, node) in &events {
             match node {
                 rln::RLNNode::Registration(commitment) => {
-                    expected_commitments.insert(commitment.to_repr());
+                    let repr = commitment.to_repr();
+                    if !expected_slashed.contains(&repr) {
+                        expected_commitments.insert(repr);
+                    }
                 }
                 rln::RLNNode::Slashing(commitment) => {
-                    expected_commitments.remove(&commitment.to_repr());
+                    let repr = commitment.to_repr();
+                    expected_slashed.insert(repr);
+                    expected_commitments.remove(&repr);
                 }
             }
         }
 
         let expected_leaves = expected_commitments.len();
-        let actual_commitments = self.identity_state.read().await.commitment_reprs();
+        let expected_slashed_count = expected_slashed.len();
+        let (actual_commitments, actual_slashed) = {
+            let state = self.identity_state.read().await;
+            (state.commitment_reprs(), state.slashed_commitment_reprs())
+        };
         let (actual_leaves, leaves_consistent) = match actual_commitments {
             Ok(commitments) => {
                 let len = commitments.len();
@@ -842,20 +852,35 @@ impl EventGraph {
             }
         };
 
+        let (actual_slashed_count, slashed_consistent) = match actual_slashed {
+            Ok(commitments) => {
+                let len = commitments.len();
+                (len, commitments == expected_slashed)
+            }
+            Err(e) => {
+                warn!(
+                    target: "event_graph::new",
+                    "[EVENTGRAPH] RLN slashed identity audit failed: {e}; rebuilding",
+                );
+                (0, false)
+            }
+        };
+
         let static_count = events.len();
         let historical_roots_consistent = self.historical_roots_index_consistent(static_count)?;
         let recorded_count = self.rln_historical_roots_ordered.len();
         let by_value_count = self.rln_historical_roots_by_value.len();
-        let consistent = historical_roots_consistent && leaves_consistent;
+        let consistent = historical_roots_consistent && leaves_consistent && slashed_consistent;
 
         info!(
             target: "event_graph::new",
             concat!(
                 "[EVENTGRAPH] RLN state audit: static_count={} recorded_count={} ",
-                "by_value_count={} actual_leaves={} expected_leaves={} consistent={}",
+                "by_value_count={} actual_leaves={} expected_leaves={} actual_slashed={} ",
+                "expected_slashed={} consistent={}",
             ),
             static_count, recorded_count, by_value_count, actual_leaves, expected_leaves,
-            consistent,
+            actual_slashed_count, expected_slashed_count, consistent,
         );
 
         if consistent {
@@ -866,9 +891,10 @@ impl EventGraph {
             target: "event_graph::new",
             concat!(
                 "[EVENTGRAPH] Rebuilding RLN state: {} static events, {} recorded roots, ",
-                "{} by-value roots, {} leaves (expected {})",
+                "{} by-value roots, {} leaves (expected {}), {} slashed (expected {})",
             ),
             static_count, recorded_count, by_value_count, actual_leaves, expected_leaves,
+            actual_slashed_count, expected_slashed_count,
         );
 
         self.rln_historical_roots_ordered.clear()?;
@@ -2058,9 +2084,9 @@ impl EventGraph {
         Ok(())
     }
 
-    async fn static_persist(&self, ev: &Event) -> Result<()> {
+    fn static_persist_serialized(&self, ev_id: &blake3::Hash, ev_bytes: &[u8]) -> Result<()> {
         let mut ov = SledTreeOverlay::new(&self.static_dag);
-        ov.insert(ev.id().as_bytes(), &serialize_async(ev).await)?;
+        ov.insert(ev_id.as_bytes(), ev_bytes)?;
 
         if let Some(b) = ov.aggregate() {
             self.static_dag.apply_batch(b)?;
@@ -2071,7 +2097,8 @@ impl EventGraph {
 
     #[cfg(test)]
     pub(crate) async fn static_insert(&self, ev: &Event) -> Result<()> {
-        self.static_persist(ev).await?;
+        let ev_bytes = serialize_async(ev).await;
+        self.static_persist_serialized(&ev.id(), &ev_bytes)?;
         self.static_pub.notify(ev.clone()).await;
         Ok(())
     }
@@ -2094,9 +2121,16 @@ impl EventGraph {
             return Err(Error::Custom("static RLN event blob must not be empty".into()))
         }
 
-        self.static_blob_store(&ev.id(), blob)?;
-        self.static_persist(ev).await?;
-        let root = self.apply_rln_static_event(ev, rln_node).await?;
+        let ev_id = ev.id();
+        let ev_bytes = serialize_async(ev).await;
+        let mut state = self.identity_state.write().await;
+        Self::ensure_rln_static_event_transition(&state, rln_node)?;
+
+        self.static_blob_store(&ev_id, blob)?;
+        self.static_persist_serialized(&ev_id, &ev_bytes)?;
+        let root = self.apply_rln_static_event_locked(ev, rln_node, &mut state)?;
+        drop(state);
+
         self.static_pub.notify(ev.clone()).await;
         Ok(root)
     }
@@ -2261,21 +2295,46 @@ impl EventGraph {
         node: &rln::RLNNode,
     ) -> Result<pallas::Base> {
         let mut state = self.identity_state.write().await;
+        self.apply_rln_static_event_locked(ev, node, &mut state)
+    }
 
+    fn ensure_rln_static_event_transition(
+        state: &rln::IdentityState,
+        node: &rln::RLNNode,
+    ) -> Result<()> {
         match node {
             rln::RLNNode::Registration(commitment) => {
-                // Soft-fail on duplicate (race with another peer).
+                if state.contains(commitment) || state.is_slashed(commitment) {
+                    return Err(Error::Custom(
+                        "static RLN registration is duplicate or slashed".into(),
+                    ))
+                }
+            }
+            rln::RLNNode::Slashing(_) => {}
+        }
+
+        Ok(())
+    }
+
+    fn apply_rln_static_event_locked(
+        &self,
+        ev: &Event,
+        node: &rln::RLNNode,
+        state: &mut rln::IdentityState,
+    ) -> Result<pallas::Base> {
+        match node {
+            rln::RLNNode::Registration(commitment) => {
+                // Soft-fail on duplicate during internal replay/rebuild.
                 let _ = state.register(*commitment);
             }
             rln::RLNNode::Slashing(commitment) => {
-                // Idempotent - slashing a non-present identity is
-                // a no-op.
+                // Slashes are durable evidence. Replayed slashes keep the
+                // tombstone and record another static root entry.
                 let _ = state.slash(*commitment);
             }
         }
 
         let new_root = state.root();
-        drop(state);
 
         // Record the root in both side-tables. We do this even if
         // the SMT mutation was a no-op (duplicate register, slash of
@@ -2740,7 +2799,8 @@ impl EventGraph {
                 if blob == rln::GENESIS_BLOB_GUARD {
                     let repr = commitment.to_repr();
                     if self.pregenerated_identity_commitment_reprs.contains(&repr) {
-                        if self.identity_state.read().await.contains(commitment) {
+                        let state = self.identity_state.read().await;
+                        if state.contains(commitment) || state.is_slashed(commitment) {
                             return StaticEventCheck::Rejected
                         }
                         return StaticEventCheck::AcceptedRegistration(*commitment)
@@ -2851,8 +2911,11 @@ impl EventGraph {
         }
 
         for commitment in self.pregenerated_identity_commitments.iter() {
-            if self.identity_state.read().await.contains(commitment) {
-                continue
+            {
+                let state = self.identity_state.read().await;
+                if state.contains(commitment) || state.is_slashed(commitment) {
+                    continue
+                }
             }
 
             let rln_node = rln::RLNNode::Registration(*commitment);

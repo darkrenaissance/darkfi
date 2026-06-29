@@ -337,6 +337,7 @@ pub enum StaticEventCheck {
 pub struct IdentityState {
     smt: SmtMemoryFp,
     leaves: sled::Tree,
+    slashed: sled::Tree,
     recent_roots: VecDeque<pallas::Base>,
 }
 
@@ -347,6 +348,7 @@ impl IdentityState {
         let mut smt = SmtMemoryFp::new(store, hasher, &EMPTY_NODES_FP);
 
         let leaves = sled_db.open_tree("rln-identity-leaves")?;
+        let slashed = sled_db.open_tree("rln-slashed-identity-leaves")?;
 
         let mut batch = vec![];
         for item in leaves.iter() {
@@ -356,6 +358,9 @@ impl IdentityState {
             }
             let mut repr = [0u8; 32];
             repr.copy_from_slice(&val);
+            if slashed.contains_key(repr)? {
+                continue
+            }
             if let Some(c) = pallas::Base::from_repr(repr).into() {
                 batch.push((c, c));
             }
@@ -372,7 +377,7 @@ impl IdentityState {
         let mut recent_roots = VecDeque::with_capacity(ROOT_HISTORY_SIZE);
         recent_roots.push_back(smt.root());
 
-        Ok(Self { smt, leaves, recent_roots })
+        Ok(Self { smt, leaves, slashed, recent_roots })
     }
 
     /// Returns true if the commitment is already a leaf in the tree.
@@ -380,14 +385,21 @@ impl IdentityState {
         self.leaves.contains_key(commitment.to_repr()).unwrap_or(false)
     }
 
+    /// Returns true if the commitment has been permanently slashed.
+    pub fn is_slashed(&self, commitment: &pallas::Base) -> bool {
+        self.slashed.contains_key(commitment.to_repr()).unwrap_or(false)
+    }
+
     /// Register a new identity.
     ///
-    /// Returns `Err(Error::DuplicateIdentity)` if the commitment is
-    /// already in the tree. Callers should treat this as a soft
-    /// failure (drop the message), not as protocol-level malice.
-    /// Concurrent honest registrations of the same commitment can
-    /// race during P2P propagation.
+    /// Returns an error if the commitment is already active or has been
+    /// slashed before. Callers should treat this as a soft failure (drop the
+    /// message), not as protocol-level malice. Concurrent honest registrations
+    /// of the same commitment can race during P2P propagation.
     pub fn register(&mut self, commitment: pallas::Base) -> Result<()> {
+        if self.is_slashed(&commitment) {
+            return Err(Error::Custom("RLN: slashed identity commitment".into()))
+        }
         if self.contains(&commitment) {
             return Err(Error::Custom("RLN: duplicate identity commitment".into()))
         }
@@ -397,15 +409,17 @@ impl IdentityState {
         Ok(())
     }
 
-    /// Slash (remove) an identity. Idempotent: removing a
-    /// non-present commitment is a no-op rather than an error,
-    /// because the same slash proof may legitimately arrive twice
-    /// via different propagation paths.
+    /// Slash (remove) an identity and permanently tombstone its commitment.
+    ///
+    /// Removing a non-present commitment remains idempotent: the slash is
+    /// still recorded as a tombstone, but the SMT root is unchanged.
     pub fn slash(&mut self, commitment: pallas::Base) -> Result<()> {
+        let repr = commitment.to_repr();
+        self.slashed.insert(repr, repr.as_ref())?;
         if !self.contains(&commitment) {
             return Ok(())
         }
-        self.leaves.remove(commitment.to_repr())?;
+        self.leaves.remove(repr)?;
         self.smt.remove_leaves(vec![(commitment, commitment)])?;
         self.push_root();
         Ok(())
@@ -434,6 +448,28 @@ impl IdentityState {
             }
             if key.as_ref() != val.as_ref() {
                 return Err(Error::Custom("RLN identity leaf key/value mismatch".into()))
+            }
+            let mut repr = [0u8; 32];
+            repr.copy_from_slice(&val);
+            commitments.insert(repr);
+        }
+        Ok(commitments)
+    }
+
+    /// Return the commitments persisted in the slashed-identity tombstone tree.
+    pub(crate) fn slashed_commitment_reprs(&self) -> Result<BTreeSet<[u8; 32]>> {
+        let mut commitments = BTreeSet::new();
+        for item in self.slashed.iter() {
+            let (key, val) = item?;
+            if key.len() != 32 || val.len() != 32 {
+                return Err(Error::Custom(format!(
+                    "RLN slashed identity key/value must be 32 bytes, got {}/{}",
+                    key.len(),
+                    val.len()
+                )))
+            }
+            if key.as_ref() != val.as_ref() {
+                return Err(Error::Custom("RLN slashed identity key/value mismatch".into()))
             }
             let mut repr = [0u8; 32];
             repr.copy_from_slice(&val);
@@ -472,8 +508,9 @@ impl IdentityState {
     /// empty state, in preparation for replaying the canonical
     /// static-DAG history.
     pub fn clear_for_rebuild(&mut self) -> Result<()> {
-        // Drop every leaf from sled.
+        // Drop every derived identity state from sled.
         self.leaves.clear()?;
+        self.slashed.clear()?;
 
         // Replace the in-memory SMT with a fresh empty one.
         let hasher = PoseidonFp::new();

@@ -170,6 +170,8 @@ fn rln_identity_state_register_then_slash() {
 
     s.slash(c).unwrap();
     assert!(!s.contains(&c));
+    assert!(s.is_slashed(&c));
+    assert!(s.register(c).is_err());
 }
 
 #[test]
@@ -187,24 +189,31 @@ fn rln_identity_state_register_rejects_duplicate() {
 fn rln_identity_state_slash_idempotent_for_unknown() {
     let db = sled::Config::new().temporary(true).open().unwrap();
     let mut s = IdentityState::new(&db).unwrap();
-    // Slashing something that was never registered is a no-op,
-    // not an error. This matters for P2P propagation: a slash
-    // event may legitimately arrive twice via different paths.
-    s.slash(pallas::Base::from(7u64)).unwrap();
+    // Slashing something that was never registered is not an error. This
+    // matters for P2P propagation: a slash event may legitimately arrive twice
+    // via different paths. The commitment is still tombstoned permanently.
+    let c = pallas::Base::from(7u64);
+    s.slash(c).unwrap();
+    assert!(s.is_slashed(&c));
+    assert!(s.register(c).is_err());
 }
 
 #[test]
 fn rln_identity_state_persists_across_reopen() {
     let db = sled::Config::new().temporary(true).open().unwrap();
     let c = pallas::Base::from(0xfeedu64);
+    let slashed = pallas::Base::from(0xdead_u64);
 
     {
         let mut s = IdentityState::new(&db).unwrap();
         s.register(c).unwrap();
-    } // drop closes the in-memory SMT but the leaves are in sled
+        s.slash(slashed).unwrap();
+    } // drop closes the in-memory SMT but the derived state is in sled
 
-    let s2 = IdentityState::new(&db).unwrap();
+    let mut s2 = IdentityState::new(&db).unwrap();
     assert!(s2.contains(&c), "leaf should survive close-and-reopen");
+    assert!(s2.is_slashed(&slashed), "tombstone should survive close-and-reopen");
+    assert!(s2.register(slashed).is_err());
 }
 
 #[test]
@@ -712,7 +721,7 @@ fn rln_static_event_slash_invalid_blobs_rejected() {
 }
 
 #[test]
-fn rln_identity_state_re_register_after_slash_works() {
+fn rln_identity_state_re_register_after_slash_requires_new_commitment() {
     // A slashed identity can re-register with new credentials
     // (different commitment). The ban is on the commitment, not
     // on the underlying network identity.
@@ -730,13 +739,10 @@ fn rln_identity_state_re_register_after_slash_works() {
     s.register(c2).unwrap();
     assert!(s.contains(&c2));
 
-    // The slashed commitment can ALSO be re-registered (which would
-    // never happen in practice - same identity_secret_hash means
-    // the same identity is back, but if the network policy says
-    // "ok", we should support it). This test documents that
-    // behaviour rather than asserting it should be otherwise.
-    s.register(c1).unwrap();
-    assert!(s.contains(&c1));
+    // The slashed commitment itself is permanently tombstoned.
+    assert!(s.register(c1).is_err());
+    assert!(!s.contains(&c1));
+    assert!(s.is_slashed(&c1));
 }
 
 #[test]
@@ -1037,6 +1043,82 @@ async fn concurrent_slashes(ex: Arc<Executor<'static>>) {
     }
 
     shutdown_network(&nodes).await;
+}
+
+#[test]
+fn rln_static_slashes_persist_and_tombstone_commitment() {
+    smol::block_on(async {
+        let id = TestIdentity::new();
+        let commitment = id.commitment();
+        let config = EventGraphConfig {
+            pregenerated_identity_commitments: vec![commitment.to_repr()],
+            ..test_config()
+        };
+        let eg = make_eg_with_config(config).await;
+
+        let reg_node = RLNNode::Registration(commitment);
+        let reg_event = synth_static_event(1, 499_000, &reg_node).await;
+        let _ = eg.apply_rln_static_event(&reg_event, &reg_node).await.unwrap();
+        eg.static_insert(&reg_event).await.unwrap();
+        assert!(eg.rln_contains(&commitment).await);
+
+        let slash_pk = eg.zk_keys.load_slash_pk().unwrap();
+        let (proof, root) = crate::event_graph::rln::create_slash_proof(
+            id.identity_secret_hash(),
+            &mut *eg.identity_state.write().await,
+            &slash_pk,
+        )
+        .unwrap();
+        let slash_blob =
+            SlashBlob { proof, identity_secret_hash: id.identity_secret_hash(), merkle_root: root };
+        let blob = serialize_async(&slash_blob).await;
+        let slash_node = RLNNode::Slashing(commitment);
+
+        let first_slash = synth_static_event(2, 500_000, &slash_node).await;
+        let outcome =
+            eg.rln_verify_static_event(&slash_node, &blob, first_slash.header.timestamp).await;
+        assert!(matches!(outcome, StaticEventCheck::AcceptedSlash(c) if c == commitment));
+        eg.commit_verified_static_event(&first_slash, &blob, &slash_node).await.unwrap();
+        assert!(!eg.rln_contains(&commitment).await);
+        assert!(eg.identity_state.read().await.is_slashed(&commitment));
+        assert!(eg.static_fetch(&first_slash.id()).await.unwrap().is_some());
+
+        let replayed_slash = synth_static_event(3, 500_001, &slash_node).await;
+        assert_ne!(first_slash.id(), replayed_slash.id());
+        let outcome =
+            eg.rln_verify_static_event(&slash_node, &blob, replayed_slash.header.timestamp).await;
+        assert!(matches!(outcome, StaticEventCheck::AcceptedSlash(c) if c == commitment));
+        eg.commit_verified_static_event(&replayed_slash, &blob, &slash_node).await.unwrap();
+        assert!(eg.static_fetch(&replayed_slash.id()).await.unwrap().is_some());
+        assert_eq!(eg.static_blob_fetch(&replayed_slash.id()).unwrap().unwrap(), blob);
+        assert_eq!(eg.rln_historical_roots_ordered.len(), 3);
+        assert_eq!(eg.rln_historical_roots_by_value.len(), 3);
+
+        let re_registration = synth_static_event(4, 500_002, &reg_node).await;
+        let outcome = eg
+            .rln_verify_static_event(
+                &reg_node,
+                GENESIS_BLOB_GUARD,
+                re_registration.header.timestamp,
+            )
+            .await;
+        assert!(matches!(outcome, StaticEventCheck::Rejected));
+        assert!(eg
+            .commit_verified_static_event(&re_registration, GENESIS_BLOB_GUARD, &reg_node)
+            .await
+            .is_err());
+        assert!(eg.static_fetch(&re_registration.id()).await.unwrap().is_none());
+        assert!(eg.static_blob_fetch(&re_registration.id()).unwrap().is_none());
+        assert_eq!(eg.rln_historical_roots_ordered.len(), 3);
+
+        eg.rln_historical_roots_ordered.clear().unwrap();
+        eg.rln_historical_roots_by_value.clear().unwrap();
+        eg.identity_state.write().await.clear_for_rebuild().unwrap();
+        eg.rebuild_historical_roots_if_needed().await.unwrap();
+        assert!(!eg.rln_contains(&commitment).await);
+        assert!(eg.identity_state.read().await.is_slashed(&commitment));
+        assert_eq!(eg.rln_historical_roots_ordered.len(), 3);
+    })
 }
 
 #[test]
