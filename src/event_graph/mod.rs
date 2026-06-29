@@ -1155,9 +1155,23 @@ impl EventGraph {
 
         // dag_insert_with_blobs handles RLN re-verification for every
         // non-genesis event and rejects any event whose blob is missing,
-        // malformed, or invalid. This preserves the invariant that synced
-        // rotating DAG events remain independently verifiable.
+        // malformed, or invalid. Strict sync must not report success unless
+        // every requested body is now locally committed.
         self.dag_insert_with_blobs(&events, &blobs, dag_name).await?;
+
+        let store = self.dag_store.read().await;
+        let slot = store.get_slot(&dag_ts).ok_or(Error::DagSyncFailed)?;
+        for event in &events {
+            if !slot.main_tree.contains_key(event.id().as_bytes())? {
+                error!(
+                    target: "event_graph::sync",
+                    "[DAG_SYNC] requested event {} was fetched but not committed",
+                    event.id(),
+                );
+                return Err(Error::DagSyncFailed)
+            }
+        }
+
         Ok(())
     }
 
@@ -1908,7 +1922,11 @@ impl EventGraph {
             // sync-time re-verification by other late-joiners.
             if let Some(blob) = blobs.get(i) {
                 if !blob.is_empty() {
-                    let _ = self.dag_blob_store(&eid, blob);
+                    if require_blobs {
+                        self.dag_blob_store(&eid, blob)?;
+                    } else {
+                        let _ = self.dag_blob_store(&eid, blob);
+                    }
                 }
             }
 

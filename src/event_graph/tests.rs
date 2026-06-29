@@ -1531,7 +1531,11 @@ async fn dag_sync_rejects_child_when_parent_body_rejected(ex: Arc<Executor<'stat
         seed_rotating_event_unchecked(eg, &child, &child_blob, &dag_name).await;
     }
 
-    nodes[4].dag_sync(dag_ts).await.unwrap();
+    let result = nodes[4].dag_sync(dag_ts).await;
+    assert!(
+        matches!(result, Err(crate::Error::DagSyncFailed)),
+        "dag_sync should fail when a required parent body is rejected, got {result:?}",
+    );
     sleep(2).await;
 
     let store = nodes[4].dag_store.read().await;
@@ -1580,7 +1584,11 @@ async fn dag_sync_rejects_bad_blob(ex: Arc<Executor<'static>>) {
         eg.dag_blob_store(&event.id(), &bad_blob).unwrap();
     }
 
-    nodes[4].dag_sync(dag_ts).await.unwrap();
+    let result = nodes[4].dag_sync(dag_ts).await;
+    assert!(
+        matches!(result, Err(crate::Error::DagSyncFailed)),
+        "dag_sync should fail when a requested body is rejected, got {result:?}",
+    );
     sleep(2).await;
 
     let store = nodes[4].dag_store.read().await;
