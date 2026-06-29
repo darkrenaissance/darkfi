@@ -34,6 +34,7 @@ use crate::{
         event::Header,
         filter_requested_event_rep, merge_static_sync_event_rep,
         proto::{cap_layer_tips, count_layer_tips, EventPut, SyncDirection, MAX_RANGE_PAGE_SIZE},
+        rln::epoch_of,
         test_helpers::{
             archive_config, bounded_dag_store_config, init_logger, make_eg, make_eg_with_config,
             make_network, run_multi_node_test, shutdown_network, test_config, TestIdentity,
@@ -828,6 +829,53 @@ async fn empty_blob_rejected(ex: Arc<Executor<'static>>) {
         assert!(
             !slot.main_tree.contains_key(event.id().as_bytes()).unwrap(),
             "Vector-1 breach: node {i} accepted an empty-blob non-genesis event",
+        );
+    }
+
+    shutdown_network(&nodes).await;
+}
+
+#[test]
+fn evgr_multi_node_malformed_event_rejected_before_rln() {
+    init_logger();
+    run_multi_node_test(malformed_event_rejected_before_rln);
+}
+async fn malformed_event_rejected_before_rln(ex: Arc<Executor<'static>>) {
+    let nodes = make_network(ex).await;
+
+    let mut alice = TestIdentity::new();
+    for eg in &nodes {
+        alice.register_directly(eg).await.unwrap();
+    }
+
+    let dag_ts = nodes[0].current_genesis.read().await.header.timestamp;
+    let event = Event::new(b"preflight-live".to_vec(), &nodes[0]).await;
+    let message_id = alice.next_message_id(event.header.timestamp).expect("budget");
+    let blob = alice.create_signal(&event, message_id, &nodes[0]).await.unwrap();
+    let internal_nullifier = blob.internal_nullifier;
+    let blob = serialize_async(&blob).await;
+
+    let mut malformed = event.clone();
+    malformed.content.extend_from_slice(b"-tampered");
+    assert!(!malformed.content_matches_header());
+
+    nodes[0].p2p.broadcast(&EventPut(malformed.clone(), blob)).await;
+    sleep(5).await;
+
+    let epoch = epoch_of(malformed.header.timestamp);
+    for (i, eg) in nodes.iter().enumerate().skip(1) {
+        let store = eg.dag_store.read().await;
+        let slot = store.get_slot(&dag_ts).unwrap();
+        assert!(
+            !slot.main_tree.contains_key(malformed.id().as_bytes()).unwrap(),
+            "node {i} accepted a structurally invalid event",
+        );
+        drop(store);
+
+        let state = eg.rln_state.read().await;
+        assert!(
+            !state.metadata.is_reused(epoch, &internal_nullifier),
+            "node {i} ran RLN verification before structural rejection",
         );
     }
 

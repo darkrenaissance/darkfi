@@ -408,32 +408,9 @@ impl ProtocolEventGraph {
                 continue
             }
 
-            // RLN: every non-genesis event MUST carry a valid signal
-            // proof. The only exception is genesis-shaped events
-            // (parents == NULL_PARENTS), which are produced by
-            // `dag_prune` on rotation and don't represent user
-            // signals. An empty blob on a non-genesis event is an
-            // unauthenticated injection attempt - strike the peer
-            // and drop the event.
-            if event.header.parents != NULL_PARENTS {
-                if blob.is_empty() {
-                    self.clone().strike().await?;
-                    continue
-                }
-                if self.verify_rln_signal(&event, &blob).await {
-                    continue
-                }
-            } else if !blob.is_empty() {
-                // A genesis-shaped event with a non-empty blob is
-                // also misbehavior - genesis events are deterministic
-                // and don't carry signals. Strike.
-                self.clone().strike().await?;
-                continue
-            }
-
             _ = self.ev_rep_sub.clean().await;
 
-            // Extract genesis info and immediately release the lock
+            // Extract genesis info and immediately release the lock.
             let genesis_ts = self.event_graph.current_genesis.read().await.header.timestamp;
             let dag_name = genesis_ts.to_string();
             let eid = event.id();
@@ -448,20 +425,35 @@ impl ProtocolEventGraph {
                 }
             }
 
-            // Flood protection
+            // Flood protection.
             bantimes.ticktock();
             if bantimes.count() > WINDOW_MAXSIZE {
                 self.channel.ban().await;
                 return Err(Error::MaliciousFlood)
             }
 
-            // Reject events from before the current rotation period
+            // Reject events from before the current rotation period.
             if event.header.timestamp < genesis_ts {
                 continue
             }
 
-            // Quick structural validation
+            // Cheap structural validation happens before RLN proof verification
+            // so malformed content, timestamps, or parent sets cannot force
+            // expensive proof work or mutate RLN metadata.
             if !event.validate_new() {
+                self.clone().strike().await?;
+                continue
+            }
+
+            // RLN: every non-genesis event MUST carry a signal proof. The only
+            // exception is genesis-shaped events (parents == NULL_PARENTS),
+            // which are deterministic consensus inputs and never carry blobs.
+            if event.header.parents != NULL_PARENTS {
+                if blob.is_empty() {
+                    self.clone().strike().await?;
+                    continue
+                }
+            } else if !blob.is_empty() {
                 self.clone().strike().await?;
                 continue
             }
@@ -486,6 +478,35 @@ impl ProtocolEventGraph {
                 !self.clone().fetch_parents(&mut missing, &dag_name, genesis_ts).await
             {
                 // Depth exceeded or peer misbehaved
+                continue
+            }
+
+            let structurally_valid = {
+                let store = self.event_graph.dag_store.read().await;
+                match store.get_slot(&genesis_ts) {
+                    Some(slot) => match event
+                        .dag_validate(&slot.header_tree, &self.event_graph.config, genesis_ts)
+                        .await
+                    {
+                        Ok(valid) => valid,
+                        Err(e) => {
+                            error!(
+                                target: "event_graph::protocol",
+                                "[EVENTGRAPH] Failed validating event {} before RLN verification: {e}",
+                                event.id(),
+                            );
+                            false
+                        }
+                    },
+                    None => false,
+                }
+            };
+            if !structurally_valid {
+                self.clone().strike().await?;
+                continue
+            }
+
+            if event.header.parents != NULL_PARENTS && self.verify_rln_signal(&event, &blob).await {
                 continue
             }
 

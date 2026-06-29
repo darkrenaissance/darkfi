@@ -1641,42 +1641,74 @@ impl EventGraph {
             return Ok(vec![])
         }
 
-        // Pre-flight RLN verification. Done BEFORE acquiring the
-        // DAG-store write lock so a slow proof verification doesn't
-        // hold up other inserts.
+        // Pre-flight structural validation and RLN verification. Done
+        // BEFORE acquiring the DAG-store write lock so slow proof work does
+        // not hold up other inserts. Cheap structural checks run first, so
+        // malformed events cannot force proof verification or mutate RLN
+        // metadata.
         //
-        // Events we already have are skipped without verification.
-        // This matters because `rln_verify_signal` records the share
-        // on `Accepted`, and re-running it for an already-seen event
-        // would trip its duplicate-share check (returning `Rejected`)
-        // - which would be incorrect: the event is legitimate, we
-        // just already know about it.
+        // Events we already have are skipped without verification. This
+        // matters because `rln_verify_signal` records the share on `Accepted`,
+        // and re-running it for an already-seen event would trip its
+        // duplicate-share check.
         let dag_ts = u64::from_str(dag_name)?;
-        let already_have: Vec<bool> = {
+        let (already_have, structurally_valid): (Vec<bool>, Vec<bool>) = {
             let store = self.dag_store.read().await;
             let slot = store.get_slot(&dag_ts);
-            events
-                .iter()
-                .map(|ev| match slot {
-                    Some(s) => s.main_tree.contains_key(ev.id().as_bytes()).unwrap_or(false),
+            let mut already_have = Vec::with_capacity(events.len());
+            let mut structurally_valid = Vec::with_capacity(events.len());
+
+            for ev in events {
+                let eid = ev.id();
+                let have = match slot {
+                    Some(s) => s.main_tree.contains_key(eid.as_bytes())?,
                     None => false,
-                })
-                .collect()
+                };
+                already_have.push(have);
+
+                if have || ev.header.parents == NULL_PARENTS {
+                    structurally_valid.push(true);
+                    continue
+                }
+
+                let Some(slot) = slot else {
+                    structurally_valid.push(false);
+                    continue
+                };
+
+                if !slot.header_tree.contains_key(eid.as_bytes())? {
+                    structurally_valid.push(false);
+                    continue
+                }
+
+                structurally_valid
+                    .push(ev.dag_validate(&slot.header_tree, &self.config, dag_ts).await?);
+            }
+
+            (already_have, structurally_valid)
         };
 
         let mut accepted: Vec<usize> = Vec::with_capacity(events.len());
         for (i, ev) in events.iter().enumerate() {
-            // Already-known events go through structurally (the
-            // downstream `contains_key` check will skip them) but
-            // skip the RLN verifier to avoid double-recording the
-            // share for the same (epoch, internal_nullifier, x, y)
-            // tuple.
+            if !structurally_valid[i] {
+                error!(
+                    target: "event_graph::dag_insert",
+                    "[DAG_INSERT] event {} failed structural validation before RLN verification; skipping",
+                    ev.id(),
+                );
+                continue
+            }
+
+            // Already-known events go through structurally (the downstream
+            // `contains_key` check will skip them) but skip the RLN verifier to
+            // avoid double-recording the share for the same
+            // (epoch, internal_nullifier, x, y) tuple.
             if already_have[i] {
                 accepted.push(i);
                 continue
             }
-            // Genesis-shaped events have no blob and no proof -
-            // they're consensus inputs, not user signals.
+            // Genesis-shaped events have no blob and no proof - they're
+            // consensus inputs, not user signals.
             if ev.header.parents == NULL_PARENTS {
                 accepted.push(i);
                 continue
@@ -1692,9 +1724,8 @@ impl EventGraph {
                     );
                     continue
                 }
-                // Lenient path: caller pre-verified. Accept the
-                // event structurally without running the RLN
-                // verifier on it.
+                // Lenient path: caller pre-verified. Accept the event
+                // structurally without running the RLN verifier on it.
                 accepted.push(i);
                 continue
             }
@@ -1709,12 +1740,11 @@ impl EventGraph {
                 }
                 rln::SignalCheck::Slashable(_) => {
                     // The conflicting share is recorded inside
-                    // `rln_verify_signal` ONLY on `Accepted`. On
-                    // `Slashable` it returns the conflicting shares
-                    // *without* mutating metadata, so we don't
-                    // double-record. We don't broadcast a slash
-                    // here - that's the live broadcast handler's
-                    // job. We just skip the event.
+                    // `rln_verify_signal` ONLY on `Accepted`. On `Slashable` it
+                    // returns the conflicting shares without mutating metadata,
+                    // so we don't double-record. We don't broadcast a slash
+                    // here - that's the live broadcast handler's job. We just
+                    // skip the event.
                     error!(
                         target: "event_graph::dag_insert",
                         "[DAG_INSERT] sync event {} is slashable (slot reuse); skipping",
