@@ -2319,11 +2319,9 @@ impl EventGraph {
     /// of an event that produced `root` and ends just before the next
     /// event timestamp (or `u64::MAX` if `root` is currently live).
     ///
-    /// This subsumes the old `recent_roots` window as a special case
-    /// (live verification = signal_timestamp ~= now). The in-memory
-    /// `recent_roots` cache in `IdentityState` remains as a fast
-    /// path for the live-broadcast hot loop; this method is consulted
-    /// when the cache misses.
+    /// The verifier calls this for every non-current root. Current-root
+    /// verification stays on the in-memory fast path, while recent but
+    /// non-current roots still pass through this timestamp-window check.
     pub fn is_root_valid_at(&self, root: &pallas::Base, signal_timestamp: u64) -> Result<bool> {
         let drift = EVENT_TIME_DRIFT;
         let lo = signal_timestamp.saturating_sub(drift);
@@ -2588,19 +2586,18 @@ impl EventGraph {
         // 1) The merkle root must be valid for a signal at this
         //    timestamp. We accept any root that was the live SMT
         //    root at any time within EVENT_TIME_DRIFT of the signal's
-        //    timestamp. This subsumes the old "recent_roots window"
-        //    behaviour as a special case (live verification, signal
-        //    timestamp ~= now) AND supports sync of historical signals
-        //    (signal timestamp = signing time, root corresponds to
-        //    that historical state).
+        //    timestamp. This supports both live propagation races and
+        //    sync of historical signals (signal timestamp = signing
+        //    time, root corresponds to that historical state).
         //
-        //    Hot-path optimization: check the in-memory recent_roots
-        //    cache first. For live broadcasts (the overwhelming
-        //    majority of verifications) the root will be in the
-        //    cache and we skip the sled lookup.
+        //    Hot-path optimization: accept the current in-memory root
+        //    without touching the historical index. Non-current roots,
+        //    even if still present in the recent-roots cache, must pass
+        //    the timestamp-window check below so old pre-slash roots
+        //    cannot stay valid indefinitely.
         {
             let id_state = self.identity_state.read().await;
-            if !id_state.is_known_root(&rcvd.merkle_root) {
+            if !id_state.is_current_root(&rcvd.merkle_root) {
                 drop(id_state);
                 match self.is_root_valid_at(&rcvd.merkle_root, event.header.timestamp) {
                     Ok(true) => {}
@@ -2827,7 +2824,7 @@ impl EventGraph {
                 // slash timestamp.
                 {
                     let id_state = self.identity_state.read().await;
-                    if !id_state.is_known_root(&sl.merkle_root) {
+                    if !id_state.is_current_root(&sl.merkle_root) {
                         drop(id_state);
                         match self.is_root_valid_at(&sl.merkle_root, event_timestamp) {
                             Ok(true) => {}

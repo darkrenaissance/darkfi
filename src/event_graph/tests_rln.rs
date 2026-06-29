@@ -815,6 +815,61 @@ fn rln_e2e_duplicate_signal_dropped_not_slashed() {
 }
 
 #[test]
+fn rln_verify_signal_rejects_recent_pre_slash_root_after_drift() {
+    smol::block_on(async {
+        use crate::event_graph::event::Header;
+
+        let eg = make_eg().await;
+        let mut id = TestIdentity::new();
+        let commitment = id.commitment();
+        let drift = crate::event_graph::EVENT_TIME_DRIFT;
+
+        let t_reg = 1_000_000_u64;
+        let t_slash = t_reg + 100 * drift;
+        let t_late = t_slash + 2 * drift;
+
+        let reg_node = RLNNode::Registration(commitment);
+        let reg_event = synth_static_event(1, t_reg, &reg_node).await;
+        let pre_slash_root = eg.apply_rln_static_event(&reg_event, &reg_node).await.unwrap();
+        assert!(eg.rln_contains(&commitment).await);
+
+        let content = b"post-slash-old-root-signal".to_vec();
+        let mut parents = NULL_PARENTS;
+        parents[0] = reg_event.id();
+        let signal_event = Event {
+            header: Header {
+                timestamp: t_late,
+                parents,
+                layer: 2,
+                content_hash: blake3::hash(&content),
+            },
+            content,
+        };
+        let mid = id.next_message_id(signal_event.header.timestamp).expect("budget");
+        let blob = id.create_signal(&signal_event, mid, &eg).await.unwrap();
+        assert_eq!(blob.merkle_root, pre_slash_root);
+
+        let slash_node = RLNNode::Slashing(commitment);
+        let slash_event = synth_static_event(2, t_slash, &slash_node).await;
+        let post_slash_root = eg.apply_rln_static_event(&slash_event, &slash_node).await.unwrap();
+        assert_ne!(pre_slash_root, post_slash_root);
+        assert!(!eg.rln_contains(&commitment).await);
+
+        assert!(
+            eg.identity_state.read().await.is_known_root(&pre_slash_root),
+            "pre-slash root should still be in the recent-root cache",
+        );
+        assert!(
+            !eg.is_root_valid_at(&pre_slash_root, t_late).unwrap(),
+            "pre-slash root is outside the post-slash drift window",
+        );
+
+        let bytes = serialize_async(&blob).await;
+        assert!(matches!(eg.rln_verify_signal(&signal_event, &bytes).await, SignalCheck::Rejected));
+    })
+}
+
+#[test]
 fn rln_e2e_slot_reuse_is_slashable() {
     smol::block_on(async {
         let (eg, mut id) = fresh_identity_and_eg().await;
