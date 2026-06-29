@@ -17,6 +17,8 @@
  */
 
 use std::{
+    collections::HashMap,
+    fs::File,
     io::Write,
     sync::{atomic::Ordering, Arc},
 };
@@ -36,6 +38,7 @@ use darkfi::{
     Error, Result,
 };
 use darkfi_sdk::crypto::pasta_prelude::PrimeField;
+use darkfi_serial::serialize;
 
 use irc2::{
     crypto::{bcrypt::bcrypt_hash_password, rln::RlnIdentity},
@@ -138,6 +141,10 @@ struct Args {
     gen_chacha_keypair: bool,
 
     #[structopt(long)]
+    /// Generate N genesis RLN identities
+    gen_genesis_rln_identities: Option<u64>,
+
+    #[structopt(long)]
     /// Generate a new encrypted channel NaCl secret and exit
     gen_channel_secret: bool,
 
@@ -238,7 +245,56 @@ async fn realmain(args: Args, ex: Arc<Executor<'static>>) -> Result<()> {
              A `darkirc --gen-rln-identity` run is NOT idempotent; treat the \
              output like a freshly-minted password."
         );
-        return Ok(());
+        return Ok(())
+    }
+
+    if let Some(n_identities) = args.gen_genesis_rln_identities {
+        // We'll generate n_identities and hold them in a map
+        // `k=commitment, v=(nullifier, trapdoor, used)`
+        // We'll export the commitments to be used in the genesis event,
+        // and the rest as a JSON file.
+        let mut identities_map = HashMap::new();
+        for _ in 0..n_identities {
+            let identity = RlnIdentity::new(&mut OsRng);
+            let commitment = identity.commitment();
+            identities_map.insert(
+                commitment.to_repr(),
+                (identity.nullifier.to_repr(), identity.trapdoor.to_repr(), false),
+            );
+        }
+
+        let mut commits = String::from(
+            r#"
+use darkfi_sdk::{crypto::pasta_prelude::PrimeField, pasta::pallas};
+
+/// Return DarkIRC's configured pregenerated RLN commitment set.
+pub fn pregenerated_identity_commitments() -> Vec<[u8; 32]> {
+    DARKIRC_GENESIS_COMMITMENTS_REPR.to_vec()
+}
+
+/// Check whether an RLN commitment belongs to DarkIRC's pregenerated set.
+pub fn is_pregenerated_commitment(commitment: &pallas::Base) -> bool {
+    DARKIRC_GENESIS_COMMITMENTS_REPR.contains(&commitment.to_repr())
+}
+
+pub const DARKIRC_GENESIS_COMMITMENTS_REPR: &[[u8; 32]] = &[
+"#,
+        );
+
+        for commitment in identities_map.keys() {
+            commits.push_str(&format!("{:?},\n", commitment));
+        }
+
+        commits.push_str("];\n");
+
+        let mut file = File::create("genesis_commits.rs")?;
+        file.write_all(commits.as_bytes())?;
+
+        let mut file = File::create("darkirc_rln_commits.bin")?;
+        let buf = serialize(&identities_map);
+        file.write_all(&buf)?;
+
+        return Ok(())
     }
 
     if let Some(chacha_secret) = args.chacha_secret {
