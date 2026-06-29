@@ -1396,12 +1396,17 @@ impl EventGraph {
         let mut rejected = 0usize;
         let mut structural_invalid = 0usize;
         let mut content_unparseable = 0usize;
+        let mut parent_missing = 0usize;
         let total_to_consider = fetched.len();
+        let mut committed: HashSet<blake3::Hash> = HashSet::with_capacity(total_to_consider);
 
         for (ev, blob) in fetched {
+            let eid = ev.id();
+
             // Skip if someone else inserted it concurrently.
-            if self.static_dag.contains_key(ev.id().as_bytes())? {
+            if self.static_dag.contains_key(eid.as_bytes())? {
                 already_present += 1;
+                committed.insert(eid);
                 continue
             }
 
@@ -1414,6 +1419,17 @@ impl EventGraph {
                 structural_invalid += 1;
                 continue
             }
+
+            if !self.static_parents_committed(&ev, &committed)? {
+                parent_missing += 1;
+                error!(
+                    target: "event_graph::static_sync",
+                    "[STATIC_SYNC] static event {} has a parent that was not committed; skipping",
+                    eid,
+                );
+                continue
+            }
+
             let rln_node: rln::RLNNode = match deserialize_async_partial(ev.content()).await {
                 Ok((v, _)) => v,
                 Err(_) => {
@@ -1434,9 +1450,11 @@ impl EventGraph {
                 blob_missing += 1;
                 error!(
                     target: "event_graph::static_sync",
-                    "[STATIC_SYNC] no blob available for static event {}; skipping. \
-                     Every static-DAG event must carry an RLN blob.",
-                    ev.id(),
+                    concat!(
+                        "[STATIC_SYNC] no blob available for static event {}; skipping. ",
+                        "Every static-DAG event must carry an RLN blob.",
+                    ),
+                    eid,
                 );
                 continue
             }
@@ -1446,6 +1464,7 @@ impl EventGraph {
                 rln::StaticEventCheck::AcceptedRegistration(_) |
                 rln::StaticEventCheck::AcceptedSlash(_) => {
                     self.commit_verified_static_event(&ev, &blob, &rln_node).await?;
+                    committed.insert(eid);
                     applied += 1;
                 }
                 rln::StaticEventCheck::Rejected | rln::StaticEventCheck::Malicious => {
@@ -1458,9 +1477,11 @@ impl EventGraph {
                     rejected += 1;
                     error!(
                         target: "event_graph::static_sync",
-                        "[STATIC_SYNC] historical blob FAILED re-verification for event {}: {:?}; \
-                         skipping event despite quorum inclusion",
-                        ev.id(),
+                        concat!(
+                            "[STATIC_SYNC] historical blob FAILED re-verification for event {}: {:?}; ",
+                            "skipping event despite quorum inclusion",
+                        ),
+                        eid,
                         outcome,
                     );
                 }
@@ -1469,14 +1490,34 @@ impl EventGraph {
 
         info!(
             target: "event_graph::static_sync",
-            "[STATIC_SYNC] complete: fetched={} applied={} already_present={} \
-             blob_missing={} verification_rejected={} structural_invalid={} \
-             unparseable={}",
+            concat!(
+                "[STATIC_SYNC] complete: fetched={} applied={} already_present={} ",
+                "blob_missing={} verification_rejected={} structural_invalid={} ",
+                "unparseable={} parent_missing={}",
+            ),
             total_to_consider, applied, already_present, blob_missing, rejected,
-            structural_invalid, content_unparseable,
+            structural_invalid, content_unparseable, parent_missing,
         );
 
+        if parent_missing > 0 {
+            return Err(Error::DagSyncFailed)
+        }
+
         Ok(())
+    }
+
+    fn static_parents_committed(
+        &self,
+        ev: &Event,
+        committed: &HashSet<blake3::Hash>,
+    ) -> Result<bool> {
+        for parent in ev.header.parents.iter().filter(|parent| **parent != NULL_ID) {
+            if !committed.contains(parent) && !self.static_dag.contains_key(parent.as_bytes())? {
+                return Ok(false)
+            }
+        }
+
+        Ok(true)
     }
 
     /// Fetch a page of events, crossing DAG boundaries transparently.

@@ -1277,6 +1277,55 @@ async fn static_sync_registration(ex: Arc<Executor<'static>>) {
 }
 
 #[test]
+fn rln_multi_node_static_sync_rejects_child_when_parent_rejected() {
+    run_multi_node_test(static_sync_rejects_child_when_parent_rejected);
+}
+async fn static_sync_rejects_child_when_parent_rejected(ex: Arc<Executor<'static>>) {
+    let nodes = make_network(ex).await;
+
+    let bad_node = RLNNode::Registration(pallas::Base::from(0x51a7_1c_u64));
+    let bad_parent = Event::new_static(serialize_async(&bad_node).await, &nodes[0]).await.unwrap();
+    let bad_blob = b"not-a-valid-static-rln-blob".to_vec();
+    for eg in nodes.iter().take(4) {
+        eg.static_insert(&bad_parent).await.unwrap();
+        eg.static_blob_store(&bad_parent.id(), &bad_blob).unwrap();
+    }
+
+    let commitment = pallas::Base::from_repr(nodes[0].config.pregenerated_identity_commitments[0])
+        .into_option()
+        .unwrap();
+    let child_node = RLNNode::Registration(commitment);
+    let child = Event::new_static(serialize_async(&child_node).await, &nodes[0]).await.unwrap();
+    assert!(child.header.parents.contains(&bad_parent.id()));
+
+    let child_blob = GENESIS_BLOB_GUARD.to_vec();
+    for eg in nodes.iter().take(4) {
+        eg.commit_verified_static_event(&child, &child_blob, &child_node).await.unwrap();
+    }
+
+    assert!(nodes[4].static_fetch(&bad_parent.id()).await.unwrap().is_none());
+    assert!(nodes[4].static_fetch(&child.id()).await.unwrap().is_none());
+    assert!(!nodes[4].rln_contains(&commitment).await);
+
+    let result = nodes[4].static_sync().await;
+    assert!(
+        matches!(result, Err(crate::Error::DagSyncFailed)),
+        "static_sync should fail clearly when a fetched static parent is rejected, got {result:?}",
+    );
+    assert!(
+        nodes[4].static_fetch(&bad_parent.id()).await.unwrap().is_none(),
+        "bad static parent should not be committed",
+    );
+    assert!(
+        nodes[4].static_fetch(&child.id()).await.unwrap().is_none(),
+        "child static event should not be committed without its parent",
+    );
+    assert!(!nodes[4].rln_contains(&commitment).await);
+
+    shutdown_network(&nodes).await;
+}
+
+#[test]
 fn rln_multi_node_static_sync_no_peers_is_ok() {
     // A single node with no peers calling static_sync must return
     // Err(DagSyncFailed) since the precondition "channels is not
