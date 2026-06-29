@@ -25,7 +25,10 @@ use std::{
 
 use darkfi::{
     async_daemonize, cli_desc,
-    event_graph::{proto::ProtocolEventGraph, EventGraph, EventGraphConfig, EventGraphPtr},
+    event_graph::{
+        proto::ProtocolEventGraph, rln::GENESIS_USER_MSG_LIMIT, EventGraph, EventGraphConfig,
+        EventGraphPtr,
+    },
     net::{session::SESSION_DEFAULT, settings::SettingsOpt, P2p, P2pPtr},
     rpc::{
         jsonrpc::JsonSubscriber,
@@ -83,6 +86,11 @@ const DARKIRC_GENESIS_CONTENTS: &[u8] = b"darkirc-v1";
 /// With `hours_rotation = 1` and `max_dags = 24`, this gives a
 /// 24-hour history window. Older events are evicted from sled.
 const DARKIRC_MAX_DAGS: usize = 24;
+
+/// Per-epoch limit printed by `--gen-rln-identity`.
+fn generated_rln_identity_user_msg_limit() -> u64 {
+    GENESIS_USER_MSG_LIMIT
+}
 
 fn panic_hook(panic_info: &std::panic::PanicHookInfo) {
     error!("panic occurred: {panic_info}");
@@ -229,8 +237,9 @@ async fn realmain(args: Args, ex: Arc<Executor<'static>>) -> Result<()> {
         let identity = RlnIdentity::new(&mut OsRng);
         let nullifier = bs58::encode(identity.nullifier.to_repr()).into_string();
         let trapdoor = bs58::encode(identity.trapdoor.to_repr()).into_string();
-        // Default per-epoch budget for fresh identities.
-        let user_msg_limit: u64 = 10;
+        // This value is part of the RLN commitment. It must match
+        // the genesis budget used for pregenerated identities.
+        let user_msg_limit = generated_rln_identity_user_msg_limit();
 
         println!("Generated a fresh RLN identity.\n");
         println!(
@@ -245,6 +254,10 @@ async fn realmain(args: Args, ex: Arc<Executor<'static>>) -> Result<()> {
         );
         println!(
             "Replace <account_name> with any local label you like (\"alice\", \"throwaway\", etc)."
+        );
+        println!(
+            "Do not change user_msg_limit: it is part of the RLN commitment and must be \
+             GENESIS_USER_MSG_LIMIT ({user_msg_limit}) for pregenerated genesis identities."
         );
         println!(
             "Keep the nullifier and trapdoor secret - they ARE the identity. \
@@ -831,5 +844,22 @@ fn deg_event_to_json(ev: &darkfi::event_graph::deg::DegEvent) -> JsonValue {
     match ev {
         DegEvent::SendMessage(info) => info_to_json("send", info),
         DegEvent::RecvMessage(info) => info_to_json("recv", info),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use darkfi::event_graph::rln::MAX_MSG_LIMIT;
+    use rand::rngs::OsRng;
+
+    use super::RlnIdentity;
+
+    #[test]
+    fn generated_rln_identity_limit_matches_genesis_budget() {
+        let identity = RlnIdentity::new(&mut OsRng);
+
+        assert_eq!(super::generated_rln_identity_user_msg_limit(), super::GENESIS_USER_MSG_LIMIT);
+        assert_eq!(super::generated_rln_identity_user_msg_limit(), MAX_MSG_LIMIT);
+        assert_eq!(identity.user_message_limit, super::generated_rln_identity_user_msg_limit());
     }
 }
