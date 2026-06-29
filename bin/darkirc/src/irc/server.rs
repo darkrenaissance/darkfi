@@ -16,7 +16,13 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::{collections::HashMap, fs::File, io::BufReader, path::PathBuf, sync::Arc};
+use std::{
+    collections::HashMap,
+    fs::File,
+    io::{BufRead, BufReader},
+    path::PathBuf,
+    sync::Arc,
+};
 
 use darkfi::{
     event_graph::Event,
@@ -26,7 +32,10 @@ use darkfi::{
 };
 use darkfi_serial::{deserialize_async, serialize_async};
 use futures_rustls::{
-    rustls::{self, pki_types::PrivateKeyDer},
+    rustls::{
+        self,
+        pki_types::{CertificateDer, PrivateKeyDer},
+    },
     TlsAcceptor,
 };
 use sled_overlay::sled;
@@ -125,6 +134,73 @@ pub(crate) async fn reserve_rln_message_id_in_store(
     Ok(RlnMessageReservation::Reserved { identity: updated, message_id })
 }
 
+fn parse_tls_secret<R>(reader: &mut R) -> Result<PrivateKeyDer<'static>>
+where
+    R: BufRead,
+{
+    let key = rustls_pemfile::pkcs8_private_keys(reader)
+        .next()
+        .ok_or(Error::ParseFailed("TLS key missing PKCS#8 private key"))?
+        .map_err(|_| Error::ParseFailed("TLS key contains invalid PKCS#8 private key"))?;
+
+    Ok(PrivateKeyDer::Pkcs8(key))
+}
+
+fn parse_tls_cert<R>(reader: &mut R) -> Result<CertificateDer<'static>>
+where
+    R: BufRead,
+{
+    rustls_pemfile::certs(reader)
+        .next()
+        .ok_or(Error::ParseFailed("TLS certificate missing"))?
+        .map_err(|_| Error::ParseFailed("TLS certificate contains invalid DER"))
+}
+
+fn tls_acceptor_from_pem<CR, KR>(
+    cert_reader: &mut CR,
+    secret_reader: &mut KR,
+) -> Result<TlsAcceptor>
+where
+    CR: BufRead,
+    KR: BufRead,
+{
+    let secret = parse_tls_secret(secret_reader)?;
+    let cert = parse_tls_cert(cert_reader)?;
+    let config = rustls::ServerConfig::builder()
+        .with_no_client_auth()
+        .with_single_cert(vec![cert], secret)
+        .map_err(|_| Error::ParseFailed("TLS certificate and key are invalid"))?;
+
+    Ok(TlsAcceptor::from(Arc::new(config)))
+}
+
+fn load_tls_acceptor(tls_cert: &str, tls_secret: &str) -> Result<TlsAcceptor> {
+    let f = File::open(expand_path(tls_secret)?)?;
+    let mut secret_reader = BufReader::new(f);
+
+    let f = File::open(expand_path(tls_cert)?)?;
+    let mut cert_reader = BufReader::new(f);
+
+    tls_acceptor_from_pem(&mut cert_reader, &mut secret_reader)
+}
+
+async fn load_default_rln_identity(sled_db: &sled::Db) -> Result<Option<RlnIdentity>> {
+    let default_db = sled_db.open_tree(ACCOUNTS_DEFAULT_TREE)?;
+    let Some(blob) = default_db.get(ACCOUNTS_KEY_RLN_IDENTITY)? else {
+        if default_db.is_empty() {
+            return Ok(None)
+        }
+
+        return Err(Error::ParseFailed("Default RLN account is missing identity record"))
+    };
+
+    let identity: RlnIdentity = deserialize_async(&blob)
+        .await
+        .map_err(|_| Error::ParseFailed("Default RLN account identity is corrupted"))?;
+
+    Ok(Some(identity))
+}
+
 /// IRC server instance
 pub struct IrcServer {
     /// DarkIrc instance
@@ -191,23 +267,12 @@ impl IrcServer {
                 // openssl genpkey -algorithm ED25519 > example.com.key
                 // openssl req -new -out example.com.csr -key example.com.key
                 // openssl x509 -req -in example.com.csr -signkey example.com.key -out example.com.crt
-                let f = File::open(expand_path(tls_secret.as_ref().unwrap())?)?;
-                let mut reader = BufReader::new(f);
-                let secret = PrivateKeyDer::Pkcs8(
-                    rustls_pemfile::pkcs8_private_keys(&mut reader).next().unwrap().unwrap(),
-                );
+                let (Some(tls_cert), Some(tls_secret)) = (tls_cert.as_ref(), tls_secret.as_ref())
+                else {
+                    return Err(Error::ParseFailed("TLS certificate and key are required"))
+                };
 
-                let f = File::open(expand_path(tls_cert.as_ref().unwrap())?)?;
-                let mut reader = BufReader::new(f);
-                let cert = rustls_pemfile::certs(&mut reader).next().unwrap().unwrap();
-
-                let config = rustls::ServerConfig::builder()
-                    .with_no_client_auth()
-                    .with_single_cert(vec![cert], secret)
-                    .unwrap();
-
-                let acceptor = TlsAcceptor::from(Arc::new(config));
-                Some(acceptor)
+                Some(load_tls_acceptor(tls_cert, tls_secret)?)
             }
             _ => None,
         };
@@ -216,15 +281,10 @@ impl IrcServer {
         let server_store = darkirc.sled.open_tree("server_store")?;
 
         // Set the default RLN account if any
-        let default_db = darkirc.sled.open_tree(format!("{}default", ACCOUNTS_DB_PREFIX))?;
-        let rln_identity = if !default_db.is_empty() {
-            let default_accnt = default_db.get(ACCOUNTS_KEY_RLN_IDENTITY)?.unwrap();
-            let default_accnt = deserialize_async(&default_accnt).await.unwrap();
+        let rln_identity = load_default_rln_identity(&darkirc.sled).await?;
+        if rln_identity.is_some() {
             info!("Default RLN account set");
-            Some(default_accnt)
-        } else {
-            None
-        };
+        }
 
         let self_ = Arc::new(Self {
             darkirc,
@@ -305,13 +365,14 @@ impl IrcServer {
                 Ok((s, a)) => (s, a),
 
                 // As per usual accept(2) recommendations
-                Err(e) if e.raw_os_error().is_some() => match e.raw_os_error().unwrap() {
-                    libc::EAGAIN | libc::ECONNABORTED | libc::EPROTO | libc::EINTR => continue,
-                    _ => {
-                        error!("[IRC SERVER] Failed accepting connection: {e}");
-                        return Err(e.into())
-                    }
-                },
+                Err(e)
+                    if matches!(
+                        e.raw_os_error(),
+                        Some(libc::EAGAIN | libc::ECONNABORTED | libc::EPROTO | libc::EINTR)
+                    ) =>
+                {
+                    continue
+                }
 
                 Err(e) => {
                     error!("[IRC SERVER] Failed accepting new connection: {e}");
@@ -500,7 +561,9 @@ impl IrcServer {
 
 #[cfg(test)]
 mod tests {
-    use darkfi::event_graph::rln::epoch_of;
+    use std::io::Cursor;
+
+    use darkfi::{event_graph::rln::epoch_of, Error};
     use darkfi_sdk::pasta::pallas;
     use darkfi_serial::deserialize_async;
 
@@ -514,6 +577,66 @@ mod tests {
             message_id: 0,
             last_epoch: 0,
         }
+    }
+
+    #[test]
+    fn tls_secret_parser_rejects_malformed_key() {
+        let mut reader = Cursor::new(b"not a private key".as_slice());
+
+        assert!(matches!(parse_tls_secret(&mut reader), Err(Error::ParseFailed(_))));
+    }
+
+    #[test]
+    fn tls_cert_parser_rejects_malformed_cert() {
+        let mut reader = Cursor::new(b"not a certificate".as_slice());
+
+        assert!(matches!(parse_tls_cert(&mut reader), Err(Error::ParseFailed(_))));
+    }
+
+    #[test]
+    fn load_default_rln_identity_returns_none_for_empty_tree() {
+        smol::block_on(async {
+            let sled_db = sled::Config::new().temporary(true).open().unwrap();
+
+            let identity = load_default_rln_identity(&sled_db).await.unwrap();
+
+            assert!(identity.is_none());
+        })
+    }
+
+    #[test]
+    fn load_default_rln_identity_rejects_missing_identity_record() {
+        smol::block_on(async {
+            let sled_db = sled::Config::new().temporary(true).open().unwrap();
+            let default = sled_db.open_tree(ACCOUNTS_DEFAULT_TREE).unwrap();
+            default.insert(b"other", b"value").unwrap();
+
+            let err = match load_default_rln_identity(&sled_db).await {
+                Ok(_) => panic!("expected missing identity record error"),
+                Err(e) => e,
+            };
+
+            assert!(matches!(
+                err,
+                Error::ParseFailed("Default RLN account is missing identity record")
+            ));
+        })
+    }
+
+    #[test]
+    fn load_default_rln_identity_rejects_corrupted_identity_record() {
+        smol::block_on(async {
+            let sled_db = sled::Config::new().temporary(true).open().unwrap();
+            let default = sled_db.open_tree(ACCOUNTS_DEFAULT_TREE).unwrap();
+            default.insert(ACCOUNTS_KEY_RLN_IDENTITY, b"not an identity").unwrap();
+
+            let err = match load_default_rln_identity(&sled_db).await {
+                Ok(_) => panic!("expected corrupted identity record error"),
+                Err(e) => e,
+            };
+
+            assert!(matches!(err, Error::ParseFailed("Default RLN account identity is corrupted")));
+        })
     }
 
     #[test]
