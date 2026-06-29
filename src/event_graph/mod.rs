@@ -1983,20 +1983,29 @@ impl EventGraph {
             }
         }
 
-        let mut out = vec![];
+        let mut out = Vec::with_capacity(MAX_HEADER_REP_HEADERS);
+        let sort_headers = |headers: &mut Vec<Header>| {
+            headers.sort_unstable_by(|a, b| {
+                a.layer.cmp(&b.layer).then_with(|| a.id().as_bytes().cmp(b.id().as_bytes()))
+            });
+        };
 
         for item in slot.header_tree.iter() {
             let (id, v) = item?;
             let h = blake3::Hash::from_bytes((&id as &[u8]).try_into()?);
-            if !ancestors.contains(&h) {
-                if out.len() >= MAX_HEADER_REP_HEADERS {
-                    break
-                }
-                out.push(deserialize_async(&v).await?);
+            if ancestors.contains(&h) {
+                continue
+            }
+
+            out.push(deserialize_async(&v).await?);
+            if out.len() >= MAX_HEADER_REP_HEADERS * 2 {
+                sort_headers(&mut out);
+                out.truncate(MAX_HEADER_REP_HEADERS);
             }
         }
 
-        out.sort_unstable_by_key(|h: &Header| h.layer);
+        sort_headers(&mut out);
+        out.truncate(MAX_HEADER_REP_HEADERS);
         Ok(out)
     }
 
