@@ -41,6 +41,7 @@ use tracing::{error, warn};
 
 use super::{
     event::Header,
+    filter_requested_event_rep,
     rln::{self, create_slash_proof, sss_recover, RLNNode, SlashBlob},
     Event, EventGraphPtr, LayerUTips, NULL_ID, NULL_PARENTS,
 };
@@ -146,6 +147,39 @@ pub(crate) fn cap_layer_tips(tips: &LayerUTips, limit: usize) -> LayerUTips {
     }
 
     out
+}
+
+/// Match one parent-fetch response against the exact request and update the
+/// outstanding frontier only if the response resolves at least one missing ID.
+pub(crate) fn filter_parent_event_rep(
+    requested: &[blake3::Hash],
+    missing: &mut HashSet<blake3::Hash>,
+    known: &mut HashSet<blake3::Hash>,
+    events: Vec<Event>,
+    blobs: Vec<Vec<u8>>,
+) -> Result<Vec<(Event, Vec<u8>)>> {
+    let (matched_events, matched_blobs, _) = filter_requested_event_rep(requested, events, blobs)?;
+    let resolves_missing = matched_events.iter().any(|event| {
+        let id = event.id();
+        missing.contains(&id) && !known.contains(&id)
+    });
+    if !resolves_missing {
+        return Err(Error::DagSyncFailed)
+    }
+
+    let mut resolved = Vec::with_capacity(matched_events.len());
+    for (event, blob) in matched_events.into_iter().zip(matched_blobs) {
+        let id = event.id();
+        if missing.remove(&id) && known.insert(id) {
+            resolved.push((event, blob));
+        }
+    }
+
+    if resolved.is_empty() {
+        return Err(Error::DagSyncFailed)
+    }
+
+    Ok(resolved)
 }
 
 struct MovingWindow {
@@ -536,9 +570,8 @@ impl ProtocolEventGraph {
     ) -> bool {
         // received[layer] = Vec<(event, blob)> - keeping events
         // paired with their blobs through the layer ordering so we
-        // can re-verify proofs at insert time. An empty blob means
-        // the serving peer didn't have one; dag_insert_with_blobs
-        // treats that as the trust-the-quorum fallback.
+        // can re-verify proofs at insert time. Non-genesis parents
+        // without blobs are rejected by dag_insert_with_blobs.
         let mut received: BTreeMap<u64, Vec<(Event, Vec<u8>)>> = BTreeMap::new();
         let mut known = HashSet::new();
         let mut depth = 0usize;
@@ -555,7 +588,8 @@ impl ProtocolEventGraph {
                 return false
             }
 
-            if self.channel.send(&EventReq(missing.iter().cloned().collect())).await.is_err() {
+            let requested: Vec<_> = missing.iter().copied().collect();
+            if self.channel.send(&EventReq(requested.clone())).await.is_err() {
                 return false
             }
 
@@ -567,23 +601,28 @@ impl ProtocolEventGraph {
                 return false
             };
 
-            // Pair each returned event with its corresponding blob.
-            let parents = rep.0.clone();
-            let blobs_in = rep.1.clone();
-            let blobs_aligned = blobs_in.len() == parents.len();
-            for (i, parent) in parents.into_iter().enumerate() {
-                let pid = parent.id();
-                if !missing.contains(&pid) {
-                    // Peer sent an event we didn't ask for
-                    self.channel.stop().await;
+            let parents = match filter_parent_event_rep(
+                &requested,
+                missing,
+                &mut known,
+                rep.0.clone(),
+                rep.1.clone(),
+            ) {
+                Ok(parents) => parents,
+                Err(e) => {
+                    warn!(
+                        target: "event_graph::protocol",
+                        "[EVENTGRAPH] parent fetch made no progress or returned invalid data: {e}",
+                    );
+                    let _ = self.clone().strike().await;
                     return false
                 }
-                let blob = if blobs_aligned { blobs_in[i].clone() } else { Vec::new() };
-                received.entry(parent.header.layer).or_default().push((parent.clone(), blob));
-                known.insert(pid);
-                missing.remove(&pid);
+            };
 
-                // Check for more unknown grandparents
+            for (parent, blob) in parents {
+                received.entry(parent.header.layer).or_default().push((parent.clone(), blob));
+
+                // Check for more unknown grandparents.
                 let store = self.event_graph.dag_store.read().await;
                 if let Some(slot) = store.get_slot(&dag_ts) {
                     for gp in parent.header.parents.iter() {
