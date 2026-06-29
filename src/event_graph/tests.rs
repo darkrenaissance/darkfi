@@ -35,7 +35,7 @@ use crate::{
         filter_requested_event_rep, merge_static_sync_event_rep,
         proto::{
             cap_layer_tips, count_layer_tips, filter_parent_event_rep, EventPut, SyncDirection,
-            MAX_RANGE_PAGE_SIZE,
+            MAX_HEADER_REP_HEADERS, MAX_RANGE_PAGE_SIZE,
         },
         rln::epoch_of,
         test_helpers::{
@@ -725,6 +725,43 @@ fn evgr_header_insert_rejects_unloaded_dag_slot() {
 
         let err = eg.header_dag_insert(vec![header], &dag_name).await.unwrap_err();
         assert!(matches!(err, crate::Error::DagSyncFailed));
+    })
+}
+
+#[test]
+fn evgr_fetch_headers_with_tips_is_bounded_and_layer_ordered() {
+    smol::block_on(async {
+        let eg = make_eg().await;
+        let dag_ts = eg.current_genesis.read().await.header.timestamp;
+        let dag_name = dag_ts.to_string();
+        let base = UNIX_EPOCH.elapsed().unwrap().as_millis() as u64;
+        let mut parent = eg.current_genesis.read().await.id();
+        let mut headers = Vec::with_capacity(MAX_HEADER_REP_HEADERS + 32);
+
+        for i in 0..(MAX_HEADER_REP_HEADERS + 32) {
+            let mut parents = [NULL_ID; N_EVENT_PARENTS];
+            parents[0] = parent;
+            let content = format!("bounded-header-{i}");
+            let header = Header {
+                timestamp: base + i as u64,
+                parents,
+                layer: i as u64 + 1,
+                content_hash: blake3::hash(content.as_bytes()),
+            };
+            parent = header.id();
+            headers.push(header);
+        }
+
+        eg.header_dag_insert(headers, &dag_name).await.unwrap();
+
+        let hostile_empty_tips = LayerUTips::new();
+        let response = eg.fetch_headers_with_tips(&dag_name, &hostile_empty_tips).await.unwrap();
+        assert_eq!(response.len(), MAX_HEADER_REP_HEADERS);
+        for pair in response.windows(2) {
+            assert!(pair[0].layer <= pair[1].layer);
+        }
+        assert_eq!(response.first().unwrap().layer, 0);
+        assert!(response.last().unwrap().layer < MAX_HEADER_REP_HEADERS as u64);
     })
 }
 
