@@ -1024,7 +1024,10 @@ impl ProtocolEventGraph {
     async fn broadcast_rate_limiter(self: Arc<Self>) -> Result<()> {
         let mut rl = MovingWindow::new(RATELIMIT_EXPIRY_TIME);
         loop {
-            let ep = self.broadcaster_pull.recv().await.expect("broadcaster closed");
+            let Ok(ep) = self.broadcaster_pull.recv().await else {
+                warn!(target: "event_graph::protocol", "broadcaster channel closed");
+                return Ok(())
+            };
             rl.ticktock();
             if rl.count() > RATELIMIT_MIN_COUNT {
                 let ms = ((rl.count() - RATELIMIT_MIN_COUNT) * RATELIMIT_SAMPLE_SLEEP /

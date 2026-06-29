@@ -16,7 +16,7 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::{cmp::Ordering, collections::HashSet, time::UNIX_EPOCH};
+use std::{cmp::Ordering, collections::HashSet};
 
 use darkfi_serial::{async_trait, deserialize_async, Encodable, SerialDecodable, SerialEncodable};
 use sled_overlay::{sled, SledTreeOverlay};
@@ -76,9 +76,9 @@ impl Header {
     /// Blake3 hash of `(timestamp, parents, layer, content_hash)`.
     pub fn id(&self) -> blake3::Hash {
         let mut h = blake3::Hasher::new();
-        self.timestamp.encode(&mut h).unwrap();
-        self.parents.encode(&mut h).unwrap();
-        self.layer.encode(&mut h).unwrap();
+        let _ = self.timestamp.encode(&mut h);
+        let _ = self.parents.encode(&mut h);
+        let _ = self.layer.encode(&mut h);
         h.update(self.content_hash.as_bytes());
         h.finalize()
     }
@@ -135,7 +135,7 @@ impl Header {
         }
 
         if config.hours_rotation == 0 {
-            let now = UNIX_EPOCH.elapsed().unwrap().as_millis() as u64;
+            let Ok(now) = unix_timestamp_millis() else { return false };
             return self.timestamp <= now.saturating_add(EVENT_TIME_DRIFT)
         }
 
@@ -210,10 +210,10 @@ impl Event {
             return false
         }
 
-        let now = UNIX_EPOCH.elapsed().unwrap().as_millis() as u64;
+        let Ok(now) = unix_timestamp_millis() else { return false };
 
-        if self.header.timestamp < now - EVENT_TIME_DRIFT ||
-            self.header.timestamp > now + EVENT_TIME_DRIFT
+        if self.header.timestamp < now.saturating_sub(EVENT_TIME_DRIFT) ||
+            self.header.timestamp > now.saturating_add(EVENT_TIME_DRIFT)
         {
             return false
         }

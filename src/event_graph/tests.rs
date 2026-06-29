@@ -280,7 +280,7 @@ fn evgr_rotation_helpers_are_total() {
     let future_start = now + HOUR_MS;
     assert_eq!(next_rotation_timestamp(future_start, 1).unwrap(), future_start);
     assert!(millis_until_next_rotation(now.saturating_sub(1)).is_err());
-    assert_eq!(super::util::hours_since(future_start), 0);
+    assert_eq!(super::util::hours_since(future_start).unwrap(), 0);
 }
 
 #[test]
@@ -326,7 +326,7 @@ fn evgr_dag_store_eviction_policy() {
         // (a) bounded
         let mut store = make_dag_store().await.unwrap();
         let oldest_ts = store.dag_timestamps()[0];
-        let new_ts = next_hour_timestamp(1);
+        let new_ts = next_hour_timestamp(1).unwrap();
         let hdr = Header {
             timestamp: new_ts,
             parents: NULL_PARENTS,
@@ -344,7 +344,7 @@ fn evgr_dag_store_eviction_policy() {
         let mut archive = DagStore::new(sled_db, &archive_config()).await.unwrap();
         let initial = archive.dag_timestamps().len();
         for i in 1..=30i64 {
-            let ts = next_hour_timestamp(i);
+            let ts = next_hour_timestamp(i).unwrap();
             let hdr = Header {
                 timestamp: ts,
                 parents: NULL_PARENTS,
@@ -362,7 +362,7 @@ fn evgr_dag_store_eviction_policy() {
 fn evgr_dag_store_archive_mode_discovers_existing_trees() {
     smol::block_on(async {
         let sled_db = sled::Config::new().temporary(true).open().unwrap();
-        let historical_ts = next_hour_timestamp(-100);
+        let historical_ts = next_hour_timestamp(-100).unwrap();
         {
             let mut store = DagStore::new(sled_db.clone(), &archive_config()).await.unwrap();
             let hdr = Header {
@@ -766,7 +766,7 @@ fn evgr_header_insert_rejects_unloaded_dag_slot() {
     smol::block_on(async {
         let config = EventGraphConfig { hours_rotation: 1, max_dags: Some(2), ..test_config() };
         let eg = make_eg_with_config(config).await;
-        let dag_ts = next_hour_timestamp(-100);
+        let dag_ts = next_hour_timestamp(-100).unwrap();
         let dag_name = dag_ts.to_string();
         let genesis = Header {
             timestamp: dag_ts,

@@ -679,7 +679,10 @@ pub fn sss_recover(shares: &[(pallas::Base, pallas::Base)]) -> Result<pallas::Ba
         let mut basis = pallas::Base::one();
         for (i, si) in shares.iter().enumerate() {
             if i != j {
-                basis *= si.0 * (si.0 - sj.0).invert().unwrap();
+                let Some(denominator) = Option::<pallas::Base>::from((si.0 - sj.0).invert()) else {
+                    return Err(Error::Custom("Duplicate x-coordinates in SSS shares".into()))
+                };
+                basis *= si.0 * denominator;
             }
         }
         secret += basis * sj.1;
