@@ -142,6 +142,7 @@
 - [tau](misc/tau.md)
 - [event_graph](misc/event_graph/event_graph.md)
   - [Network Protocol](misc/event_graph/network_protocol.md)
+  - [Security Invariants](misc/event_graph/security_invariants.md)
   - [Recovery](misc/event_graph/recovery.md)
 - [dnetview](misc/dnetview.md)
 - [Zero2darkfi](zero2darkfi/zero2darkfi.md)
