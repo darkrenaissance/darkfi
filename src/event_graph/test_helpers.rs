@@ -120,9 +120,17 @@ pub async fn make_eg() -> EventGraphPtr {
 
 /// Construct an [`EventGraph`] with a caller-provided test config.
 pub async fn make_eg_with_config(config: EventGraphConfig) -> EventGraphPtr {
+    let sled_db = sled::Config::new().temporary(true).open().unwrap();
+    make_eg_with_config_and_db(config, sled_db).await
+}
+
+/// Construct an [`EventGraph`] with a caller-provided config and sled DB.
+pub async fn make_eg_with_config_and_db(
+    config: EventGraphConfig,
+    sled_db: sled::Db,
+) -> EventGraphPtr {
     let ex = Arc::new(Executor::new());
     let p2p = P2p::new(Settings::default(), ex.clone()).await.unwrap();
-    let sled_db = sled::Config::new().temporary(true).open().unwrap();
     EventGraph::with_zk_keys(p2p, sled_db, "/tmp".into(), false, config, shared_zk_keys(), ex)
         .await
         .unwrap()

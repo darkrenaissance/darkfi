@@ -737,11 +737,6 @@ impl EventGraph {
             rln_app_id,
         });
 
-        // Init genesis registration events
-        if config.hours_rotation > 0 {
-            self_.bootstrap_genesis_identities().await?;
-        }
-
         if need_prune {
             info!(
                 target: "event_graph::new",
@@ -750,16 +745,17 @@ impl EventGraph {
             self_.dag_prune(current_genesis).await?;
         }
 
-        // Consistency check: if the static DAG has events but the
-        // historical-roots tables are empty, rebuild them by
-        // replaying the static DAG in canonical order. This handles
-        // the case where the operator manually deleted the
-        // historical-roots trees, or where this is the first startup
-        // after upgrading from a version that didn't track them.
-        //
-        // Without this, signal verification would fail for any root
-        // beyond the in-memory `recent_roots` window.
+        // Reconcile persisted RLN state before bootstrapping. If an
+        // earlier process crashed after writing identity leaves but before
+        // inserting the corresponding static event, bootstrapping must see
+        // the corrected leaf set rather than skip the configured identity.
         self_.rebuild_historical_roots_if_needed().await?;
+
+        // Init genesis registration events after recovery has made the
+        // static DAG authoritative for the current identity tree.
+        if config.hours_rotation > 0 {
+            self_.bootstrap_genesis_identities().await?;
+        }
 
         if config.hours_rotation > 0 {
             let task = StoppableTask::new();
@@ -780,124 +776,145 @@ impl EventGraph {
         Ok(self_)
     }
 
-    /// Rebuild the historical-roots side-tables from the static DAG.
+    /// Rebuild the RLN state side-tables from the static DAG.
     ///
-    /// Called once at startup. No-op if the historical-roots tables
-    /// already match the static-DAG event count. Otherwise replays
-    /// every static-DAG event in canonical `(layer, event_id)` order
-    /// and re-records the post-mutation root for each one.
+    /// Called once at startup. No-op if the historical-root indexes match
+    /// the canonical static-DAG event sequence and the persisted identity
+    /// leaves match the commitment set obtained by replaying that sequence.
+    /// Otherwise resets the identity SMT and root indexes, then replays every
+    /// parseable static-DAG event in canonical `(layer, event_id)` order.
     ///
-    /// **Side effect.** Resets the in-memory SMT to empty, then
-    /// rebuilds it leaf-by-leaf in canonical order, so the SMT and
-    /// the historical-roots tables come out consistent. The
-    /// `rln-identity-leaves` tree (which `IdentityState::new`
-    /// originally read) is implicitly re-derived; we don't read it
-    /// during rebuild because we want to honor any slashes in the
-    /// static DAG even if the leaves tree is stale.
+    /// **Side effect.** The static DAG is authoritative. The in-memory SMT,
+    /// the persistent `rln-identity-leaves` tree, and both historical-root
+    /// indexes are derived from it so crashes between the old split write
+    /// steps cannot leave stale leaves or unusable root indexes behind.
     async fn rebuild_historical_roots_if_needed(self: &Arc<Self>) -> Result<()> {
-        // Walk the static DAG once, computing both:
-        //   * static_count: total non-genesis events
-        //   * expected_leaves: registrations - slashes (the number
-        //     of identities that should currently be in the SMT)
-        // We need the second one to detect a state where leaves and
-        // historical-roots happen to share counts but the leaves
-        // don't actually correspond to the static-DAG events. That
-        // can happen across schema changes or when older code paths
-        // wrote to leaves without going through `apply_rln_static_event`.
-        let mut static_count: u64 = 0;
-        let mut registrations: i64 = 0;
-        let mut slashes: i64 = 0;
+        let mut events: Vec<(Event, rln::RLNNode)> = vec![];
+
         for item in self.static_dag.iter() {
             let (_, val) = item?;
             let ev: Event = deserialize_async(&val).await?;
             if ev.header.parents == NULL_PARENTS {
                 continue
             }
-            static_count += 1;
-            // Try to classify this event. We tolerate failed parses
-            // here because the rebuild path is best-effort: if an
-            // event's content is unparseable, we just don't count it
-            // toward expected_leaves. The replay loop below skips
-            // it for the same reason.
-            if let Ok((node, _)) = deserialize_async_partial::<rln::RLNNode>(ev.content()).await {
-                match node {
-                    rln::RLNNode::Registration(_) => registrations += 1,
-                    rln::RLNNode::Slashing(_) => slashes += 1,
-                }
-            }
-        }
-        let expected_leaves = (registrations - slashes).max(0) as usize;
 
-        let recorded_count = self.rln_historical_roots_ordered.len() as u64;
-        let actual_leaves = self.identity_state.read().await.leaves_count();
-
-        let counts_consistent = recorded_count == static_count;
-        let leaves_consistent = actual_leaves == expected_leaves;
-
-        info!(
-            target: "event_graph::new",
-            "[EVENTGRAPH] RLN state audit: static_count={} recorded_count={} \
-             actual_leaves={} expected_leaves={} consistent={}",
-            static_count, recorded_count, actual_leaves, expected_leaves,
-            counts_consistent && leaves_consistent,
-        );
-
-        if counts_consistent && leaves_consistent {
-            // Already consistent across all three sources (static
-            // DAG, historical-roots table, leaves tree).
-            return Ok(())
+            let Ok((node, _)) = deserialize_async_partial::<rln::RLNNode>(ev.content()).await
+            else {
+                continue
+            };
+            events.push((ev, node));
         }
 
-        info!(
-            target: "event_graph::new",
-            "[EVENTGRAPH] Rebuilding historical-roots: {} static events, \
-             {} recorded roots, {} leaves (expected {})",
-            static_count, recorded_count, actual_leaves, expected_leaves,
-        );
-
-        // Reset the historical-roots tables to a known-empty state.
-        self.rln_historical_roots_ordered.clear()?;
-        self.rln_historical_roots_by_value.clear()?;
-
-        // Reset the in-memory SMT and the leaves tree so the replay
-        // below builds it correctly from the canonical static-DAG
-        // sequence (including any slashes).
-        {
-            let mut state = self.identity_state.write().await;
-            state.clear_for_rebuild()?;
-        }
-
-        // Collect static-DAG events and sort canonically.
-        let mut events: Vec<Event> = vec![];
-        for item in self.static_dag.iter() {
-            let (_, val) = item?;
-            let ev: Event = deserialize_async(&val).await?;
-            if ev.header.parents != NULL_PARENTS {
-                events.push(ev);
-            }
-        }
-        events.sort_by(|a, b| {
+        events.sort_by(|(a, _), (b, _)| {
             a.header
                 .layer
                 .cmp(&b.header.layer)
                 .then_with(|| a.id().as_bytes().cmp(b.id().as_bytes()))
         });
 
-        // Replay each event through the canonical apply path.
-        for ev in events {
-            let rln_node: rln::RLNNode = match deserialize_async_partial(ev.content()).await {
-                Ok((v, _)) => v,
-                Err(_) => continue,
-            };
+        let mut expected_commitments = BTreeSet::new();
+        for (_, node) in &events {
+            match node {
+                rln::RLNNode::Registration(commitment) => {
+                    expected_commitments.insert(commitment.to_repr());
+                }
+                rln::RLNNode::Slashing(commitment) => {
+                    expected_commitments.remove(&commitment.to_repr());
+                }
+            }
+        }
+
+        let expected_leaves = expected_commitments.len();
+        let actual_commitments = self.identity_state.read().await.commitment_reprs();
+        let (actual_leaves, leaves_consistent) = match actual_commitments {
+            Ok(commitments) => {
+                let len = commitments.len();
+                (len, commitments == expected_commitments)
+            }
+            Err(e) => {
+                warn!(
+                    target: "event_graph::new",
+                    "[EVENTGRAPH] RLN identity leaf audit failed: {e}; rebuilding",
+                );
+                (0, false)
+            }
+        };
+
+        let static_count = events.len();
+        let historical_roots_consistent = self.historical_roots_index_consistent(static_count)?;
+        let recorded_count = self.rln_historical_roots_ordered.len();
+        let by_value_count = self.rln_historical_roots_by_value.len();
+        let consistent = historical_roots_consistent && leaves_consistent;
+
+        info!(
+            target: "event_graph::new",
+            concat!(
+                "[EVENTGRAPH] RLN state audit: static_count={} recorded_count={} ",
+                "by_value_count={} actual_leaves={} expected_leaves={} consistent={}",
+            ),
+            static_count, recorded_count, by_value_count, actual_leaves, expected_leaves,
+            consistent,
+        );
+
+        if consistent {
+            return Ok(())
+        }
+
+        info!(
+            target: "event_graph::new",
+            concat!(
+                "[EVENTGRAPH] Rebuilding RLN state: {} static events, {} recorded roots, ",
+                "{} by-value roots, {} leaves (expected {})",
+            ),
+            static_count, recorded_count, by_value_count, actual_leaves, expected_leaves,
+        );
+
+        self.rln_historical_roots_ordered.clear()?;
+        self.rln_historical_roots_by_value.clear()?;
+
+        {
+            let mut state = self.identity_state.write().await;
+            state.clear_for_rebuild()?;
+        }
+
+        for (ev, rln_node) in events {
             let _ = self.apply_rln_static_event(&ev, &rln_node).await?;
         }
 
         info!(
             target: "event_graph::new",
-            "[EVENTGRAPH] Historical-roots rebuild complete",
+            "[EVENTGRAPH] RLN state rebuild complete",
         );
 
         Ok(())
+    }
+
+    fn historical_roots_index_consistent(&self, expected_count: usize) -> Result<bool> {
+        if self.rln_historical_roots_ordered.len() != expected_count {
+            return Ok(false)
+        }
+        if self.rln_historical_roots_by_value.len() != expected_count {
+            return Ok(false)
+        }
+
+        for item in self.rln_historical_roots_ordered.iter() {
+            let (ordered_key_bytes, value_bytes) = item?;
+            if ordered_key_bytes.len() != 40 {
+                return Ok(false)
+            }
+            let Ok((root, _)) = decode_historical_root_value(&value_bytes) else {
+                return Ok(false)
+            };
+
+            let mut ordered_key = [0u8; 40];
+            ordered_key.copy_from_slice(&ordered_key_bytes);
+            let by_value_key = encode_historical_root_by_value_key(&root, &ordered_key);
+            if !self.rln_historical_roots_by_value.contains_key(by_value_key)? {
+                return Ok(false)
+            }
+        }
+
+        Ok(true)
     }
 
     /// After header sync, event content can be fetched lazily via

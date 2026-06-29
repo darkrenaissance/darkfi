@@ -34,8 +34,8 @@ use crate::{
             GENESIS_BLOB_GUARD, MAX_MSG_LIMIT, RLN_EPOCH_LEN, RLN_GENESIS,
         },
         test_helpers::{
-            make_eg, make_eg_with_config, make_network, run_multi_node_test, shutdown_network,
-            TestIdentity,
+            make_eg, make_eg_with_config, make_eg_with_config_and_db, make_network,
+            run_multi_node_test, shutdown_network, test_config, TestIdentity,
         },
         util::generate_genesis,
         Event, EventGraphConfig, EventGraphPtr, NULL_ID, NULL_PARENTS,
@@ -389,6 +389,68 @@ fn rln_bootstrapped_identities_parent_static_genesis() {
         }
 
         assert!(bootstrapped > 0, "expected pregenerated identities to be bootstrapped");
+    })
+}
+
+#[test]
+fn rln_startup_rebuild_before_bootstrap_restores_configured_identity() {
+    smol::block_on(async {
+        let config = EventGraphConfig { hours_rotation: 1, ..test_config() };
+        let commitment = pallas::Base::from_repr(config.pregenerated_identity_commitments[0])
+            .into_option()
+            .unwrap();
+        let db = sled::Config::new().temporary(true).open().unwrap();
+
+        // Simulate a crash after the identity leaf was written but before the
+        // corresponding pregenerated static event reached the static DAG.
+        let leaves = db.open_tree("rln-identity-leaves").unwrap();
+        leaves.insert(commitment.to_repr(), commitment.to_repr().as_ref()).unwrap();
+        leaves.insert(b"bad-leaf", b"bad-value").unwrap();
+
+        let eg = make_eg_with_config_and_db(config, db).await;
+        assert!(eg.rln_contains(&commitment).await);
+
+        let mut matching_static_events = 0usize;
+        for item in eg.static_dag.iter() {
+            let (_, bytes) = item.unwrap();
+            let ev: Event = deserialize_async(&bytes).await.unwrap();
+            if ev.header.parents == NULL_PARENTS {
+                continue
+            }
+            let node: RLNNode = deserialize_async(ev.content()).await.unwrap();
+            if matches!(node, RLNNode::Registration(c) if c == commitment) {
+                matching_static_events += 1;
+                assert_eq!(eg.static_blob_fetch(&ev.id()).unwrap().unwrap(), GENESIS_BLOB_GUARD,);
+            }
+        }
+        assert_eq!(matching_static_events, 1);
+    })
+}
+
+#[test]
+fn rln_rebuild_detects_stale_leaf_with_same_count() {
+    smol::block_on(async {
+        let config = EventGraphConfig { hours_rotation: 1, ..test_config() };
+        let eg = make_eg_with_config(config).await;
+        let commitment = genesis_commitment_at(&eg, 0);
+        let stale = pallas::Base::from(0x51a1e_u64);
+
+        {
+            let mut state = eg.identity_state.write().await;
+            state.clear_for_rebuild().unwrap();
+            state.register(stale).unwrap();
+        }
+
+        assert!(!eg.rln_contains(&commitment).await);
+        assert!(eg.rln_contains(&stale).await);
+        assert_eq!(eg.rln_historical_roots_ordered.len(), 1);
+
+        eg.rebuild_historical_roots_if_needed().await.unwrap();
+
+        assert!(eg.rln_contains(&commitment).await);
+        assert!(!eg.rln_contains(&stale).await);
+        assert_eq!(eg.rln_historical_roots_ordered.len(), 1);
+        assert_eq!(eg.rln_historical_roots_by_value.len(), 1);
     })
 }
 
@@ -1684,6 +1746,42 @@ fn rln_rebuild_historical_roots() {
         assert!(eg.is_root_valid_at(&r1, 100_000).unwrap(), "rebuild restored r1");
         assert!(eg.is_root_valid_at(&r2, 100_001).unwrap(), "rebuild restored r2");
         assert_eq!(eg.rln_historical_roots_ordered.len(), 2, "exactly one entry per static event",);
+    })
+}
+
+#[test]
+fn rln_rebuild_repairs_mismatched_historical_root_by_value_index() {
+    smol::block_on(async {
+        let eg = make_eg().await;
+
+        let c1 = pallas::Base::from(0x5555_u64);
+        let c2 = pallas::Base::from(0x6666_u64);
+        let n1 = RLNNode::Registration(c1);
+        let n2 = RLNNode::Registration(c2);
+
+        let ev1 = synth_static_event(1, 200_000, &n1).await;
+        let ev2 = synth_static_event(2, 200_001, &n2).await;
+        let _ = eg.apply_rln_static_event(&ev1, &n1).await.unwrap();
+        eg.static_insert(&ev1).await.unwrap();
+        let r2 = eg.apply_rln_static_event(&ev2, &n2).await.unwrap();
+        eg.static_insert(&ev2).await.unwrap();
+
+        assert!(eg.is_root_valid_at(&r2, 200_001).unwrap());
+
+        eg.rln_historical_roots_by_value.clear().unwrap();
+        let bogus_a = [0u8; 72];
+        let mut bogus_b = [0u8; 72];
+        bogus_b[71] = 1;
+        eg.rln_historical_roots_by_value.insert(bogus_a, &[]).unwrap();
+        eg.rln_historical_roots_by_value.insert(bogus_b, &[]).unwrap();
+        assert_eq!(eg.rln_historical_roots_by_value.len(), 2);
+        assert!(!eg.is_root_valid_at(&r2, 200_001).unwrap());
+
+        eg.rebuild_historical_roots_if_needed().await.unwrap();
+
+        assert_eq!(eg.rln_historical_roots_ordered.len(), 2);
+        assert_eq!(eg.rln_historical_roots_by_value.len(), 2);
+        assert!(eg.is_root_valid_at(&r2, 200_001).unwrap());
     })
 }
 

@@ -26,7 +26,7 @@
 //! proof to remove them from the identity tree.
 
 use std::{
-    collections::{BTreeMap, VecDeque},
+    collections::{BTreeMap, BTreeSet, VecDeque},
     io::Cursor,
 };
 
@@ -336,7 +336,10 @@ impl IdentityState {
 
         let mut batch = vec![];
         for item in leaves.iter() {
-            let (_, val) = item?;
+            let (key, val) = item?;
+            if key.len() != 32 || val.len() != 32 || key.as_ref() != val.as_ref() {
+                continue
+            }
             let mut repr = [0u8; 32];
             repr.copy_from_slice(&val);
             if let Some(c) = pallas::Base::from_repr(repr).into() {
@@ -398,13 +401,31 @@ impl IdentityState {
         self.smt.root()
     }
 
-    /// Number of leaves currently in the persistent identity tree.
-    /// Used by [`EventGraph::rebuild_historical_roots_if_needed`] to
-    /// detect a leaves-vs-events mismatch that bypasses the simpler
-    /// recorded-count check (e.g. stale leaves left over from an
-    /// older code path that bypassed `apply_rln_static_event`).
-    pub(crate) fn leaves_count(&self) -> usize {
-        self.leaves.len()
+    /// Return the commitments currently persisted in the identity leaf tree.
+    ///
+    /// Startup recovery compares this set against the set derived by replaying
+    /// the static DAG. Counting leaves is not enough because a crash or old
+    /// code path can leave the right number of leaves with the wrong
+    /// commitments.
+    pub(crate) fn commitment_reprs(&self) -> Result<BTreeSet<[u8; 32]>> {
+        let mut commitments = BTreeSet::new();
+        for item in self.leaves.iter() {
+            let (key, val) = item?;
+            if key.len() != 32 || val.len() != 32 {
+                return Err(Error::Custom(format!(
+                    "RLN identity leaf key/value must be 32 bytes, got {}/{}",
+                    key.len(),
+                    val.len()
+                )))
+            }
+            if key.as_ref() != val.as_ref() {
+                return Err(Error::Custom("RLN identity leaf key/value mismatch".into()))
+            }
+            let mut repr = [0u8; 32];
+            repr.copy_from_slice(&val);
+            commitments.insert(repr);
+        }
+        Ok(commitments)
     }
 
     /// Check whether `root` matches the current root or any recent
