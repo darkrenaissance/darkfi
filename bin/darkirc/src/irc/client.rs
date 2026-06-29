@@ -33,7 +33,7 @@ use darkfi_serial::{deserialize_async_partial, serialize_async};
 use futures::FutureExt;
 use sled_overlay::sled;
 use smol::{
-    io::{self, AsyncBufReadExt, AsyncWriteExt, BufReader},
+    io::{self, AsyncBufRead, AsyncBufReadExt, AsyncWriteExt, BufReader},
     lock::{OnceCell, RwLock},
     net::SocketAddr,
     prelude::{AsyncRead, AsyncWrite},
@@ -47,6 +47,56 @@ use super::{
 use crate::{crypto::rln::RLN2_SIGNAL_ZKBIN, Privmsg};
 
 const PENALTY_LIMIT: usize = 5;
+const MAX_IRC_LINE_LEN: usize = 1024;
+const MAX_PENDING_PRIVMSGS: usize = 128;
+
+/// Read one IRC line without allowing unbounded buffer growth.
+async fn read_bounded_line<R>(reader: &mut R, line: &mut String) -> Result<usize>
+where
+    R: AsyncBufRead + Unpin,
+{
+    line.clear();
+    let mut bytes = Vec::new();
+
+    loop {
+        let (consumed, complete) = {
+            let available = reader.fill_buf().await?;
+            if available.is_empty() {
+                if bytes.is_empty() {
+                    return Ok(0)
+                }
+
+                *line = String::from_utf8(bytes)?;
+                return Ok(line.len())
+            }
+
+            let newline = available.iter().position(|b| *b == b'\n');
+            let take = newline.map_or(available.len(), |idx| idx + 1);
+            if bytes.len().saturating_add(take) > MAX_IRC_LINE_LEN {
+                return Err(Error::ParseFailed("IRC line too long"))
+            }
+
+            bytes.extend_from_slice(&available[..take]);
+            (take, newline.is_some())
+        };
+
+        reader.consume(consumed);
+
+        if complete {
+            *line = String::from_utf8(bytes)?;
+            return Ok(line.len())
+        }
+    }
+}
+
+fn enqueue_pending_privmsg(args_queue: &mut VecDeque<Privmsg>, privmsg: Privmsg) -> bool {
+    if args_queue.len() >= MAX_PENDING_PRIVMSGS {
+        return false
+    }
+
+    args_queue.push_back(privmsg);
+    true
+}
 
 /// Reply types, we can either send server replies, or client replies.
 pub enum ReplyType {
@@ -157,7 +207,7 @@ impl Client {
         loop {
             futures::select! {
                 // Process message from the IRC client
-                r = reader.read_line(&mut line).fuse() => {
+                r = read_bounded_line(&mut reader, &mut line).fuse() => {
                     // If client closed unexpectedly, we disconnect.
                     if let Ok(0) = r {
                         error!("[IRC CLIENT] Read failed for {}: Client disconnected", self.addr);
@@ -537,8 +587,21 @@ impl Client {
             // Once synced, send queued lines and continue as normal
             if !self.server.darkirc.event_graph.is_synced() {
                 debug!("DAG is still syncing, queuing and skipping...");
-                let privmsg = self.args_to_privmsg(args).await;
-                args_queue.push_back(privmsg);
+                let Some(privmsg) = self.args_to_privmsg(args).await else {
+                    self.penalty.fetch_add(1, SeqCst);
+                    return Ok(None)
+                };
+
+                if !enqueue_pending_privmsg(args_queue, privmsg) {
+                    self.penalty.fetch_add(1, SeqCst);
+                    let nick = self.nickname.read().await.to_string();
+                    let reply = ReplyType::Notice((
+                        SERVER_NAME.to_string(),
+                        nick,
+                        "PRIVMSG queue is full; wait for sync before sending more".to_string(),
+                    ));
+                    self.reply(writer, &reply).await?;
+                }
                 return Ok(None)
             }
 
@@ -553,7 +616,10 @@ impl Client {
             }
 
             // If queue is empty, create an event and return it
-            let privmsg = self.args_to_privmsg(args).await;
+            let Some(privmsg) = self.args_to_privmsg(args).await else {
+                self.penalty.fetch_add(1, SeqCst);
+                return Ok(None)
+            };
             let event = self.privmsg_to_event(privmsg).await?;
 
             return Ok(Some(vec![event]))
@@ -563,15 +629,15 @@ impl Client {
     }
 
     // Internal helper function that creates a PRIVMSG from IRC client arguments
-    async fn args_to_privmsg(&self, args: String) -> Privmsg {
+    async fn args_to_privmsg(&self, args: String) -> Option<Privmsg> {
         let nick = self.nickname.read().await.to_string();
-        let channel = args.split_ascii_whitespace().next().unwrap().to_string();
-        let msg_offset = args.find(':').unwrap() + 1;
+        let channel = args.split_ascii_whitespace().next()?.to_string();
+        let msg_offset = args.find(':')? + 1;
         let (_, msg) = args.split_at(msg_offset);
 
         // Truncate messages longer than MAX_MSG_LEN
         let msg = if msg.len() > MAX_MSG_LEN { msg.split_at(MAX_MSG_LEN).0 } else { msg };
-        Privmsg { version: 0, msg_type: 0, channel, nick, msg: msg.to_string() }
+        Some(Privmsg { version: 0, msg_type: 0, channel, nick, msg: msg.to_string() })
     }
 
     // Internal helper function that creates an Event from PRIVMSG arguments
@@ -610,5 +676,63 @@ impl Client {
             .await;
 
         Ok(db.contains_key(event_id.as_bytes())?)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::collections::VecDeque;
+
+    use smol::io::{BufReader, Cursor};
+
+    use super::{
+        enqueue_pending_privmsg, read_bounded_line, MAX_IRC_LINE_LEN, MAX_PENDING_PRIVMSGS,
+    };
+    use crate::irc::Privmsg;
+
+    #[test]
+    fn read_bounded_line_accepts_line_within_limit() {
+        smol::block_on(async {
+            let input = format!("{}\n", "a".repeat(MAX_IRC_LINE_LEN - 1));
+            let mut reader = BufReader::new(Cursor::new(input.into_bytes()));
+            let mut line = String::new();
+
+            let read = read_bounded_line(&mut reader, &mut line).await.unwrap();
+
+            assert_eq!(read, MAX_IRC_LINE_LEN);
+            assert!(line.ends_with('\n'));
+        });
+    }
+
+    #[test]
+    fn read_bounded_line_rejects_oversized_line() {
+        smol::block_on(async {
+            let input = format!("{}\n", "a".repeat(MAX_IRC_LINE_LEN));
+            let mut reader = BufReader::new(Cursor::new(input.into_bytes()));
+            let mut line = String::new();
+
+            assert!(read_bounded_line(&mut reader, &mut line).await.is_err());
+        });
+    }
+
+    #[test]
+    fn pending_privmsg_queue_has_fixed_capacity() {
+        let mut queue = VecDeque::new();
+        for _ in 0..MAX_PENDING_PRIVMSGS {
+            assert!(enqueue_pending_privmsg(&mut queue, privmsg()));
+        }
+
+        assert!(!enqueue_pending_privmsg(&mut queue, privmsg()));
+        assert_eq!(queue.len(), MAX_PENDING_PRIVMSGS);
+    }
+
+    fn privmsg() -> Privmsg {
+        Privmsg {
+            version: 0,
+            msg_type: 0,
+            channel: "#chan".to_string(),
+            nick: "nick".to_string(),
+            msg: "msg".to_string(),
+        }
     }
 }
