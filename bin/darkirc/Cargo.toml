@@ -64,10 +64,5 @@ serde = {version = "1.0.228", features = ["derive"]}
 structopt = "0.3.26"
 structopt-toml = "0.5.1"
 
-# See https://github.com/rust-mobile/android-rs-glue/issues/193
-[target.aarch64-linux-android.dependencies]
-openssl = { version = "*", features = ["vendored"] }
-rusqlite = {version = "0.37.0", features = ["bundled"]}
-
 [lints]
 workspace = true
