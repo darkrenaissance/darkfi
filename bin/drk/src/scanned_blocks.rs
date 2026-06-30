@@ -112,7 +112,7 @@ impl Drk {
         // If genesis block height(0) was provided,
         // perform a full reset.
         if height == 0 {
-            return self.reset(output)
+            return self.reset(output).await
         }
 
         // Grab last scanned block height
@@ -205,39 +205,39 @@ impl Drk {
         }
 
         // Remove all wallet coins created after the reset height
-        self.remove_money_coins_after(&height, output)?;
+        self.remove_money_coins_after(&height, output).await?;
 
         // Unspent all wallet coins spent after the reset height
-        self.unspent_money_coins_after(&height, output)?;
+        self.unspent_money_coins_after(&height, output).await?;
 
         // Unfreeze tokens mint authorities frozen after the reset
         // height.
-        self.unfreeze_mint_authorities_after(&height, output)?;
+        self.unfreeze_mint_authorities_after(&height, output).await?;
 
         // Unconfirm DAOs minted after the reset height
-        self.unconfirm_daos_after(&height, output)?;
+        self.unconfirm_daos_after(&height, output).await?;
 
         // Unconfirm DAOs proposals minted after the reset height
-        self.unconfirm_dao_proposals_after(&height, output)?;
+        self.unconfirm_dao_proposals_after(&height, output).await?;
 
         // Reset execution information for DAOs proposals executed
         // after the reset height.
-        self.unexec_dao_proposals_after(&height, output)?;
+        self.unexec_dao_proposals_after(&height, output).await?;
 
         // Remove all DAOs proposals votes created after the reset
         // height.
-        self.remove_dao_votes_after(&height, output)?;
+        self.remove_dao_votes_after(&height, output).await?;
 
         // Unlock all contracts frozen after the reset height
-        self.unlock_deploy_authorities_after(&height, output)?;
+        self.unlock_deploy_authorities_after(&height, output).await?;
 
         // Remove all contracts history records created after the reset
         // height.
-        self.remove_deploy_history_after(&height, output)?;
+        self.remove_deploy_history_after(&height, output).await?;
 
         // Set reverted status to all transactions executed after reset
         // height.
-        self.revert_transactions_after(&height, output)?;
+        self.revert_transactions_after(&height, output).await?;
 
         output.push(String::from("Successfully reset wallet state"));
         Ok(())

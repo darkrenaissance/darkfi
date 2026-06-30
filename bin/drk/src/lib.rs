@@ -114,7 +114,7 @@ impl Drk {
                 create_dir_all(parent)?;
             }
         }
-        let Ok(wallet) = WalletDb::new(Some(wallet_path), Some(&wallet_pass)) else {
+        let Ok(wallet) = WalletDb::new(Some(wallet_path), Some(&wallet_pass)).await else {
             return Err(Error::DatabaseError(format!("{}", WalletDbError::InitializationFailed)));
         };
 
@@ -135,26 +135,26 @@ impl Drk {
     /// Initialize wallet with tables for `Drk`.
     pub async fn initialize_wallet(&self) -> WalletDbResult<()> {
         // Initialize wallet schema
-        self.wallet.exec_batch_sql(include_str!("../wallet.sql"))?;
+        self.wallet.exec_batch_sql(include_str!("../wallet.sql")).await?;
 
         Ok(())
     }
 
     /// Auxiliary function to completely reset wallet state.
-    pub fn reset(&self, output: &mut Vec<String>) -> WalletDbResult<()> {
+    pub async fn reset(&self, output: &mut Vec<String>) -> WalletDbResult<()> {
         output.push(String::from("Resetting full wallet state"));
         self.reset_scanned_blocks(output)?;
         self.reset_money_tree(output)?;
         self.reset_money_smt(output)?;
-        self.reset_money_coins(output)?;
-        self.reset_mint_authorities(output)?;
+        self.reset_money_coins(output).await?;
+        self.reset_mint_authorities(output).await?;
         self.reset_dao_trees(output)?;
-        self.reset_daos(output)?;
-        self.reset_dao_proposals(output)?;
-        self.reset_dao_votes(output)?;
-        self.reset_deploy_authorities(output)?;
-        self.reset_deploy_history(output)?;
-        self.reset_tx_history(output)?;
+        self.reset_daos(output).await?;
+        self.reset_dao_proposals(output).await?;
+        self.reset_dao_votes(output).await?;
+        self.reset_deploy_authorities(output).await?;
+        self.reset_deploy_history(output).await?;
+        self.reset_tx_history(output).await?;
         output.push(String::from("Successfully reset full wallet state"));
         Ok(())
     }

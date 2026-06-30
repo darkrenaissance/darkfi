@@ -246,7 +246,7 @@ enum WalletSubcmd {
     /// Set the default address in the wallet
     DefaultAddress {
         /// Identifier of the address
-        index: usize,
+        index: u16,
     },
 
     /// Print all the secret keys from the wallet
@@ -264,7 +264,7 @@ enum WalletSubcmd {
     /// Print a wallet address mining configuration
     MiningConfig {
         /// Identifier of the address
-        index: usize,
+        index: u16,
 
         /// Optional contract spend hook to use
         spend_hook: Option<String>,
@@ -724,7 +724,7 @@ async fn realmain(args: Args, ex: ExecutorPtr) -> Result<()> {
                         eprintln!("Failed to initialize DAO: {e}");
                         exit(2);
                     }
-                    if let Err(e) = drk.initialize_deployooor() {
+                    if let Err(e) = drk.initialize_deployooor().await {
                         eprintln!("Failed to initialize Deployooor: {e}");
                         exit(2);
                     }
@@ -793,7 +793,7 @@ async fn realmain(args: Args, ex: ExecutorPtr) -> Result<()> {
                 }
 
                 WalletSubcmd::DefaultAddress { index } => {
-                    if let Err(e) = drk.set_default_address(index) {
+                    if let Err(e) = drk.set_default_address(index).await {
                         eprintln!("Failed to set default address: {e}");
                         exit(2);
                     }
@@ -2227,7 +2227,7 @@ async fn realmain(args: Args, ex: ExecutorPtr) -> Result<()> {
                     return Ok(())
                 }
 
-                let map = match drk.get_txs_history() {
+                let map = match drk.get_txs_history().await {
                     Ok(m) => m,
                     Err(e) => {
                         eprintln!("Failed to retrieve transactions history records: {e}");
@@ -2269,7 +2269,7 @@ async fn realmain(args: Args, ex: ExecutorPtr) -> Result<()> {
                 .await;
 
                 let mut output = vec![];
-                if let Err(e) = drk.remove_reverted_txs(&mut output) {
+                if let Err(e) = drk.remove_reverted_txs(&mut output).await {
                     print_output(&output);
                     eprintln!("Failed to remove reverted transactions: {e}");
                     exit(2);

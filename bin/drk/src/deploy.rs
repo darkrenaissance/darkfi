@@ -42,9 +42,10 @@ use darkfi_sdk::{
     ContractCall,
 };
 use darkfi_serial::{deserialize_async, serialize, serialize_async, AsyncEncodable};
-use rusqlite::types::Value;
 
-use crate::{convert_named_params, error::WalletDbResult, rpc::ScanCache, Drk};
+use crate::{
+    convert_named_params, error::WalletDbResult, params, rpc::ScanCache, walletdb::Value, Drk,
+};
 
 // Wallet SQL table constant names. These have to represent the `wallet.sql`
 // SQL schema. Table names are prefixed with the contract ID to avoid collisions.
@@ -71,10 +72,10 @@ pub const DEPLOY_HISTORY_COL_DEPLOY_IX: &str = "deploy_ix";
 
 impl Drk {
     /// Initialize wallet with tables for the Deployooor contract.
-    pub fn initialize_deployooor(&self) -> WalletDbResult<()> {
+    pub async fn initialize_deployooor(&self) -> WalletDbResult<()> {
         // Initialize Deployooor wallet schema
         let wallet_schema = include_str!("../deploy.sql");
-        self.wallet.exec_batch_sql(wallet_schema)?;
+        self.wallet.exec_batch_sql(wallet_schema).await?;
 
         Ok(())
     }
@@ -95,15 +96,17 @@ impl Drk {
             DEPLOY_AUTH_COL_IS_LOCKED,
             DEPLOY_AUTH_COL_LOCK_HEIGHT,
         );
-        self.wallet.exec_sql(
-            &query,
-            rusqlite::params![
-                serialize_async(&contract_id).await,
-                serialize_async(&secret_key).await,
-                0,
-                lock_height
-            ],
-        )?;
+        self.wallet
+            .exec_sql(
+                &query,
+                params![
+                    serialize_async(&contract_id).await,
+                    serialize_async(&secret_key).await,
+                    0,
+                    lock_height
+                ],
+            )
+            .await?;
 
         output.push(String::from("Created new contract deploy authority"));
         output.push(format!("Contract ID: {contract_id}"));
@@ -112,7 +115,7 @@ impl Drk {
     }
 
     /// Insert a deploy authority history record into the wallet.
-    pub fn put_deploy_history_record(
+    pub async fn put_deploy_history_record(
         &self,
         tx_hash: &TransactionHash,
         contract: &ContractId,
@@ -131,29 +134,31 @@ impl Drk {
             DEPLOY_HISTORY_COL_WASM_BINCODE,
             DEPLOY_HISTORY_COL_DEPLOY_IX,
         );
-        self.wallet.exec_sql(
-            &query,
-            rusqlite::params![
-                tx_hash.to_string(),
-                serialize(contract),
-                tx_type,
-                block_height,
-                serialize(wasm_bincode),
-                serialize(deploy_ix),
-            ],
-        )?;
+        self.wallet
+            .exec_sql(
+                &query,
+                params![
+                    tx_hash.to_string(),
+                    serialize(contract),
+                    tx_type,
+                    *block_height,
+                    serialize(wasm_bincode),
+                    serialize(deploy_ix),
+                ],
+            )
+            .await?;
 
         Ok(())
     }
 
     /// Reset all contract deploy authorities locked status in the wallet.
-    pub fn reset_deploy_authorities(&self, output: &mut Vec<String>) -> WalletDbResult<()> {
+    pub async fn reset_deploy_authorities(&self, output: &mut Vec<String>) -> WalletDbResult<()> {
         output.push(String::from("Resetting deploy authorities locked status"));
         let query = format!(
             "UPDATE {} SET {} = 0, {} = NULL;",
             *DEPLOY_AUTH_TABLE, DEPLOY_AUTH_COL_IS_LOCKED, DEPLOY_AUTH_COL_LOCK_HEIGHT
         );
-        self.wallet.exec_sql(&query, &[])?;
+        self.wallet.exec_sql(&query, vec![]).await?;
         output.push(String::from("Successfully reset deploy authorities locked status"));
 
         Ok(())
@@ -161,7 +166,7 @@ impl Drk {
 
     /// Remove deploy authorities locked status in the wallet that
     /// where locked after provided height.
-    pub fn unlock_deploy_authorities_after(
+    pub async fn unlock_deploy_authorities_after(
         &self,
         height: &u32,
         output: &mut Vec<String>,
@@ -174,17 +179,17 @@ impl Drk {
             DEPLOY_AUTH_COL_LOCK_HEIGHT,
             DEPLOY_AUTH_COL_LOCK_HEIGHT
         );
-        self.wallet.exec_sql(&query, rusqlite::params![Some(*height)])?;
+        self.wallet.exec_sql(&query, params![Some(*height)]).await?;
         output.push(String::from("Successfully reset deploy authorities locked status"));
 
         Ok(())
     }
 
     /// Reset all contracts history records in the wallet.
-    pub fn reset_deploy_history(&self, output: &mut Vec<String>) -> WalletDbResult<()> {
+    pub async fn reset_deploy_history(&self, output: &mut Vec<String>) -> WalletDbResult<()> {
         output.push(String::from("Resetting deployment history"));
         let query = format!("DELETE FROM {};", *DEPLOY_HISTORY_TABLE);
-        self.wallet.exec_sql(&query, &[])?;
+        self.wallet.exec_sql(&query, vec![]).await?;
         output.push(String::from("Successfully deployment history"));
 
         Ok(())
@@ -192,7 +197,7 @@ impl Drk {
 
     /// Remove the contracts history records in the wallet that were
     /// created after provided height.
-    pub fn remove_deploy_history_after(
+    pub async fn remove_deploy_history_after(
         &self,
         height: &u32,
         output: &mut Vec<String>,
@@ -202,7 +207,7 @@ impl Drk {
             "DELETE FROM {} WHERE {} > ?1;",
             *DEPLOY_HISTORY_TABLE, DEPLOY_HISTORY_COL_BLOCK_HEIGHT
         );
-        self.wallet.exec_sql(&query, rusqlite::params![height])?;
+        self.wallet.exec_sql(&query, params![*height]).await?;
         output.push(String::from("Successfully removed deployment history records"));
 
         Ok(())
@@ -212,7 +217,7 @@ impl Drk {
     pub async fn list_deploy_auth(
         &self,
     ) -> Result<Vec<(ContractId, SecretKey, bool, Option<u32>)>> {
-        let rows = match self.wallet.query_multiple(&DEPLOY_AUTH_TABLE, &[], &[]) {
+        let rows = match self.wallet.query_multiple(&DEPLOY_AUTH_TABLE, &[], vec![]).await {
             Ok(r) => r,
             Err(e) => {
                 return Err(Error::DatabaseError(format!(
@@ -270,7 +275,7 @@ impl Drk {
             &DEPLOY_AUTH_TABLE,
             &[DEPLOY_AUTH_COL_SECRET_KEY, DEPLOY_AUTH_COL_IS_LOCKED],
             convert_named_params! {(DEPLOY_AUTH_COL_CONTRACT_ID, serialize_async(contract_id).await)},
-        ) {
+        ).await {
             Ok(v) => v,
             Err(e) => {
                 return Err(Error::DatabaseError(format!(
@@ -297,8 +302,8 @@ impl Drk {
         let rows = match self.wallet.query_multiple(
             &DEPLOY_AUTH_TABLE,
             &[DEPLOY_AUTH_COL_SECRET_KEY],
-            &[],
-        ) {
+            vec![],
+        ).await {
             Ok(r) => r,
             Err(e) => {
                 return Err(Error::DatabaseError(format!(
@@ -331,7 +336,7 @@ impl Drk {
             &DEPLOY_HISTORY_TABLE,
             &[DEPLOY_HISTORY_COL_TX_HASH, DEPLOY_HISTORY_COL_TYPE, DEPLOY_HISTORY_COL_BLOCK_HEIGHT],
             convert_named_params! {(DEPLOY_HISTORY_COL_CONTRACT, serialize_async(contract_id).await)},
-        ) {
+        ).await {
             Ok(r) => r,
             Err(e) => {
                 return Err(Error::DatabaseError(format!(
@@ -375,11 +380,15 @@ impl Drk {
         &self,
         tx_hash: &str,
     ) -> Result<(Option<Vec<u8>>, Option<Vec<u8>>)> {
-        let row = match self.wallet.query_single(
-            &DEPLOY_HISTORY_TABLE,
-            &[DEPLOY_HISTORY_COL_WASM_BINCODE, DEPLOY_HISTORY_COL_DEPLOY_IX],
-            convert_named_params! {(DEPLOY_HISTORY_COL_TX_HASH, tx_hash)},
-        ) {
+        let row = match self
+            .wallet
+            .query_single(
+                &DEPLOY_HISTORY_TABLE,
+                &[DEPLOY_HISTORY_COL_WASM_BINCODE, DEPLOY_HISTORY_COL_DEPLOY_IX],
+                convert_named_params! {(DEPLOY_HISTORY_COL_TX_HASH, tx_hash)},
+            )
+            .await
+        {
             Ok(v) => v,
             Err(e) => {
                 return Err(Error::DatabaseError(format!(
@@ -409,7 +418,7 @@ impl Drk {
     /// data to the wallet.
     /// Returns a flag indicating if the provided call refers to our
     /// own wallet.
-    fn apply_deploy_deploy_data(
+    async fn apply_deploy_deploy_data(
         &self,
         scan_cache: &ScanCache,
         params: &DeployParamsV1,
@@ -422,14 +431,17 @@ impl Drk {
         };
 
         // Create a new history record containing the deployment data
-        if let Err(e) = self.put_deploy_history_record(
-            tx_hash,
-            &ContractId::derive_public(params.public_key),
-            "DEPLOYMENT",
-            block_height,
-            &Some(params.wasm_bincode.clone()),
-            &Some(params.ix.clone()),
-        ) {
+        if let Err(e) = self
+            .put_deploy_history_record(
+                tx_hash,
+                &ContractId::derive_public(params.public_key),
+                "DEPLOYMENT",
+                block_height,
+                &Some(params.wasm_bincode.clone()),
+                &Some(params.ix.clone()),
+            )
+            .await
+        {
             return Err(Error::DatabaseError(format!(
                 "[apply_deploy_deploy_data] Inserting deploy history recod failed: {e}"
             )))
@@ -463,8 +475,7 @@ impl Drk {
             DEPLOY_AUTH_COL_LOCK_HEIGHT,
             DEPLOY_AUTH_COL_SECRET_KEY
         );
-        if let Err(e) =
-            self.wallet.exec_sql(&query, rusqlite::params![Some(*lock_height), secret_key])
+        if let Err(e) = self.wallet.exec_sql(&query, params![Some(*lock_height), secret_key]).await
         {
             return Err(Error::DatabaseError(format!(
                 "[apply_deploy_lock_data] Lock deploy authority failed: {e}"
@@ -472,14 +483,17 @@ impl Drk {
         }
 
         // Create a new history record for the lock transaction
-        if let Err(e) = self.put_deploy_history_record(
-            tx_hash,
-            &ContractId::derive_public(*public_key),
-            "LOCK",
-            lock_height,
-            &None,
-            &None,
-        ) {
+        if let Err(e) = self
+            .put_deploy_history_record(
+                tx_hash,
+                &ContractId::derive_public(*public_key),
+                "LOCK",
+                lock_height,
+                &None,
+                &None,
+            )
+            .await
+        {
             return Err(Error::DatabaseError(format!(
                 "[apply_deploy_lock_data] Inserting deploy history recod failed: {e}"
             )))
@@ -504,7 +518,7 @@ impl Drk {
             DeployFunction::DeployV1 => {
                 scan_cache.log(String::from("[apply_tx_deploy_data] Found Deploy::DeployV1 call"));
                 let params: DeployParamsV1 = deserialize_async(&data[1..]).await?;
-                self.apply_deploy_deploy_data(scan_cache, &params, tx_hash, block_height)
+                self.apply_deploy_deploy_data(scan_cache, &params, tx_hash, block_height).await
             }
             DeployFunction::LockV1 => {
                 scan_cache.log(String::from("[apply_tx_deploy_data] Found Deploy::LockV1 call"));

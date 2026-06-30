@@ -21,7 +21,6 @@ use std::{collections::HashMap, fmt, str::FromStr};
 use lazy_static::lazy_static;
 use num_bigint::BigUint;
 use rand::rngs::OsRng;
-use rusqlite::types::Value;
 
 use darkfi::{
     tx::{ContractCallLeaf, Transaction, TransactionBuilder},
@@ -81,7 +80,9 @@ use crate::{
     convert_named_params,
     error::{WalletDbError, WalletDbResult},
     money::BALANCE_BASE10_DECIMALS,
+    params,
     rpc::ScanCache,
+    walletdb::Value,
     Drk,
 };
 
@@ -922,7 +923,7 @@ impl Drk {
     pub async fn initialize_dao(&self) -> WalletDbResult<()> {
         // Initialize DAO wallet schema
         let wallet_schema = include_str!("../dao.sql");
-        self.wallet.exec_batch_sql(wallet_schema)?;
+        self.wallet.exec_batch_sql(wallet_schema).await?;
 
         Ok(())
     }
@@ -1004,7 +1005,7 @@ impl Drk {
 
     /// Fetch all known DAOs from the wallet.
     pub async fn get_daos(&self) -> Result<Vec<DaoRecord>> {
-        let rows = match self.wallet.query_multiple(&DAO_DAOS_TABLE, &[], &[]) {
+        let rows = match self.wallet.query_multiple(&DAO_DAOS_TABLE, &[], vec![]).await {
             Ok(r) => r,
             Err(e) => {
                 return Err(Error::DatabaseError(format!("[get_daos] DAOs retrieval failed: {e}")))
@@ -1159,7 +1160,7 @@ impl Drk {
             &DAO_PROPOSALS_TABLE,
             &[],
             convert_named_params! {(DAO_PROPOSALS_COL_DAO_BULLA, serialize_async(&dao.bulla()).await)},
-        ) {
+        ).await {
             Ok(r) => r,
             Err(e) => {
                 return Err(Error::DatabaseError(format!(
@@ -1399,7 +1400,8 @@ impl Drk {
         // Execute the query
         if let Err(e) = self
             .wallet
-            .exec_sql(&query, rusqlite::params![Some(*exec_height), Some(serialize(tx_hash)), key])
+            .exec_sql(&query, params![Some(*exec_height), Some(serialize(tx_hash)), key])
+            .await
         {
             return Err(Error::DatabaseError(format!(
                 "[apply_dao_exec_data] Update DAO proposal failed: {e}"
@@ -1486,16 +1488,16 @@ impl Drk {
         );
 
         // Create its params
-        let params = rusqlite::params![
+        let params = params![
             serialize(leaf_position),
             Some(*mint_height),
             serialize(tx_hash),
-            call_index,
+            *call_index,
             key,
         ];
 
         // Execute the query
-        self.wallet.exec_sql(&query, params)
+        self.wallet.exec_sql(&query, params).await
     }
 
     /// Import given DAO proposal into the wallet.
@@ -1531,10 +1533,7 @@ impl Drk {
         );
 
         // Create its params
-        let data = match &proposal.data {
-            Some(data) => Some(data),
-            None => None,
-        };
+        let data = proposal.data.clone();
 
         let leaf_position = match &proposal.leaf_position {
             Some(leaf_position) => Some(serialize_async(leaf_position).await),
@@ -1561,7 +1560,7 @@ impl Drk {
             None => None,
         };
 
-        let params = rusqlite::params![
+        let params = params![
             key,
             serialize(&proposal.proposal.dao_bulla),
             serialize(&proposal.proposal),
@@ -1577,7 +1576,7 @@ impl Drk {
         ];
 
         // Execute the query
-        if let Err(e) = self.wallet.exec_sql(&query, params) {
+        if let Err(e) = self.wallet.exec_sql(&query, params).await {
             return Err(Error::DatabaseError(format!(
                 "[put_dao_proposal] Proposal insert failed: {e}"
             )))
@@ -1604,9 +1603,9 @@ impl Drk {
         );
 
         // Create its params
-        let params = rusqlite::params![
+        let params = params![
             serialize(&vote.proposal),
-            vote.vote_option as u64,
+            vote.vote_option as u8,
             serialize(&vote.yes_vote_blind),
             serialize(&vote.all_vote_value),
             serialize(&vote.all_vote_blind),
@@ -1617,7 +1616,7 @@ impl Drk {
         ];
 
         // Execute the query
-        self.wallet.exec_sql(&query, params)?;
+        self.wallet.exec_sql(&query, params).await?;
 
         Ok(())
     }
@@ -1640,7 +1639,7 @@ impl Drk {
     }
 
     /// Reset confirmed DAOs in the wallet.
-    pub fn reset_daos(&self, output: &mut Vec<String>) -> WalletDbResult<()> {
+    pub async fn reset_daos(&self, output: &mut Vec<String>) -> WalletDbResult<()> {
         output.push(String::from("Resetting DAO confirmations"));
         let query = format!(
             "UPDATE {} SET {} = NULL, {} = NULL, {} = NULL, {} = NULL;",
@@ -1650,7 +1649,7 @@ impl Drk {
             DAO_DAOS_COL_TX_HASH,
             DAO_DAOS_COL_CALL_INDEX,
         );
-        self.wallet.exec_sql(&query, &[])?;
+        self.wallet.exec_sql(&query, vec![]).await?;
         output.push(String::from("Successfully unconfirmed DAOs"));
 
         Ok(())
@@ -1658,7 +1657,7 @@ impl Drk {
 
     /// Reset confirmed DAOs in the wallet that were minted after
     /// provided height.
-    pub fn unconfirm_daos_after(
+    pub async fn unconfirm_daos_after(
         &self,
         height: &u32,
         output: &mut Vec<String>,
@@ -1673,14 +1672,14 @@ impl Drk {
             DAO_DAOS_COL_CALL_INDEX,
             DAO_DAOS_COL_MINT_HEIGHT,
         );
-        self.wallet.exec_sql(&query, rusqlite::params![Some(*height)])?;
+        self.wallet.exec_sql(&query, params![Some(*height)]).await?;
         output.push(String::from("Successfully unconfirmed DAOs"));
 
         Ok(())
     }
 
     /// Reset all DAO proposals in the wallet.
-    pub fn reset_dao_proposals(&self, output: &mut Vec<String>) -> WalletDbResult<()> {
+    pub async fn reset_dao_proposals(&self, output: &mut Vec<String>) -> WalletDbResult<()> {
         output.push(String::from("Resetting DAO proposals confirmations"));
         let query = format!(
             "UPDATE {} SET {} = NULL, {} = NULL, {} = NULL, {} = NULL, {} = NULL, {} = NULL, {} = NULL, {} = NULL;",
@@ -1694,7 +1693,7 @@ impl Drk {
             DAO_PROPOSALS_COL_EXEC_HEIGHT,
             DAO_PROPOSALS_COL_EXEC_TX_HASH,
         );
-        self.wallet.exec_sql(&query, &[])?;
+        self.wallet.exec_sql(&query, vec![]).await?;
         output.push(String::from("Successfully unconfirmed DAO proposals"));
 
         Ok(())
@@ -1702,7 +1701,7 @@ impl Drk {
 
     /// Reset DAO proposals in the wallet that were minted after
     /// provided height.
-    pub fn unconfirm_dao_proposals_after(
+    pub async fn unconfirm_dao_proposals_after(
         &self,
         height: &u32,
         output: &mut Vec<String>,
@@ -1721,7 +1720,7 @@ impl Drk {
             DAO_PROPOSALS_COL_EXEC_TX_HASH,
             DAO_PROPOSALS_COL_MINT_HEIGHT,
         );
-        self.wallet.exec_sql(&query, rusqlite::params![Some(*height)])?;
+        self.wallet.exec_sql(&query, params![Some(*height)]).await?;
         output.push(String::from("Successfully unconfirmed DAO proposals"));
 
         Ok(())
@@ -1729,7 +1728,7 @@ impl Drk {
 
     /// Reset execution information in the wallet for DAO proposals
     /// that were executed after provided height.
-    pub fn unexec_dao_proposals_after(
+    pub async fn unexec_dao_proposals_after(
         &self,
         height: &u32,
         output: &mut Vec<String>,
@@ -1742,17 +1741,17 @@ impl Drk {
             DAO_PROPOSALS_COL_EXEC_TX_HASH,
             DAO_PROPOSALS_COL_EXEC_HEIGHT,
         );
-        self.wallet.exec_sql(&query, rusqlite::params![Some(*height)])?;
+        self.wallet.exec_sql(&query, params![Some(*height)]).await?;
         output.push(String::from("Successfully reset DAO proposals execution information"));
 
         Ok(())
     }
 
     /// Reset all DAO votes in the wallet.
-    pub fn reset_dao_votes(&self, output: &mut Vec<String>) -> WalletDbResult<()> {
+    pub async fn reset_dao_votes(&self, output: &mut Vec<String>) -> WalletDbResult<()> {
         output.push(String::from("Resetting DAO votes"));
         let query = format!("DELETE FROM {};", *DAO_VOTES_TABLE);
-        self.wallet.exec_sql(&query, &[])?;
+        self.wallet.exec_sql(&query, vec![]).await?;
         output.push(String::from("Successfully reset DAO votes"));
 
         Ok(())
@@ -1760,7 +1759,7 @@ impl Drk {
 
     /// Remove the DAO votes in the wallet that were created after
     /// provided height.
-    pub fn remove_dao_votes_after(
+    pub async fn remove_dao_votes_after(
         &self,
         height: &u32,
         output: &mut Vec<String>,
@@ -1768,7 +1767,7 @@ impl Drk {
         output.push(format!("Removing DAO votes after: {height}"));
         let query =
             format!("DELETE FROM {} WHERE {} > ?1;", *DAO_VOTES_TABLE, DAO_VOTES_COL_BLOCK_HEIGHT);
-        self.wallet.exec_sql(&query, rusqlite::params![height])?;
+        self.wallet.exec_sql(&query, params![*height]).await?;
         output.push(String::from("Successfully removed DAO votes"));
 
         Ok(())
@@ -1792,14 +1791,14 @@ impl Drk {
                 "UPDATE {} SET {} = ?1, {} = ?2 WHERE {} = ?3;",
                 *DAO_DAOS_TABLE, DAO_DAOS_COL_NAME, DAO_DAOS_COL_PARAMS, DAO_DAOS_COL_BULLA
             );
-            if let Err(e) = self.wallet.exec_sql(
-                &query,
-                rusqlite::params![
-                    name,
-                    serialize_async(params).await,
-                    serialize_async(&bulla).await
-                ],
-            ) {
+            if let Err(e) = self
+                .wallet
+                .exec_sql(
+                    &query,
+                    params![name, serialize_async(params).await, serialize_async(&bulla).await],
+                )
+                .await
+            {
                 return Err(Error::DatabaseError(format!("[import_dao] DAO update failed: {e}")))
             };
             return Ok(())
@@ -1811,14 +1810,18 @@ impl Drk {
             "INSERT INTO {} ({}, {}, {}) VALUES (?1, ?2, ?3);",
             *DAO_DAOS_TABLE, DAO_DAOS_COL_BULLA, DAO_DAOS_COL_NAME, DAO_DAOS_COL_PARAMS
         );
-        if let Err(e) = self.wallet.exec_sql(
-            &query,
-            rusqlite::params![
-                serialize_async(&params.dao.to_bulla()).await,
-                name,
-                serialize_async(params).await
-            ],
-        ) {
+        if let Err(e) = self
+            .wallet
+            .exec_sql(
+                &query,
+                params![
+                    serialize_async(&params.dao.to_bulla()).await,
+                    name,
+                    serialize_async(params).await
+                ],
+            )
+            .await
+        {
             return Err(Error::DatabaseError(format!("[import_dao] DAO insert failed: {e}")))
         };
 
@@ -1829,7 +1832,7 @@ impl Drk {
     pub async fn remove_dao(&self, name: &str, output: &mut Vec<String>) -> Result<()> {
         output.push(format!("Removing \"{name}\" DAO from the wallet"));
         let query = format!("DELETE FROM {} WHERE {} = ?1;", *DAO_DAOS_TABLE, DAO_DAOS_COL_NAME);
-        if let Err(e) = self.wallet.exec_sql(&query, rusqlite::params![name]) {
+        if let Err(e) = self.wallet.exec_sql(&query, params![name]).await {
             return Err(Error::DatabaseError(format!("[remove_dao] DAO removal failed: {e}")))
         };
         output.push(String::from("Successfully removed DAO"));
@@ -1839,11 +1842,15 @@ impl Drk {
 
     /// Fetch a DAO given its bulla.
     pub async fn get_dao_by_bulla(&self, bulla: &DaoBulla) -> Result<DaoRecord> {
-        let row = match self.wallet.query_single(
-            &DAO_DAOS_TABLE,
-            &[],
-            convert_named_params! {(DAO_DAOS_COL_BULLA, serialize_async(bulla).await)},
-        ) {
+        let row = match self
+            .wallet
+            .query_single(
+                &DAO_DAOS_TABLE,
+                &[],
+                convert_named_params! {(DAO_DAOS_COL_BULLA, serialize_async(bulla).await)},
+            )
+            .await
+        {
             Ok(r) => r,
             Err(e) => {
                 return Err(Error::DatabaseError(format!(
@@ -1857,11 +1864,11 @@ impl Drk {
 
     /// Fetch a DAO given its name.
     pub async fn get_dao_by_name(&self, name: &str) -> Result<DaoRecord> {
-        let row = match self.wallet.query_single(
-            &DAO_DAOS_TABLE,
-            &[],
-            convert_named_params! {(DAO_DAOS_COL_NAME, name)},
-        ) {
+        let row = match self
+            .wallet
+            .query_single(&DAO_DAOS_TABLE, &[], convert_named_params! {(DAO_DAOS_COL_NAME, name)})
+            .await
+        {
             Ok(r) => r,
             Err(e) => {
                 return Err(Error::DatabaseError(format!(
@@ -1943,7 +1950,7 @@ impl Drk {
 
     /// Fetch all known DAO proposalss from the wallet.
     pub async fn get_proposals(&self) -> Result<Vec<ProposalRecord>> {
-        let rows = match self.wallet.query_multiple(&DAO_PROPOSALS_TABLE, &[], &[]) {
+        let rows = match self.wallet.query_multiple(&DAO_PROPOSALS_TABLE, &[], vec![]).await {
             Ok(r) => r,
             Err(e) => {
                 return Err(Error::DatabaseError(format!(
@@ -1966,11 +1973,15 @@ impl Drk {
         bulla: &DaoProposalBulla,
     ) -> Result<ProposalRecord> {
         // Grab the proposal record
-        let row = match self.wallet.query_single(
-            &DAO_PROPOSALS_TABLE,
-            &[],
-            convert_named_params! {(DAO_PROPOSALS_COL_BULLA, serialize_async(bulla).await)},
-        ) {
+        let row = match self
+            .wallet
+            .query_single(
+                &DAO_PROPOSALS_TABLE,
+                &[],
+                convert_named_params! {(DAO_PROPOSALS_COL_BULLA, serialize_async(bulla).await)},
+            )
+            .await
+        {
             Ok(r) => r,
             Err(e) => {
                 return Err(Error::DatabaseError(format!(
@@ -1992,7 +2003,7 @@ impl Drk {
             &DAO_VOTES_TABLE,
             &[],
             convert_named_params! {(DAO_VOTES_COL_PROPOSAL_BULLA, serialize_async(proposal).await)},
-        ) {
+        ).await {
             Ok(r) => r,
             Err(e) => {
                 return Err(Error::DatabaseError(format!(

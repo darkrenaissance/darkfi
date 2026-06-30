@@ -17,7 +17,6 @@
  */
 
 use rand::rngs::OsRng;
-use rusqlite::types::Value;
 
 use darkfi::{
     tx::{ContractCallLeaf, Transaction, TransactionBuilder},
@@ -55,6 +54,8 @@ use crate::{
         MONEY_TOKENS_COL_MINT_AUTHORITY, MONEY_TOKENS_COL_TOKEN_BLIND, MONEY_TOKENS_COL_TOKEN_ID,
         MONEY_TOKENS_TABLE,
     },
+    params,
+    walletdb::Value,
     Drk,
 };
 
@@ -103,16 +104,20 @@ impl Drk {
             MONEY_TOKENS_COL_FREEZE_HEIGHT,
         );
 
-        if let Err(e) = self.wallet.exec_sql(
-            &query,
-            rusqlite::params![
-                serialize_async(&token_id).await,
-                serialize_async(&mint_authority).await,
-                serialize_async(&token_blind).await,
-                is_frozen,
-                freeze_height,
-            ],
-        ) {
+        if let Err(e) = self
+            .wallet
+            .exec_sql(
+                &query,
+                params![
+                    serialize_async(&token_id).await,
+                    serialize_async(&mint_authority).await,
+                    serialize_async(&token_blind).await,
+                    is_frozen,
+                    freeze_height,
+                ],
+            )
+            .await
+        {
             return Err(Error::DatabaseError(format!(
                 "[import_mint_authority] Inserting mint authority failed: {e}"
             )))
@@ -176,13 +181,13 @@ impl Drk {
     }
 
     /// Reset all token mint authorities frozen status in the wallet.
-    pub fn reset_mint_authorities(&self, output: &mut Vec<String>) -> WalletDbResult<()> {
+    pub async fn reset_mint_authorities(&self, output: &mut Vec<String>) -> WalletDbResult<()> {
         output.push(String::from("Resetting mint authorities frozen status"));
         let query = format!(
             "UPDATE {} SET {} = 0, {} = NULL;",
             *MONEY_TOKENS_TABLE, MONEY_TOKENS_COL_IS_FROZEN, MONEY_TOKENS_COL_FREEZE_HEIGHT
         );
-        self.wallet.exec_sql(&query, &[])?;
+        self.wallet.exec_sql(&query, vec![]).await?;
         output.push(String::from("Successfully reset mint authorities frozen status"));
 
         Ok(())
@@ -190,7 +195,7 @@ impl Drk {
 
     /// Remove token mint authorities frozen status in the wallet that
     /// where frozen after provided height.
-    pub fn unfreeze_mint_authorities_after(
+    pub async fn unfreeze_mint_authorities_after(
         &self,
         height: &u32,
         output: &mut Vec<String>,
@@ -203,7 +208,7 @@ impl Drk {
             MONEY_TOKENS_COL_FREEZE_HEIGHT,
             MONEY_TOKENS_COL_FREEZE_HEIGHT
         );
-        self.wallet.exec_sql(&query, rusqlite::params![Some(*height)])?;
+        self.wallet.exec_sql(&query, params![Some(*height)]).await?;
         output.push(String::from("Successfully reset mint authorities frozen status"));
 
         Ok(())
@@ -213,7 +218,7 @@ impl Drk {
     pub async fn get_mint_authorities(
         &self,
     ) -> Result<Vec<(TokenId, SecretKey, BaseBlind, bool, Option<u32>)>> {
-        let rows = match self.wallet.query_multiple(&MONEY_TOKENS_TABLE, &[], &[]) {
+        let rows = match self.wallet.query_multiple(&MONEY_TOKENS_TABLE, &[], vec![]).await {
             Ok(r) => r,
             Err(e) => {
                 return Err(Error::DatabaseError(format!(
@@ -239,7 +244,7 @@ impl Drk {
             &MONEY_TOKENS_TABLE,
             &[],
             convert_named_params! {(MONEY_TOKENS_COL_TOKEN_ID, serialize_async(token_id).await)},
-        ) {
+        ).await {
             Ok(r) => r,
             Err(e) => {
                 return Err(Error::DatabaseError(format!(
