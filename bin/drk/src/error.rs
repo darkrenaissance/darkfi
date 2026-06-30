@@ -28,7 +28,6 @@ pub enum WalletDbError {
 
     // Connection related errors
     ConnectionFailed = -32110,
-    FailedToAquireLock = -32111,
 
     // Configuration related errors
     PragmaUpdateError = -32120,
@@ -49,7 +48,6 @@ impl std::fmt::Display for WalletDbError {
         match self {
             WalletDbError::InitializationFailed => write!(f, "WalletDbError::InitializationFailed"),
             WalletDbError::ConnectionFailed => write!(f, "WalletDbError::ConnectionFailed"),
-            WalletDbError::FailedToAquireLock => write!(f, "WalletDbError::FailedToAquireLock"),
             WalletDbError::PragmaUpdateError => write!(f, "WalletDbError::PragmaUpdateError"),
             WalletDbError::QueryPreparationFailed => {
                 write!(f, "WalletDbError::QueryPreparationFailed")

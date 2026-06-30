@@ -16,14 +16,14 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use rusqlite::types::Value;
-
 use darkfi::{tx::Transaction, Error, Result};
 use darkfi_serial::{deserialize_async, serialize};
 
 use crate::{
     convert_named_params,
     error::{WalletDbError, WalletDbResult},
+    params,
+    walletdb::Value,
     Drk,
 };
 
@@ -52,7 +52,8 @@ impl Drk {
         // Execute the query
         let tx_hash = tx.hash().to_string();
         self.wallet
-            .exec_sql(&query, rusqlite::params![tx_hash, status, block_height, &serialize(tx)])?;
+            .exec_sql(&query, params![tx_hash.clone(), status, block_height, serialize(tx)])
+            .await?;
 
         Ok(tx_hash)
     }
@@ -77,11 +78,15 @@ impl Drk {
         &self,
         tx_hash: &str,
     ) -> Result<(String, String, Option<u32>, Transaction)> {
-        let row = match self.wallet.query_single(
-            WALLET_TXS_HISTORY_TABLE,
-            &[],
-            convert_named_params! {(WALLET_TXS_HISTORY_COL_TX_HASH, tx_hash)},
-        ) {
+        let row = match self
+            .wallet
+            .query_single(
+                WALLET_TXS_HISTORY_TABLE,
+                &[],
+                convert_named_params! {(WALLET_TXS_HISTORY_COL_TX_HASH, tx_hash)},
+            )
+            .await
+        {
             Ok(r) => r,
             Err(e) => {
                 return Err(Error::DatabaseError(format!(
@@ -128,16 +133,19 @@ impl Drk {
     }
 
     /// Fetch all transactions history records, excluding bytes column.
-    pub fn get_txs_history(&self) -> WalletDbResult<Vec<(String, String, Option<u32>)>> {
-        let rows = self.wallet.query_multiple(
-            WALLET_TXS_HISTORY_TABLE,
-            &[
-                WALLET_TXS_HISTORY_COL_TX_HASH,
-                WALLET_TXS_HISTORY_COL_STATUS,
-                WALLET_TXS_HISTORY_BLOCK_HEIGHT,
-            ],
-            &[],
-        )?;
+    pub async fn get_txs_history(&self) -> WalletDbResult<Vec<(String, String, Option<u32>)>> {
+        let rows = self
+            .wallet
+            .query_multiple(
+                WALLET_TXS_HISTORY_TABLE,
+                &[
+                    WALLET_TXS_HISTORY_COL_TX_HASH,
+                    WALLET_TXS_HISTORY_COL_STATUS,
+                    WALLET_TXS_HISTORY_BLOCK_HEIGHT,
+                ],
+                vec![],
+            )
+            .await?;
 
         let mut ret = Vec::with_capacity(rows.len());
         for row in rows {
@@ -167,10 +175,10 @@ impl Drk {
     }
 
     /// Reset the transaction history records in the wallet.
-    pub fn reset_tx_history(&self, output: &mut Vec<String>) -> WalletDbResult<()> {
+    pub async fn reset_tx_history(&self, output: &mut Vec<String>) -> WalletDbResult<()> {
         output.push(String::from("Resetting transactions history"));
         let query = format!("DELETE FROM {WALLET_TXS_HISTORY_TABLE};");
-        self.wallet.exec_sql(&query, &[])?;
+        self.wallet.exec_sql(&query, vec![]).await?;
         output.push(String::from("Successfully reset transactions history"));
 
         Ok(())
@@ -178,7 +186,7 @@ impl Drk {
 
     /// Set reverted status to the transaction history records in the
     /// wallet that where executed after provided height.
-    pub fn revert_transactions_after(
+    pub async fn revert_transactions_after(
         &self,
         height: &u32,
         output: &mut Vec<String>,
@@ -187,7 +195,7 @@ impl Drk {
         let query = format!(
             "UPDATE {WALLET_TXS_HISTORY_TABLE} SET {WALLET_TXS_HISTORY_COL_STATUS} = 'Reverted', {WALLET_TXS_HISTORY_BLOCK_HEIGHT} = NULL WHERE {WALLET_TXS_HISTORY_BLOCK_HEIGHT} > ?1;"
         );
-        self.wallet.exec_sql(&query, rusqlite::params![Some(*height)])?;
+        self.wallet.exec_sql(&query, params![Some(*height)]).await?;
         output.push(String::from("Successfully reverted transactions history"));
 
         Ok(())
@@ -195,12 +203,12 @@ impl Drk {
 
     /// Remove the transaction history records in the wallet
     /// that have been reverted.
-    pub fn remove_reverted_txs(&self, output: &mut Vec<String>) -> WalletDbResult<()> {
+    pub async fn remove_reverted_txs(&self, output: &mut Vec<String>) -> WalletDbResult<()> {
         output.push(String::from("Removing reverted transactions history records"));
         let query = format!(
             "DELETE FROM {WALLET_TXS_HISTORY_TABLE} WHERE {WALLET_TXS_HISTORY_COL_STATUS} = 'Reverted';"
         );
-        self.wallet.exec_sql(&query, &[])?;
+        self.wallet.exec_sql(&query, vec![]).await?;
         output.push(String::from("Successfully removed reverted transactions history records"));
 
         Ok(())

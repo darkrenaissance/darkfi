@@ -367,7 +367,7 @@ impl Drk {
         // otherwise continue with the next block height.
         if height == 0 {
             let mut buf = vec![];
-            self.reset(&mut buf)?;
+            self.reset(&mut buf).await?;
             append_or_print(output, sender, print, buf).await;
         } else {
             height += 1;

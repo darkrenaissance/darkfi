@@ -833,7 +833,7 @@ async fn handle_wallet_initialize(drk: &DrkPtr, output: &mut Vec<String>) {
         output.push(format!("Failed to initialize DAO: {e}"));
         return
     }
-    if let Err(e) = lock.initialize_deployooor() {
+    if let Err(e) = lock.initialize_deployooor().await {
         output.push(format!("Failed to initialize Deployooor: {e}"));
     }
 }
@@ -919,7 +919,7 @@ async fn handle_wallet_default_address(drk: &DrkPtr, parts: &[&str], output: &mu
         return
     }
 
-    let index = match usize::from_str(parts[2]) {
+    let index = match u16::from_str(parts[2]) {
         Ok(i) => i,
         Err(e) => {
             output.push(format!("Invalid address id: {e}"));
@@ -927,7 +927,7 @@ async fn handle_wallet_default_address(drk: &DrkPtr, parts: &[&str], output: &mu
         }
     };
 
-    if let Err(e) = drk.read().await.set_default_address(index) {
+    if let Err(e) = drk.read().await.set_default_address(index).await {
         output.push(format!("Failed to set default address: {e}"));
     }
 }
@@ -1032,7 +1032,7 @@ async fn handle_wallet_mining_config(drk: &DrkPtr, parts: &[&str], output: &mut 
 
     // Parse command
     let mut index = 2;
-    let wallet_index = match usize::from_str(parts[index]) {
+    let wallet_index = match u16::from_str(parts[index]) {
         Ok(i) => i,
         Err(e) => {
             output.push(format!("Invalid address id: {e}"));
@@ -2761,7 +2761,7 @@ async fn handle_explorer_txs_history(drk: &DrkPtr, parts: &[&str], output: &mut 
         return
     }
 
-    let map = match lock.get_txs_history() {
+    let map = match lock.get_txs_history().await {
         Ok(m) => m,
         Err(e) => {
             output.push(format!("Failed to retrieve transactions history records: {e}"));
@@ -2797,7 +2797,7 @@ async fn handle_explorer_clear_reverted(drk: &DrkPtr, parts: &[&str], output: &m
         return
     }
 
-    if let Err(e) = drk.read().await.remove_reverted_txs(output) {
+    if let Err(e) = drk.read().await.remove_reverted_txs(output).await {
         output.push(format!("Failed to remove reverted transactions: {e}"));
     }
 }
