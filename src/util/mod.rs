@@ -40,6 +40,9 @@ pub mod ringbuffer;
 /// Logging utilities
 pub mod logger;
 
+/// Process memory telemetry helpers
+pub mod memory;
+
 /// Permuted Congruential Generator (PCG)
 /// This is an insecure PRNG used for simulations and tests.
 #[cfg(feature = "rand")]

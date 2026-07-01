@@ -44,6 +44,7 @@ use url::Url;
 use crate::{
     net::{channel::Channel, P2pPtr},
     system::{msleep, Publisher, PublisherPtr, StoppableTask, StoppableTaskPtr, Subscription},
+    util::memory::log_memory,
     Error, Result,
 };
 
@@ -763,6 +764,7 @@ impl EventGraph {
     ) -> Result<EventGraphPtr> {
         config.validate()?;
         let zk_keys = Arc::new(ZkKeys::build_and_load(&sled_db)?);
+        log_memory("after RLN key initialization");
         Self::with_zk_keys(p2p, sled_db, datastore, replay_mode, config, zk_keys, ex).await
     }
 
@@ -859,6 +861,7 @@ impl EventGraph {
         // static DAG authoritative for the current identity tree.
         if config.hours_rotation > 0 {
             self_.bootstrap_genesis_identities().await?;
+            log_memory("after genesis identity bootstrap");
         }
 
         self_.audit_static_blobs().await?;

@@ -37,7 +37,10 @@ use darkfi::{
         util::JsonValue,
     },
     system::{sleep, StoppableTask, Subscription},
-    util::path::{expand_path, get_config_path},
+    util::{
+        memory::log_memory,
+        path::{expand_path, get_config_path},
+    },
     Error, Result,
 };
 use darkfi_sdk::crypto::pasta_prelude::PrimeField;
@@ -429,6 +432,7 @@ pub const DARKIRC_GENESIS_COMMITMENTS_REPR: &[[u8; 32]] = &[
             return Err(e.into());
         }
     };
+    log_memory("after sled open");
     let p2p_settings: darkfi::net::Settings =
         (env!("CARGO_PKG_NAME"), env!("CARGO_PKG_VERSION"), args.net).try_into()?;
     let p2p = match P2p::new(p2p_settings, ex.clone()).await {
@@ -462,6 +466,7 @@ pub const DARKIRC_GENESIS_COMMITMENTS_REPR: &[[u8; 32]] = &[
             return Err(e);
         }
     };
+    log_memory("after EventGraph construction");
 
     // The prune task is only spawned when `hours_rotation > 0`. We
     // require rotation here, so the unwrap is safe.
@@ -748,7 +753,8 @@ async fn sync_task(
             info!("Syncing static DAG");
             match event_graph.static_sync().await {
                 Ok(()) => {
-                    info!("Static synced successfully")
+                    info!("Static synced successfully");
+                    log_memory("after static sync");
                 }
                 Err(e) => {
                     error!("Failed syncing static graph: {e}");
