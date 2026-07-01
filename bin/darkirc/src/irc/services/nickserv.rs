@@ -63,6 +63,7 @@ use darkfi::{
         rln::{create_slash_proof, RLNNode, SlashBlob, GENESIS_USER_MSG_LIMIT},
         Event,
     },
+    util::memory::log_memory,
     Result,
 };
 use darkfi_sdk::{crypto::pasta_prelude::PrimeField, pasta::pallas};
@@ -800,11 +801,13 @@ impl NickServ {
         // the actual proof generation does not need the lock, but
         // the API takes &mut so we hold it for the whole call.
         let identity_secret_hash = identity.identity_secret_hash();
+        log_memory("before slash proving");
         let slash_pk = evgr.zk_keys.load_slash_pk()?;
         let (proof, root) = {
             let mut id_state = evgr.identity_state.write().await;
             create_slash_proof(identity_secret_hash, &mut id_state, &slash_pk)?
         };
+        log_memory("after slash proving");
 
         let slash_blob = SlashBlob { proof, identity_secret_hash, merkle_root: root };
         let blob_bytes = serialize_async(&slash_blob).await;

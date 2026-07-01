@@ -21,6 +21,7 @@ use darkfi::{
         rln::{epoch_of, hash_event, Blob, RegistrationAttestation, RLN2_SIGNAL_ZKBIN},
         Event, EventGraphPtr,
     },
+    util::memory::log_memory,
     zk::{
         halo2::{Field, Value},
         Proof, Witness, ZkCircuit,
@@ -221,6 +222,7 @@ impl RlnIdentity {
             internal_nullifier,
         ];
         let circuit = ZkCircuit::new(witnesses, &zkbin);
+        log_memory("before local signal proving");
         let pk = eg.zk_keys.load_signal_pk()?;
 
         info!(
@@ -229,6 +231,7 @@ impl RlnIdentity {
             event.id(),
         );
         let proof = Proof::create(&pk, &[circuit], &pi, &mut OsRng)?;
+        log_memory("after local signal proving");
 
         Ok(Blob {
             proof,
