@@ -756,7 +756,7 @@ enum KeyKind {
 
 /// Build a key into sled if it doesn't already exist.
 fn ensure_key(sled_db: &sled::Db, key: &str, zkbin_bytes: &[u8], kind: KeyKind) -> Result<()> {
-    if sled_db.get(key)?.is_some() {
+    if sled_db.contains_key(key)? {
         return Ok(())
     }
 
