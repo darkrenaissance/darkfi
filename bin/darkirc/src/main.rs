@@ -89,10 +89,21 @@ const DARKIRC_GENESIS_CONTENTS: &[u8] = b"darkirc-v1";
 /// With `hours_rotation = 1` and `max_dags = 24`, this gives a
 /// 24-hour history window. Older events are evicted from sled.
 const DARKIRC_MAX_DAGS: usize = 24;
+const BYTES_PER_MIB: u64 = 1024 * 1024;
 
 /// Per-epoch limit printed by `--gen-rln-identity`.
 fn generated_rln_identity_user_msg_limit() -> u64 {
     GENESIS_USER_MSG_LIMIT
+}
+
+fn sled_cache_capacity_bytes(cache_mb: u64) -> Result<u64> {
+    if cache_mb == 0 {
+        return Err(Error::Custom("sled_cache_mb must be greater than 0".to_string()))
+    }
+
+    cache_mb
+        .checked_mul(BYTES_PER_MIB)
+        .ok_or_else(|| Error::Custom("sled_cache_mb overflows bytes".to_string()))
 }
 
 fn panic_hook(panic_info: &std::panic::PanicHookInfo) {
@@ -138,6 +149,10 @@ struct Args {
     #[structopt(long, default_value = "~/.local/share/darkfi/darkirc_db")]
     /// Datastore (DB) path
     datastore: String,
+
+    #[structopt(long, default_value = "64")]
+    /// Sled cache capacity for the datastore, in MiB
+    sled_cache_mb: u64,
 
     #[structopt(short, long, default_value = "~/.local/share/darkfi/replayed_darkirc_db")]
     /// Replay logs (DB) path
@@ -426,6 +441,13 @@ pub const DARKIRC_GENESIS_COMMITMENTS_REPR: &[[u8; 32]] = &[
 
     info!("Instantiating event DAG");
     let sled_db = match sled::open(datastore.clone()) {
+    let sled_cache_capacity = sled_cache_capacity_bytes(args.sled_cache_mb)?;
+    info!("Instantiating event DAG with {} MiB sled cache", args.sled_cache_mb);
+    let sled_db = match sled::Config::new()
+        .path(datastore.clone())
+        .cache_capacity(sled_cache_capacity)
+        .open()
+    {
         Ok(v) => v,
         Err(e) => {
             error!("Failed to open datastore database `{datastore:?}`: {e}");
@@ -858,7 +880,7 @@ mod tests {
     use darkfi::event_graph::rln::MAX_MSG_LIMIT;
     use rand::rngs::OsRng;
 
-    use super::RlnIdentity;
+    use super::{sled_cache_capacity_bytes, validate_history_window, RlnIdentity, BYTES_PER_MIB};
 
     #[test]
     fn generated_rln_identity_limit_matches_genesis_budget() {

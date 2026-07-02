@@ -18,6 +18,9 @@
 ## Sets Datastore Path
 #datastore = "~/.local/share/darkfi/darkirc/darkirc_db"
 
+## Sled cache capacity for the DarkIRC/EventGraph datastore, in MiB
+#sled_cache_mb = 64
+
 ## Sets DB logs replay datastore path
 #replay_datastore = "~/.local/share/darkfi/darkirc/replayed_darkirc_db"
 
