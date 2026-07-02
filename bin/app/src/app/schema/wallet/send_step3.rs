@@ -24,7 +24,7 @@ use darkfi_serial::Encodable;
 use crate::{
     app::{
         App,
-        node::{create_button, create_layer, create_decimal_edit, create_text, create_vector_art},
+        node::{create_button, create_layer, create_decimal_edit, create_singleline_edit, create_text, create_vector_art},
         schema::COLOR_SCHEME,
     },
     expr,
@@ -379,20 +379,16 @@ pub async fn make(
         .await;
     amount_wrapper.link(input_node.clone());
 
-    // Token symbol text node (displayed next to amount)
-    let token_symbol_node = create_text("send_amount_token_symbol");
+    // Token symbol node (displayed next to amount)
+    // Singleline edit so that it has the exact same Y position as the amount input
+    let token_symbol_node = create_singleline_edit("send_amount_token_symbol");
+    token_symbol_node.set_property_bool(atom, Role::App, "is_active", false).unwrap();
     let prop = token_symbol_node.get_property("rect").unwrap();
-    // Position will be dynamically updated based on amount text
     prop.set_f32(atom, Role::App, 0, 0.).unwrap();
-    let code = cc.compile(format!("{amount_y} - AMOUNT_FONTSIZE * 0.1")).unwrap();
-    prop.set_expr(atom, Role::App, 1, code).unwrap();
+    prop.set_f32(atom, Role::App, 1, 0.).unwrap();
     prop.set_f32(atom, Role::App, 2, 1000.).unwrap();
     prop.set_f32(atom, Role::App, 3, AMOUNT_FONTSIZE).unwrap();
-    prop.add_depend(&addr_h_prop, 0, "addr_height");
     token_symbol_node.set_property_f32(atom, Role::App, "font_size", AMOUNT_FONTSIZE).unwrap();
-    // Initial text - will be set from send_tx_data.token_symbol
-    let token_symbol_initial = send_tx_data.lock().unwrap().token_symbol.clone().unwrap_or_else(|| "".to_string());
-    token_symbol_node.set_property_str(atom, Role::App, "text", &token_symbol_initial).unwrap();
     let prop = token_symbol_node.get_property("text_color").unwrap();
     if COLOR_SCHEME == ColorScheme::DarkMode {
         prop.set_f32(atom, Role::App, 0, 1.).unwrap();
@@ -405,11 +401,47 @@ pub async fn make(
         prop.set_f32(atom, Role::App, 2, 0.).unwrap();
         prop.set_f32(atom, Role::App, 3, 1.).unwrap();
     }
+    let prop = token_symbol_node.get_property("hi_bg_color").unwrap();
+    if COLOR_SCHEME == ColorScheme::PaperLight {
+        prop.set_f32(atom, Role::App, 0, 0.5).unwrap();
+        prop.set_f32(atom, Role::App, 1, 0.5).unwrap();
+        prop.set_f32(atom, Role::App, 2, 0.5).unwrap();
+        prop.set_f32(atom, Role::App, 3, 1.).unwrap();
+    } else if COLOR_SCHEME == ColorScheme::DarkMode {
+        prop.set_f32(atom, Role::App, 0, 0.5).unwrap();
+        prop.set_f32(atom, Role::App, 1, 0.5).unwrap();
+        prop.set_f32(atom, Role::App, 2, 0.5).unwrap();
+        prop.set_f32(atom, Role::App, 3, 1.).unwrap();
+    }
+    let prop = token_symbol_node.get_property("text_hi_color").unwrap();
+    prop.set_f32(atom, Role::App, 0, 0.44).unwrap();
+    prop.set_f32(atom, Role::App, 1, 0.96).unwrap();
+    prop.set_f32(atom, Role::App, 2, 1.).unwrap();
+    prop.set_f32(atom, Role::App, 3, 1.).unwrap();
+    let prop = token_symbol_node.get_property("cursor_color").unwrap();
+    prop.set_f32(atom, Role::App, 0, 0.816).unwrap();
+    prop.set_f32(atom, Role::App, 1, 0.627).unwrap();
+    prop.set_f32(atom, Role::App, 2, 1.).unwrap();
+    prop.set_f32(atom, Role::App, 3, 1.).unwrap();
+    token_symbol_node.set_property_f32(atom, Role::App, "cursor_ascent", 0.).unwrap();
+    token_symbol_node.set_property_f32(atom, Role::App, "cursor_descent", AMOUNT_FONTSIZE*1.3).unwrap();
+    token_symbol_node.set_property_f32(atom, Role::App, "select_ascent", AMOUNT_FONTSIZE*1.3).unwrap();
+    token_symbol_node.set_property_f32(atom, Role::App, "select_descent", AMOUNT_FONTSIZE/3.).unwrap();
+    token_symbol_node.set_property_f32(atom, Role::App, "handle_descent", AMOUNT_FONTSIZE/2.5).unwrap();
     token_symbol_node.set_property_u32(atom, Role::App, "z_index", 2).unwrap();
+
     let token_symbol_node = token_symbol_node
-        .setup(|me| Text::new(me, window_scale.clone(), app.renderer.clone(), i18n_fish.clone()))
+        .setup(|me| {
+            BaseEdit::new(
+                me,
+                window_scale.clone(),
+                app.renderer.clone(),
+                BaseEditType::SingleLine,
+                app.ex.clone(),
+            )
+        })
         .await;
-    send_step3_layer.link(token_symbol_node.clone());
+    amount_wrapper.link(token_symbol_node.clone());
 
     y += PADDING_Y * 2. + BUTTON_HEIGHT + 10.;
 
@@ -533,7 +565,7 @@ pub async fn make(
                 if let Some(token_symbol_node) = sg_root.lookup_node("/window/content/wallet/send_step4_layer/send_selected_token_symbol4") {
                     token_symbol_node.set_property_str(atom, Role::App, "text", &data.token_symbol.clone().unwrap()).unwrap();
                 }
-                if let Some(amount_token_node) = sg_root.lookup_node("/window/content/wallet/send_step4_layer/send_amount_token_symbol4") {
+                if let Some(amount_token_node) = sg_root.lookup_node("/window/content/wallet/send_step4_layer/send_amount_wrapper4/send_amount_token_symbol4") {
                     amount_token_node.set_property_str(atom, Role::App, "text", &data.token_symbol.clone().unwrap()).unwrap();
                 }
                 if let Some(recipient_node) = sg_root.lookup_node("/window/content/wallet/send_step4_layer/send_recipient_value4") {

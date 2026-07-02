@@ -30,7 +30,7 @@ use crate::{
     gfx::gfxtag,
     mesh::COLOR_CYAN,
     prop::{PropertyAtomicGuard, PropertyBool, PropertyFloat32, Role},
-    scene::{SceneNodePtr, Slot},
+    scene::{Pimpl, SceneNodePtr, Slot},
     shape,
     ui::{BaseEdit, BaseEditType, Button, Layer, Text, VectorArt, VectorShape},
     util::i18n::I18nBabelFish,
@@ -435,8 +435,11 @@ pub async fn make(
                 token_symbol_node.set_property_str(atom, Role::App, "text", token_symbol).unwrap();
 
                 // Update amount token symbol
-                if let Some(amount_token_node) = sg_root.lookup_node("/window/content/wallet/send_step3_layer/send_amount_token_symbol") {
-                    amount_token_node.set_property_str(atom, Role::App, "text", token_symbol).unwrap();
+                if let Some(token_symbol_node) = sg_root.lookup_node("/window/content/wallet/send_step3_layer/send_amount_wrapper/send_amount_token_symbol") {
+                    token_symbol_node.set_property_str(atom, Role::Internal, "text", token_symbol).unwrap();
+                    if let Pimpl::Edit(edit) = token_symbol_node.pimpl() {
+                        edit.on_text_prop_changed();
+                    }
 
                     // Update available balance
                     let available_balance = encode_base10(get_balance(&sg_root, &data.token_id.unwrap()).await, BALANCE_BASE10_DECIMALS);

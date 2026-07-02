@@ -290,8 +290,7 @@ pub async fn make(
     let token_symbol_node = create_text("send_amount_token_symbol4");
     let prop = token_symbol_node.get_property("rect").unwrap();
     prop.set_f32(atom, Role::App, 0, 0.).unwrap();
-    let code = cc.compile(amount_y).unwrap();
-    prop.set_expr(atom, Role::App, 1, code).unwrap();
+    prop.set_f32(atom, Role::App, 1, 0.).unwrap();
     prop.set_f32(atom, Role::App, 2, 1000.).unwrap();
     prop.set_f32(atom, Role::App, 3, AMOUNT_FONTSIZE).unwrap();
     prop.add_depend(&addr_h_prop, 0, "addr_height");
@@ -313,7 +312,7 @@ pub async fn make(
     let token_symbol_node = token_symbol_node
         .setup(|me| Text::new(me, window_scale.clone(), app.renderer.clone(), i18n_fish.clone()))
         .await;
-    send_step4_layer.link(token_symbol_node.clone());
+    amount_wrapper.link(token_symbol_node.clone());
 
     // Transaction fee label
     let tx_fee_label_node = create_text("send_fee_label");

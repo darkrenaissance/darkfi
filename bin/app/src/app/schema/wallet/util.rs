@@ -93,10 +93,13 @@ pub async fn update_amount_screen(
     if let Pimpl::Edit(edit) = amount_input_node.pimpl() {
         edit.reset_scroll();
     }
+    if let Pimpl::Edit(edit) = token_node.pimpl() {
+        edit.reset_scroll();
+    }
 
     // Update token symbol position
     let token_rect = token_node.get_property("rect").unwrap();
-    token_rect.set_expr(atom, Role::App, 0, cc.compile("(w - AMOUNT_TOTAL_WIDTH) / 2 + AMOUNT_TOKEN_SPACING + AMOUNT_WIDTH").unwrap()).unwrap();
+    token_rect.set_expr(atom, Role::App, 0, cc.compile("AMOUNT_TOKEN_SPACING + AMOUNT_WIDTH").unwrap()).unwrap();
 
     // Set available balance
     if let Some(available_balance_node) = available_balance_node {
