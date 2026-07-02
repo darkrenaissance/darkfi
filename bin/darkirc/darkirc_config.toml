@@ -10,10 +10,15 @@
 ## TLS secret key path if IRC acceptor uses TLS (optional)
 #irc_tls_secret = "/etc/letsencrypt/darkirc/privkey.pem"
 
-## How many DAGs to be synced (each DAG represents a 1hr msg history),
-## increasing this number means you get/sync previous hours msg history 
-## as well (max. 24)
+## How many recent DAGs to sync at startup. Each DAG is 1 hour of
+## message history. This can be larger than 24 if history_retention_dags
+## is also larger.
 #dags_count = 8
+
+## How many rotating DAGs to retain locally. This controls how much
+## history the node can serve or lazily sync without old DAGs being
+## pruned from sled.
+#history_retention_dags = 24
 
 ## Sets Datastore Path
 #datastore = "~/.local/share/darkfi/darkirc/darkirc_db"
