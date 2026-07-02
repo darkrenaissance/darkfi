@@ -85,10 +85,6 @@ const DARKIRC_HOURS_ROTATION: u64 = 1;
 /// deployment never appear valid on another.
 const DARKIRC_GENESIS_CONTENTS: &[u8] = b"darkirc-v1";
 
-/// How many rotation periods to keep in the rolling DAG window.
-/// With `hours_rotation = 1` and `max_dags = 24`, this gives a
-/// 24-hour history window. Older events are evicted from sled.
-const DARKIRC_MAX_DAGS: usize = 24;
 const BYTES_PER_MIB: u64 = 1024 * 1024;
 
 /// Per-epoch limit printed by `--gen-rln-identity`.
@@ -104,6 +100,25 @@ fn sled_cache_capacity_bytes(cache_mb: u64) -> Result<u64> {
     cache_mb
         .checked_mul(BYTES_PER_MIB)
         .ok_or_else(|| Error::Custom("sled_cache_mb overflows bytes".to_string()))
+}
+
+fn validate_history_window(dags_count: usize, history_retention_dags: usize) -> Result<()> {
+    if dags_count == 0 {
+        return Err(Error::Custom("dags_count must be greater than 0".to_string()))
+    }
+
+    if history_retention_dags == 0 {
+        return Err(Error::Custom("history_retention_dags must be greater than 0".to_string()))
+    }
+
+    if dags_count > history_retention_dags {
+        return Err(Error::Custom(format!(
+            "dags_count ({dags_count}) cannot exceed history_retention_dags \
+             ({history_retention_dags})",
+        )))
+    }
+
+    Ok(())
 }
 
 fn panic_hook(panic_info: &std::panic::PanicHookInfo) {
@@ -142,9 +157,13 @@ struct Args {
     /// Optional TLS certificate key file path if `irc_listen` uses TLS
     irc_tls_secret: Option<String>,
 
-    /// How many DAGs to sync.
+    /// How many recent DAGs to sync at startup.
     #[structopt(long, default_value = "8")]
     dags_count: usize,
+
+    #[structopt(long, default_value = "24")]
+    /// How many rotating DAGs to retain locally
+    history_retention_dags: usize,
 
     #[structopt(long, default_value = "~/.local/share/darkfi/darkirc_db")]
     /// Datastore (DB) path
@@ -439,8 +458,12 @@ pub const DARKIRC_GENESIS_COMMITMENTS_REPR: &[[u8; 32]] = &[
     };
     let replay_mode = args.replay_mode;
 
-    info!("Instantiating event DAG");
-    let sled_db = match sled::open(datastore.clone()) {
+    validate_history_window(args.dags_count, args.history_retention_dags)?;
+    info!(
+        "Retaining {} DAG(s) of local history; syncing {} DAG(s) at startup",
+        args.history_retention_dags, args.dags_count,
+    );
+
     let sled_cache_capacity = sled_cache_capacity_bytes(args.sled_cache_mb)?;
     info!("Instantiating event DAG with {} MiB sled cache", args.sled_cache_mb);
     let sled_db = match sled::Config::new()
@@ -470,7 +493,7 @@ pub const DARKIRC_GENESIS_COMMITMENTS_REPR: &[[u8; 32]] = &[
         hours_rotation: DARKIRC_HOURS_ROTATION,
         genesis_contents: DARKIRC_GENESIS_CONTENTS.to_vec(),
         pregenerated_identity_commitments: genesis_commits::pregenerated_identity_commitments(),
-        max_dags: Some(DARKIRC_MAX_DAGS),
+        max_dags: Some(args.history_retention_dags),
     };
     let event_graph = match EventGraph::new(
         p2p.clone(),
@@ -889,5 +912,35 @@ mod tests {
         assert_eq!(super::generated_rln_identity_user_msg_limit(), super::GENESIS_USER_MSG_LIMIT);
         assert_eq!(super::generated_rln_identity_user_msg_limit(), MAX_MSG_LIMIT);
         assert_eq!(identity.user_message_limit, super::generated_rln_identity_user_msg_limit());
+    }
+
+    #[test]
+    fn sled_cache_capacity_rejects_zero() {
+        assert!(sled_cache_capacity_bytes(0).is_err());
+    }
+
+    #[test]
+    fn sled_cache_capacity_converts_mib() {
+        assert_eq!(sled_cache_capacity_bytes(64).unwrap(), 64 * BYTES_PER_MIB);
+    }
+
+    #[test]
+    fn history_window_rejects_zero_startup_sync() {
+        assert!(validate_history_window(0, 24).is_err());
+    }
+
+    #[test]
+    fn history_window_rejects_zero_retention() {
+        assert!(validate_history_window(1, 0).is_err());
+    }
+
+    #[test]
+    fn history_window_rejects_sync_beyond_retention() {
+        assert!(validate_history_window(25, 24).is_err());
+    }
+
+    #[test]
+    fn history_window_allows_sync_inside_retention() {
+        assert!(validate_history_window(48, 168).is_ok());
     }
 }
