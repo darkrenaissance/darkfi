@@ -182,14 +182,14 @@ pub async fn make(
     // Receive label
     let node = create_text("receive_label");
     let prop = node.get_property("rect").unwrap();
-    let code = cc.compile("PADDING_X + (w / 2 - PADDING_X * 1.5) / 2 - (BUTTON_FONTSIZE * 0.6 * 7) / 2").unwrap();
-    prop.set_expr(atom, Role::App, 0, code).unwrap();
+    prop.set_f32(atom, Role::App, 0, PADDING_X).unwrap();
     prop.set_f32(atom, Role::App, 1, y + PADDING_X + BUTTON_HEIGHT / 2. - BUTTON_FONTSIZE / 1.8).unwrap();
     let code = cc.compile("w / 2 - PADDING_X * 1.5").unwrap();
     prop.set_expr(atom, Role::App, 2, code).unwrap();
     prop.set_f32(atom, Role::App, 3, BUTTON_HEIGHT).unwrap();
     node.set_property_f32(atom, Role::App, "font_size", BUTTON_FONTSIZE).unwrap();
     node.set_property_str(atom, Role::App, "text", "receive").unwrap();
+    node.set_property_enum(atom, Role::App, "text_align", "center").unwrap();
     let prop = node.get_property("text_color").unwrap();
     if COLOR_SCHEME == ColorScheme::DarkMode {
         prop.set_f32(atom, Role::App, 0, COLOR_CYAN[0]).unwrap();
@@ -262,7 +262,7 @@ pub async fn make(
     // Send label
     let node = create_text("wallet_send_label");
     let prop = node.get_property("rect").unwrap();
-    let code = cc.compile("PADDING_X / 2 + w / 2 + (w / 2 - PADDING_X * 1.5) / 2 - (BUTTON_FONTSIZE * 0.6 * 4) / 2").unwrap();
+    let code = cc.compile("PADDING_X / 2 + w / 2").unwrap();
     prop.set_expr(atom, Role::App, 0, code).unwrap();
     prop.set_f32(atom, Role::App, 1, y + PADDING_X + BUTTON_HEIGHT / 2. - BUTTON_FONTSIZE / 1.8).unwrap();
     let code = cc.compile("w / 2 - PADDING_X * 1.5").unwrap();
@@ -270,6 +270,7 @@ pub async fn make(
     prop.set_f32(atom, Role::App, 3, BUTTON_HEIGHT).unwrap();
     node.set_property_f32(atom, Role::App, "font_size", BUTTON_FONTSIZE).unwrap();
     node.set_property_str(atom, Role::App, "text", "send").unwrap();
+    node.set_property_enum(atom, Role::App, "text_align", "center").unwrap();
     let prop = node.get_property("text_color").unwrap();
     if COLOR_SCHEME == ColorScheme::DarkMode {
         prop.set_f32(atom, Role::App, 0, COLOR_CYAN[0]).unwrap();
