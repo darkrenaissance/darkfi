@@ -214,6 +214,13 @@ pub enum RLNNode {
     Slashing(pallas::Base),
 }
 
+const REGISTER_VK_KEY: &str = "rlnv2-diff-register-vk";
+const REGISTER_PK_KEY: &str = "rlnv2-diff-register-pk";
+const SIGNAL_VK_KEY: &str = "rlnv2-diff-signal-vk";
+const SIGNAL_PK_KEY: &str = "rlnv2-diff-signal-pk";
+const SLASH_VK_KEY: &str = "rlnv2-diff-slash-vk";
+const SLASH_PK_KEY: &str = "rlnv2-diff-slash-pk";
+
 /// ZK key cache.
 pub struct ZkKeys {
     /// Verifying key for identity registration proofs.
@@ -222,42 +229,51 @@ pub struct ZkKeys {
     pub signal_vk: VerifyingKey,
     /// Verifying key for slash proofs.
     pub slash_vk: VerifyingKey,
-    /// Reference to the sled DB so we can lazy-load the proving keys.
+    /// Reference to the sled DB for proving-key access during local proving.
     sled_db: sled::Db,
 }
 
 impl ZkKeys {
-    /// Ensure all keys exist in sled and load only the verifying
-    /// keys into memory.
+    /// Ensure all required keys exist and load only verifying keys into memory.
     pub fn build_and_load(sled_db: &sled::Db) -> Result<Self> {
-        ensure_key(sled_db, "rlnv2-diff-register-vk", RLN2_REGISTER_ZKBIN, KeyKind::Vk)?;
-        ensure_key(sled_db, "rlnv2-diff-register-pk", RLN2_REGISTER_ZKBIN, KeyKind::Pk)?;
-        ensure_key(sled_db, "rlnv2-diff-signal-vk", RLN2_SIGNAL_ZKBIN, KeyKind::Vk)?;
-        ensure_key(sled_db, "rlnv2-diff-signal-pk", RLN2_SIGNAL_ZKBIN, KeyKind::Pk)?;
-        ensure_key(sled_db, "rlnv2-diff-slash-pk", RLN2_SLASH_ZKBIN, KeyKind::Pk)?;
-        ensure_key(sled_db, "rlnv2-diff-slash-vk", RLN2_SLASH_ZKBIN, KeyKind::Vk)?;
+        Self::ensure_keys(sled_db)?;
+        Self::load_verifying_keys(sled_db)
+    }
 
+    /// Build missing proving and verifying keys into persistent storage.
+    fn ensure_keys(sled_db: &sled::Db) -> Result<()> {
+        ensure_key(sled_db, REGISTER_VK_KEY, RLN2_REGISTER_ZKBIN, KeyKind::Vk)?;
+        ensure_key(sled_db, REGISTER_PK_KEY, RLN2_REGISTER_ZKBIN, KeyKind::Pk)?;
+        ensure_key(sled_db, SIGNAL_VK_KEY, RLN2_SIGNAL_ZKBIN, KeyKind::Vk)?;
+        ensure_key(sled_db, SIGNAL_PK_KEY, RLN2_SIGNAL_ZKBIN, KeyKind::Pk)?;
+        ensure_key(sled_db, SLASH_PK_KEY, RLN2_SLASH_ZKBIN, KeyKind::Pk)?;
+        ensure_key(sled_db, SLASH_VK_KEY, RLN2_SLASH_ZKBIN, KeyKind::Vk)?;
+        Ok(())
+    }
+
+    /// Load the verifying keys needed by validation paths.
+    fn load_verifying_keys(sled_db: &sled::Db) -> Result<Self> {
         Ok(Self {
-            register_vk: read_vk(sled_db, "rlnv2-diff-register-vk", RLN2_REGISTER_ZKBIN)?,
-            signal_vk: read_vk(sled_db, "rlnv2-diff-signal-vk", RLN2_SIGNAL_ZKBIN)?,
-            slash_vk: read_vk(sled_db, "rlnv2-diff-slash-vk", RLN2_SLASH_ZKBIN)?,
+            register_vk: read_vk(sled_db, REGISTER_VK_KEY, RLN2_REGISTER_ZKBIN)?,
+            signal_vk: read_vk(sled_db, SIGNAL_VK_KEY, RLN2_SIGNAL_ZKBIN)?,
+            slash_vk: read_vk(sled_db, SLASH_VK_KEY, RLN2_SLASH_ZKBIN)?,
             sled_db: sled_db.clone(),
         })
     }
 
     /// Load the slash proving key from sled.
     pub fn load_slash_pk(&self) -> Result<ProvingKey> {
-        read_pk(&self.sled_db, "rlnv2-diff-slash-pk", RLN2_SLASH_ZKBIN)
+        read_pk(&self.sled_db, SLASH_PK_KEY, RLN2_SLASH_ZKBIN)
     }
 
     /// Load the register proving key from sled.
     pub fn load_register_pk(&self) -> Result<ProvingKey> {
-        read_pk(&self.sled_db, "rlnv2-diff-register-pk", RLN2_REGISTER_ZKBIN)
+        read_pk(&self.sled_db, REGISTER_PK_KEY, RLN2_REGISTER_ZKBIN)
     }
 
     /// Load the signal proving key from sled.
     pub fn load_signal_pk(&self) -> Result<ProvingKey> {
-        read_pk(&self.sled_db, "rlnv2-diff-signal-pk", RLN2_SIGNAL_ZKBIN)
+        read_pk(&self.sled_db, SIGNAL_PK_KEY, RLN2_SIGNAL_ZKBIN)
     }
 }
 
