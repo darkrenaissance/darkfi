@@ -218,6 +218,47 @@ fn rln_identity_state_persists_across_reopen() {
 }
 
 #[test]
+fn rln_identity_state_restores_sled_smt_nodes_from_leaves() {
+    let db = sled::Config::new().temporary(true).open().unwrap();
+    let c = pallas::Base::from(0xbeefu64);
+
+    let original_root = {
+        let mut s = IdentityState::new(&db).unwrap();
+        s.register(c).unwrap();
+        s.root()
+    };
+
+    db.open_tree("rln-identity-smt-nodes").unwrap().clear().unwrap();
+
+    let s2 = IdentityState::new(&db).unwrap();
+    assert!(s2.contains(&c));
+    assert_eq!(s2.root(), original_root);
+    assert!(s2.prove_membership(&c).verify(&original_root, &c, &c));
+}
+
+#[test]
+fn rln_rebuild_detects_stale_sled_smt_nodes() {
+    smol::block_on(async {
+        let config = EventGraphConfig { hours_rotation: 1, ..test_config() };
+        let eg = make_eg_with_config(config).await;
+        let commitment = genesis_commitment_at(&eg, 0);
+        let original_root = eg.identity_state.read().await.root();
+
+        eg.sled_db.open_tree("rln-identity-smt-nodes").unwrap().clear().unwrap();
+
+        assert!(eg.rln_contains(&commitment).await);
+        assert_ne!(eg.identity_state.read().await.root(), original_root);
+        assert_eq!(eg.rln_historical_roots_ordered.len(), 1);
+
+        eg.rebuild_historical_roots_if_needed().await.unwrap();
+
+        assert!(eg.rln_contains(&commitment).await);
+        assert_eq!(eg.identity_state.read().await.root(), original_root);
+        assert_eq!(eg.rln_historical_roots_ordered.len(), 1);
+    })
+}
+
+#[test]
 fn rln_cross_app_isolation_on_internal_nullifier() {
     // Two apps with different RlnAppId, same identity_secret_hash,
     // same epoch, same message_id: internal_nullifiers must differ.

@@ -34,15 +34,17 @@ use darkfi_sdk::{
     crypto::{
         pasta_prelude::{FromUniformBytes, PrimeField},
         poseidon_hash,
-        smt::{MemoryStorageFp, PoseidonFp, SmtMemoryFp, EMPTY_NODES_FP, SMT_FP_DEPTH},
+        smt::{PoseidonFp, SparseMerkleTree, StorageAdapter, EMPTY_NODES_FP, SMT_FP_DEPTH},
     },
+    error::{ContractError, ContractResult},
     pasta::pallas,
 };
 use darkfi_serial::{async_trait, FutAsyncWriteExt, SerialDecodable, SerialEncodable};
 use halo2_proofs::{arithmetic::Field, circuit::Value};
+use num_bigint::BigUint;
 use rand::rngs::OsRng;
 use sled_overlay::sled;
-use tracing::info;
+use tracing::{error, info};
 
 use super::Event;
 use crate::{
@@ -264,6 +266,88 @@ const SIGNAL_VK_KEY: &str = "rlnv2-diff-signal-vk";
 const SIGNAL_PK_KEY: &str = "rlnv2-diff-signal-pk";
 const SLASH_VK_KEY: &str = "rlnv2-diff-slash-vk";
 const SLASH_PK_KEY: &str = "rlnv2-diff-slash-pk";
+const IDENTITY_LEAVES_TREE: &str = "rln-identity-leaves";
+const SLASHED_IDENTITY_LEAVES_TREE: &str = "rln-slashed-identity-leaves";
+const IDENTITY_SMT_NODES_TREE: &str = "rln-identity-smt-nodes";
+
+type SmtSledFp = SparseMerkleTree<
+    'static,
+    SMT_FP_DEPTH,
+    { SMT_FP_DEPTH + 1 },
+    pallas::Base,
+    PoseidonFp,
+    SledStorageFp,
+>;
+
+/// Sled-backed storage for RLN identity SMT nodes.
+///
+/// The leaf/tombstone trees remain the durable source of truth. This
+/// tree stores the SMT's internal node cache so membership proofs and
+/// root lookups do not require keeping the full sparse tree in heap.
+#[derive(Clone)]
+struct SledStorageFp {
+    tree: sled::Tree,
+}
+
+impl SledStorageFp {
+    fn new(tree: sled::Tree) -> Self {
+        Self { tree }
+    }
+}
+
+impl StorageAdapter for SledStorageFp {
+    type Value = pallas::Base;
+
+    fn put(&mut self, key: BigUint, value: pallas::Base) -> ContractResult {
+        if let Err(e) = self.tree.insert(key.to_bytes_le(), value.to_repr().as_ref()) {
+            error!(
+                target: "event_graph::rln",
+                "[RLN] SMT sled put failed: {e}",
+            );
+            return Err(ContractError::SmtPutFailed)
+        }
+
+        Ok(())
+    }
+
+    fn get(&self, key: &BigUint) -> Option<pallas::Base> {
+        let value = match self.tree.get(key.to_bytes_le()) {
+            Ok(value) => value?,
+            Err(e) => {
+                error!(
+                    target: "event_graph::rln",
+                    "[RLN] SMT sled get failed: {e}",
+                );
+                return None
+            }
+        };
+
+        if value.len() != 32 {
+            error!(
+                target: "event_graph::rln",
+                "[RLN] SMT sled node must be 32 bytes, got {}",
+                value.len(),
+            );
+            return None
+        }
+
+        let mut repr = [0u8; 32];
+        repr.copy_from_slice(&value);
+        pallas::Base::from_repr(repr).into()
+    }
+
+    fn del(&mut self, key: &BigUint) -> ContractResult {
+        if let Err(e) = self.tree.remove(key.to_bytes_le()) {
+            error!(
+                target: "event_graph::rln",
+                "[RLN] SMT sled del failed: {e}",
+            );
+            return Err(ContractError::SmtDelFailed)
+        }
+
+        Ok(())
+    }
+}
 
 /// ZK key cache.
 pub struct ZkKeys {
@@ -477,53 +561,87 @@ pub enum StaticEventCheck {
 /// The set of currently registered RLN identities, stored as a Sparse
 /// Merkle Tree (SMT).
 ///
-/// Persistence model: leaf commitments are stored in a dedicated sled
-/// tree (`rln-identity-leaves`). The in-memory SMT is rebuilt from
-/// these leaves on startup.
+/// Persistence model: leaf commitments and slash tombstones are stored in
+/// dedicated sled trees. SMT internal nodes are also sled-backed, but are
+/// treated as rebuildable derived state from the canonical static DAG and the
+/// leaf/tombstone side tables.
 pub struct IdentityState {
-    smt: SmtMemoryFp,
+    smt: SmtSledFp,
     leaves: sled::Tree,
     slashed: sled::Tree,
+    smt_nodes: sled::Tree,
     recent_roots: VecDeque<pallas::Base>,
 }
 
 impl IdentityState {
     pub fn new(sled_db: &sled::Db) -> Result<Self> {
+        let leaves = sled_db.open_tree(IDENTITY_LEAVES_TREE)?;
+        let slashed = sled_db.open_tree(SLASHED_IDENTITY_LEAVES_TREE)?;
+        let smt_nodes = sled_db.open_tree(IDENTITY_SMT_NODES_TREE)?;
+        let smt = Self::new_smt(smt_nodes.clone());
+
+        let mut state = Self {
+            smt,
+            leaves,
+            slashed,
+            smt_nodes,
+            recent_roots: VecDeque::with_capacity(ROOT_HISTORY_SIZE),
+        };
+
+        if state.smt_nodes.is_empty() && !state.leaves.is_empty() {
+            state.restore_smt_nodes_from_leaves()?;
+        }
+
+        state.recent_roots.push_back(state.smt.root());
+        Ok(state)
+    }
+
+    fn new_smt(smt_nodes: sled::Tree) -> SmtSledFp {
         let hasher = PoseidonFp::new();
-        let store = MemoryStorageFp::new();
-        let mut smt = SmtMemoryFp::new(store, hasher, &EMPTY_NODES_FP);
+        let store = SledStorageFp::new(smt_nodes);
+        SmtSledFp::new(store, hasher, &EMPTY_NODES_FP)
+    }
 
-        let leaves = sled_db.open_tree("rln-identity-leaves")?;
-        let slashed = sled_db.open_tree("rln-slashed-identity-leaves")?;
+    /// Return the root of an empty RLN identity SMT.
+    pub fn empty_root() -> pallas::Base {
+        EMPTY_NODES_FP[0]
+    }
 
-        let mut batch = vec![];
-        for item in leaves.iter() {
+    /// Recreate the sled-backed SMT node tree from persisted leaves.
+    ///
+    /// This is a migration and repair path for databases that have the old
+    /// leaf side table but no `rln-identity-smt-nodes` tree yet. It restores
+    /// one leaf at a time to avoid allocating a full leaf batch in memory.
+    fn restore_smt_nodes_from_leaves(&mut self) -> Result<()> {
+        let mut restored = 0usize;
+
+        for item in self.leaves.iter() {
             let (key, val) = item?;
             if key.len() != 32 || val.len() != 32 || key.as_ref() != val.as_ref() {
                 continue
             }
+
             let mut repr = [0u8; 32];
             repr.copy_from_slice(&val);
-            if slashed.contains_key(repr)? {
+            if self.slashed.contains_key(repr)? {
                 continue
             }
-            if let Some(c) = pallas::Base::from_repr(repr).into() {
-                batch.push((c, c));
+
+            if let Some(commitment) = pallas::Base::from_repr(repr).into() {
+                self.smt.insert_batch(vec![(commitment, commitment)])?;
+                restored += 1;
             }
         }
 
-        if !batch.is_empty() {
+        if restored > 0 {
             info!(
                 target: "event_graph::rln",
-                "[RLN] Restoring {} identities from sled", batch.len(),
+                "[RLN] Restored {} sled-backed identity SMT nodes from leaves",
+                restored,
             );
-            smt.insert_batch(batch)?;
         }
 
-        let mut recent_roots = VecDeque::with_capacity(ROOT_HISTORY_SIZE);
-        recent_roots.push_back(smt.root());
-
-        Ok(Self { smt, leaves, slashed, recent_roots })
+        Ok(())
     }
 
     /// Returns true if the commitment is already a leaf in the tree.
@@ -650,18 +768,15 @@ impl IdentityState {
         self.recent_roots.push_back(root);
     }
 
-    /// Reset the in-memory SMT and the persistent leaves tree to an
+    /// Reset the sled-backed SMT and the persistent leaves tree to an
     /// empty state, in preparation for replaying the canonical
     /// static-DAG history.
     pub fn clear_for_rebuild(&mut self) -> Result<()> {
         // Drop every derived identity state from sled.
         self.leaves.clear()?;
         self.slashed.clear()?;
-
-        // Replace the in-memory SMT with a fresh empty one.
-        let hasher = PoseidonFp::new();
-        let store = MemoryStorageFp::new();
-        self.smt = SmtMemoryFp::new(store, hasher, &EMPTY_NODES_FP);
+        self.smt_nodes.clear()?;
+        self.smt = Self::new_smt(self.smt_nodes.clone());
 
         // Reset the recent-roots cache. The empty SMT root is the
         // current state.

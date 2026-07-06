@@ -800,6 +800,7 @@ impl EventGraph {
     ) -> Result<EventGraphPtr> {
         config.validate()?;
         let identity_state = IdentityState::new(&sled_db)?;
+        log_memory("after RLN identity state initialization");
         let rln_app_id = rln::RlnAppId::from_genesis(&config.genesis_contents);
         let current_genesis = generate_genesis(&config)?;
         let (pregenerated_identity_commitments, pregenerated_identity_commitment_reprs) =
@@ -955,9 +956,9 @@ impl EventGraph {
 
         let expected_leaves = expected_commitments.len();
         let expected_slashed_count = expected_slashed.len();
-        let (actual_commitments, actual_slashed) = {
+        let (actual_commitments, actual_slashed, actual_root) = {
             let state = self.identity_state.read().await;
-            (state.commitment_reprs(), state.slashed_commitment_reprs())
+            (state.commitment_reprs(), state.slashed_commitment_reprs(), state.root())
         };
         let (actual_leaves, leaves_consistent) = match actual_commitments {
             Ok(commitments) => {
@@ -989,19 +990,31 @@ impl EventGraph {
 
         let static_count = events.len();
         let historical_roots_consistent = self.historical_roots_index_consistent(static_count)?;
+        let expected_current_root = if historical_roots_consistent {
+            Some(self.historical_roots_current_root(static_count)?)
+        } else {
+            None
+        };
+        let smt_nodes_consistent = match expected_current_root {
+            Some(root) => actual_root == root,
+            None => false,
+        };
         let recorded_count = self.rln_historical_roots_ordered.len();
         let by_value_count = self.rln_historical_roots_by_value.len();
-        let consistent = historical_roots_consistent && leaves_consistent && slashed_consistent;
+        let consistent = historical_roots_consistent &&
+            leaves_consistent &&
+            slashed_consistent &&
+            smt_nodes_consistent;
 
         info!(
             target: "event_graph::new",
             concat!(
                 "[EVENTGRAPH] RLN state audit: static_count={} recorded_count={} ",
                 "by_value_count={} actual_leaves={} expected_leaves={} actual_slashed={} ",
-                "expected_slashed={} consistent={}",
+                "expected_slashed={} smt_nodes_consistent={} consistent={}",
             ),
             static_count, recorded_count, by_value_count, actual_leaves, expected_leaves,
-            actual_slashed_count, expected_slashed_count, consistent,
+            actual_slashed_count, expected_slashed_count, smt_nodes_consistent, consistent,
         );
 
         if consistent {
@@ -1012,11 +1025,13 @@ impl EventGraph {
             target: "event_graph::new",
             concat!(
                 "[EVENTGRAPH] Rebuilding RLN state: {} static events, {} recorded roots, ",
-                "{} by-value roots, {} leaves (expected {}), {} slashed (expected {})",
+                "{} by-value roots, {} leaves (expected {}), {} slashed (expected {}), ",
+                "smt_nodes_consistent={}",
             ),
             static_count, recorded_count, by_value_count, actual_leaves, expected_leaves,
-            actual_slashed_count, expected_slashed_count,
+            actual_slashed_count, expected_slashed_count, smt_nodes_consistent,
         );
+        log_memory("before RLN state rebuild");
 
         self.rln_historical_roots_ordered.clear()?;
         self.rln_historical_roots_by_value.clear()?;
@@ -1025,11 +1040,13 @@ impl EventGraph {
             let mut state = self.identity_state.write().await;
             state.clear_for_rebuild()?;
         }
+        log_memory("after RLN state clear for rebuild");
 
         for (ev, rln_node) in events {
             let _ = self.apply_rln_static_event(&ev, &rln_node).await?;
         }
 
+        log_memory("after RLN state rebuild");
         info!(
             target: "event_graph::new",
             "[EVENTGRAPH] RLN state rebuild complete",
@@ -1064,6 +1081,21 @@ impl EventGraph {
         }
 
         Ok(true)
+    }
+
+    fn historical_roots_current_root(&self, expected_count: usize) -> Result<pallas::Base> {
+        if expected_count == 0 {
+            return Ok(IdentityState::empty_root())
+        }
+
+        let mut current_root = None;
+        for item in self.rln_historical_roots_ordered.iter() {
+            let (_, value_bytes) = item?;
+            let (root, _) = decode_historical_root_value(&value_bytes)?;
+            current_root = Some(root);
+        }
+
+        current_root.ok_or_else(|| Error::Custom("missing RLN historical current root".into()))
     }
 
     /// After header sync, event content can be fetched lazily via local
