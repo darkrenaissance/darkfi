@@ -34,7 +34,7 @@ use darkfi_sdk::{
     crypto::{
         pasta_prelude::{FromUniformBytes, PrimeField},
         poseidon_hash,
-        smt::{MemoryStorageFp, PoseidonFp, SmtMemoryFp, EMPTY_NODES_FP},
+        smt::{MemoryStorageFp, PoseidonFp, SmtMemoryFp, EMPTY_NODES_FP, SMT_FP_DEPTH},
     },
     pasta::pallas,
 };
@@ -205,6 +205,50 @@ pub struct Blob {
     pub merkle_root: pallas::Base,
 }
 
+/// Private witness and public inputs for a signal proof.
+///
+/// This type is serializable so the local prover boundary can later be
+/// implemented by a trusted remote prover. It contains identity secrets and
+/// must never be sent to an untrusted service.
+#[derive(Clone, SerialEncodable, SerialDecodable)]
+pub struct SignalProvingRequest {
+    pub nullifier: pallas::Base,
+    pub trapdoor: pallas::Base,
+    pub message_id: pallas::Base,
+    pub merkle_path: [pallas::Base; SMT_FP_DEPTH],
+    pub x: pallas::Base,
+    pub user_message_limit: u64,
+    pub app_id: pallas::Base,
+    pub epoch: pallas::Base,
+    pub merkle_root: pallas::Base,
+    pub external_nullifier: pallas::Base,
+    pub y: pallas::Base,
+    pub internal_nullifier: pallas::Base,
+}
+
+/// Output of a signal proving request.
+#[derive(Clone, SerialEncodable, SerialDecodable)]
+pub struct SignalProvingResponse {
+    pub proof: Proof,
+}
+
+/// Private witness and public inputs for a slash proof.
+///
+/// This type is serializable for the same trusted-prover boundary as
+/// [`SignalProvingRequest`].
+#[derive(Clone, SerialEncodable, SerialDecodable)]
+pub struct SlashProvingRequest {
+    pub identity_secret_hash: pallas::Base,
+    pub merkle_path: [pallas::Base; SMT_FP_DEPTH],
+    pub merkle_root: pallas::Base,
+}
+
+/// Output of a slash proving request.
+#[derive(Clone, SerialEncodable, SerialDecodable)]
+pub struct SlashProvingResponse {
+    pub proof: Proof,
+}
+
 /// An entry in the static DAG representing an identity event.
 #[derive(Clone, Debug, SerialEncodable, SerialDecodable)]
 pub enum RLNNode {
@@ -275,6 +319,92 @@ impl ZkKeys {
     pub fn load_signal_pk(&self) -> Result<ProvingKey> {
         read_pk(&self.sled_db, SIGNAL_PK_KEY, RLN2_SIGNAL_ZKBIN)
     }
+}
+
+/// Proving backend for RLN private proofs.
+///
+/// The local implementation is backed by [`ZkKeys`]. A future trusted remote
+/// prover can implement this trait using the serializable request/response
+/// types without changing callers.
+#[async_trait]
+pub trait RlnProver: Send + Sync {
+    /// Create a signal proof from a fully prepared request.
+    async fn prove_signal(&self, request: SignalProvingRequest) -> Result<SignalProvingResponse>;
+
+    /// Create a slash proof from a fully prepared request.
+    async fn prove_slash(&self, request: SlashProvingRequest) -> Result<SlashProvingResponse>;
+}
+
+#[async_trait]
+impl RlnProver for ZkKeys {
+    async fn prove_signal(&self, request: SignalProvingRequest) -> Result<SignalProvingResponse> {
+        let pk = self.load_signal_pk()?;
+        create_signal_proof(&request, &pk)
+    }
+
+    async fn prove_slash(&self, request: SlashProvingRequest) -> Result<SlashProvingResponse> {
+        let pk = self.load_slash_pk()?;
+        create_slash_proof_from_request(&request, &pk)
+    }
+}
+
+/// Create a local signal proof from a prover request.
+pub fn create_signal_proof(
+    request: &SignalProvingRequest,
+    signal_pk: &ProvingKey,
+) -> Result<SignalProvingResponse> {
+    let zkbin = ZkBinary::decode(RLN2_SIGNAL_ZKBIN, false)?;
+    let witnesses = vec![
+        Witness::Base(Value::known(request.nullifier)),
+        Witness::Base(Value::known(request.trapdoor)),
+        Witness::Base(Value::known(request.message_id)),
+        Witness::SparseMerklePath(Value::known(request.merkle_path)),
+        Witness::Base(Value::known(request.x)),
+        Witness::Base(Value::known(pallas::Base::from(request.user_message_limit))),
+        Witness::Base(Value::known(request.app_id)),
+        Witness::Base(Value::known(request.epoch)),
+    ];
+    let pi = vec![
+        request.merkle_root,
+        request.external_nullifier,
+        pallas::Base::from(request.user_message_limit),
+        request.x,
+        request.y,
+        request.internal_nullifier,
+    ];
+    let circuit = ZkCircuit::new(witnesses, &zkbin);
+    let proof = Proof::create(signal_pk, &[circuit], &pi, &mut OsRng)
+        .map_err(|e| Error::Custom(format!("Signal proof creation failed: {e}")))?;
+    Ok(SignalProvingResponse { proof })
+}
+
+/// Create a local slash proof from a prover request.
+pub fn create_slash_proof_from_request(
+    request: &SlashProvingRequest,
+    slash_pk: &ProvingKey,
+) -> Result<SlashProvingResponse> {
+    let witnesses = vec![
+        Witness::Base(Value::known(request.identity_secret_hash)),
+        Witness::SparseMerklePath(Value::known(request.merkle_path)),
+    ];
+    let pi = vec![request.identity_secret_hash, request.merkle_root];
+    let zkbin = ZkBinary::decode(RLN2_SLASH_ZKBIN, false)?;
+    let circuit = ZkCircuit::new(witnesses, &zkbin);
+    let proof = Proof::create(slash_pk, &[circuit], &pi, &mut OsRng)
+        .map_err(|e| Error::Custom(format!("Slash proof creation failed: {e}")))?;
+    Ok(SlashProvingResponse { proof })
+}
+
+/// Build the slash proving request from the local identity tree.
+pub fn prepare_slash_proof_request(
+    identity_secret_hash: pallas::Base,
+    identity_state: &IdentityState,
+) -> SlashProvingRequest {
+    let commitment = poseidon_hash([identity_secret_hash]);
+    let merkle_root = identity_state.root();
+    let merkle_path = identity_state.prove_membership(&commitment).path;
+
+    SlashProvingRequest { identity_secret_hash, merkle_path, merkle_root }
 }
 
 /// Mutable RLN state shared across all protocol instances via
@@ -708,20 +838,10 @@ pub fn create_slash_proof(
     identity_state: &mut IdentityState,
     slash_pk: &ProvingKey,
 ) -> Result<(Proof, pallas::Base)> {
-    let commitment = poseidon_hash([identity_secret_hash]);
-    let root = identity_state.root();
-    let path = identity_state.prove_membership(&commitment);
-
-    let witnesses = vec![
-        Witness::Base(Value::known(identity_secret_hash)),
-        Witness::SparseMerklePath(Value::known(path.path)),
-    ];
-    let pi = vec![identity_secret_hash, root];
-    let zkbin = ZkBinary::decode(RLN2_SLASH_ZKBIN, false)?;
-    let circuit = ZkCircuit::new(witnesses, &zkbin);
-    let proof = Proof::create(slash_pk, &[circuit], &pi, &mut OsRng)
-        .map_err(|e| Error::Custom(format!("Slash proof creation failed: {e}")))?;
-    Ok((proof, root))
+    let request = prepare_slash_proof_request(identity_secret_hash, identity_state);
+    let merkle_root = request.merkle_root;
+    let response = create_slash_proof_from_request(&request, slash_pk)?;
+    Ok((response.proof, merkle_root))
 }
 
 /// Recover the secret from two or more `(x, y)` Shamir shares using

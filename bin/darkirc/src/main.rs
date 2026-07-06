@@ -92,14 +92,14 @@ fn generated_rln_identity_user_msg_limit() -> u64 {
     GENESIS_USER_MSG_LIMIT
 }
 
-fn sled_cache_capacity_bytes(cache_mb: u64) -> Result<u64> {
+fn sled_cache_capacity_bytes(name: &str, cache_mb: u64) -> Result<u64> {
     if cache_mb == 0 {
-        return Err(Error::Custom("sled_cache_mb must be greater than 0".to_string()))
+        return Err(Error::Custom(format!("{name} must be greater than 0")))
     }
 
     cache_mb
         .checked_mul(BYTES_PER_MIB)
-        .ok_or_else(|| Error::Custom("sled_cache_mb overflows bytes".to_string()))
+        .ok_or_else(|| Error::Custom(format!("{name} overflows bytes")))
 }
 
 fn validate_history_window(dags_count: usize, history_retention_dags: usize) -> Result<()> {
@@ -172,6 +172,14 @@ struct Args {
     #[structopt(long, default_value = "64")]
     /// Sled cache capacity for the datastore, in MiB
     sled_cache_mb: u64,
+
+    #[structopt(long, default_value = "~/.local/share/darkfi/darkirc_zk_keys")]
+    /// Datastore path for RLN proving and verifying keys
+    zk_key_datastore: String,
+
+    #[structopt(long, default_value = "16")]
+    /// Sled cache capacity for the RLN key datastore, in MiB
+    zk_key_sled_cache_mb: u64,
 
     #[structopt(short, long, default_value = "~/.local/share/darkfi/replayed_darkirc_db")]
     /// Replay logs (DB) path
@@ -449,6 +457,18 @@ pub const DARKIRC_GENESIS_COMMITMENTS_REPR: &[[u8; 32]] = &[
         return Err(e.into());
     }
 
+    let zk_key_datastore = match expand_path(&args.zk_key_datastore) {
+        Ok(v) => v,
+        Err(e) => {
+            error!("Bad RLN key datastore path `{}`: {e}", args.zk_key_datastore);
+            return Err(e);
+        }
+    };
+    if let Err(e) = fs::create_dir_all(&zk_key_datastore).await {
+        error!("Failed to create RLN key datastore path `{zk_key_datastore:?}`: {e}");
+        return Err(e.into());
+    }
+
     let replay_datastore = match expand_path(&args.replay_datastore) {
         Ok(v) => v,
         Err(e) => {
@@ -464,7 +484,7 @@ pub const DARKIRC_GENESIS_COMMITMENTS_REPR: &[[u8; 32]] = &[
         args.history_retention_dags, args.dags_count,
     );
 
-    let sled_cache_capacity = sled_cache_capacity_bytes(args.sled_cache_mb)?;
+    let sled_cache_capacity = sled_cache_capacity_bytes("sled_cache_mb", args.sled_cache_mb)?;
     info!("Instantiating event DAG with {} MiB sled cache", args.sled_cache_mb);
     let sled_db = match sled::Config::new()
         .path(datastore.clone())
@@ -478,6 +498,22 @@ pub const DARKIRC_GENESIS_COMMITMENTS_REPR: &[[u8; 32]] = &[
         }
     };
     log_memory("after sled open");
+
+    let zk_key_sled_cache_capacity =
+        sled_cache_capacity_bytes("zk_key_sled_cache_mb", args.zk_key_sled_cache_mb)?;
+    info!("Opening RLN key datastore with {} MiB sled cache", args.zk_key_sled_cache_mb);
+    let zk_key_db = match sled::Config::new()
+        .path(zk_key_datastore.clone())
+        .cache_capacity(zk_key_sled_cache_capacity)
+        .open()
+    {
+        Ok(v) => v,
+        Err(e) => {
+            error!("Failed to open RLN key datastore `{zk_key_datastore:?}`: {e}");
+            return Err(e.into());
+        }
+    };
+
     let p2p_settings: darkfi::net::Settings =
         (env!("CARGO_PKG_NAME"), env!("CARGO_PKG_VERSION"), args.net).try_into()?;
     let p2p = match P2p::new(p2p_settings, ex.clone()).await {
@@ -495,9 +531,10 @@ pub const DARKIRC_GENESIS_COMMITMENTS_REPR: &[[u8; 32]] = &[
         pregenerated_identity_commitments: genesis_commits::pregenerated_identity_commitments(),
         max_dags: Some(args.history_retention_dags),
     };
-    let event_graph = match EventGraph::new(
+    let event_graph = match EventGraph::new_with_zk_key_db(
         p2p.clone(),
         sled_db.clone(),
+        zk_key_db.clone(),
         replay_datastore.clone(),
         replay_mode,
         eg_config,
@@ -766,6 +803,10 @@ pub const DARKIRC_GENESIS_COMMITMENTS_REPR: &[[u8; 32]] = &[
     let flushed_bytes = sled_db.flush_async().await?;
     info!("Flushed {flushed_bytes} bytes");
 
+    info!("Flushing RLN key sled database...");
+    let flushed_key_bytes = zk_key_db.flush_async().await?;
+    info!("Flushed {flushed_key_bytes} RLN key bytes");
+
     info!("Shut down successfully");
     Ok(())
 }
@@ -916,12 +957,12 @@ mod tests {
 
     #[test]
     fn sled_cache_capacity_rejects_zero() {
-        assert!(sled_cache_capacity_bytes(0).is_err());
+        assert!(sled_cache_capacity_bytes("test_cache_mb", 0).is_err());
     }
 
     #[test]
     fn sled_cache_capacity_converts_mib() {
-        assert_eq!(sled_cache_capacity_bytes(64).unwrap(), 64 * BYTES_PER_MIB);
+        assert_eq!(sled_cache_capacity_bytes("test_cache_mb", 64).unwrap(), 64 * BYTES_PER_MIB);
     }
 
     #[test]

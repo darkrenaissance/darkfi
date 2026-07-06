@@ -32,9 +32,10 @@ use smol::Executor;
 use crate::{
     event_graph::{
         rln::{
-            epoch_of, epoch_start_millis, sss_recover, Blob, IdentityState, MessageMetadata,
-            RLNNode, RegistrationAttestation, RegistrationBlob, RlnAppId, SignalCheck, SlashBlob,
-            GENESIS_BLOB_GUARD, MAX_MSG_LIMIT, RLN_EPOCH_LEN, RLN_GENESIS,
+            epoch_of, epoch_start_millis, prepare_slash_proof_request, sss_recover, Blob,
+            IdentityState, MessageMetadata, RLNNode, RegistrationAttestation, RegistrationBlob,
+            RlnAppId, RlnProver, SignalCheck, SlashBlob, GENESIS_BLOB_GUARD, MAX_MSG_LIMIT,
+            RLN_EPOCH_LEN, RLN_GENESIS,
         },
         test_helpers::{
             make_eg, make_eg_with_config, make_eg_with_config_and_db, make_network,
@@ -915,7 +916,6 @@ fn rln_e2e_slot_reuse_is_slashable() {
 #[test]
 fn rln_e2e_slash_proof_round_trip() {
     // Recover identity_secret_hash, build a slash proof, verify it.
-    use crate::event_graph::rln::create_slash_proof;
     smol::block_on(async {
         let (eg, id) = fresh_identity_and_eg().await;
         id.register_directly(&eg).await.unwrap();
@@ -937,10 +937,12 @@ fn rln_e2e_slash_proof_round_trip() {
         let recovered = sss_recover(&[s1, s2]).unwrap();
         assert_eq!(recovered, a_0);
 
-        let slash_pk = eg.zk_keys.load_slash_pk().unwrap();
-        let (proof, root) =
-            create_slash_proof(recovered, &mut *eg.identity_state.write().await, &slash_pk)
-                .unwrap();
+        let request = {
+            let id_state = eg.identity_state.read().await;
+            prepare_slash_proof_request(recovered, &id_state)
+        };
+        let root = request.merkle_root;
+        let proof = eg.zk_keys.prove_slash(request).await.unwrap().proof;
 
         // The recovered commitment must verify against the slash VK.
         let pi = vec![recovered, root];
@@ -1000,13 +1002,12 @@ async fn concurrent_slashes(ex: Arc<Executor<'static>>) {
         ish: pallas::Base,
         commitment: pallas::Base,
     ) -> (Event, Vec<u8>) {
-        let slash_pk = eg.zk_keys.load_slash_pk().expect("pk");
-        let (proof, root) = crate::event_graph::rln::create_slash_proof(
-            ish,
-            &mut *eg.identity_state.write().await,
-            &slash_pk,
-        )
-        .expect("proof");
+        let request = {
+            let id_state = eg.identity_state.read().await;
+            prepare_slash_proof_request(ish, &id_state)
+        };
+        let root = request.merkle_root;
+        let proof = eg.zk_keys.prove_slash(request).await.expect("proof").proof;
         let blob = SlashBlob { proof, identity_secret_hash: ish, merkle_root: root };
         let event = Event::new_static(serialize_async(&RLNNode::Slashing(commitment)).await, eg)
             .await
@@ -1062,13 +1063,12 @@ fn rln_static_slashes_persist_and_tombstone_commitment() {
         eg.static_insert(&reg_event).await.unwrap();
         assert!(eg.rln_contains(&commitment).await);
 
-        let slash_pk = eg.zk_keys.load_slash_pk().unwrap();
-        let (proof, root) = crate::event_graph::rln::create_slash_proof(
-            id.identity_secret_hash(),
-            &mut *eg.identity_state.write().await,
-            &slash_pk,
-        )
-        .unwrap();
+        let request = {
+            let id_state = eg.identity_state.read().await;
+            prepare_slash_proof_request(id.identity_secret_hash(), &id_state)
+        };
+        let root = request.merkle_root;
+        let proof = eg.zk_keys.prove_slash(request).await.unwrap().proof;
         let slash_blob =
             SlashBlob { proof, identity_secret_hash: id.identity_secret_hash(), merkle_root: root };
         let blob = serialize_async(&slash_blob).await;

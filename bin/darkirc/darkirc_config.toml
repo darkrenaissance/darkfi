@@ -26,6 +26,12 @@
 ## Sled cache capacity for the DarkIRC/EventGraph datastore, in MiB
 #sled_cache_mb = 64
 
+## Datastore path for RLN proving and verifying keys
+#zk_key_datastore = "~/.local/share/darkfi/darkirc_zk_keys"
+
+## Sled cache capacity for the RLN key datastore, in MiB
+#zk_key_sled_cache_mb = 16
+
 ## Sets DB logs replay datastore path
 #replay_datastore = "~/.local/share/darkfi/darkirc/replayed_darkirc_db"
 
