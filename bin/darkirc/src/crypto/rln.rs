@@ -18,20 +18,18 @@
 
 use darkfi::{
     event_graph::{
-        rln::{epoch_of, hash_event, Blob, RegistrationAttestation, RLN2_SIGNAL_ZKBIN},
+        rln::{
+            epoch_of, hash_event, Blob, RegistrationAttestation, RlnProver, SignalProvingRequest,
+        },
         Event, EventGraphPtr,
     },
     util::memory::log_memory,
-    zk::{
-        halo2::{Field, Value},
-        Proof, Witness, ZkCircuit,
-    },
-    zkas::ZkBinary,
+    zk::halo2::Field,
     Result,
 };
 use darkfi_sdk::{crypto::poseidon_hash, pasta::pallas};
 use darkfi_serial::{async_trait, SerialDecodable, SerialEncodable};
-use rand::{rngs::OsRng, CryptoRng, RngCore};
+use rand::{CryptoRng, RngCore};
 use tracing::info;
 
 /// Domain-separation tags for credential generation.
@@ -199,38 +197,28 @@ impl RlnIdentity {
         // Canonical membership path via the EG.
         let (root, path) = eg.rln_membership_path(&self.commitment()).await;
 
-        let zkbin = ZkBinary::decode(RLN2_SIGNAL_ZKBIN, false)?;
-
-        // Witness order MUST match `witness` declarations in
-        let witnesses = vec![
-            Witness::Base(Value::known(self.nullifier)),
-            Witness::Base(Value::known(self.trapdoor)),
-            Witness::Base(Value::known(mid)),
-            Witness::SparseMerklePath(Value::known(path.path)),
-            Witness::Base(Value::known(x)),
-            Witness::Base(Value::known(pallas::Base::from(self.user_message_limit))),
-            Witness::Base(Value::known(app_id)),
-            Witness::Base(Value::known(epoch)),
-        ];
-        // PI order MUST match `constrain_instance` in the .zk file.
-        let pi = vec![
-            root,
-            ext_null,
-            pallas::Base::from(self.user_message_limit),
+        let request = SignalProvingRequest {
+            nullifier: self.nullifier,
+            trapdoor: self.trapdoor,
+            message_id: mid,
+            merkle_path: path.path,
             x,
+            user_message_limit: self.user_message_limit,
+            app_id,
+            epoch,
+            merkle_root: root,
+            external_nullifier: ext_null,
             y,
             internal_nullifier,
-        ];
-        let circuit = ZkCircuit::new(witnesses, &zkbin);
-        log_memory("before local signal proving");
-        let pk = eg.zk_keys.load_signal_pk()?;
+        };
 
+        log_memory("before local signal proving");
         info!(
             target: "darkirc::crypto::rln",
             "[RLN] Creating signal proof for event {}",
             event.id(),
         );
-        let proof = Proof::create(&pk, &[circuit], &pi, &mut OsRng)?;
+        let proof = eg.zk_keys.prove_signal(request).await?.proof;
         log_memory("after local signal proving");
 
         Ok(Blob {

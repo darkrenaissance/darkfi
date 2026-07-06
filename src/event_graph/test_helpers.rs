@@ -266,20 +266,15 @@ where
 
 mod test_identity {
     use darkfi_sdk::{crypto::poseidon_hash, pasta::pallas};
-    use halo2_proofs::circuit::Value;
-    use rand::rngs::OsRng;
 
     use super::*;
-    use crate::{
-        event_graph::{
-            event::Header,
-            rln::{
-                epoch_of, hash_event, Blob, RLNNode, RegistrationAttestation, RLN2_SIGNAL_ZKBIN,
-            },
-            NULL_PARENTS,
+    use crate::event_graph::{
+        event::Header,
+        rln::{
+            epoch_of, hash_event, Blob, RLNNode, RegistrationAttestation, RlnProver,
+            SignalProvingRequest,
         },
-        zk::{Proof, Witness, ZkCircuit},
-        zkas::ZkBinary,
+        NULL_PARENTS,
     };
 
     /// A test RLN identity with deterministic secrets and an
@@ -371,28 +366,21 @@ mod test_identity {
             let y = a_0 + x * a_1;
             let internal_nullifier = poseidon_hash([a_1]);
 
-            let witnesses = vec![
-                Witness::Base(Value::known(self.nullifier)),
-                Witness::Base(Value::known(self.trapdoor)),
-                Witness::Base(Value::known(pallas::Base::from(message_id))),
-                Witness::SparseMerklePath(Value::known(path.path)),
-                Witness::Base(Value::known(x)),
-                Witness::Base(Value::known(pallas::Base::from(self.user_message_limit))),
-                Witness::Base(Value::known(app_id)),
-                Witness::Base(Value::known(epoch_field)),
-            ];
-            let pi = vec![
-                root,
-                external_nullifier,
-                pallas::Base::from(self.user_message_limit),
+            let request = SignalProvingRequest {
+                nullifier: self.nullifier,
+                trapdoor: self.trapdoor,
+                message_id: pallas::Base::from(message_id),
+                merkle_path: path.path,
                 x,
+                user_message_limit: self.user_message_limit,
+                app_id,
+                epoch: epoch_field,
+                merkle_root: root,
+                external_nullifier,
                 y,
                 internal_nullifier,
-            ];
-            let zkbin = ZkBinary::decode(RLN2_SIGNAL_ZKBIN, false)?;
-            let circuit = ZkCircuit::new(witnesses, &zkbin);
-            let pk = eg.zk_keys.load_signal_pk()?;
-            let proof = Proof::create(&pk, &[circuit], &pi, &mut OsRng)?;
+            };
+            let proof = eg.zk_keys.prove_signal(request).await?.proof;
 
             Ok(Blob {
                 proof,

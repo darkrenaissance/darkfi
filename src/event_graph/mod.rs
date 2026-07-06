@@ -762,17 +762,31 @@ impl EventGraph {
         config: EventGraphConfig,
         ex: Arc<Executor<'_>>,
     ) -> Result<EventGraphPtr> {
+        let zk_key_db = sled_db.clone();
+        Self::new_with_zk_key_db(p2p, sled_db, zk_key_db, datastore, replay_mode, config, ex).await
+    }
+
+    /// Create a new Event Graph using a separate DB for RLN key material.
+    pub async fn new_with_zk_key_db(
+        p2p: P2pPtr,
+        sled_db: sled::Db,
+        zk_key_db: sled::Db,
+        datastore: PathBuf,
+        replay_mode: bool,
+        config: EventGraphConfig,
+        ex: Arc<Executor<'_>>,
+    ) -> Result<EventGraphPtr> {
         config.validate()?;
-        let zk_keys = Arc::new(ZkKeys::build_and_load(&sled_db)?);
+        let zk_keys = Arc::new(ZkKeys::build_and_load(&zk_key_db)?);
         log_memory("after RLN key initialization");
         Self::with_zk_keys(p2p, sled_db, datastore, replay_mode, config, zk_keys, ex).await
     }
 
     /// Same as [`Self::new`] but accepts a pre-built [`ZkKeys`].
     ///
-    /// Production always wants `Self::new`, which builds keys once
-    /// against its own sled DB. Tests use this variant to share a
-    /// single [`Arc<ZkKeys>`] across many `EventGraph` instances -
+    /// Production should use [`Self::new`] or [`Self::new_with_zk_key_db`].
+    /// Tests use this variant to share a single [`Arc<ZkKeys>`] across
+    /// many `EventGraph` instances -
     /// proving keys are large (hundreds of MB each) and copying
     /// them per-test would blow out RAM and `/dev/shm`.
     pub async fn with_zk_keys(

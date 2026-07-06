@@ -42,7 +42,7 @@ use tracing::{error, warn};
 use super::{
     event::Header,
     filter_requested_event_rep,
-    rln::{self, create_slash_proof, sss_recover, RLNNode, SlashBlob},
+    rln::{self, prepare_slash_proof_request, sss_recover, RLNNode, RlnProver, SlashBlob},
     Event, EventGraphPtr, LayerUTips, NULL_ID, NULL_PARENTS,
 };
 use crate::{
@@ -754,27 +754,21 @@ impl ProtocolEventGraph {
             }
         }
 
-        let slash_pk = match self.event_graph.zk_keys.load_slash_pk() {
-            Ok(pk) => pk,
-            Err(e) => {
-                error!(target: "event_graph::protocol", "[RLN] Failed to load slash PK: {e}");
-                return
-            }
+        let request = {
+            let id = self.event_graph.identity_state.read().await;
+            prepare_slash_proof_request(identity_secret_hash, &id)
         };
-
-        let mut id = self.event_graph.identity_state.write().await;
-        let (proof, root) = match create_slash_proof(identity_secret_hash, &mut id, &slash_pk) {
-            Ok(v) => v,
+        let root = request.merkle_root;
+        let proof = match self.event_graph.zk_keys.prove_slash(request).await {
+            Ok(response) => response.proof,
             Err(e) => {
                 error!(target: "event_graph::protocol", "[RLN] Slash proof creation failed: {e}");
                 return
             }
         };
-        // Note: create_slash_proof itself does NOT mutate the SMT -
-        // it only reads the membership path. The actual removal happens
-        // when commit_verified_static_event applies the verified slashing
-        // event, the same state transition remote slashes use.
-        drop(id);
+        // The proving request captures only the membership path and root. The
+        // actual removal happens when commit_verified_static_event applies the
+        // verified slashing event, the same state transition remote slashes use.
 
         let slash_blob = SlashBlob { proof, identity_secret_hash, merkle_root: root };
         let blob = serialize_async(&slash_blob).await;

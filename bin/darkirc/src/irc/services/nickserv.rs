@@ -60,7 +60,7 @@ use std::{str::SplitAsciiWhitespace, sync::Arc};
 
 use darkfi::{
     event_graph::{
-        rln::{create_slash_proof, RLNNode, SlashBlob, GENESIS_USER_MSG_LIMIT},
+        rln::{prepare_slash_proof_request, RLNNode, RlnProver, SlashBlob, GENESIS_USER_MSG_LIMIT},
         Event,
     },
     util::memory::log_memory,
@@ -788,25 +788,20 @@ impl NickServ {
             ))
         }
 
-        // Build the slash proof. `create_slash_proof` takes
+        // Build the slash proof. The request contains
         // identity_secret_hash (NOT the raw nullifier+trapdoor pair)
-        // because that's what SSS would have recovered in the
-        // misbehavior path; the slash circuit's public input is
-        // identity_secret_hash + root, and the witness is
-        // (identity_secret_hash, merkle_path).
-        //
-        // The ProvingKey comes from the EG's shared zk_keys cache.
-        // The IdentityState write lock is held only for the duration
-        // of the proof construction (root read + path computation);
-        // the actual proof generation does not need the lock, but
-        // the API takes &mut so we hold it for the whole call.
+        // because that's what SSS would recover in the misbehavior path.
+        // The expensive proof work runs through the RLN prover boundary so a
+        // future trusted remote prover can implement the same API.
         let identity_secret_hash = identity.identity_secret_hash();
-        log_memory("before slash proving");
-        let slash_pk = evgr.zk_keys.load_slash_pk()?;
-        let (proof, root) = {
-            let mut id_state = evgr.identity_state.write().await;
-            create_slash_proof(identity_secret_hash, &mut id_state, &slash_pk)?
+        let request = {
+            let id_state = evgr.identity_state.read().await;
+            prepare_slash_proof_request(identity_secret_hash, &id_state)
         };
+        let root = request.merkle_root;
+
+        log_memory("before slash proving");
+        let proof = evgr.zk_keys.prove_slash(request).await?.proof;
         log_memory("after slash proving");
 
         let slash_blob = SlashBlob { proof, identity_secret_hash, merkle_root: root };
