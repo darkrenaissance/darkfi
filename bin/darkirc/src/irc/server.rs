@@ -275,11 +275,18 @@ impl IrcServer {
             _ => None,
         };
 
-        // Set the default RLN account if any
-        let rln_identity = load_default_rln_identity(&darkirc.sled).await?;
-        if rln_identity.is_some() {
-            info!("Default RLN account set");
-        }
+        // Set the default RLN account if any. When RLN is disabled, avoid
+        // loading account state that cannot affect outbound messages.
+        let rln_identity = if darkirc.event_graph.rln_enabled() {
+            let rln_identity = load_default_rln_identity(&darkirc.sled).await?;
+            if rln_identity.is_some() {
+                info!("Default RLN account set");
+            }
+            rln_identity
+        } else {
+            info!("RLN disabled; skipping default RLN account load");
+            None
+        };
 
         let self_ = Arc::new(Self {
             darkirc,

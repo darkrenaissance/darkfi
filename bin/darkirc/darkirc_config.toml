@@ -26,6 +26,10 @@
 ## Sled cache capacity for the DarkIRC/EventGraph datastore, in MiB
 #sled_cache_mb = 64
 
+## Enable RLN proof generation and verification. Disabled by default to skip
+## RLN key loading, identity SMT state, proof generation, and proof verification.
+#rln_enabled = false
+
 ## Datastore path for RLN proving and verifying keys
 #zk_key_datastore = "~/.local/share/darkfi/darkirc_zk_keys"
 

@@ -111,6 +111,13 @@ pub struct EventGraphConfig {
     /// Unique payload embedded in genesis events.
     /// Different protocols must use different values.
     pub genesis_contents: Vec<u8>,
+    /// Enable RLN proof generation and verification.
+    ///
+    /// When false, EventGraph skips RLN key loading, identity SMT
+    /// initialization, static identity bootstrap/rebuild, and proof
+    /// verification. Rotating events are accepted structurally with empty
+    /// blobs, and outbound events are sent without proofs.
+    pub rln_enabled: bool,
     /// App-provided pregenerated RLN identity commitments.
     ///
     /// EventGraph treats these as the only proof-less registration
@@ -729,9 +736,9 @@ pub struct EventGraph {
     pub deg_enabled: AtomicBool,
     deg_publisher: PublisherPtr<DegEvent>,
     pub sled_db: sled::Db,
-    pub zk_keys: Arc<ZkKeys>,
-    pub identity_state: RwLock<IdentityState>,
-    pub rln_state: RwLock<RlnState>,
+    pub zk_keys: Option<Arc<ZkKeys>>,
+    pub identity_state: Option<RwLock<IdentityState>>,
+    pub rln_state: Option<RwLock<RlnState>>,
     /// App identifier mixed into the RLN external nullifier. Derived
     /// from `config.genesis_contents` so two deployments using the
     /// same circuit cannot collide on internal_nullifiers.
@@ -777,9 +784,15 @@ impl EventGraph {
         ex: Arc<Executor<'_>>,
     ) -> Result<EventGraphPtr> {
         config.validate()?;
-        let zk_keys = Arc::new(ZkKeys::build_and_load(&zk_key_db)?);
-        log_memory("after RLN key initialization");
-        Self::with_zk_keys(p2p, sled_db, datastore, replay_mode, config, zk_keys, ex).await
+        let zk_keys = if config.rln_enabled {
+            let zk_keys = Arc::new(ZkKeys::build_and_load(&zk_key_db)?);
+            log_memory("after RLN key initialization");
+            Some(zk_keys)
+        } else {
+            info!(target: "event_graph::new", "[EVENTGRAPH] RLN disabled; skipping key initialization");
+            None
+        };
+        Self::with_optional_zk_keys(p2p, sled_db, datastore, replay_mode, config, zk_keys, ex).await
     }
 
     /// Same as [`Self::new`] but accepts a pre-built [`ZkKeys`].
@@ -798,13 +811,41 @@ impl EventGraph {
         zk_keys: Arc<ZkKeys>,
         ex: Arc<Executor<'_>>,
     ) -> Result<EventGraphPtr> {
+        Self::with_optional_zk_keys(p2p, sled_db, datastore, replay_mode, config, Some(zk_keys), ex)
+            .await
+    }
+
+    async fn with_optional_zk_keys(
+        p2p: P2pPtr,
+        sled_db: sled::Db,
+        datastore: PathBuf,
+        replay_mode: bool,
+        config: EventGraphConfig,
+        zk_keys: Option<Arc<ZkKeys>>,
+        ex: Arc<Executor<'_>>,
+    ) -> Result<EventGraphPtr> {
         config.validate()?;
-        let identity_state = IdentityState::new(&sled_db)?;
-        log_memory("after RLN identity state initialization");
+        let rln_enabled = config.rln_enabled;
+        let zk_keys = if rln_enabled {
+            Some(zk_keys.ok_or_else(|| Error::Custom("RLN enabled without ZK keys".into()))?)
+        } else {
+            None
+        };
+        let identity_state = if rln_enabled {
+            let identity_state = IdentityState::new(&sled_db)?;
+            log_memory("after RLN identity state initialization");
+            Some(identity_state)
+        } else {
+            None
+        };
         let rln_app_id = rln::RlnAppId::from_genesis(&config.genesis_contents);
         let current_genesis = generate_genesis(&config)?;
         let (pregenerated_identity_commitments, pregenerated_identity_commitment_reprs) =
-            validate_pregenerated_identity_commitments(&config)?;
+            if rln_enabled {
+                validate_pregenerated_identity_commitments(&config)?
+            } else {
+                (Vec::new(), HashSet::new())
+            };
         let dag_store = DagStore::new(sled_db.clone(), &config).await?;
         let static_dag = Self::static_new(&sled_db, &config).await?;
         let static_dag_blobs = sled_db.open_tree("static-dag-blobs")?;
@@ -853,8 +894,8 @@ impl EventGraph {
             deg_enabled: AtomicBool::new(false),
             deg_publisher: Publisher::new(),
             zk_keys,
-            identity_state: RwLock::new(identity_state),
-            rln_state: RwLock::new(RlnState::new()),
+            identity_state: identity_state.map(RwLock::new),
+            rln_state: rln_enabled.then(|| RwLock::new(RlnState::new())),
             rln_app_id,
         });
 
@@ -866,20 +907,22 @@ impl EventGraph {
             self_.dag_prune(current_genesis).await?;
         }
 
-        // Reconcile persisted RLN state before bootstrapping. If an
-        // earlier process crashed after writing identity leaves but before
-        // inserting the corresponding static event, bootstrapping must see
-        // the corrected leaf set rather than skip the configured identity.
-        self_.rebuild_historical_roots_if_needed().await?;
+        if rln_enabled {
+            // Reconcile persisted RLN state before bootstrapping. If an
+            // earlier process crashed after writing identity leaves but before
+            // inserting the corresponding static event, bootstrapping must see
+            // the corrected leaf set rather than skip the configured identity.
+            self_.rebuild_historical_roots_if_needed().await?;
 
-        // Init genesis registration events after recovery has made the
-        // static DAG authoritative for the current identity tree.
-        if config.hours_rotation > 0 {
-            self_.bootstrap_genesis_identities().await?;
-            log_memory("after genesis identity bootstrap");
+            // Init genesis registration events after recovery has made the
+            // static DAG authoritative for the current identity tree.
+            if config.hours_rotation > 0 {
+                self_.bootstrap_genesis_identities().await?;
+                log_memory("after genesis identity bootstrap");
+            }
+
+            self_.audit_static_blobs().await?;
         }
-
-        self_.audit_static_blobs().await?;
 
         if config.hours_rotation > 0 {
             let task = StoppableTask::new();
@@ -913,6 +956,10 @@ impl EventGraph {
     /// indexes are derived from it so crashes between the old split write
     /// steps cannot leave stale leaves or unusable root indexes behind.
     async fn rebuild_historical_roots_if_needed(self: &Arc<Self>) -> Result<()> {
+        if !self.rln_enabled() {
+            return Ok(())
+        }
+
         let mut events: Vec<(Event, rln::RLNNode)> = vec![];
 
         for item in self.static_dag.iter() {
@@ -957,7 +1004,8 @@ impl EventGraph {
         let expected_leaves = expected_commitments.len();
         let expected_slashed_count = expected_slashed.len();
         let (actual_commitments, actual_slashed, actual_root) = {
-            let state = self.identity_state.read().await;
+            let state_lock = self.rln_identity_state()?;
+            let state = state_lock.read().await;
             (state.commitment_reprs(), state.slashed_commitment_reprs(), state.root())
         };
         let (actual_leaves, leaves_consistent) = match actual_commitments {
@@ -1037,7 +1085,7 @@ impl EventGraph {
         self.rln_historical_roots_by_value.clear()?;
 
         {
-            let mut state = self.identity_state.write().await;
+            let mut state = self.rln_identity_state()?.write().await;
             state.clear_for_rebuild()?;
         }
         log_memory("after RLN state clear for rebuild");
@@ -1663,6 +1711,13 @@ impl EventGraph {
                 continue
             }
 
+            if !self.rln_enabled() {
+                self.commit_static_event_unverified(&ev, &blob).await?;
+                committed.insert(eid);
+                applied += 1;
+                continue
+            }
+
             let rln_node: rln::RLNNode = match deserialize_async_partial(ev.content()).await {
                 Ok((v, _)) => v,
                 Err(_) => {
@@ -1836,15 +1891,19 @@ impl EventGraph {
                 continue
             }
 
-            let blob = match self.dag_blob_fetch(&id)? {
-                Some(blob) if !blob.is_empty() => blob,
-                _ => {
-                    warn!(
-                        target: "event_graph::range",
-                        "[EVENTGRAPH] refusing to serve range event {id} without blob",
-                    );
-                    continue
+            let blob = if self.rln_enabled() {
+                match self.dag_blob_fetch(&id)? {
+                    Some(blob) if !blob.is_empty() => blob,
+                    _ => {
+                        warn!(
+                            target: "event_graph::range",
+                            "[EVENTGRAPH] refusing to serve range event {id} without blob",
+                        );
+                        continue
+                    }
                 }
+            } else {
+                Vec::new()
             };
 
             events.push(event);
@@ -1867,6 +1926,7 @@ impl EventGraph {
         peer_next_cursor: RangeCursor,
         exhausted: bool,
     ) -> Result<RangeSyncPage> {
+        let blobs = if !self.rln_enabled() { vec![Vec::new(); events.len()] } else { blobs };
         if events.len() != blobs.len() || events.len() > limit || events.len() > MAX_RANGE_PAGE_SIZE
         {
             return Err(Error::DagSyncFailed)
@@ -1908,7 +1968,7 @@ impl EventGraph {
                 if !event.dag_validate(&slot.header_tree, &self.config, dag_ts).await? {
                     return Err(Error::DagSyncFailed)
                 }
-                if !already_have && !already_pending && blob.is_empty() {
+                if self.rln_enabled() && !already_have && !already_pending && blob.is_empty() {
                     return Err(Error::DagSyncFailed)
                 }
 
@@ -1920,6 +1980,12 @@ impl EventGraph {
         let mut newly_pending = Vec::new();
         for (event, blob, already_have, already_pending) in candidates {
             if already_have || already_pending {
+                accepted_events.push(event);
+                continue
+            }
+
+            if !self.rln_enabled() {
+                newly_pending.push(PendingLazyEvent { event: event.clone(), blob });
                 accepted_events.push(event);
                 continue
             }
@@ -2094,6 +2160,10 @@ impl EventGraph {
         blob: &[u8],
         dag_name: &str,
     ) -> Result<Vec<blake3::Hash>> {
+        if !self.rln_enabled() {
+            self.header_dag_insert(vec![event.header.clone()], dag_name).await?;
+            return self.dag_insert(std::slice::from_ref(event), dag_name).await
+        }
         if event.header.parents != NULL_PARENTS && blob.is_empty() {
             return Err(Error::Custom("rotating-DAG signal event blob must not be empty".into()))
         }
@@ -2153,12 +2223,12 @@ impl EventGraph {
         blob: &[u8],
         dag_name: &str,
     ) -> Result<Vec<blake3::Hash>> {
-        if event.header.parents != NULL_PARENTS && blob.is_empty() {
+        if self.rln_enabled() && event.header.parents != NULL_PARENTS && blob.is_empty() {
             return Err(Error::Custom("verified signal event blob must not be empty".into()))
         }
 
         self.header_dag_insert(vec![event.header.clone()], dag_name).await?;
-        if event.header.parents != NULL_PARENTS {
+        if self.rln_enabled() && event.header.parents != NULL_PARENTS {
             self.dag_blob_store(&event.id(), blob)?;
         }
         self.dag_insert(std::slice::from_ref(event), dag_name).await
@@ -2292,6 +2362,12 @@ impl EventGraph {
                 continue
             }
 
+            if !self.rln_enabled() {
+                accepted.push(i);
+                accepted_body_ids.insert(eid);
+                continue
+            }
+
             let blob = blobs.get(i).cloned().unwrap_or_default();
             if blob.is_empty() {
                 if require_blobs {
@@ -2343,7 +2419,6 @@ impl EventGraph {
         let mut store = self.dag_store.write().await;
         let slot = store.get_slot_mut(&dag_ts).ok_or(Error::DagSyncFailed)?;
 
-        let mut accepted = accepted;
         sort_event_indices(events, &mut accepted);
 
         let mut ids = Vec::with_capacity(accepted.len());
@@ -2387,12 +2462,14 @@ impl EventGraph {
 
             // Persist the blob alongside the event for future
             // sync-time re-verification by other late-joiners.
-            if let Some(blob) = blobs.get(i) {
-                if !blob.is_empty() {
-                    if require_blobs {
-                        self.dag_blob_store(&eid, blob)?;
-                    } else {
-                        let _ = self.dag_blob_store(&eid, blob);
+            if self.rln_enabled() {
+                if let Some(blob) = blobs.get(i) {
+                    if !blob.is_empty() {
+                        if require_blobs {
+                            self.dag_blob_store(&eid, blob)?;
+                        } else {
+                            let _ = self.dag_blob_store(&eid, blob);
+                        }
                     }
                 }
             }
@@ -2703,6 +2780,19 @@ impl EventGraph {
         Ok(())
     }
 
+    /// Commit a static-DAG event without RLN verification or identity-state
+    /// mutation.
+    ///
+    /// Used when RLN is disabled. The static DAG remains available for generic
+    /// long-lived graph state, but the event content is not interpreted as an
+    /// RLN registration or slash.
+    pub async fn commit_static_event_unverified(&self, ev: &Event, _blob: &[u8]) -> Result<()> {
+        let ev_bytes = serialize_async(ev).await;
+        self.static_persist_serialized(&ev.id(), &ev_bytes)?;
+        self.static_pub.notify(ev.clone()).await;
+        Ok(())
+    }
+
     /// Durably commit a verified static RLN event.
     ///
     /// The write order is intentional: blob first, static DAG second, RLN
@@ -2717,13 +2807,17 @@ impl EventGraph {
         blob: &[u8],
         rln_node: &rln::RLNNode,
     ) -> Result<pallas::Base> {
+        if !self.rln_enabled() {
+            self.commit_static_event_unverified(ev, blob).await?;
+            return Ok(IdentityState::empty_root())
+        }
         if blob.is_empty() {
             return Err(Error::Custom("static RLN event blob must not be empty".into()))
         }
 
         let ev_id = ev.id();
         let ev_bytes = serialize_async(ev).await;
-        let mut state = self.identity_state.write().await;
+        let mut state = self.rln_identity_state()?.write().await;
         Self::ensure_rln_static_event_transition(&state, rln_node)?;
 
         self.static_blob_store(&ev_id, blob)?;
@@ -2754,6 +2848,10 @@ impl EventGraph {
     /// blobs and future staked registration proofs are not reconstructible and
     /// are logged for operator intervention.
     async fn audit_static_blobs(&self) -> Result<()> {
+        if !self.rln_enabled() {
+            return Ok(())
+        }
+
         let mut repaired = 0usize;
         let mut unrecoverable = 0usize;
         let mut malformed = 0usize;
@@ -2894,7 +2992,10 @@ impl EventGraph {
         ev: &Event,
         node: &rln::RLNNode,
     ) -> Result<pallas::Base> {
-        let mut state = self.identity_state.write().await;
+        if !self.rln_enabled() {
+            return Ok(IdentityState::empty_root())
+        }
+        let mut state = self.rln_identity_state()?.write().await;
         self.apply_rln_static_event_locked(ev, node, &mut state)
     }
 
@@ -3146,6 +3247,26 @@ impl EventGraph {
         self.synced.load(Ordering::Acquire)
     }
 
+    /// True when RLN proof generation and verification are enabled.
+    pub fn rln_enabled(&self) -> bool {
+        self.config.rln_enabled
+    }
+
+    /// Return the RLN identity state when RLN is enabled.
+    pub fn rln_identity_state(&self) -> Result<&RwLock<IdentityState>> {
+        self.identity_state.as_ref().ok_or_else(|| Error::Custom("RLN is disabled".into()))
+    }
+
+    /// Return the RLN share metadata state when RLN is enabled.
+    pub fn rln_share_state(&self) -> Result<&RwLock<RlnState>> {
+        self.rln_state.as_ref().ok_or_else(|| Error::Custom("RLN is disabled".into()))
+    }
+
+    /// Return the RLN ZK keys when RLN is enabled.
+    pub fn rln_zk_keys(&self) -> Result<&ZkKeys> {
+        self.zk_keys.as_deref().ok_or_else(|| Error::Custom("RLN is disabled".into()))
+    }
+
     pub async fn deg_subscribe(&self) -> Subscription<DegEvent> {
         self.deg_publisher.clone().subscribe().await
     }
@@ -3195,14 +3316,15 @@ impl EventGraph {
     pub async fn rln_membership_path(
         &self,
         commitment: &darkfi_sdk::pasta::pallas::Base,
-    ) -> (darkfi_sdk::pasta::pallas::Base, darkfi_sdk::crypto::smt::PathFp) {
-        let s = self.identity_state.read().await;
-        (s.root(), s.prove_membership(commitment))
+    ) -> Result<(darkfi_sdk::pasta::pallas::Base, darkfi_sdk::crypto::smt::PathFp)> {
+        let s = self.rln_identity_state()?.read().await;
+        Ok((s.root(), s.prove_membership(commitment)))
     }
 
     /// True if the given identity commitment is registered.
     pub async fn rln_contains(&self, commitment: &darkfi_sdk::pasta::pallas::Base) -> bool {
-        self.identity_state.read().await.contains(commitment)
+        let Ok(state) = self.rln_identity_state() else { return false };
+        state.read().await.contains(commitment)
     }
 
     /// Verify an RLN signal blob against this event graph's state.
@@ -3223,6 +3345,10 @@ impl EventGraph {
     pub async fn rln_verify_signal(&self, event: &Event, blob: &[u8]) -> rln::SignalCheck {
         use darkfi_sdk::{crypto::poseidon_hash, pasta::pallas};
         use rln::{epoch_of, hash_event, Blob, SignalCheck, MAX_MSG_LIMIT};
+
+        if !self.rln_enabled() {
+            return SignalCheck::Accepted
+        }
 
         let rcvd: Blob = match deserialize_async_partial(blob).await {
             Ok((v, _)) => v,
@@ -3255,7 +3381,8 @@ impl EventGraph {
         //    the timestamp-window check below so old pre-slash roots
         //    cannot stay valid indefinitely.
         {
-            let id_state = self.identity_state.read().await;
+            let Ok(id_state_lock) = self.rln_identity_state() else { return SignalCheck::Rejected };
+            let id_state = id_state_lock.read().await;
             if !id_state.is_current_root(&rcvd.merkle_root) {
                 drop(id_state);
                 match self.is_root_valid_at(&rcvd.merkle_root, event.header.timestamp) {
@@ -3276,7 +3403,10 @@ impl EventGraph {
                         // misbehavior, useful for operators
                         // debugging "why are my messages being
                         // rejected" or investigating peer abuse.
-                        let local_root = self.identity_state.read().await.root();
+                        let local_root = match self.rln_identity_state() {
+                            Ok(state) => state.read().await.root(),
+                            Err(_) => return SignalCheck::Rejected,
+                        };
                         let historical_count = self.rln_historical_roots_ordered.len();
                         warn!(
                             target: "event_graph::rln_verify_signal",
@@ -3317,13 +3447,15 @@ impl EventGraph {
             rcvd.y,
             rcvd.internal_nullifier,
         ];
-        if rcvd.proof.verify(&self.zk_keys.signal_vk, &pi).is_err() {
+        let Ok(zk_keys) = self.rln_zk_keys() else { return SignalCheck::Rejected };
+        if rcvd.proof.verify(&zk_keys.signal_vk, &pi).is_err() {
             return SignalCheck::Rejected
         }
 
         // 3) Now consult the metadata table. Any share we look at
         //    here is guaranteed to be from a valid proof.
-        let mut state = self.rln_state.write().await;
+        let Ok(rln_state) = self.rln_share_state() else { return SignalCheck::Rejected };
+        let mut state = rln_state.write().await;
 
         // Prune metadata relative to THIS signal's epoch, not
         // wall-clock. The retention window is conceptually
@@ -3390,6 +3522,15 @@ impl EventGraph {
         use darkfi_sdk::crypto::poseidon_hash;
         use rln::{RLNNode, SlashBlob, StaticEventCheck};
 
+        if !self.rln_enabled() {
+            return match rln_node {
+                RLNNode::Registration(commitment) => {
+                    StaticEventCheck::AcceptedRegistration(*commitment)
+                }
+                RLNNode::Slashing(commitment) => StaticEventCheck::AcceptedSlash(*commitment),
+            }
+        }
+
         match rln_node {
             RLNNode::Registration(commitment) => {
                 // Current admission policy is pregenerated identities only.
@@ -3399,7 +3540,10 @@ impl EventGraph {
                 if blob == rln::GENESIS_BLOB_GUARD {
                     let repr = commitment.to_repr();
                     if self.pregenerated_identity_commitment_reprs.contains(&repr) {
-                        let state = self.identity_state.read().await;
+                        let Ok(state_lock) = self.rln_identity_state() else {
+                            return StaticEventCheck::Rejected
+                        };
+                        let state = state_lock.read().await;
                         if state.contains(commitment) || state.is_slashed(commitment) {
                             return StaticEventCheck::Rejected
                         }
@@ -3465,7 +3609,8 @@ impl EventGraph {
                 };
 
                 let pi = vec![sl.identity_secret_hash, sl.merkle_root];
-                if sl.proof.verify(&self.zk_keys.slash_vk, &pi).is_err() {
+                let Ok(zk_keys) = self.rln_zk_keys() else { return StaticEventCheck::Rejected };
+                if sl.proof.verify(&zk_keys.slash_vk, &pi).is_err() {
                     return StaticEventCheck::Rejected
                 }
 
@@ -3483,7 +3628,10 @@ impl EventGraph {
                 // accepts any root that was live within DRIFT of the
                 // slash timestamp.
                 {
-                    let id_state = self.identity_state.read().await;
+                    let Ok(id_state_lock) = self.rln_identity_state() else {
+                        return StaticEventCheck::Rejected
+                    };
+                    let id_state = id_state_lock.read().await;
                     if !id_state.is_current_root(&sl.merkle_root) {
                         drop(id_state);
                         match self.is_root_valid_at(&sl.merkle_root, event_timestamp) {
@@ -3503,6 +3651,10 @@ impl EventGraph {
     /// event itself is inserted. Idempotent - skips any commitment
     /// already present in the identity tree.
     pub async fn bootstrap_genesis_identities(&self) -> Result<()> {
+        if !self.rln_enabled() {
+            return Ok(())
+        }
+
         // Deterministic for configured pregenerated identities.
         let genesis_event = generate_static_genesis(&self.config);
         let genesis_id = genesis_event.id();
@@ -3518,7 +3670,7 @@ impl EventGraph {
 
         for commitment in self.pregenerated_identity_commitments.iter() {
             {
-                let state = self.identity_state.read().await;
+                let state = self.rln_identity_state()?.read().await;
                 if state.contains(commitment) {
                     skipped_active += 1;
                     continue

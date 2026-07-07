@@ -1552,7 +1552,7 @@ async fn malformed_event_rejected_before_rln(ex: Arc<Executor<'static>>) {
         );
         drop(store);
 
-        let state = eg.rln_state.read().await;
+        let state = eg.rln_state.as_ref().unwrap().read().await;
         assert!(
             !state.metadata.is_reused(epoch, &internal_nullifier),
             "node {i} ran RLN verification before structural rejection",

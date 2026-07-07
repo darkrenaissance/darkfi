@@ -181,6 +181,10 @@ struct Args {
     /// Sled cache capacity for the RLN key datastore, in MiB
     zk_key_sled_cache_mb: u64,
 
+    #[structopt(long)]
+    /// Enable RLN proof generation and verification
+    rln_enabled: Option<bool>,
+
     #[structopt(short, long, default_value = "~/.local/share/darkfi/replayed_darkirc_db")]
     /// Replay logs (DB) path
     replay_datastore: String,
@@ -443,6 +447,7 @@ pub const DARKIRC_GENESIS_COMMITMENTS_REPR: &[[u8; 32]] = &[
     }
 
     info!("Initializing DarkIRC node");
+    let rln_enabled = args.rln_enabled.unwrap_or(false);
 
     // Create datastore path if not there already.
     let datastore = match expand_path(&args.datastore) {
@@ -457,17 +462,23 @@ pub const DARKIRC_GENESIS_COMMITMENTS_REPR: &[[u8; 32]] = &[
         return Err(e.into());
     }
 
-    let zk_key_datastore = match expand_path(&args.zk_key_datastore) {
-        Ok(v) => v,
-        Err(e) => {
-            error!("Bad RLN key datastore path `{}`: {e}", args.zk_key_datastore);
-            return Err(e);
+    let zk_key_datastore = if rln_enabled {
+        let zk_key_datastore = match expand_path(&args.zk_key_datastore) {
+            Ok(v) => v,
+            Err(e) => {
+                error!("Bad RLN key datastore path `{}`: {e}", args.zk_key_datastore);
+                return Err(e);
+            }
+        };
+        if let Err(e) = fs::create_dir_all(&zk_key_datastore).await {
+            error!("Failed to create RLN key datastore path `{zk_key_datastore:?}`: {e}");
+            return Err(e.into());
         }
+        Some(zk_key_datastore)
+    } else {
+        info!("RLN disabled; skipping RLN key datastore setup");
+        None
     };
-    if let Err(e) = fs::create_dir_all(&zk_key_datastore).await {
-        error!("Failed to create RLN key datastore path `{zk_key_datastore:?}`: {e}");
-        return Err(e.into());
-    }
 
     let replay_datastore = match expand_path(&args.replay_datastore) {
         Ok(v) => v,
@@ -499,19 +510,25 @@ pub const DARKIRC_GENESIS_COMMITMENTS_REPR: &[[u8; 32]] = &[
     };
     log_memory("after sled open");
 
-    let zk_key_sled_cache_capacity =
-        sled_cache_capacity_bytes("zk_key_sled_cache_mb", args.zk_key_sled_cache_mb)?;
-    info!("Opening RLN key datastore with {} MiB sled cache", args.zk_key_sled_cache_mb);
-    let zk_key_db = match sled::Config::new()
-        .path(zk_key_datastore.clone())
-        .cache_capacity(zk_key_sled_cache_capacity)
-        .open()
-    {
-        Ok(v) => v,
-        Err(e) => {
-            error!("Failed to open RLN key datastore `{zk_key_datastore:?}`: {e}");
-            return Err(e.into());
-        }
+    let zk_key_db = if let Some(zk_key_datastore) = zk_key_datastore.as_ref() {
+        let zk_key_sled_cache_capacity =
+            sled_cache_capacity_bytes("zk_key_sled_cache_mb", args.zk_key_sled_cache_mb)?;
+        info!("Opening RLN key datastore with {} MiB sled cache", args.zk_key_sled_cache_mb);
+        Some(
+            match sled::Config::new()
+                .path(zk_key_datastore.clone())
+                .cache_capacity(zk_key_sled_cache_capacity)
+                .open()
+            {
+                Ok(v) => v,
+                Err(e) => {
+                    error!("Failed to open RLN key datastore `{zk_key_datastore:?}`: {e}");
+                    return Err(e.into());
+                }
+            },
+        )
+    } else {
+        None
     };
 
     let p2p_settings: darkfi::net::Settings =
@@ -528,20 +545,36 @@ pub const DARKIRC_GENESIS_COMMITMENTS_REPR: &[[u8; 32]] = &[
         initial_genesis: DARKIRC_INITIAL_GENESIS,
         hours_rotation: DARKIRC_HOURS_ROTATION,
         genesis_contents: DARKIRC_GENESIS_CONTENTS.to_vec(),
-        pregenerated_identity_commitments: genesis_commits::pregenerated_identity_commitments(),
+        rln_enabled,
+        pregenerated_identity_commitments: if rln_enabled {
+            genesis_commits::pregenerated_identity_commitments()
+        } else {
+            Vec::new()
+        },
         max_dags: Some(args.history_retention_dags),
     };
-    let event_graph = match EventGraph::new_with_zk_key_db(
-        p2p.clone(),
-        sled_db.clone(),
-        zk_key_db.clone(),
-        replay_datastore.clone(),
-        replay_mode,
-        eg_config,
-        ex.clone(),
-    )
-    .await
-    {
+    let event_graph = match if let Some(zk_key_db) = zk_key_db.clone() {
+        EventGraph::new_with_zk_key_db(
+            p2p.clone(),
+            sled_db.clone(),
+            zk_key_db,
+            replay_datastore.clone(),
+            replay_mode,
+            eg_config,
+            ex.clone(),
+        )
+        .await
+    } else {
+        EventGraph::new(
+            p2p.clone(),
+            sled_db.clone(),
+            replay_datastore.clone(),
+            replay_mode,
+            eg_config,
+            ex.clone(),
+        )
+        .await
+    } {
         Ok(v) => v,
         Err(e) => {
             error!("Event graph failed to start: {e}");
@@ -803,9 +836,11 @@ pub const DARKIRC_GENESIS_COMMITMENTS_REPR: &[[u8; 32]] = &[
     let flushed_bytes = sled_db.flush_async().await?;
     info!("Flushed {flushed_bytes} bytes");
 
-    info!("Flushing RLN key sled database...");
-    let flushed_key_bytes = zk_key_db.flush_async().await?;
-    info!("Flushed {flushed_key_bytes} RLN key bytes");
+    if let Some(zk_key_db) = zk_key_db {
+        info!("Flushing RLN key sled database...");
+        let flushed_key_bytes = zk_key_db.flush_async().await?;
+        info!("Flushed {flushed_key_bytes} RLN key bytes");
+    }
 
     info!("Shut down successfully");
     Ok(())

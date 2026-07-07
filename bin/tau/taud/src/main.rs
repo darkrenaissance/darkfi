@@ -22,7 +22,6 @@ use std::{
     ffi::CString,
     fs::{create_dir_all, remove_dir_all},
     io::{stdin, Write},
-    slice,
     str::FromStr,
     sync::{atomic::Ordering, Arc, OnceLock},
 };
@@ -339,23 +338,23 @@ async fn start_sync_loop(
                     let encrypted_task = encrypt_sign_task(&tk, ws)?;
                     info!(target: "taud", "Send the task: ref: {}", tk.ref_id);
                     // Build a DAG event and return it.
-                    let event = Event::new(
-                        serialize_async(&encrypted_task).await,
-                        &event_graph,
-                    )
-                    .await;
+                    let event = match Event::new(serialize_async(&encrypted_task).await, &event_graph).await {
+                        Ok(event) => event,
+                        Err(e) => {
+                            error!(target: "taud", "Failed creating new DAG event: {e}");
+                            continue
+                        }
+                    };
 
-                    // If it fails for some reason, for now, we just note it
-                    // and pass.
                     let current_genesis = event_graph.current_genesis.read().await;
                     let dag_name = current_genesis.header.timestamp.to_string();
-                    if let Err(e) = event_graph.header_dag_insert(vec![event.header.clone()], &dag_name).await {
-                        error!(target: "taud", "Failed inserting new header to DAG: {}", e);
-                    }
-                    if let Err(e) = event_graph.dag_insert(slice::from_ref(&event), &dag_name).await {
+                    drop(current_genesis);
+
+                    if let Err(e) = event_graph.insert_signal_with_blob(&event, &[], &dag_name).await {
                         error!(target: "taud", "Failed inserting new event to DAG: {e}");
                     } else {
-                        // Otherwise, broadcast it
+                        // Otherwise, broadcast it. Taud runs EventGraph with RLN disabled,
+                        // so the blob is intentionally empty.
                         p2p.broadcast(&EventPut(event, vec![])).await;
                     }
                 }
@@ -567,6 +566,7 @@ async fn realmain(settings: Args, executor: Arc<smol::Executor<'static>>) -> Res
         initial_genesis: TAUD_INITIAL_GENESIS,
         hours_rotation: TAUD_HOURS_ROTATION,
         genesis_contents: TAUD_GENESIS_CONTENTS.to_vec(),
+        rln_enabled: false,
         pregenerated_identity_commitments: Vec::new(),
         max_dags: Some(TAUD_MAX_DAGS),
     };
@@ -633,7 +633,7 @@ async fn realmain(settings: Args, executor: Arc<smol::Executor<'static>>) -> Res
     ////////////////////
     // get history
     ////////////////////
-    let dag_events = event_graph.order_events().await;
+    let dag_events = event_graph.order_events().await?;
 
     for event in dag_events.iter() {
         let event_id = event.header.id();

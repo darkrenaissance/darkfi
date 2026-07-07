@@ -44,6 +44,7 @@ pub fn test_config() -> EventGraphConfig {
         initial_genesis: 1_704_067_200_000, // 2024-01-01 UTC
         hours_rotation: 0,
         genesis_contents: b"darkfi-test-graph".to_vec(),
+        rln_enabled: true,
         pregenerated_identity_commitments: test_pregenerated_identity_commitments(),
         max_dags: Some(24),
     }
@@ -131,9 +132,13 @@ pub async fn make_eg_with_config_and_db(
 ) -> EventGraphPtr {
     let ex = Arc::new(Executor::new());
     let p2p = P2p::new(Settings::default(), ex.clone()).await.unwrap();
-    EventGraph::with_zk_keys(p2p, sled_db, "/tmp".into(), false, config, shared_zk_keys(), ex)
-        .await
-        .unwrap()
+    if config.rln_enabled {
+        EventGraph::with_zk_keys(p2p, sled_db, "/tmp".into(), false, config, shared_zk_keys(), ex)
+            .await
+            .unwrap()
+    } else {
+        EventGraph::new(p2p, sled_db, "/tmp".into(), false, config, ex).await.unwrap()
+    }
 }
 
 /// Number of nodes a `make_network` call brings up.
@@ -353,7 +358,7 @@ mod test_identity {
             eg: &EventGraphPtr,
         ) -> Result<Blob> {
             let commitment = self.commitment();
-            let (root, path) = eg.rln_membership_path(&commitment).await;
+            let (root, path) = eg.rln_membership_path(&commitment).await?;
 
             let app_id = eg.rln_app_id().as_field();
             let epoch = epoch_of(event.header.timestamp);
@@ -380,7 +385,7 @@ mod test_identity {
                 y,
                 internal_nullifier,
             };
-            let proof = eg.zk_keys.prove_signal(request).await?.proof;
+            let proof = eg.rln_zk_keys()?.prove_signal(request).await?.proof;
 
             Ok(Blob {
                 proof,
