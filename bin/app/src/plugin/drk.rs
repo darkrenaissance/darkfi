@@ -138,10 +138,10 @@ impl DrkPlugin {
         sg_root: SceneNodePtr,
         ex: ExecutorPtr,
     ) -> Result<(Pimpl, Arc<smol::LocalExecutor<'a>>)> {
-        let node_ref = &node.upgrade().unwrap();
+        let node_ref = node.upgrade().unwrap();
 
         let setting_root = Arc::new(SceneNode::new("setting", SceneNodeType::SettingRoot));
-        node_ref.clone().link(setting_root.clone());
+        node_ref.link(setting_root.clone());
 
         let endpoint = Url::parse(DARKFID_ENDPOINT).unwrap();
 
