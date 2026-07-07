@@ -195,7 +195,7 @@ impl RlnIdentity {
         let y = a_0 + x * a_1;
 
         // Canonical membership path via the EG.
-        let (root, path) = eg.rln_membership_path(&self.commitment()).await;
+        let (root, path) = eg.rln_membership_path(&self.commitment()).await?;
 
         let request = SignalProvingRequest {
             nullifier: self.nullifier,
@@ -218,7 +218,7 @@ impl RlnIdentity {
             "[RLN] Creating signal proof for event {}",
             event.id(),
         );
-        let proof = eg.zk_keys.prove_signal(request).await?.proof;
+        let proof = eg.rln_zk_keys()?.prove_signal(request).await?.proof;
         log_memory("after local signal proving");
 
         Ok(Blob {

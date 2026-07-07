@@ -413,6 +413,10 @@ impl NickServ {
         nick: &str,
         tokens: &mut SplitAsciiWhitespace<'_>,
     ) -> Result<Vec<ReplyType>> {
+        if !self.server.darkirc.event_graph.rln_enabled() {
+            return Ok(vec![notice(nick, "RLN is disabled; registration is not required.")])
+        }
+
         // Gather the tokens
         let (
             Some(account_name),
@@ -611,6 +615,10 @@ impl NickServ {
         nick: &str,
         tokens: &mut SplitAsciiWhitespace<'_>,
     ) -> Result<Vec<ReplyType>> {
+        if !self.server.darkirc.event_graph.rln_enabled() {
+            return Ok(vec![notice(nick, "RLN is disabled; SET has no effect.")])
+        }
+
         let Some(account_name) = tokens.next() else {
             return Ok(vec![notice(nick, "Invalid syntax. Use `SET <account_name>`.")])
         };
@@ -706,6 +714,10 @@ impl NickServ {
         nick: &str,
         tokens: &mut SplitAsciiWhitespace<'_>,
     ) -> Result<Vec<ReplyType>> {
+        if !self.server.darkirc.event_graph.rln_enabled() {
+            return Ok(vec![notice(nick, "RLN is disabled; SLASH is unavailable.")])
+        }
+
         let Some(account_name) = tokens.next() else {
             return Ok(notices(
                 nick,
@@ -795,13 +807,13 @@ impl NickServ {
         // future trusted remote prover can implement the same API.
         let identity_secret_hash = identity.identity_secret_hash();
         let request = {
-            let id_state = evgr.identity_state.read().await;
+            let id_state = evgr.rln_identity_state()?.read().await;
             prepare_slash_proof_request(identity_secret_hash, &id_state)
         };
         let root = request.merkle_root;
 
         log_memory("before slash proving");
-        let proof = evgr.zk_keys.prove_slash(request).await?.proof;
+        let proof = evgr.rln_zk_keys()?.prove_slash(request).await?.proof;
         log_memory("after slash proving");
 
         let slash_blob = SlashBlob { proof, identity_secret_hash, merkle_root: root };

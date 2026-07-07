@@ -463,10 +463,13 @@ impl ProtocolEventGraph {
         let mut bantimes = MovingWindow::new(WINDOW_EXPIRY_TIME);
 
         loop {
-            let (event, blob) = match self.ev_put_sub.receive().await {
+            let (event, mut blob) = match self.ev_put_sub.receive().await {
                 Ok(v) => (v.0.clone(), v.1.clone()),
                 Err(_) => continue,
             };
+            if !self.event_graph.rln_enabled() {
+                blob.clear();
+            }
 
             if !self.event_graph.is_synced() {
                 continue
@@ -511,17 +514,19 @@ impl ProtocolEventGraph {
                 continue
             }
 
-            // RLN: every non-genesis event MUST carry a signal proof. The only
-            // exception is genesis-shaped events (parents == NULL_PARENTS),
-            // which are deterministic consensus inputs and never carry blobs.
-            if event.header.parents != NULL_PARENTS {
-                if blob.is_empty() {
+            // RLN: every non-genesis event MUST carry a signal proof when RLN
+            // is enabled. With RLN disabled, blobs are ignored and events are
+            // admitted based on DAG structure only.
+            if self.event_graph.rln_enabled() {
+                if event.header.parents != NULL_PARENTS {
+                    if blob.is_empty() {
+                        self.clone().strike().await?;
+                        continue
+                    }
+                } else if !blob.is_empty() {
                     self.clone().strike().await?;
                     continue
                 }
-            } else if !blob.is_empty() {
-                self.clone().strike().await?;
-                continue
             }
 
             // Fetch missing parents (depth-bounded)
@@ -572,7 +577,10 @@ impl ProtocolEventGraph {
                 continue
             }
 
-            if event.header.parents != NULL_PARENTS && self.verify_rln_signal(&event, &blob).await {
+            if self.event_graph.rln_enabled() &&
+                event.header.parents != NULL_PARENTS &&
+                self.verify_rln_signal(&event, &blob).await
+            {
                 continue
             }
 
@@ -708,6 +716,10 @@ impl ProtocolEventGraph {
     /// wrapper that translates the [`rln::SignalCheck`] outcome
     /// into "accept or reject" plus the slash side effect.
     async fn verify_rln_signal(&self, event: &Event, blob: &[u8]) -> bool {
+        if !self.event_graph.rln_enabled() {
+            return false
+        }
+
         match self.event_graph.rln_verify_signal(event, blob).await {
             rln::SignalCheck::Accepted => false,
             rln::SignalCheck::Rejected => true,
@@ -729,6 +741,10 @@ impl ProtocolEventGraph {
     /// baked into `identity_secret_hash`, so the verifier doesn't
     /// need to know it explicitly.
     async fn slash(&self, shares: Vec<(pallas::Base, pallas::Base)>) {
+        if !self.event_graph.rln_enabled() {
+            return
+        }
+
         let identity_secret_hash = match sss_recover(&shares) {
             Ok(s) => s,
             Err(e) => {
@@ -744,7 +760,8 @@ impl ProtocolEventGraph {
         // were against a stale root we no longer have, or we have a
         // bug). Either way, do not broadcast a bogus slash.
         {
-            let id_state = self.event_graph.identity_state.read().await;
+            let Ok(id_state) = self.event_graph.rln_identity_state() else { return };
+            let id_state = id_state.read().await;
             if !id_state.contains(&commitment) {
                 warn!(
                     target: "event_graph::protocol",
@@ -755,11 +772,13 @@ impl ProtocolEventGraph {
         }
 
         let request = {
-            let id = self.event_graph.identity_state.read().await;
+            let Ok(id) = self.event_graph.rln_identity_state() else { return };
+            let id = id.read().await;
             prepare_slash_proof_request(identity_secret_hash, &id)
         };
         let root = request.merkle_root;
-        let proof = match self.event_graph.zk_keys.prove_slash(request).await {
+        let Ok(zk_keys) = self.event_graph.rln_zk_keys() else { return };
+        let proof = match zk_keys.prove_slash(request).await {
             Ok(response) => response.proof,
             Err(e) => {
                 error!(target: "event_graph::protocol", "[RLN] Slash proof creation failed: {e}");
@@ -822,6 +841,18 @@ impl ProtocolEventGraph {
             }
             if orphan {
                 self.clone().strike().await?;
+                continue
+            }
+
+            if !self.event_graph.rln_enabled() {
+                if let Err(e) = self.event_graph.commit_static_event_unverified(&event, &[]).await {
+                    warn!(
+                        target: "event_graph::protocol",
+                        "[EVENTGRAPH] unverified static commit failed: {e}",
+                    );
+                    continue
+                }
+                self.event_graph.static_broadcast(event, Vec::new()).await?;
                 continue
             }
 
@@ -908,12 +939,14 @@ impl ProtocolEventGraph {
                     continue
                 }
                 if let Some(ev) = self.event_graph.fetch_event_from_dags(id).await? {
-                    let blob = if in_static {
+                    let blob = if !self.event_graph.rln_enabled() {
+                        Vec::new()
+                    } else if in_static {
                         self.event_graph.static_blob_fetch(id).unwrap_or(None).unwrap_or_default()
                     } else {
                         self.event_graph.dag_blob_fetch(id).unwrap_or(None).unwrap_or_default()
                     };
-                    if !in_static && blob.is_empty() {
+                    if self.event_graph.rln_enabled() && !in_static && blob.is_empty() {
                         // Rotating-DAG event without a blob. Don't ship
                         // it, just log loudly.
                         warn!(

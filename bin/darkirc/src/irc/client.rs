@@ -245,21 +245,10 @@ impl Client {
                                 let dag_name = current_genesis.header.timestamp.to_string();
                                 drop(current_genesis);
 
-                                // Build the RLN signal blob FIRST,
-                                // BEFORE touching the local DAG. The
-                                // contract for any rotating-DAG event
-                                // is that it carries a valid signal
-                                // proof. If we can't produce one
-                                // (no identity, exhausted budget,
-                                // proof-construction failure) we
-                                // refuse to admit the event into the
-                                // local DAG at all. Letting it land
-                                // locally with an empty blob would
-                                // leave a no-blob event in our
-                                // dag_main_tree that we can't serve
-                                // honestly to syncing peers and that
-                                // peers would strict-reject anyway.
-                                let blob = {
+                                // Build the RLN signal blob before touching the local
+                                // DAG when RLN is enabled. With RLN disabled, outbound
+                                // events deliberately carry no proof blob.
+                                let blob = if self.server.darkirc.event_graph.rln_enabled() {
                                     let (rln_identity, mid) = match self
                                         .server
                                         .reserve_rln_message_id(event.header.timestamp)
@@ -303,6 +292,8 @@ impl Client {
                                             return Err(e)
                                         }
                                     }
+                                } else {
+                                    Vec::new()
                                 };
 
                                 // Commit our outbound signal through

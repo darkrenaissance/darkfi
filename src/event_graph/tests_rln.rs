@@ -242,18 +242,18 @@ fn rln_rebuild_detects_stale_sled_smt_nodes() {
         let config = EventGraphConfig { hours_rotation: 1, ..test_config() };
         let eg = make_eg_with_config(config).await;
         let commitment = genesis_commitment_at(&eg, 0);
-        let original_root = eg.identity_state.read().await.root();
+        let original_root = eg.identity_state.as_ref().unwrap().read().await.root();
 
         eg.sled_db.open_tree("rln-identity-smt-nodes").unwrap().clear().unwrap();
 
         assert!(eg.rln_contains(&commitment).await);
-        assert_ne!(eg.identity_state.read().await.root(), original_root);
+        assert_ne!(eg.identity_state.as_ref().unwrap().read().await.root(), original_root);
         assert_eq!(eg.rln_historical_roots_ordered.len(), 1);
 
         eg.rebuild_historical_roots_if_needed().await.unwrap();
 
         assert!(eg.rln_contains(&commitment).await);
-        assert_eq!(eg.identity_state.read().await.root(), original_root);
+        assert_eq!(eg.identity_state.as_ref().unwrap().read().await.root(), original_root);
         assert_eq!(eg.rln_historical_roots_ordered.len(), 1);
     })
 }
@@ -490,7 +490,7 @@ fn rln_rebuild_detects_stale_leaf_with_same_count() {
         let stale = pallas::Base::from(0x51a1e_u64);
 
         {
-            let mut state = eg.identity_state.write().await;
+            let mut state = eg.identity_state.as_ref().unwrap().write().await;
             state.clear_for_rebuild().unwrap();
             state.register(stale).unwrap();
         }
@@ -540,7 +540,7 @@ fn rln_verify_signal_rejects_malformed_blobs() {
             y: pallas::Base::zero(),
             internal_nullifier: pallas::Base::from(1u64),
             user_msg_limit: 5,
-            merkle_root: eg.identity_state.read().await.root(),
+            merkle_root: eg.identity_state.as_ref().unwrap().read().await.root(),
         };
         let bytes = serialize_async(&blob).await;
         let truncated = &bytes[..bytes.len() / 2];
@@ -548,7 +548,14 @@ fn rln_verify_signal_rejects_malformed_blobs() {
 
         // None of these touched metadata.
         assert_eq!(
-            eg.rln_state.read().await.metadata.get_shares(0, &pallas::Base::zero()).len(),
+            eg.rln_state
+                .as_ref()
+                .unwrap()
+                .read()
+                .await
+                .metadata
+                .get_shares(0, &pallas::Base::zero())
+                .len(),
             0
         );
     })
@@ -564,7 +571,7 @@ fn rln_verify_signal_rejects_out_of_range_msg_limit() {
     smol::block_on(async {
         let eg = make_eg().await;
         let ev = make_static_event(b"static-event-2", &eg).await;
-        let root = eg.identity_state.read().await.root();
+        let root = eg.identity_state.as_ref().unwrap().read().await.root();
         let mk = |limit: u64| Blob {
             proof: synthesize_placeholder_proof(),
             y: pallas::Base::zero(),
@@ -591,7 +598,7 @@ fn rln_verify_signal_no_metadata_mutation_on_reject() {
         // Use the real current root to bypass the root check, but
         // the proof itself will fail. The test asserts that even
         // though we got past the root check, no share is recorded.
-        let real_root = eg.identity_state.read().await.root();
+        let real_root = eg.identity_state.as_ref().unwrap().read().await.root();
         let nullifier = pallas::Base::from(0xfeedu64);
         let blob = Blob {
             proof: synthesize_placeholder_proof(),
@@ -610,7 +617,7 @@ fn rln_verify_signal_no_metadata_mutation_on_reject() {
         // verified. Anchor to the SIGNAL's epoch rather than
         // wall-clock so the test is deterministic regardless of
         // when it runs.
-        let state = eg.rln_state.read().await;
+        let state = eg.rln_state.as_ref().unwrap().read().await;
         let event_epoch = epoch_of(ev.header.timestamp);
         for e in (event_epoch.saturating_sub(2))..=event_epoch.saturating_add(1) {
             assert!(
@@ -710,7 +717,7 @@ fn rln_static_event_registration_duplicate_commitment_soft_reject() {
     smol::block_on(async {
         let eg = make_eg().await;
         let commitment = pallas::Base::from(0xc0ffeeu64);
-        eg.identity_state.write().await.register(commitment).unwrap();
+        eg.identity_state.as_ref().unwrap().write().await.register(commitment).unwrap();
 
         let blob =
             placeholder_registration_blob(5, MAX_MSG_LIMIT, RegistrationAttestation::SPECIAL);
@@ -742,7 +749,7 @@ fn rln_static_event_slash_invalid_blobs_rejected() {
         let eg = make_eg().await;
 
         // (a) Mismatched commitment.
-        let real_root = eg.identity_state.read().await.root();
+        let real_root = eg.identity_state.as_ref().unwrap().read().await.root();
         let blob_a = placeholder_slash_blob(pallas::Base::from(0xaaaau64), real_root);
         let bytes_a = serialize_async(&blob_a).await;
         let mismatched_commitment = pallas::Base::from(0xbbbb_bbbbu64);
@@ -904,7 +911,7 @@ fn rln_verify_signal_rejects_recent_pre_slash_root_after_drift() {
         assert!(!eg.rln_contains(&commitment).await);
 
         assert!(
-            eg.identity_state.read().await.is_known_root(&pre_slash_root),
+            eg.identity_state.as_ref().unwrap().read().await.is_known_root(&pre_slash_root),
             "pre-slash root should still be in the recent-root cache",
         );
         assert!(
@@ -979,15 +986,15 @@ fn rln_e2e_slash_proof_round_trip() {
         assert_eq!(recovered, a_0);
 
         let request = {
-            let id_state = eg.identity_state.read().await;
+            let id_state = eg.identity_state.as_ref().unwrap().read().await;
             prepare_slash_proof_request(recovered, &id_state)
         };
         let root = request.merkle_root;
-        let proof = eg.zk_keys.prove_slash(request).await.unwrap().proof;
+        let proof = eg.zk_keys.as_ref().unwrap().prove_slash(request).await.unwrap().proof;
 
         // The recovered commitment must verify against the slash VK.
         let pi = vec![recovered, root];
-        proof.verify(&eg.zk_keys.slash_vk, &pi).expect("slash proof must verify");
+        proof.verify(&eg.zk_keys.as_ref().unwrap().slash_vk, &pi).expect("slash proof must verify");
     })
 }
 
@@ -1034,7 +1041,7 @@ async fn concurrent_slashes(ex: Arc<Executor<'static>>) {
     let id = TestIdentity::new();
     let commitment = id.commitment();
     for eg in &nodes {
-        eg.identity_state.write().await.register(commitment).expect("reg");
+        eg.identity_state.as_ref().unwrap().write().await.register(commitment).expect("reg");
     }
 
     // Helper to build a slash blob on a given node.
@@ -1044,11 +1051,11 @@ async fn concurrent_slashes(ex: Arc<Executor<'static>>) {
         commitment: pallas::Base,
     ) -> (Event, Vec<u8>) {
         let request = {
-            let id_state = eg.identity_state.read().await;
+            let id_state = eg.identity_state.as_ref().unwrap().read().await;
             prepare_slash_proof_request(ish, &id_state)
         };
         let root = request.merkle_root;
-        let proof = eg.zk_keys.prove_slash(request).await.expect("proof").proof;
+        let proof = eg.zk_keys.as_ref().unwrap().prove_slash(request).await.expect("proof").proof;
         let blob = SlashBlob { proof, identity_secret_hash: ish, merkle_root: root };
         let event = Event::new_static(serialize_async(&RLNNode::Slashing(commitment)).await, eg)
             .await
@@ -1105,11 +1112,11 @@ fn rln_static_slashes_persist_and_tombstone_commitment() {
         assert!(eg.rln_contains(&commitment).await);
 
         let request = {
-            let id_state = eg.identity_state.read().await;
+            let id_state = eg.identity_state.as_ref().unwrap().read().await;
             prepare_slash_proof_request(id.identity_secret_hash(), &id_state)
         };
         let root = request.merkle_root;
-        let proof = eg.zk_keys.prove_slash(request).await.unwrap().proof;
+        let proof = eg.zk_keys.as_ref().unwrap().prove_slash(request).await.unwrap().proof;
         let slash_blob =
             SlashBlob { proof, identity_secret_hash: id.identity_secret_hash(), merkle_root: root };
         let blob = serialize_async(&slash_blob).await;
@@ -1121,7 +1128,7 @@ fn rln_static_slashes_persist_and_tombstone_commitment() {
         assert!(matches!(outcome, StaticEventCheck::AcceptedSlash(c) if c == commitment));
         eg.commit_verified_static_event(&first_slash, &blob, &slash_node).await.unwrap();
         assert!(!eg.rln_contains(&commitment).await);
-        assert!(eg.identity_state.read().await.is_slashed(&commitment));
+        assert!(eg.identity_state.as_ref().unwrap().read().await.is_slashed(&commitment));
         assert!(eg.static_fetch(&first_slash.id()).await.unwrap().is_some());
 
         let replayed_slash = synth_static_event(3, 500_001, &slash_node).await;
@@ -1154,10 +1161,10 @@ fn rln_static_slashes_persist_and_tombstone_commitment() {
 
         eg.rln_historical_roots_ordered.clear().unwrap();
         eg.rln_historical_roots_by_value.clear().unwrap();
-        eg.identity_state.write().await.clear_for_rebuild().unwrap();
+        eg.identity_state.as_ref().unwrap().write().await.clear_for_rebuild().unwrap();
         eg.rebuild_historical_roots_if_needed().await.unwrap();
         assert!(!eg.rln_contains(&commitment).await);
-        assert!(eg.identity_state.read().await.is_slashed(&commitment));
+        assert!(eg.identity_state.as_ref().unwrap().read().await.is_slashed(&commitment));
         assert_eq!(eg.rln_historical_roots_ordered.len(), 3);
     })
 }
@@ -1197,7 +1204,7 @@ fn rln_static_blob_audit_repairs_pregenerated_guard() {
 fn rln_static_blob_audit_does_not_fabricate_slash_blob() {
     smol::block_on(async {
         let eg = make_eg().await;
-        let commitment = pallas::Base::from(0x515a_5b_u64);
+        let commitment = pallas::Base::from(0x0051_5a5b_u64);
         let node = RLNNode::Slashing(commitment);
         let ev = synth_static_event(1, 400_000, &node).await;
 
@@ -1324,7 +1331,7 @@ fn rln_multi_node_static_sync_rejects_child_when_parent_rejected() {
 async fn static_sync_rejects_child_when_parent_rejected(ex: Arc<Executor<'static>>) {
     let nodes = make_network(ex).await;
 
-    let bad_node = RLNNode::Registration(pallas::Base::from(0x51a7_1c_u64));
+    let bad_node = RLNNode::Registration(pallas::Base::from(0x0051_a71c_u64));
     let bad_parent = Event::new_static(serialize_async(&bad_node).await, &nodes[0]).await.unwrap();
     let bad_blob = b"not-a-valid-static-rln-blob".to_vec();
     for eg in nodes.iter().take(4) {
@@ -1413,7 +1420,7 @@ async fn static_sync_blob_propagation(ex: Arc<Executor<'static>>) {
     let synthetic_blob = b"synthetic-test-blob-bytes".to_vec();
 
     for eg in nodes.iter().take(4) {
-        eg.identity_state.write().await.register(commitment).unwrap();
+        eg.identity_state.as_ref().unwrap().write().await.register(commitment).unwrap();
         eg.static_insert(&event).await.unwrap();
         // Synthetic blob will fail rln_verify_static_event (no
         // real proof). For this test that's fine - we WANT to
@@ -1665,6 +1672,48 @@ fn rln_dag_insert_with_blobs_rejects_missing_blob_on_non_genesis() {
 }
 
 #[test]
+fn rln_disabled_skips_state_and_accepts_empty_signal_blob() {
+    smol::block_on(async {
+        let config = EventGraphConfig {
+            rln_enabled: false,
+            pregenerated_identity_commitments: Vec::new(),
+            ..test_config()
+        };
+        let eg = make_eg_with_config(config).await;
+
+        assert!(!eg.rln_enabled());
+        assert!(eg.zk_keys.is_none());
+        assert!(eg.identity_state.is_none());
+        assert!(eg.rln_state.is_none());
+        assert!(eg.rln_zk_keys().is_err());
+        assert!(eg.rln_identity_state().is_err());
+        assert!(eg.rln_share_state().is_err());
+
+        let dag_ts = eg.current_genesis.read().await.header.timestamp;
+        let dag_name = dag_ts.to_string();
+        let event = Event::new(b"rln-disabled".to_vec(), &eg).await.unwrap();
+        assert_ne!(event.header.parents, NULL_PARENTS);
+        assert!(matches!(eg.rln_verify_signal(&event, &[]).await, SignalCheck::Accepted));
+
+        let accepted = eg.insert_signal_with_blob(&event, &[], &dag_name).await.unwrap();
+        assert_eq!(accepted, vec![event.id()]);
+
+        let store = eg.dag_store.read().await;
+        let slot = store.get_slot(&dag_ts).unwrap();
+        assert!(slot.header_tree.contains_key(event.id().as_bytes()).unwrap());
+        assert!(slot.main_tree.contains_key(event.id().as_bytes()).unwrap());
+        drop(store);
+        assert!(eg.dag_blob_fetch(&event.id()).unwrap().is_none());
+
+        let static_node = RLNNode::Registration(pallas::Base::from(0x5151u64));
+        let static_event =
+            Event::new_static(serialize_async(&static_node).await, &eg).await.unwrap();
+        eg.commit_static_event_unverified(&static_event, b"ignored-proof").await.unwrap();
+        assert!(eg.static_blob_fetch(&static_event.id()).unwrap().is_none());
+    })
+}
+
+#[test]
 fn rln_dag_insert_with_blobs_rejects_bad_content_before_verification() {
     // RLN proofs bind to the event header ID. If the body no longer matches
     // the header content hash, the event is structurally invalid even though a
@@ -1698,7 +1747,7 @@ fn rln_dag_insert_with_blobs_rejects_bad_content_before_verification() {
             .unwrap();
         assert!(result.is_empty(), "malformed event must not be inserted");
 
-        let state = eg.rln_state.read().await;
+        let state = eg.rln_state.as_ref().unwrap().read().await;
         assert!(
             !state.metadata.is_reused(epoch_of(malformed.header.timestamp), &internal_nullifier),
             "structural rejection must happen before RLN metadata is recorded",
@@ -2086,7 +2135,7 @@ fn rln_rebuild_restores_static_event_committed_before_rln_apply() {
         assert_eq!(eg.static_blob_fetch(&ev.id()).unwrap().unwrap(), blob);
         assert_eq!(eg.rln_historical_roots_ordered.len(), 1);
         assert_eq!(eg.rln_historical_roots_by_value.len(), 1);
-        let state = eg.identity_state.read().await;
+        let state = eg.identity_state.as_ref().unwrap().read().await;
         assert!(state.is_known_root(&state.root()));
     })
 }
