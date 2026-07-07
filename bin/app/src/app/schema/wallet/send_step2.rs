@@ -26,6 +26,7 @@ use crate::{
         node::{create_button, create_layer, create_singleline_edit, create_text, create_vector_art},
         schema::COLOR_SCHEME,
     },
+    clipboard,
     expr,
     gfx::gfxtag,
     mesh::COLOR_CYAN,
@@ -332,7 +333,7 @@ pub async fn make(
     let renderer_clone = app.renderer.clone();
     let listen_click = app.ex.spawn(async move {
         while let Ok(_) = recvr.recv().await {
-            if let Some(clipboard_text) = miniquad::window::clipboard_get() {
+            if let Some(clipboard_text) = clipboard::get() {
                 let text_prop = recipient_input2.get_property("text").unwrap();
                 let atom = &mut renderer_clone.make_guard(gfxtag!("step2 recipient paste"));
                 text_prop.set_str(atom, Role::App, 0, &clipboard_text).unwrap();

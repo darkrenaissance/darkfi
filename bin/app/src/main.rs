@@ -35,6 +35,7 @@ extern crate tracing;
 mod android;
 mod app;
 mod build_info;
+mod clipboard;
 mod error;
 mod expr;
 mod gfx;

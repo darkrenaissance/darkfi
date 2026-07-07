@@ -37,6 +37,7 @@ use tracing::instrument;
 #[cfg(target_os = "android")]
 use crate::android::textinput::AndroidTextInputState;
 use crate::{
+    clipboard,
     gfx::{
         anim::Frame as AnimFrame, gfxtag, DrawCall, DrawInstruction, DrawMesh, ManagedSeqAnimPtr,
         Point, Rectangle, RenderApi, Renderer, RendererSync, Vertex,
@@ -528,13 +529,13 @@ impl BaseEdit {
                 if action_mod {
                     let editor = self.editor.lock();
                     if let Some(txt) = editor.selected_text() {
-                        miniquad::window::clipboard_set(&txt);
+                        clipboard::set(&txt);
                     }
                 }
             }
             'v' => {
                 if action_mod {
-                    if let Some(txt) = miniquad::window::clipboard_get() {
+                    if let Some(txt) = clipboard::get() {
                         self.editor.lock().insert(&txt, atom);
                         // Maybe insert should call this?
                         self.behave.apply_cursor_scroll();
@@ -703,11 +704,11 @@ impl BaseEdit {
             match action_id {
                 ACTION_COPY => {
                     if let Some(txt) = self.editor.lock().selected_text() {
-                        miniquad::window::clipboard_set(&txt);
+                        clipboard::set(&txt);
                     }
                 }
                 ACTION_PASTE => {
-                    if let Some(txt) = miniquad::window::clipboard_get() {
+                    if let Some(txt) = clipboard::get() {
                         self.editor.lock().insert(&txt, atom);
                         self.behave.apply_cursor_scroll();
                         self.finish_select(atom);
@@ -1851,11 +1852,11 @@ impl UIObject for BaseEdit {
             match action_id {
                 ACTION_COPY => {
                     if let Some(txt) = self.editor.lock().selected_text() {
-                        miniquad::window::clipboard_set(&txt);
+                        clipboard::set(&txt);
                     }
                 }
                 ACTION_PASTE => {
-                    if let Some(txt) = miniquad::window::clipboard_get() {
+                    if let Some(txt) = clipboard::get() {
                         self.editor.lock().insert(&txt, atom);
                         self.behave.apply_cursor_scroll();
                         self.finish_select(atom);

@@ -22,6 +22,7 @@ use crate::{
         node::{create_button, create_layer, create_text, create_vector_art},
         schema::COLOR_SCHEME,
     },
+    clipboard,
     expr,
     gfx::gfxtag,
     mesh::COLOR_CYAN,
@@ -172,7 +173,7 @@ pub async fn make(
     let listen_click = app.ex.spawn(async move {
         while let Ok(_) = recvr.recv().await {
             let addr = receive_address_text2.get();
-            miniquad::window::clipboard_set(&addr);
+            clipboard::set(&addr);
         }
     });
     app.tasks.lock().unwrap().push(listen_click);
