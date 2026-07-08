@@ -33,7 +33,10 @@ use tracing::{debug, error};
 use wasmer::{FunctionEnvMut, WasmPtr};
 
 use super::acl::acl_allow;
-use crate::runtime::vm_runtime::{ContractSection, Env};
+use crate::{
+    runtime::vm_runtime::{ContractSection, Env},
+    validator::fees::{MIN_GAS, POSEIDON_HASH_GAS, WRITE_GAS_PER_BYTE},
+};
 
 /// An SMT adapter for sled overlay storage. Compatible with the WasmDb SMT adapter
 pub struct SledStorage<'a> {
@@ -106,6 +109,9 @@ pub(crate) fn sparse_merkle_insert_batch(
     let (env, mut store) = ctx.data_and_store_mut();
     let cid = env.contract_id;
 
+    // Subtract base gas before the ACL check.
+    env.subtract_gas(&mut store, MIN_GAS);
+
     // Enforce function ACL
     if let Err(e) = acl_allow(env, &[ContractSection::Update]) {
         error!(
@@ -114,10 +120,6 @@ pub(crate) fn sparse_merkle_insert_batch(
         );
         return darkfi_sdk::error::CALLER_ACCESS_DENIED
     }
-
-    // Subtract used gas.
-    // This makes calling the function which returns early have some (small) cost.
-    env.subtract_gas(&mut store, 1);
 
     let memory_view = env.memory_view(&store);
     let Ok(mem_slice) = ptr.slice(&memory_view, len) else {
@@ -301,6 +303,9 @@ pub(crate) fn sparse_merkle_insert_batch(
         return darkfi_sdk::error::INTERNAL_ERROR
     }
 
+    // Capture length before the writes below move the data.
+    let new_value_data_len = new_value_data.len();
+
     // Retrieve snapshot root data set
     let root_value_data_set = match overlay.get(&db_roots.tree, &latest_root_data) {
         Ok(data) => data,
@@ -365,12 +370,18 @@ pub(crate) fn sparse_merkle_insert_batch(
     }
 
     // Subtract used gas.
-    // Here we count:
-    // * The number of nullifiers we inserted into the DB
     drop(overlay);
     drop(lock);
     drop(db_handles);
-    env.subtract_gas(&mut store, inserted_nullifiers as u64);
+
+    // Compute cost: one Poseidon hash per tree level per nullifier.
+    let compute_gas = nullifiers.len() as u64 * SMT_FP_DEPTH as u64 * POSEIDON_HASH_GAS;
+
+    // Storage cost: inserted nullifiers, new value data, and root data.
+    let storage_bytes = inserted_nullifiers as u64 + new_value_data_len as u64 + 32;
+    let storage_gas = storage_bytes * WRITE_GAS_PER_BYTE;
+
+    env.subtract_gas(&mut store, compute_gas.saturating_add(storage_gas));
 
     wasm::entrypoint::SUCCESS
 }

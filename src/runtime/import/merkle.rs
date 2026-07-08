@@ -19,7 +19,7 @@
 use std::io::Cursor;
 
 use darkfi_sdk::{
-    crypto::{pasta_prelude::Field, MerkleNode, MerkleTree},
+    crypto::{constants::MERKLE_DEPTH_ORCHARD, pasta_prelude::Field, MerkleNode, MerkleTree},
     hex::AsHex,
     pasta::pallas,
     wasm,
@@ -28,9 +28,12 @@ use darkfi_serial::{serialize, Decodable, Encodable, WriteExt};
 use tracing::{debug, error};
 use wasmer::{FunctionEnvMut, WasmPtr};
 
-use crate::runtime::{
-    import::{acl::acl_allow, util::wasm_mem_read},
-    vm_runtime::{ContractSection, Env},
+use crate::{
+    runtime::{
+        import::{acl::acl_allow, util::wasm_mem_read},
+        vm_runtime::{ContractSection, Env},
+    },
+    validator::fees::{MIN_GAS, SINSEMILLA_HASH_GAS, WRITE_GAS_PER_BYTE},
 };
 
 /// Add data to an on-chain Merkle tree.
@@ -75,6 +78,9 @@ pub(crate) fn merkle_add_internal(
     let (env, mut store) = ctx.data_and_store_mut();
     let cid = env.contract_id;
 
+    // Subtract base gas before the ACL check.
+    env.subtract_gas(&mut store, MIN_GAS);
+
     // Enforce function ACL
     if let Err(e) = acl_allow(env, &[ContractSection::Update]) {
         error!(
@@ -83,9 +89,6 @@ pub(crate) fn merkle_add_internal(
         );
         return darkfi_sdk::error::CALLER_ACCESS_DENIED
     }
-
-    // Subtract used gas. 1 for opcode, 33 for value_data.len().
-    env.subtract_gas(&mut store, 34);
 
     // Get the wasm memory reader
     let mut buf_reader = match wasm_mem_read(env, &store, ptr, ptr_len) {
@@ -337,6 +340,10 @@ pub(crate) fn merkle_add_internal(
     env.call_idx.encode(&mut value_data).expect("Unable to serialize call_idx");
     assert_eq!(value_data.len(), 32 + 1);
 
+    // Capture lengths before the writes below move the data.
+    let value_data_len = value_data.len();
+    let latest_root_data_len = latest_root_data.len();
+
     if local {
         // We unwrap here because we already know the databases exist
         // from when we fetched the tree.
@@ -370,8 +377,15 @@ pub(crate) fn merkle_add_internal(
     drop(overlay);
     drop(blockchain);
     drop(db_handles);
-    let spent_gas = coins_len * 32;
-    env.subtract_gas(&mut store, spent_gas as u64);
+
+    // Compute cost: one Sinsemilla hash per tree level per coin appended.
+    let compute_gas = coins_len as u64 * MERKLE_DEPTH_ORCHARD as u64 * SINSEMILLA_HASH_GAS;
+
+    // Storage cost: appended coins, value data, and root data.
+    let storage_bytes = coins_len as u64 * 32 + value_data_len as u64 + latest_root_data_len as u64;
+    let storage_gas = if local { storage_bytes } else { storage_bytes * WRITE_GAS_PER_BYTE };
+
+    env.subtract_gas(&mut store, compute_gas.saturating_add(storage_gas));
 
     wasm::entrypoint::SUCCESS
 }
