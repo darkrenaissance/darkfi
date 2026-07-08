@@ -49,8 +49,11 @@ use crate::{blockchain::BlockchainOverlayPtr, Error, Result};
 /// Name of the wasm linear memory in our guest module
 const MEMORY: &str = "memory";
 
-/// Gas limit for a single contract call (Single WASM instance)
-pub const GAS_LIMIT: u64 = 400_000_000;
+/// Gas limit for a single contract call (single WASM instance).
+pub const CONTRACT_GAS_LIMIT: u64 = 800_000_000;
+
+/// Gas limit for a single transaction (across all of its calls).
+pub const TX_GAS_LIMIT: u64 = 1_000_000_000;
 
 // ANCHOR: contract-section
 #[derive(Clone, Copy, PartialEq)]
@@ -192,7 +195,7 @@ impl Runtime {
         // `Metering` needs to be configured with a limit and a cost function.
         // For each `Operator`, the metering middleware will call the cost
         // function and subtract the cost from the remaining points.
-        let metering = Arc::new(Metering::new(GAS_LIMIT, cost_function));
+        let metering = Arc::new(Metering::new(CONTRACT_GAS_LIMIT, cost_function));
 
         // Define the compiler and middleware, engine, and store
         let mut compiler_config = Singlepass::new();
@@ -630,28 +633,28 @@ impl Runtime {
 
         match remaining_points {
             MeteringPoints::Remaining(rem) => {
-                if rem > GAS_LIMIT {
+                if rem > CONTRACT_GAS_LIMIT {
                     // This should never occur, but catch it explicitly to avoid
                     // potential underflow issues when calculating `remaining_points`.
-                    unreachable!("Remaining wasm points exceed GAS_LIMIT");
+                    unreachable!("Remaining wasm points exceed CONTRACT_GAS_LIMIT");
                 }
-                GAS_LIMIT - rem
+                CONTRACT_GAS_LIMIT - rem
             }
-            MeteringPoints::Exhausted => GAS_LIMIT + 1,
+            MeteringPoints::Exhausted => CONTRACT_GAS_LIMIT + 1,
         }
     }
 
     // Return a message informing the user whether there is any
-    // gas remaining. Values equal to GAS_LIMIT are not considered
+    // gas remaining. Values equal to CONTRACT_GAS_LIMIT are not considered
     // to be exhausted. e.g. Using 100/100 gas should not give a
     // 'gas exhausted' message.
     fn gas_info(&mut self) -> String {
         let gas_used = self.gas_used();
 
-        if gas_used > GAS_LIMIT {
-            format!("Gas fully exhausted: {gas_used}/{GAS_LIMIT}")
+        if gas_used > CONTRACT_GAS_LIMIT {
+            format!("Gas fully exhausted: {gas_used}/{CONTRACT_GAS_LIMIT}")
         } else {
-            format!("Gas used: {gas_used}/{GAS_LIMIT}")
+            format!("Gas used: {gas_used}/{CONTRACT_GAS_LIMIT}")
         }
     }
 
