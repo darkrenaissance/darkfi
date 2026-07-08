@@ -26,6 +26,7 @@ use wasmer::{FunctionEnvMut, StoreMut, WasmPtr};
 use super::acl::acl_allow;
 use crate::{
     runtime::vm_runtime::{ContractSection, Env},
+    validator::fees::{MIN_GAS, READ_GAS_PER_BYTE},
     Result,
 };
 
@@ -33,8 +34,8 @@ use crate::{
 pub(crate) fn drk_log(mut ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, len: u32) {
     let (env, mut store) = ctx.data_and_store_mut();
 
-    // Subtract used gas. Here we count the length of the string.
-    env.subtract_gas(&mut store, len as u64);
+    // Subtract base gas plus a per-byte charge for the log string.
+    env.subtract_gas(&mut store, MIN_GAS.saturating_add(len as u64));
 
     let memory_view = env.memory_view(&store);
     match ptr.read_utf8_string(&memory_view, len) {
@@ -82,7 +83,10 @@ pub(crate) fn wasm_mem_read(
 /// Permissions: metadata, exec
 pub(crate) fn set_return_data(mut ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, len: u32) -> i64 {
     let (env, mut store) = ctx.data_and_store_mut();
-    let cid = &env.contract_id;
+    let cid = env.contract_id;
+
+    // Subtract base gas before the ACL check.
+    env.subtract_gas(&mut store, MIN_GAS);
 
     // Enforce function ACL
     if let Err(e) = acl_allow(env, &[ContractSection::Metadata, ContractSection::Exec]) {
@@ -93,7 +97,7 @@ pub(crate) fn set_return_data(mut ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, le
         return darkfi_sdk::error::CALLER_ACCESS_DENIED
     }
 
-    // Subtract used gas. Here we count the length read from the memory slice.
+    // Subtract per-byte gas for the data copied to memory.
     env.subtract_gas(&mut store, len as u64);
 
     let memory_view = env.memory_view(&store);
@@ -119,6 +123,9 @@ pub(crate) fn get_object_bytes(mut ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, i
     // Get the slice, where we will read the size of the buffer
     let (env, mut store) = ctx.data_and_store_mut();
     let cid = env.contract_id;
+
+    // Subtract base gas before the ACL check.
+    env.subtract_gas(&mut store, MIN_GAS);
 
     // Enforce function ACL
     if let Err(e) =
@@ -181,6 +188,9 @@ pub(crate) fn get_object_size(mut ctx: FunctionEnvMut<Env>, idx: u32) -> i64 {
     let (env, mut store) = ctx.data_and_store_mut();
     let cid = env.contract_id;
 
+    // Subtract base gas before the ACL check.
+    env.subtract_gas(&mut store, MIN_GAS);
+
     // Enforce function ACL
     if let Err(e) =
         acl_allow(env, &[ContractSection::Deploy, ContractSection::Metadata, ContractSection::Exec])
@@ -210,10 +220,6 @@ pub(crate) fn get_object_size(mut ctx: FunctionEnvMut<Env>, idx: u32) -> i64 {
         return darkfi_sdk::error::DATA_TOO_LARGE
     }
 
-    // Subtract used gas. Here we count the size of the object.
-    // TODO: This could probably be fixed-cost
-    env.subtract_gas(&mut store, obj_len as u64);
-
     obj_len as i64
 }
 
@@ -223,6 +229,9 @@ pub(crate) fn get_object_size(mut ctx: FunctionEnvMut<Env>, idx: u32) -> i64 {
 pub(crate) fn get_verifying_block_height(mut ctx: FunctionEnvMut<Env>) -> i64 {
     let (env, mut store) = ctx.data_and_store_mut();
     let cid = env.contract_id;
+
+    // Subtract base gas before the ACL check.
+    env.subtract_gas(&mut store, MIN_GAS);
 
     if let Err(e) =
         acl_allow(env, &[ContractSection::Deploy, ContractSection::Metadata, ContractSection::Exec])
@@ -234,10 +243,6 @@ pub(crate) fn get_verifying_block_height(mut ctx: FunctionEnvMut<Env>) -> i64 {
         return darkfi_sdk::error::CALLER_ACCESS_DENIED
     }
 
-    // Subtract used gas. Here we count the size of the object.
-    // u32 is 4 bytes.
-    env.subtract_gas(&mut store, 4);
-
     env.verifying_block_height as i64
 }
 
@@ -247,6 +252,9 @@ pub(crate) fn get_verifying_block_height(mut ctx: FunctionEnvMut<Env>) -> i64 {
 pub(crate) fn get_block_target(mut ctx: FunctionEnvMut<Env>) -> i64 {
     let (env, mut store) = ctx.data_and_store_mut();
     let cid = env.contract_id;
+
+    // Subtract base gas before the ACL check.
+    env.subtract_gas(&mut store, MIN_GAS);
 
     if let Err(e) =
         acl_allow(env, &[ContractSection::Deploy, ContractSection::Metadata, ContractSection::Exec])
@@ -258,10 +266,6 @@ pub(crate) fn get_block_target(mut ctx: FunctionEnvMut<Env>) -> i64 {
         return darkfi_sdk::error::CALLER_ACCESS_DENIED
     }
 
-    // Subtract used gas. Here we count the size of the object.
-    // u32 is 4 bytes.
-    env.subtract_gas(&mut store, 4);
-
     env.block_target as i64
 }
 
@@ -272,6 +276,9 @@ pub(crate) fn get_tx_hash(mut ctx: FunctionEnvMut<Env>) -> i64 {
     let (env, mut store) = ctx.data_and_store_mut();
     let cid = env.contract_id;
 
+    // Subtract base gas plus the fixed cost of a 32-byte tx hash.
+    env.subtract_gas(&mut store, MIN_GAS.saturating_add(32));
+
     if let Err(e) =
         acl_allow(env, &[ContractSection::Deploy, ContractSection::Metadata, ContractSection::Exec])
     {
@@ -281,9 +288,6 @@ pub(crate) fn get_tx_hash(mut ctx: FunctionEnvMut<Env>) -> i64 {
         );
         return darkfi_sdk::error::CALLER_ACCESS_DENIED
     }
-
-    // Subtract used gas. Here we count the size of the object.
-    env.subtract_gas(&mut store, 32);
 
     // Return the length of the objects Vector.
     // This is the location of the data that was retrieved and pushed
@@ -299,6 +303,9 @@ pub(crate) fn get_call_index(mut ctx: FunctionEnvMut<Env>) -> i64 {
     let (env, mut store) = ctx.data_and_store_mut();
     let cid = env.contract_id;
 
+    // Subtract base gas before the ACL check.
+    env.subtract_gas(&mut store, MIN_GAS);
+
     if let Err(e) =
         acl_allow(env, &[ContractSection::Deploy, ContractSection::Metadata, ContractSection::Exec])
     {
@@ -309,10 +316,6 @@ pub(crate) fn get_call_index(mut ctx: FunctionEnvMut<Env>) -> i64 {
         return darkfi_sdk::error::CALLER_ACCESS_DENIED
     }
 
-    // Subtract used gas. Here we count the size of the object.
-    // u8 is 1 byte.
-    env.subtract_gas(&mut store, 1);
-
     env.call_idx as i64
 }
 
@@ -322,7 +325,10 @@ pub(crate) fn get_call_index(mut ctx: FunctionEnvMut<Env>) -> i64 {
 /// Permissions: deploy, metadata, exec
 pub(crate) fn get_blockchain_time(mut ctx: FunctionEnvMut<Env>) -> i64 {
     let (env, mut store) = ctx.data_and_store_mut();
-    let cid = &env.contract_id;
+    let cid = env.contract_id;
+
+    // Subtract base gas before the ACL check.
+    env.subtract_gas(&mut store, MIN_GAS);
 
     if let Err(e) =
         acl_allow(env, &[ContractSection::Deploy, ContractSection::Metadata, ContractSection::Exec])
@@ -346,9 +352,8 @@ pub(crate) fn get_blockchain_time(mut ctx: FunctionEnvMut<Env>) -> i64 {
         }
     };
 
-    // Subtract used gas. Here we count the size of the object.
-    // u64 is 8 bytes.
-    env.subtract_gas(&mut store, 8);
+    // Charge for the on-chain read: an 8-byte timestamp value.
+    env.subtract_gas(&mut store, 8u64 * READ_GAS_PER_BYTE);
 
     // Create the return object
     let mut ret = Vec::with_capacity(8);
@@ -373,7 +378,10 @@ pub(crate) fn get_blockchain_time(mut ctx: FunctionEnvMut<Env>) -> i64 {
 /// Permissions: deploy, metadata, exec
 pub(crate) fn get_last_block_height(mut ctx: FunctionEnvMut<Env>) -> i64 {
     let (env, mut store) = ctx.data_and_store_mut();
-    let cid = &env.contract_id;
+    let cid = env.contract_id;
+
+    // Subtract base gas before the ACL check.
+    env.subtract_gas(&mut store, MIN_GAS);
 
     // Enforce function ACL
     if let Err(e) =
@@ -398,9 +406,8 @@ pub(crate) fn get_last_block_height(mut ctx: FunctionEnvMut<Env>) -> i64 {
         }
     };
 
-    // Subtract used gas. Here we count the size of the object.
-    // u64 is 8 bytes.
-    env.subtract_gas(&mut store, 8);
+    // Charge for the on-chain read: an 8-byte block height value.
+    env.subtract_gas(&mut store, 8u64 * READ_GAS_PER_BYTE);
 
     // Create the return object
     let mut ret = Vec::with_capacity(8);
@@ -428,6 +435,9 @@ pub(crate) fn get_tx(mut ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>) -> i64 {
     let (env, mut store) = ctx.data_and_store_mut();
     let cid = env.contract_id;
 
+    // Subtract base gas before the ACL check.
+    env.subtract_gas(&mut store, MIN_GAS);
+
     if let Err(e) =
         acl_allow(env, &[ContractSection::Deploy, ContractSection::Metadata, ContractSection::Exec])
     {
@@ -438,8 +448,8 @@ pub(crate) fn get_tx(mut ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>) -> i64 {
         return darkfi_sdk::error::CALLER_ACCESS_DENIED
     }
 
-    // Subtract used gas. Here we count the length of the looked-up hash.
-    env.subtract_gas(&mut store, blake3::OUT_LEN as u64);
+    // Charge for the on-chain read of the lookup key (a blake3 hash).
+    env.subtract_gas(&mut store, blake3::OUT_LEN as u64 * READ_GAS_PER_BYTE);
 
     // Ensure that it is possible to read memory
     let memory_view = env.memory_view(&store);
@@ -509,8 +519,8 @@ pub(crate) fn get_tx(mut ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>) -> i64 {
         return darkfi_sdk::error::DATA_TOO_LARGE
     }
 
-    // Subtract used gas. Here we count the length of the data read from db.
-    env.subtract_gas(&mut store, return_data.len() as u64);
+    // Charge for the on-chain read of the returned value.
+    env.subtract_gas(&mut store, return_data.len() as u64 * READ_GAS_PER_BYTE);
 
     // Copy the data (Vec<u8>) to the VM by pushing it to the objects Vector.
     let mut objects = env.objects.borrow_mut();
@@ -536,6 +546,9 @@ pub(crate) fn get_tx_location(mut ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>) ->
     let (env, mut store) = ctx.data_and_store_mut();
     let cid = env.contract_id;
 
+    // Subtract base gas before the ACL check.
+    env.subtract_gas(&mut store, MIN_GAS);
+
     if let Err(e) =
         acl_allow(env, &[ContractSection::Deploy, ContractSection::Metadata, ContractSection::Exec])
     {
@@ -546,8 +559,8 @@ pub(crate) fn get_tx_location(mut ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>) ->
         return darkfi_sdk::error::CALLER_ACCESS_DENIED
     }
 
-    // Subtract used gas. Here we count the length of the looked-up hash.
-    env.subtract_gas(&mut store, blake3::OUT_LEN as u64);
+    // Charge for the on-chain read of the lookup key (a blake3 hash).
+    env.subtract_gas(&mut store, blake3::OUT_LEN as u64 * READ_GAS_PER_BYTE);
 
     // Ensure that it is possible to read memory
     let memory_view = env.memory_view(&store);
@@ -617,8 +630,8 @@ pub(crate) fn get_tx_location(mut ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>) ->
         return darkfi_sdk::error::DATA_TOO_LARGE
     }
 
-    // Subtract used gas. Here we count the length of the data read from db.
-    env.subtract_gas(&mut store, return_data.len() as u64);
+    // Charge for the on-chain read of the returned value.
+    env.subtract_gas(&mut store, return_data.len() as u64 * READ_GAS_PER_BYTE);
 
     // Copy the data (Vec<u8>) to the VM by pushing it to the objects Vector.
     let mut objects = env.objects.borrow_mut();
