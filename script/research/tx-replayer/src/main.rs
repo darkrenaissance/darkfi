@@ -29,7 +29,7 @@ use darkfi::{
     tx::{MAX_TX_CALLS, MIN_TX_CALLS, Transaction},
     util::path::expand_path,
     validator::{
-        fees::{GasData, PALLAS_SCHNORR_SIGNATURE_FEE, circuit_gas_use},
+        fees::{GasData, PALLAS_SCHNORR_VERIFY_GAS, circuit_gas_use},
         verification::verify_transaction,
     },
     zk::VerifyingKey,
@@ -606,7 +606,7 @@ async fn verify_transaction_signatures(
     }
 
     // The signature fee is tx_size + fixed_sig_fee * n_signatures
-    gas_data.signatures = (PALLAS_SCHNORR_SIGNATURE_FEE * tx.signatures.len() as u64) +
+    gas_data.signatures = (PALLAS_SCHNORR_VERIFY_GAS * tx.signatures.len() as u64) +
         serialize_async(tx).await.len() as u64;
 
     // Store the calculated total gas used to avoid recalculating it for subsequent uses
