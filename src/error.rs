@@ -632,6 +632,9 @@ pub enum TxVerifyFailed {
     #[error("Insufficient fee paid")]
     InsufficientFee,
 
+    #[error("Transaction exceeds configured gas limit")]
+    GasLimitExceeded,
+
     #[error("Erroneous transactions found")]
     ErroneousTxs(Vec<crate::tx::Transaction>),
 }

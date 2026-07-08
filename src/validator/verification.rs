@@ -41,12 +41,12 @@ use crate::{
         Blockchain, BlockchainOverlayPtr, HeaderHash,
     },
     error::TxVerifyFailed,
-    runtime::vm_runtime::{Runtime, TxLocalState},
+    runtime::vm_runtime::{Runtime, TxLocalState, TX_GAS_LIMIT},
     tx::{Transaction, MAX_TX_CALLS, MIN_TX_CALLS},
     util::time::Timestamp,
     validator::{
         consensus::{Consensus, Fork, Proposal, BLOCK_GAS_LIMIT},
-        fees::{circuit_gas_use, GasData, PALLAS_SCHNORR_SIGNATURE_FEE},
+        fees::{circuit_gas_use, GasData, PALLAS_SCHNORR_VERIFY_GAS},
         pow::PoWModule,
     },
     zk::VerifyingKey,
@@ -859,7 +859,7 @@ pub async fn verify_transaction(
     }
 
     // The signature fee is tx_size + fixed_sig_fee * n_signatures
-    gas_data.signatures = PALLAS_SCHNORR_SIGNATURE_FEE
+    gas_data.signatures = PALLAS_SCHNORR_VERIFY_GAS
         .saturating_mul(tx.signatures.len() as u64)
         .saturating_add(serialize_async(tx).await.len() as u64);
     debug!(target: "validator::verification::verify_transaction", "The gas used for signature of transaction {tx_hash}: {}", gas_data.signatures);
@@ -877,6 +877,15 @@ pub async fn verify_transaction(
     // Store the calculated total gas used to avoid recalculating it
     // for subsequent uses.
     let total_gas_used = gas_data.total_gas_used();
+
+    // Enforce the per-transaction gas limit.
+    if total_gas_used > TX_GAS_LIMIT {
+        error!(
+            target: "validator::verification::verify_transaction",
+            "[VALIDATOR] Transaction {tx_hash} exceeds TX_GAS_LIMIT: {total_gas_used} > {TX_GAS_LIMIT}"
+        );
+        return Err(TxVerifyFailed::GasLimitExceeded.into())
+    }
 
     if verify_fee {
         // Deserialize the fee call to find the paid fee

@@ -30,8 +30,7 @@ use crate::{
         parse_record, BlockInfo, Blockchain, BlockchainOverlay, BlockchainOverlayPtr, Header,
         HeaderHash,
     },
-    runtime::vm_runtime::GAS_LIMIT,
-    tx::{Transaction, MAX_TX_CALLS},
+    tx::Transaction,
     util::time::Timestamp,
     validator::{
         pow::{PoWModule, RANDOMX_KEY_CHANGE_DELAY, RANDOMX_KEY_CHANGING_HEIGHT},
@@ -42,8 +41,8 @@ use crate::{
     Error, Result,
 };
 
-/// Gas limit for total block transactions(50 full transactions).
-pub const BLOCK_GAS_LIMIT: u64 = GAS_LIMIT * MAX_TX_CALLS as u64 * 50;
+/// Gas limit for a full block.
+pub const BLOCK_GAS_LIMIT: u64 = 16_000_000_000;
 
 /// This struct represents the information required by the consensus
 /// algorithm.
