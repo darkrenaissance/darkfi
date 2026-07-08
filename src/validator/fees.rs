@@ -16,86 +16,45 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use darkfi_sdk::crypto::constants::{MERKLE_DEPTH_ORCHARD, SPARSE_MERKLE_DEPTH};
 use darkfi_serial::{async_trait, SerialDecodable, SerialEncodable};
 
-use crate::zkas::{Opcode, VarType, ZkBinary};
+use crate::zkas::ZkBinary;
 
-/// Fixed fee for verifying Schnorr signatures using the Pallas
-/// elliptic curve.
-pub const PALLAS_SCHNORR_SIGNATURE_FEE: u64 = 1000;
+/// Fixed fee for verifying a Schnorr signature over the Pallas curve.
+pub const PALLAS_SCHNORR_VERIFY_GAS: u64 = 1850;
+
+/// Base gas subtracted at the start of every host function call.
+pub const MIN_GAS: u64 = 1;
+
+/// Per-byte multiplier for on-chain storage reads.
+pub const READ_GAS_PER_BYTE: u64 = 7;
+
+/// Per-byte multiplier for on-chain storage writes.
+pub const WRITE_GAS_PER_BYTE: u64 = 70;
+
+/// One-time fee for inserting a new key into on-chain storage.
+pub const STATE_GROWTH_GAS: u64 = 20_000;
+
+/// Fee for initializing a new sled tree.
+pub const TREE_GAS: u64 = 300;
+
+/// Gas per `Poseidon` hash in the sparse Merkle tree.
+pub const POSEIDON_HASH_GAS: u64 = 150;
+
+/// Gas per `Sinsemilla` hash in Merkle trees.
+pub const SINSEMILLA_HASH_GAS: u64 = 800;
+
+/// Per-row gas for compiling ZK circuits.
+pub const COMPILE_GAS_PER_ROW: u64 = 7800;
+
+/// Per-row gas for verifying ZK circuits.
+pub const VERIFY_GAS_PER_ROW: u64 = 80;
 
 /// Calculate the gas use for verifying a given zkas circuit.
 /// This function assumes that the zkbin was properly decoded.
 pub fn circuit_gas_use(zkbin: &ZkBinary) -> u64 {
-    let mut accumulator: u64 = 0;
-
-    // Constants each with a cost of 10
-    accumulator = accumulator.saturating_add(10u64.saturating_mul(zkbin.constants.len() as u64));
-
-    // Literals each with a cost of 10 (for now there's only 1 type of
-    // literal).
-    accumulator = accumulator.saturating_add(10u64.saturating_mul(zkbin.literals.len() as u64));
-
-    // Witnesses have cost by type
-    for witness in &zkbin.witnesses {
-        let cost = match witness {
-            VarType::Dummy => unreachable!(),
-            VarType::EcPoint => 20,
-            VarType::EcFixedPoint => unreachable!(),
-            VarType::EcFixedPointShort => unreachable!(),
-            VarType::EcFixedPointBase => unreachable!(),
-            VarType::EcNiPoint => 20,
-            VarType::Base => 10,
-            VarType::BaseArray => unreachable!(),
-            VarType::Scalar => 20,
-            VarType::ScalarArray => unreachable!(),
-            VarType::MerklePath => 10 * MERKLE_DEPTH_ORCHARD as u64,
-            VarType::SparseMerklePath => 10 * SPARSE_MERKLE_DEPTH as u64,
-            VarType::Uint32 => 10,
-            VarType::Uint64 => 10,
-            VarType::Any => 10,
-        };
-
-        accumulator = accumulator.saturating_add(cost);
-    }
-
-    // Opcodes depending on how heavy they are
-    for opcode in &zkbin.opcodes {
-        let cost = match opcode.0 {
-            Opcode::Noop => unreachable!(),
-            Opcode::EcAdd => 30,
-            Opcode::EcMul => 30,
-            Opcode::EcMulBase => 30,
-            Opcode::EcMulShort => 30,
-            Opcode::EcMulVarBase => 30,
-            Opcode::EcGetX => 5,
-            Opcode::EcGetY => 5,
-            Opcode::PoseidonHash => {
-                20u64.saturating_add(10u64.saturating_mul(opcode.1.len() as u64))
-            }
-            Opcode::MerkleRoot => 10 * MERKLE_DEPTH_ORCHARD as u64,
-            Opcode::SparseMerkleRoot => 10 * SPARSE_MERKLE_DEPTH as u64,
-            Opcode::BaseAdd => 15,
-            Opcode::BaseMul => 15,
-            Opcode::BaseSub => 15,
-            Opcode::WitnessBase => 10,
-            Opcode::RangeCheck => 60,
-            Opcode::LessThanStrict => 100,
-            Opcode::LessThanLoose => 100,
-            Opcode::BoolCheck => 20,
-            Opcode::CondSelect => 10,
-            Opcode::ZeroCondSelect => 10,
-            Opcode::ConstrainEqualBase => 10,
-            Opcode::ConstrainEqualPoint => 20,
-            Opcode::ConstrainInstance => 10,
-            Opcode::DebugPrint => 100,
-        };
-
-        accumulator = accumulator.saturating_add(cost);
-    }
-
-    accumulator
+    let rows = 1u64.checked_shl(zkbin.k).unwrap_or(u64::MAX);
+    VERIFY_GAS_PER_ROW.saturating_mul(rows)
 }
 
 /// Auxiliary struct representing the full gas usage breakdown of a
