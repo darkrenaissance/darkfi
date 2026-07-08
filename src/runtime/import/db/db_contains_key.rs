@@ -20,9 +20,12 @@ use darkfi_serial::Decodable;
 use tracing::error;
 use wasmer::{FunctionEnvMut, WasmPtr};
 
-use crate::runtime::{
-    import::{acl::acl_allow, util::wasm_mem_read},
-    vm_runtime::{ContractSection, Env},
+use crate::{
+    runtime::{
+        import::{acl::acl_allow, util::wasm_mem_read},
+        vm_runtime::{ContractSection, Env},
+    },
+    validator::fees::{MIN_GAS, READ_GAS_PER_BYTE},
 };
 
 /// Check if an on-chain database contains a given key.
@@ -74,6 +77,9 @@ fn db_contains_key_internal(
     let (env, mut store) = ctx.data_and_store_mut();
     let cid = env.contract_id;
 
+    // Subtract base gas before the ACL check.
+    env.subtract_gas(&mut store, MIN_GAS);
+
     // Enforce function ACL
     if let Err(e) =
         acl_allow(env, &[ContractSection::Deploy, ContractSection::Metadata, ContractSection::Exec])
@@ -84,10 +90,6 @@ fn db_contains_key_internal(
         );
         return darkfi_sdk::error::CALLER_ACCESS_DENIED
     }
-
-    // Subtract used gas.
-    // Reading is free.
-    env.subtract_gas(&mut store, 1);
 
     // Get the WASM memory reader
     let mut buf_reader = match wasm_mem_read(env, &store, ptr, ptr_len) {
@@ -135,6 +137,10 @@ fn db_contains_key_internal(
         );
         return darkfi_sdk::error::DB_CONTAINS_KEY_FAILED
     }
+
+    // Charge per byte of the lookup key.
+    let key_gas = if local { key.len() as u64 } else { key.len() as u64 * READ_GAS_PER_BYTE };
+    env.subtract_gas(&mut store, key_gas);
 
     // Fetch requested db handles
     let db_handles = if local { env.local_db_handles.borrow() } else { env.db_handles.borrow() };

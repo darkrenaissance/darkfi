@@ -23,9 +23,12 @@ use darkfi_serial::Decodable;
 use tracing::error;
 use wasmer::{FunctionEnvMut, WasmPtr};
 
-use crate::runtime::{
-    import::{acl::acl_allow, util::wasm_mem_read},
-    vm_runtime::{ContractSection, Env},
+use crate::{
+    runtime::{
+        import::{acl::acl_allow, util::wasm_mem_read},
+        vm_runtime::{ContractSection, Env},
+    },
+    validator::fees::{MIN_GAS, READ_GAS_PER_BYTE},
 };
 
 use super::DbHandle;
@@ -85,6 +88,9 @@ fn db_lookup_internal(
     let (env, mut store) = ctx.data_and_store_mut();
     let cid = env.contract_id;
 
+    // Subtract base gas before the ACL check.
+    env.subtract_gas(&mut store, MIN_GAS);
+
     // Enforce function ACL
     if let Err(e) = acl_allow(
         env,
@@ -101,10 +107,6 @@ fn db_lookup_internal(
         );
         return darkfi_sdk::error::CALLER_ACCESS_DENIED
     }
-
-    // Subtract used gas.
-    // Opening an existing db should be free (i.e. 1 gas unit).
-    env.subtract_gas(&mut store, 1);
 
     // Get the wasm memory reader
     let mut buf_reader = match wasm_mem_read(env, &store, ptr, ptr_len) {
@@ -150,6 +152,11 @@ fn db_lookup_internal(
         );
         return darkfi_sdk::error::DB_LOOKUP_FAILED
     }
+
+    // Charge per byte of the db name.
+    let name_gas =
+        if local { db_name.len() as u64 } else { db_name.len() as u64 * READ_GAS_PER_BYTE };
+    env.subtract_gas(&mut store, name_gas);
 
     // We won't allow reading from the special zkas db or monotree db
     if [SMART_CONTRACT_ZKAS_DB_NAME, SMART_CONTRACT_MONOTREE_DB_NAME].contains(&db_name.as_str()) {

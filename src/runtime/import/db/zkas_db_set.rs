@@ -26,6 +26,7 @@ use crate::{
         import::{acl::acl_allow, util::wasm_mem_read},
         vm_runtime::{ContractSection, Env},
     },
+    validator::fees::{COMPILE_GAS_PER_ROW, MIN_GAS, STATE_GROWTH_GAS, WRITE_GAS_PER_BYTE},
     zk::{empty_witnesses, VerifyingKey, ZkCircuit},
     zkas::ZkBinary,
 };
@@ -40,6 +41,9 @@ use crate::{
 pub(crate) fn zkas_db_set(mut ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, ptr_len: u32) -> i64 {
     let (env, mut store) = ctx.data_and_store_mut();
     let cid = env.contract_id;
+
+    // Subtract base gas before the ACL check.
+    env.subtract_gas(&mut store, MIN_GAS);
 
     // Enforce function ACL
     if let Err(e) = acl_allow(env, &[ContractSection::Deploy]) {
@@ -95,52 +99,48 @@ pub(crate) fn zkas_db_set(mut ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, ptr_le
         }
     };
 
-    // Subtract used gas. We count 100 gas per opcode, witness, and literal.
-    // This is likely bad.
-    // TODO: This should be better-priced.
-    let gas_cost =
-        (zkbin.literals.len() + zkbin.witnesses.len() + zkbin.opcodes.len()) as u64 * 100;
-    env.subtract_gas(&mut store, gas_cost);
-
     // Because of `Runtime::Deploy`, we should be sure that the zkas db is index zero.
-    let db_handles = env.db_handles.borrow();
-    let db_handle = &db_handles[0];
-    // Redundant check
-    if db_handle.contract_id != cid {
-        error!(
-            target: "runtime::db::zkas_db_set",
-            "[WASM] [{cid}] zkas_db_set(): Internal error, zkas db at index 0 incorrect"
-        );
-        return darkfi_sdk::error::DB_SET_FAILED
-    }
+    let tree_handle = {
+        let db_handles = env.db_handles.borrow();
+        let db_handle = &db_handles[0];
+        // Redundant check
+        if db_handle.contract_id != cid {
+            error!(
+                target: "runtime::db::zkas_db_set",
+                "[WASM] [{cid}] zkas_db_set(): Internal error, zkas db at index 0 incorrect"
+            );
+            return darkfi_sdk::error::DB_SET_FAILED
+        }
+        db_handle.tree
+    };
 
     // Check if there is existing bincode and compare it. Return DB_SUCCESS if
-    // they're the same. The assumption should be that VerifyingKey was generated
-    // already so we can skip things after this guard.
-    match env
+    // they're the same.
+    let is_new_key = match env
         .blockchain
         .lock()
         .unwrap()
         .overlay
         .lock()
         .unwrap()
-        .get(&db_handle.tree, &serialize(&zkbin.namespace))
+        .get(&tree_handle, &serialize(&zkbin.namespace))
     {
-        Ok(v) => {
-            if let Some(bytes) = v {
-                // We allow a panic here because this db should never be corrupted in this way.
-                let (existing_zkbin, _): (Vec<u8>, Vec<u8>) =
-                    deserialize(&bytes).expect("deserialize tuple");
+        Ok(Some(bytes)) => {
+            // We allow a panic here because this db should never be corrupted in this way.
+            let (existing_zkbin, _): (Vec<u8>, Vec<u8>) =
+                deserialize(&bytes).expect("deserialize tuple");
 
-                if existing_zkbin == zkbin_bytes {
-                    debug!(
-                        target: "runtime::db::zkas_db_set",
-                        "[WASM] [{cid}] zkas_db_set(): Existing zkas bincode is the same. Skipping."
-                    );
-                    return wasm::entrypoint::SUCCESS
-                }
+            if existing_zkbin == zkbin_bytes {
+                debug!(
+                    target: "runtime::db::zkas_db_set",
+                    "[WASM] [{cid}] zkas_db_set(): Existing zkas bincode is the same. Skipping."
+                );
+                return wasm::entrypoint::SUCCESS
             }
+            // Existing key, will overwrite.
+            false
         }
+        Ok(None) => true,
         Err(e) => {
             error!(
                 target: "runtime::db::zkas_db_set",
@@ -149,6 +149,11 @@ pub(crate) fn zkas_db_set(mut ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, ptr_le
             return darkfi_sdk::error::DB_SET_FAILED
         }
     };
+
+    // Charge the per-row compile cost.
+    let compile_gas =
+        COMPILE_GAS_PER_ROW.saturating_mul(1u64.checked_shl(zkbin.k).unwrap_or(u64::MAX));
+    env.subtract_gas(&mut store, compile_gas);
 
     // We didn't find any existing bincode, so let's create a new VerifyingKey and write it all.
     info!(
@@ -183,6 +188,15 @@ pub(crate) fn zkas_db_set(mut ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, ptr_le
     // Insert the key-value pair into the database.
     let key = serialize(&zkbin.namespace);
     let value = serialize(&(zkbin_bytes, vk_buf));
+
+    // Charge for bytes written. New keys also incur STATE_GROWTH_GAS.
+    let bytes_written = (key.len() + value.len()) as u64;
+    let mut storage_gas = bytes_written.saturating_mul(WRITE_GAS_PER_BYTE);
+    if is_new_key {
+        storage_gas = storage_gas.saturating_add(STATE_GROWTH_GAS);
+    }
+    env.subtract_gas(&mut store, storage_gas);
+
     if env
         .blockchain
         .lock()
@@ -190,7 +204,7 @@ pub(crate) fn zkas_db_set(mut ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, ptr_le
         .overlay
         .lock()
         .unwrap()
-        .insert(&db_handle.tree, &key, &value)
+        .insert(&tree_handle, &key, &value)
         .is_err()
     {
         error!(
@@ -199,10 +213,6 @@ pub(crate) fn zkas_db_set(mut ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, ptr_le
         );
         return darkfi_sdk::error::DB_SET_FAILED
     }
-    drop(db_handles);
-
-    // Subtract used gas. Here we count the bytes written into the db.
-    env.subtract_gas(&mut store, (key.len() + value.len()) as u64);
 
     wasm::entrypoint::SUCCESS
 }

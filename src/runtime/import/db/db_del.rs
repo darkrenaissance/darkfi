@@ -21,9 +21,12 @@ use darkfi_serial::Decodable;
 use tracing::error;
 use wasmer::{FunctionEnvMut, WasmPtr};
 
-use crate::runtime::{
-    import::{acl::acl_allow, util::wasm_mem_read},
-    vm_runtime::{ContractSection, Env},
+use crate::{
+    runtime::{
+        import::{acl::acl_allow, util::wasm_mem_read},
+        vm_runtime::{ContractSection, Env},
+    },
+    validator::fees::MIN_GAS,
 };
 
 /// Remove a key from the on-chain database.
@@ -63,6 +66,9 @@ fn db_del_internal(
     let (env, mut store) = ctx.data_and_store_mut();
     let cid = env.contract_id;
 
+    // Subtract base gas before the ACL check.
+    env.subtract_gas(&mut store, MIN_GAS);
+
     // Enforce function ACL
     if let Err(e) = acl_allow(env, &[ContractSection::Deploy, ContractSection::Update]) {
         error!(
@@ -71,10 +77,6 @@ fn db_del_internal(
         );
         return darkfi_sdk::error::CALLER_ACCESS_DENIED
     }
-
-    // Subtract used gas.
-    // We make deletion free.
-    env.subtract_gas(&mut store, 1);
 
     // Get the WASM memory reader
     let mut buf_reader = match wasm_mem_read(env, &store, ptr, ptr_len) {

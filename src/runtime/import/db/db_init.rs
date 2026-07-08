@@ -23,9 +23,12 @@ use darkfi_serial::Decodable;
 use tracing::error;
 use wasmer::{FunctionEnvMut, WasmPtr};
 
-use crate::runtime::{
-    import::{acl::acl_allow, util::wasm_mem_read},
-    vm_runtime::{ContractSection, Env},
+use crate::{
+    runtime::{
+        import::{acl::acl_allow, util::wasm_mem_read},
+        vm_runtime::{ContractSection, Env},
+    },
+    validator::fees::{MIN_GAS, TREE_GAS},
 };
 
 use super::DbHandle;
@@ -46,6 +49,9 @@ pub(crate) fn db_init(mut ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, ptr_len: u
     let (env, mut store) = ctx.data_and_store_mut();
     let cid = env.contract_id;
 
+    // Subtract base gas and tree creation fee before the ACL check.
+    env.subtract_gas(&mut store, MIN_GAS.saturating_add(TREE_GAS));
+
     // Enforce function ACL
     if let Err(e) = acl_allow(env, &[ContractSection::Deploy]) {
         error!(
@@ -54,10 +60,6 @@ pub(crate) fn db_init(mut ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, ptr_len: u
         );
         return darkfi_sdk::error::CALLER_ACCESS_DENIED
     }
-
-    // Subtract used gas.
-    // TODO: There should probably be an additional fee to open a new sled tree.
-    env.subtract_gas(&mut store, 1);
 
     // Get the wasm memory reader
     let mut buf_reader = match wasm_mem_read(env, &store, ptr, ptr_len) {

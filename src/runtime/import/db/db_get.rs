@@ -20,9 +20,12 @@ use darkfi_serial::Decodable;
 use tracing::{debug, error};
 use wasmer::{FunctionEnvMut, WasmPtr};
 
-use crate::runtime::{
-    import::{acl::acl_allow, util::wasm_mem_read},
-    vm_runtime::{ContractSection, Env},
+use crate::{
+    runtime::{
+        import::{acl::acl_allow, util::wasm_mem_read},
+        vm_runtime::{ContractSection, Env},
+    },
+    validator::fees::{MIN_GAS, READ_GAS_PER_BYTE},
 };
 
 /// Reads a value by key from the on-chain key-value store.
@@ -67,6 +70,9 @@ pub(crate) fn db_get_internal(
     let (env, mut store) = ctx.data_and_store_mut();
     let cid = env.contract_id;
 
+    // Subtract base gas before the ACL check.
+    env.subtract_gas(&mut store, MIN_GAS);
+
     // Enforce function ACL
     if let Err(e) =
         acl_allow(env, &[ContractSection::Deploy, ContractSection::Metadata, ContractSection::Exec])
@@ -77,9 +83,6 @@ pub(crate) fn db_get_internal(
         );
         return darkfi_sdk::error::CALLER_ACCESS_DENIED
     }
-
-    // Subtract used gas.
-    env.subtract_gas(&mut store, 1);
 
     // Get the WASM memory reader
     let mut buf_reader = match wasm_mem_read(env, &store, ptr, ptr_len) {
@@ -127,6 +130,10 @@ pub(crate) fn db_get_internal(
         );
         return darkfi_sdk::error::DB_GET_FAILED
     }
+
+    // Charge per byte of the lookup key.
+    let key_gas = if local { key.len() as u64 } else { key.len() as u64 * READ_GAS_PER_BYTE };
+    env.subtract_gas(&mut store, key_gas);
 
     // Fetch requested db handles
     let db_handles = if local { env.local_db_handles.borrow() } else { env.db_handles.borrow() };
@@ -193,8 +200,10 @@ pub(crate) fn db_get_internal(
         return darkfi_sdk::error::DATA_TOO_LARGE
     }
 
-    // Subtract used gas. Here we count the length of the data read from db.
-    env.subtract_gas(&mut store, return_data.len() as u64);
+    // Charge per byte of the returned value.
+    let value_gas =
+        if local { return_data.len() as u64 } else { return_data.len() as u64 * READ_GAS_PER_BYTE };
+    env.subtract_gas(&mut store, value_gas);
 
     // Copy the data (Vec<u8>) to the VM by pushing it to the objects Vector.
     let mut objects = env.objects.borrow_mut();

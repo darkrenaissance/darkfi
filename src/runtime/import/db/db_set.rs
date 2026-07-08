@@ -21,9 +21,12 @@ use darkfi_serial::Decodable;
 use tracing::error;
 use wasmer::{FunctionEnvMut, WasmPtr};
 
-use crate::runtime::{
-    import::{acl::acl_allow, util::wasm_mem_read},
-    vm_runtime::{ContractSection, Env},
+use crate::{
+    runtime::{
+        import::{acl::acl_allow, util::wasm_mem_read},
+        vm_runtime::{ContractSection, Env},
+    },
+    validator::fees::{MIN_GAS, STATE_GROWTH_GAS, WRITE_GAS_PER_BYTE},
 };
 
 /// Set a value in the on-chain database for the given DbHandle.
@@ -69,6 +72,9 @@ fn db_set_internal(
     let (env, mut store) = ctx.data_and_store_mut();
     let cid = env.contract_id;
 
+    // Subtract base gas before the ACL check.
+    env.subtract_gas(&mut store, MIN_GAS);
+
     // Enforce function ACL
     if let Err(e) = acl_allow(env, &[ContractSection::Deploy, ContractSection::Update]) {
         error!(
@@ -77,11 +83,6 @@ fn db_set_internal(
         );
         return darkfi_sdk::error::CALLER_ACCESS_DENIED
     }
-
-    // Subtract used gas. Here we count the bytes written into the database.
-    // TODO: We might want to count only the difference in size if we're replacing
-    // data and the new data is larger.
-    env.subtract_gas(&mut store, ptr_len as u64);
 
     // Get the wasm memory reader
     let mut buf_reader = match wasm_mem_read(env, &store, ptr, ptr_len) {
@@ -151,28 +152,56 @@ fn db_set_internal(
         return darkfi_sdk::error::DB_SET_FAILED
     }
 
-    // Fetch requested db handles
-    let db_handles = if local { env.local_db_handles.borrow() } else { env.db_handles.borrow() };
+    // Fetch requested db handles and validate the tree handle.
+    let tree_handle = {
+        let db_handles =
+            if local { env.local_db_handles.borrow() } else { env.db_handles.borrow() };
 
-    // Check DbHandle index is within bounds
-    if db_handles.len() <= db_handle_index {
-        error!(
-            target: "runtime::db::{lt}",
-            "[WASM] [{cid}] {lt}(): Requested DbHandle that is out of bounds",
-        );
-        return darkfi_sdk::error::DB_SET_FAILED
-    }
+        // Check DbHandle index is within bounds
+        if db_handles.len() <= db_handle_index {
+            error!(
+                target: "runtime::db::{lt}",
+                "[WASM] [{cid}] {lt}(): Requested DbHandle that is out of bounds",
+            );
+            return darkfi_sdk::error::DB_SET_FAILED
+        }
 
-    // Retrive DbHandle using the index
-    let db_handle = &db_handles[db_handle_index];
+        // Retrive DbHandle using the index
+        let db_handle = &db_handles[db_handle_index];
 
-    // Validate that the DbHandle matches the contract ID
-    if db_handle.contract_id != env.contract_id {
-        error!(
-            target: "runtime::db::{lt}",
-            "[WASM] [{cid}] {lt}(): Unauthorized to write to DbHandle",
-        );
-        return darkfi_sdk::error::CALLER_ACCESS_DENIED
+        // Validate that the DbHandle matches the contract ID
+        if db_handle.contract_id != env.contract_id {
+            error!(
+                target: "runtime::db::{lt}",
+                "[WASM] [{cid}] {lt}(): Unauthorized to write to DbHandle",
+            );
+            return darkfi_sdk::error::CALLER_ACCESS_DENIED
+        }
+
+        db_handle.tree
+    };
+
+    // Charge for bytes written. New on-chain keys also incur STATE_GROWTH_GAS.
+    let bytes_written = (key.len() + value.len()) as u64;
+    if local {
+        env.subtract_gas(&mut store, bytes_written);
+    } else {
+        // Check whether the key already exists in on-chain storage.
+        let is_new_key = !env
+            .blockchain
+            .lock()
+            .unwrap()
+            .overlay
+            .lock()
+            .unwrap()
+            .contains_key(&tree_handle, &key)
+            .unwrap_or(false);
+
+        let mut storage_gas = bytes_written.saturating_mul(WRITE_GAS_PER_BYTE);
+        if is_new_key {
+            storage_gas = storage_gas.saturating_add(STATE_GROWTH_GAS);
+        }
+        env.subtract_gas(&mut store, storage_gas);
     }
 
     // Insert key-value pair into the database corresponding to this contract
@@ -180,7 +209,7 @@ fn db_set_internal(
         // Safe to unwrap here.
         let mut db = env.tx_local.lock();
         let db_cid = db.get_mut(&cid).unwrap();
-        let Some(tree) = db_cid.get_mut(&db_handle.tree) else {
+        let Some(tree) = db_cid.get_mut(&tree_handle) else {
             error!(
                 target: "runtime::db::{lt}",
                 "[WASM] [{cid}] {lt}(): Could not insert to tx-local tree",
@@ -196,7 +225,7 @@ fn db_set_internal(
         .overlay
         .lock()
         .unwrap()
-        .insert(&db_handle.tree, &key, &value)
+        .insert(&tree_handle, &key, &value)
         .is_err()
     {
         error!(
