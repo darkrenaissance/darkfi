@@ -48,6 +48,7 @@
   - [Services](arch/services.md)
   - [Smart Contracts](arch/sc/sc.md)
     - [Transaction lifetime](arch/sc/tx-lifetime.md)
+  - [Transaction Fees](arch/fees.md)
   - [DAO](arch/dao.md)
   - [DEX](arch/dex.md)
   - [Wallet](arch/wallet.md)

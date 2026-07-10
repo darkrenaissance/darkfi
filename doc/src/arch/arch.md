@@ -196,7 +196,7 @@ from writing arbitrary data to the chain.
 
 ### Transaction Fees
 
-TBD
+See [Transaction Fees](fees.md).
 
 ### `drk`
 
