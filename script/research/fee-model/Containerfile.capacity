@@ -1,0 +1,83 @@
+# Two-stage Containerfile for the DarkFi capacity benchmark.
+#
+# Build context must be the repo root (not this directory), because
+# fee-model/Cargo.toml uses path = "../../../" for darkfi deps:
+#
+#   cd /path/to/darkfi
+#   podman build -t darkfi-capacity \
+#       -f script/research/fee-model/Containerfile.capacity .
+#
+# Run:
+#   podman run --rm --cpuset-cpus=0-3 --memory=8g \
+#       -v ./out:/out darkfi-capacity
+#
+# The image bundles the capacity binary and the money contract WASM.
+# The benchmark writes results to /out/capacity.json.
+
+# ===========================================================================
+# Stage 1: Build
+# ===========================================================================
+FROM docker.io/debian:bookworm-slim AS rust_builder
+
+ARG RUST_VER=stable
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential cmake pkg-config clang libclang-dev llvm-dev \
+    libssl-dev libsqlite3-dev curl ca-certificates git python3 \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN curl https://sh.rustup.rs -sSf | bash -s -- -y --default-toolchain "${RUST_VER}"
+ENV PATH="/root/.cargo/bin:${PATH}"
+RUN rustup target add wasm32-unknown-unknown
+
+WORKDIR /opt/darkfi
+
+# Copy the full source tree (preserves the ../../../ path layout
+# that fee-model/Cargo.toml uses for darkfi path dependencies).
+COPY . /opt/darkfi
+
+# Build zkas first (native target, no special flags needed).
+RUN make zkas
+
+# Build contract WASMs with --import-undefined linker flag.
+# RUSTFLAGS is set directly so it reliably reaches cargo through the
+# contract Makefiles.  Only WASM targets are built here, so the
+# --import-undefined flag only reaches wasm-ld, never the native linker.
+# This fixes "undefined symbol: drk_log_" on Rust 1.82+ where extern "C"
+# without #[link(wasm_import_module = ...)] no longer auto-imports.
+RUN export RUSTFLAGS="-C link-arg=--import-undefined" && \
+    make -C src/contract/money && \
+    make -C src/contract/dao && \
+    make -C src/contract/deployooor
+
+# Build the capacity binary.
+WORKDIR /opt/darkfi/script/research/fee-model
+RUN cargo build --release --bin capacity
+
+# ===========================================================================
+# Stage 2: Runtime (slim)
+# ===========================================================================
+FROM docker.io/debian:bookworm-slim
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libssl3 ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /opt/fee-model
+
+# Copy the capacity binary
+COPY --from=rust_builder /opt/darkfi/script/research/fee-model/target/release/capacity \
+    /opt/fee-model/capacity
+
+# Copy the money contract WASM (needed by deploy scenarios)
+COPY --from=rust_builder /opt/darkfi/src/contract/money/darkfi_money_contract.wasm \
+    /opt/darkfi/contracts/darkfi_money_contract.wasm
+
+# Point the benchmark at the bundled WASM
+ENV MONEY_WASM_PATH=/opt/darkfi/contracts/darkfi_money_contract.wasm
+
+# Output directory (mount a volume here to retrieve results)
+RUN mkdir -p /out
+VOLUME /out
+
+ENTRYPOINT ["/opt/fee-model/capacity"]

@@ -1,0 +1,48 @@
+[package]
+name = "fee-model"
+version = "0.1.0"
+description = "Fee calibration utilities for DarkFi"
+authors = ["Dyne.org foundation <foundation@dyne.org>"]
+repository = "https://codeberg.org/darkrenaissance/darkfi"
+license = "AGPL-3.0-only"
+edition = "2021"
+
+[[bin]]
+name = "bench"
+path = "src/bench.rs"
+
+[[bin]]
+name = "capacity"
+path = "src/capacity.rs"
+
+[[bin]]
+name = "db_bench"
+path = "src/db_bench.rs"
+
+[workspace]
+
+[dependencies]
+darkfi-sdk = {path = "../../../src/sdk"}
+darkfi = {path = "../../../", features = ["zk"]}
+darkfi-serial = {path = "../../../src/serial"}
+rand = "0.8.5"
+serde = {version = "1.0", features = ["derive"]}
+serde_json = "1.0"
+sled-overlay = "0.1.20"
+pasta_curves = "0.5.1"
+bridgetree = "0.7.0"
+wasmer = {version = "6.1.0", features = ["singlepass"]}
+wasmer-compiler-singlepass = {version = "6.1.0"}
+smol = "2.0.2"
+
+# Fee modeling specific dependencies
+darkfi-contract-test-harness = {path = "../../../src/contract/test-harness"}
+darkfi_money_contract = {path = "../../../src/contract/money", features = ["client", "no-entrypoint"]}
+darkfi_dao_contract = {path = "../../../src/contract/dao", features = ["client", "no-entrypoint"]}
+darkfi_deployooor_contract = {path = "../../../src/contract/deployooor", features = ["client", "no-entrypoint"]}
+tracing = "0.1.44"
+tracing-subscriber = { version = "0.3", default-features = false, features = ["fmt", "env-filter"] }
+
+[patch.crates-io]
+halo2_proofs = {git="https://github.com/parazyd/halo2", branch="v050"}
+halo2_gadgets = {git="https://github.com/parazyd/halo2", branch="v050"}
