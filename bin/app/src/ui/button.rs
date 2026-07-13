@@ -19,6 +19,7 @@
 use async_trait::async_trait;
 use miniquad::{MouseButton, TouchPhase};
 use rand::{rngs::OsRng, Rng};
+use parking_lot::Mutex as SyncMutex;
 use std::sync::{
     atomic::{AtomicBool, Ordering},
     Arc,
@@ -26,21 +27,24 @@ use std::sync::{
 use tracing::instrument;
 
 use crate::{
-    gfx::{gfxtag, DrawCall, DrawInstruction, DrawMesh, Point, Rectangle, RenderApi, Renderer, RendererSync},
+    gfx::{gfxtag, DrawCall, DrawInstruction, Point, Rectangle, Renderer, RendererSync},
     mesh::MeshBuilder,
-    prop::{PropertyAtomicGuard, PropertyBool, PropertyRect, PropertyUint32, Role},
+    prop::{BatchGuardPtr, PropertyAtomicGuard, PropertyBool, PropertyRect, PropertyUint32, Role},
     scene::{Pimpl, SceneNodeWeak},
+    ExecutorPtr,
 };
 
-use super::{DrawUpdate, UIObject};
+use super::{DrawUpdate, OnModify, UIObject};
 
 macro_rules! d { ($($arg:tt)*) => { debug!(target: "ui::button", $($arg)*); } }
 macro_rules! t { ($($arg:tt)*) => { trace!(target: "ui::button", $($arg)*); } }
+macro_rules! w { ($($arg:tt)*) => { warn!(target: "ui::button", $($arg)*); } }
 
 pub type ButtonPtr = Arc<Button>;
 
 pub struct Button {
     node: SceneNodeWeak,
+    tasks: SyncMutex<Vec<smol::Task<()>>>,
     renderer: Renderer,
 
     is_active: PropertyBool,
@@ -51,6 +55,7 @@ pub struct Button {
     dc_key: u64,
 
     mouse_btn_held: AtomicBool,
+    parent_rect: SyncMutex<Option<Rectangle>>,
 }
 
 impl Button {
@@ -64,6 +69,7 @@ impl Button {
 
         let self_ = Arc::new(Self {
             node,
+            tasks: SyncMutex::new(vec![]),
             renderer,
             is_active,
             rect,
@@ -72,9 +78,23 @@ impl Button {
             debug,
             dc_key: OsRng.gen(),
             mouse_btn_held: AtomicBool::new(false),
+            parent_rect: SyncMutex::new(None),
         });
 
         Pimpl::Button(self_)
+    }
+
+    #[instrument(target = "ui::button")]
+    async fn redraw(self: Arc<Self>, batch: BatchGuardPtr) {
+        let Some(parent_rect) = self.parent_rect.lock().clone() else {
+            return
+        };
+
+        let atom = &mut batch.spawn();
+
+        if let Err(e) = self.rect.eval(atom, &parent_rect) {
+            w!("Rect eval failure in redraw: {e}");
+        }
     }
 }
 
@@ -84,14 +104,30 @@ impl UIObject for Button {
         self.priority.get()
     }
 
+    async fn start(self: Arc<Self>, ex: ExecutorPtr) {
+        let me = Arc::downgrade(&self);
+
+        let mut on_modify = OnModify::new(ex, self.node.clone(), me.clone());
+        on_modify.when_change(self.rect.prop(), Self::redraw);
+
+        *self.tasks.lock() = on_modify.tasks;
+    }
+
+    fn stop(&self) {
+        self.tasks.lock().clear();
+        *self.parent_rect.lock() = None;
+    }
+
     #[instrument(target = "ui::button")]
     async fn draw(
         &self,
         parent_rect: Rectangle,
         atom: &mut PropertyAtomicGuard,
     ) -> Option<DrawUpdate> {
+        *self.parent_rect.lock() = Some(parent_rect);
+
         if let Err(e) = self.rect.eval(atom, &parent_rect) {
-            warn!(target: "ui::button", "Rect eval failure: {e}");
+            w!("Rect eval failure: {e}");
         }
 
         if !self.debug.get() {
