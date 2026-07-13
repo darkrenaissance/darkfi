@@ -333,7 +333,7 @@ pub async fn make(
     prop.set_f32(atom, Role::App, 3, 1.).unwrap();
 
     let tokens_table = tokens_table
-        .setup(|me| TokenTable::new(me, app.renderer.clone(), app.sg_root.clone()))
+        .setup(|me| TokenTable::new(me, app.renderer.clone()))
         .await;
     main_layer.link(tokens_table.clone());
 

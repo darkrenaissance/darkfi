@@ -31,7 +31,7 @@ use crate::{
         BatchGuardId, PropertyAtomicGuard, PropertyColor, PropertyFloat32, PropertyRect,
         PropertyUint32, Role,
     },
-    scene::{SceneNodePtr, SceneNodeWeak},
+    scene::SceneNodeWeak,
     text,
     ui::Pimpl,
     ExecutorPtr,
@@ -63,7 +63,6 @@ pub type TokenTablePtr = Arc<TokenTable>;
 pub struct TokenTable {
     node: SceneNodeWeak,
     renderer: Renderer,
-    sg_root: SceneNodePtr,
     mouse_btn_token: SyncMutex<Option<TokenId>>,
 
     rows: SyncMutex<Vec<TokenRow>>,
@@ -88,7 +87,6 @@ impl TokenTable {
     pub async fn new(
         node: SceneNodeWeak,
         renderer: Renderer,
-        sg_root: SceneNodePtr,
     ) -> Pimpl {
         let node_ref = &node.upgrade().unwrap();
         let rect = PropertyRect::wrap(node_ref, Role::Internal, "rect").unwrap();
@@ -104,7 +102,6 @@ impl TokenTable {
         let self_ = Arc::new(Self {
             node: node.clone(),
             renderer: renderer.clone(),
-            sg_root,
             mouse_btn_token: SyncMutex::new(None),
             rows: SyncMutex::new(vec![]),
             dc_key: OsRng.gen(),
@@ -239,7 +236,6 @@ impl TokenTable {
         let separator_color = self.separator_color.get();
         let padding_x = self.padding_x.get();
         let padding_y = self.padding_y.get();
-        let column_spacing = self.column_spacing.get();
 
         let mut instrs = vec![];
 
@@ -329,8 +325,7 @@ impl UIObject for TokenTable {
             }
         });
 
-        let mut tasks = vec![set_tokens_method_task];
-        *self.tasks.lock() = tasks;
+        *self.tasks.lock() = vec![set_tokens_method_task];
     }
 
     fn stop(&self) {
@@ -343,7 +338,7 @@ impl UIObject for TokenTable {
         parent_rect: Rectangle,
         atom: &mut PropertyAtomicGuard,
     ) -> Option<DrawUpdate> {
-        *self.parent_rect.lock() = Some(parent_rect.clone());
+        *self.parent_rect.lock() = Some(parent_rect);
         self.rect.eval(atom, &parent_rect).ok()?;
         let rect = self.rect.get();
 
