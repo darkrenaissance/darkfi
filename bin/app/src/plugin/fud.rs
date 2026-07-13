@@ -221,19 +221,23 @@ impl FudPlugin {
             fud_settings
                 .pow
                 .btc_electrum_nodes
-                .push(url::Url::parse("tcp+tls://erbium1.sytes.net:50002").unwrap());
+                .push(url::Url::parse("tcp://fulcrum.grey.pw:50001").unwrap());
             fud_settings
                 .pow
                 .btc_electrum_nodes
-                .push(url::Url::parse("tcp+tls://ecdsa.net:110").unwrap());
+                .push(url::Url::parse("tcp://blockstream.info:110").unwrap());
             fud_settings
                 .pow
                 .btc_electrum_nodes
-                .push(url::Url::parse("tcp+tls://electrum.no-ip.org:50002").unwrap());
+                .push(url::Url::parse("tcp://btc.electroncash.dk:60001").unwrap());
             fud_settings
                 .pow
                 .btc_electrum_nodes
-                .push(url::Url::parse("tcp+tls://electrumx.not.fyi:50002").unwrap());
+                .push(url::Url::parse("tcp://electrum.direwolfm14.com:50001").unwrap());
+            fud_settings
+                .pow
+                .btc_electrum_nodes
+                .push(url::Url::parse("tcp://electrum.blockstream.info:50001").unwrap());
         }
         p2p_settings.p2p_datastore = p2p_datastore_path().into_os_string().into_string().ok();
         p2p_settings.hostlist = hostlist_path().into_os_string().into_string().ok();
