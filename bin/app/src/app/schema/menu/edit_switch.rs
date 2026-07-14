@@ -17,8 +17,7 @@
  */
 
 use crate::{
-    gfx::{gfxtag, Renderer},
-    scene::SceneNodePtr,
+    scene::{SceneNodePtr, Slot},
     util::ExecutorPtr,
 };
 
@@ -27,28 +26,23 @@ use crate::{
 pub fn edit_switch(
     tasks: &mut Vec<smol::Task<()>>,
     edit_nodes: &[SceneNodePtr],
-    renderer: Renderer,
     ex: ExecutorPtr,
 ) {
     for (i, edit_node) in edit_nodes.iter().enumerate() {
         let others: Vec<SceneNodePtr> =
             edit_nodes[..i].iter().chain(edit_nodes[i + 1..].iter()).cloned().collect();
 
-        let is_focused = edit_node.get_property("is_focused").unwrap();
-        let is_focused_sub = is_focused.subscribe_modify();
-        let renderer = renderer.clone();
+        let (slot, recvr) = Slot::new("editswitch_focus_changed");
+        edit_node.register("focus_request", slot).unwrap();
+        let edit_node = edit_node.clone();
         let is_focused_task = ex.spawn(async move {
-            while let Ok(_) = is_focused_sub.receive().await {
-                // Is this edit focused?
-                if !is_focused.get_bool(0).unwrap() {
-                    continue
-                }
-
-                // Unfocus everything else in the list
-                let atom = &mut renderer.make_guard(gfxtag!("write_click"));
-                for other_node in others.clone() {
+            while let Ok(_) = recvr.recv().await {
+                // Hide cursors on siblings
+                for other_node in &others {
                     other_node.call_method("unfocus", vec![]).await.unwrap();
                 }
+
+                edit_node.call_method("focus", vec![]).await.unwrap();
             }
         });
         tasks.push(is_focused_task);
