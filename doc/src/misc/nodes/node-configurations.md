@@ -23,12 +23,14 @@ This section provides configuration examples for hosting DarkFi P2P nodes.
 
 
 ###  `darkirc`
-- `6667`: IRC server (plaintext)
-- `6697`: IRC server (TLS)
+- `6667`: IRC server (plaintext by default)
+- `6697`: Conventional IRC TLS port (only when configured)
 - `9600`: Inbound P2P
 - `_ +1`: Inbound Tor/I2p/...
-- `9605`: Public RPC server
-- `9606`: Restricted RPC server
+- `9605`: RPC server
+
+DarkIRC does not enable an inbound P2P listener by default. It currently has
+one RPC listener rather than separate public and restricted RPC servers.
 
 
 ### `fud`

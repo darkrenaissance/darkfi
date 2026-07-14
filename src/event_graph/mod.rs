@@ -572,7 +572,7 @@ pub(crate) fn filter_requested_event_rep(
     let requested_set: HashSet<blake3::Hash> = requested.iter().copied().collect();
     let mut by_id = HashMap::with_capacity(events.len());
 
-    for (event, blob) in events.into_iter().zip(blobs.into_iter()) {
+    for (event, blob) in events.into_iter().zip(blobs) {
         let event_id = event.id();
         if !requested_set.contains(&event_id) || by_id.insert(event_id, (event, blob)).is_some() {
             return Err(Error::DagSyncFailed)
@@ -1147,7 +1147,7 @@ impl EventGraph {
     }
 
     /// After header sync, event content can be fetched lazily via local
-    /// [`fetch_page`] or peer [`RangeReq`] responses with aligned blobs - the
+    /// [`Self::fetch_page`] or peer [`RangeReq`] responses with aligned blobs - the
     /// application pulls the events it actually wants to display or process,
     /// without downloading the entire content on every sync.
     pub async fn dag_sync_headers(&self, dag_ts: u64) -> Result<()> {
@@ -1379,7 +1379,7 @@ impl EventGraph {
     /// Sync only headers for the `count` most recent DAGs.
     ///
     /// Fast variant - gives a full DAG skeleton without downloading
-    /// event bodies. Pair with [`fetch_page`] to pull content on-demand.
+    /// event bodies. Pair with [`Self::fetch_page`] to pull content on-demand.
     pub async fn sync_selected_headers(&self, count: usize) -> Result<()> {
         let ts: Vec<u64> =
             self.dag_store.read().await.dag_timestamps().into_iter().rev().take(count).collect();
@@ -1946,7 +1946,7 @@ impl EventGraph {
         {
             let store = self.dag_store.read().await;
             let slot = store.get_slot(&dag_ts).ok_or(Error::DagSyncFailed)?;
-            for (event, blob) in events.into_iter().zip(blobs.into_iter()) {
+            for (event, blob) in events.into_iter().zip(blobs) {
                 if event.header.parents == NULL_PARENTS {
                     continue
                 }

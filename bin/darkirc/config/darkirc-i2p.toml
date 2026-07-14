@@ -15,7 +15,7 @@ autojoin = [
 magic_bytes = [251, 229, 199, 181]
 
 ## Path to the P2P datastore
-datastore = "~/.local/share/darkfi/darkirc"
+p2p_datastore = "~/.local/share/darkfi/darkirc/p2p"
 
 ## Path to a configured hostlist for saving known peers
 hostlist = "~/.local/share/darkfi/darkirc/p2p_hostlist.tsv"
@@ -42,11 +42,11 @@ i2p_socks5_proxy = "socks5://127.0.0.1:4447"
 ## Seed nodes to connect to
 seeds = [
     ##TODO: replace with an official seed address
-    "i2p://6l2rdfriixo2nh5pr5bt555lyz56qox2ikzia4kuzm4okje7gtmq.b32.i2p:5262"
+    "i2p://6l2rdfriixo2nh5pr5bt555lyz56qox2ikzia4kuzm4okje7gtmq.b32.i2p:9600"
 ]
 
 ## Addresses we want to advertise to peers
-external_addrs = ["i2p://youraddress.b32.i2p:25551"]
+external_addrs = ["i2p://youraddress.b32.i2p:9600"]
 
 ## P2P accept addresses
-inbound = ["tcp://127.0.0.1:25551"]
+inbound = ["tcp://127.0.0.1:9601"]

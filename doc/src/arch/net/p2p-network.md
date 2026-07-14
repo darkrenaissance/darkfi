@@ -210,9 +210,9 @@ Swarming means more efficient downloading of data specific to a certain
 subset. A new p2p instance is spawned with a clean hosts table. This
 subnetwork is self contained.
 
-An application is for example DarkIRC where everyday a new event graph
-is spawned. With swarming, you would connect to nodes maintaining this
-particular day's event graph.
+An application is for example DarkIRC, where the current implementation rotates
+to a new event DAG every hour. With swarming, a node could connect to peers
+maintaining a particular history slot.
 
 The feature allows overlaying multiple different features in a single
 network such as tau, darkirc and so on. New networks require nodes to

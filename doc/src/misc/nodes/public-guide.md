@@ -1,349 +1,101 @@
-# DarkFi public node guide
+# Run a public DarkIRC node
 
-Public nodes are nodes that reveal themselves to the network. They are publicly
-accessible so they can accept inbound connections from other nodes.
-Public nodes are important for the health of the DarkFi P2P network. This guide 
-explains how to run the optimal DarkFi public node configurations.
+A public node accepts inbound P2P connections and advertises a reachable
+address. A clearnet address exposes the node's IP or hostname to peers. Use the
+[Tor guide](tor-guide.md) if that is not acceptable.
 
-<u><b>Note</b></u>: If you do not want your IP address to be public you can run 
-a node using Tor.
+First follow the [normal-node](../darkirc/normal-node.md) or
+[archive-node](../darkirc/archive-node.md) guide. Stop DarkIRC before editing
+`~/.config/darkfi/darkirc_config.toml`.
 
-<u><b>Note</b></u>: This page is a general guide for public nodes in the DarkFi
-ecosystem and is applicable to other apps such as `taud` and `darkfid`. We use
-`darkirc` as our main example throughout this guide. Commands such as `./darkirc`
-and configuration filenames need to be adjusted if using different apps.
-If you're using another app, the network configurations remain the same except
-for the seed nodes you connect to.
+## Clearnet `tcp+tls`
 
-## Common Setup Steps
+This example listens on the conventional DarkIRC P2P port. Replace the
+advertised hostname, open TCP port 9600 in the firewall, and configure router
+port forwarding if necessary.
 
-### Generating configuration files
+```toml
+[net]
+active_profiles = ["tcp+tls"]
+outbound_connections = 8
+inbound_connections = 64
 
-After compiling, you can start the application so it can spawn its configuration file. We use `darkirc` as the application example going forward.
+[net.profiles."tcp+tls"]
+seeds = ["tcp+tls://lilith0.dark.fi:9600", "tcp+tls://lilith1.dark.fi:9600"]
+inbound = ["tcp+tls://0.0.0.0:9600", "tcp+tls://[::]:9600"]
+external_addrs = ["tcp+tls://chat.example:9600"]
+```
+
+Remove the IPv6 listener if the host has no working IPv6 route. An
+`external_addrs` value must resolve to this host and be reachable from outside
+its LAN. Do not advertise `0.0.0.0`, `[::]`, loopback, or a private address.
+
+The complete clearnet example is
+`bin/darkirc/config/darkirc-clearnet.toml`.
+
+## Multi-transport bridge
+
+A bridge can accept both clearnet and Tor connections. Each inbound transport
+needs a reachable external address:
+
+```toml
+[net]
+active_profiles = ["tcp+tls", "tor"]
+outbound_connections = 8
+inbound_connections = 64
+
+[net.profiles."tcp+tls"]
+seeds = ["tcp+tls://lilith0.dark.fi:9600", "tcp+tls://lilith1.dark.fi:9600"]
+inbound = ["tcp+tls://0.0.0.0:9600"]
+external_addrs = ["tcp+tls://chat.example:9600"]
+
+[net.profiles."tor"]
+seeds = [
+    "tor://g7fxelebievvpr27w7gt24lflptpw3jeeuvafovgliq5utdst6xyruyd.onion:9600",
+    "tor://yvklzjnfmwxhyodhrkpomawjcdvcaushsj6torjz2gyd7e25f3gfunyd.onion:9600",
+]
+inbound = ["tor://127.0.0.1:9601"]
+```
+
+The `tor://` inbound form asks the built-in Arti transport to create an
+ephemeral onion service. Its onion address changes when the service is
+recreated and does not need a manual `external_addrs` entry. For a stable onion
+address, use the [static Tor setup](tor-guide.md#static-onion-service).
+
+Set `mixed_profiles` only when deliberately routing one endpoint scheme through
+another active transport. It is not required merely to enable two profiles.
+
+## UPnP IGD
+
+UPnP can request a router port mapping and discover the external address. It
+increases trust in the local router and must be enabled at compile time. Build
+with all features:
 
 ```shell
-% ./darkirc
+% cargo build --release --all-features --package darkirc --bin darkirc
 ```
 
-`darkirc` creates a configuration file `darkirc_config.toml` by default in `~/.config/darkfi/`. You will review and edit this configuration file for your preferred network settings.
+This writes `target/release/darkirc`; run or install that binary so the
+feature-enabled build is the one actually used.
 
-## Connect and test your node
-
-Run ./darkirc. Welcome to the dark forest.
-
-You can test if your node is configured properly on the network. Use [Dnet](../../learn/dchat/network-tools/using-dnet.md) and the [ping-tool](../network-troubleshooting.md#ping-tool) to test your node connections. You can view if your node is making inbound and outbound connections.
-
-### Troubleshooting
-
-Refer to [Network troubleshooting](../network-troubleshooting.md) for further troubleshooting resources.
-
----
-
-## Configure your network settings
-
-Edit your `darkirc_config.toml` file to reflect the network settings you want 
-to support. Listed below are different `darkirc_config.toml` configurations. You 
-can choose between a clearnet node, a fully anonymous Tor node, or a bridge 
-node which runs over clearnet & Tor, and is most beneficial for the health of 
-the network. Each mode can be activated by adding the appropriate profile to
-`active_profiles` net setting.
-
-<u><b>Note</b></u>: As you modify the file, if you notice some settings are missing, 
-simply add them. Some settings may be commented-out by default. In the example 
-configurations below, you will find the placeholders `MY_IP_V4`, `MY_IP_V6`, 
-`my.resolveable.address`, and `youraddress.onion` which indicates you should replace 
-them with your public IPv4, IPv6, domain or your onion address. If you don't 
-have some of them (for example: IPv6 or domain) remove the values entirely.
-
-### Clearnet node
-
-A clearnet node routes traffic over `tcp+tls`. It is enabled by adding
-`tcp+tls` to the `active_profiles` list. You can find a complete example config
-file for `darkirc-clearnet.toml` in `${DARKFI_REPO}/bin/darkirc/config`.
-
-```toml
-## Outbound connection slots
-outbound_connections = 8
-
-## Inbound connection slots
-inbound_connections = 64
-
-## Whitelisted transports for outbound connections
-active_profiles = ["tcp+tls"]
-
-## Transports to be mixed
-mixed_profiles = []
-
-[net.profiles."tcp+tls"]
-## Seed nodes to connect to
-seeds = ["tcp+tls://lilith1.dark.fi:9600"]
-
-## Addresses we want to advertise to peers
-external_addrs = ["tcp+tls://MY_IP_V4:9600", "tcp+tls://MY_IP_V6:9600", "tcp+tls://my.resolveable.address:9600"]
-
-## P2P accept addresses
-inbound = ["tcp+tls://0.0.0.0:9600", "tcp+tls://[::]:9600"]
-
-## Connection settings with default values applicable for each profile separately
-#outbound_connect_timeout = 15
-#channel_handshake_timeout = 10
-#channel_heartbeat_interval = 30
-```
-
-### Fully anonymous Tor-enabled node
-
-A Tor-enabled node routes traffic over `tor`. It is enabled by adding
-`tor` to the `active_profiles` list. You can find a complete example config
-file for `darkirc-tor.toml` in `${DARKFI_REPO}/bin/darkirc/config`. This node 
-configuration is for users that would like to support `darkirc` over the Tor 
-network. A Tor node provides the best anonymity on the network.
-
-You need to configure Tor and launch your hidden service prior to running your 
-public node over Tor. Please refer to 
-[Tor Nodes](tor-guide.md#inbound-node-settings).
-
-```toml
-## connection settings
-outbound_peer_discovery_cooloff_time = 60
-
-## Outbound connection slots
-outbound_connections = 8
-
-## Inbound connection slots
-inbound_connections = 64
-
-## Whitelisted transports for outbound connections
-active_profiles = ["tor"]
-
-## Transports to be mixed
-mixed_profiles = []
-
-[net.profiles."tor"]
-## Seed nodes to connect to
-seeds = [
-    "tor://g7fxelebievvpr27w7gt24lflptpw3jeeuvafovgliq5utdst6xyruyd.onion:9601",
-    "tor://yvklzjnfmwxhyodhrkpomawjcdvcaushsj6torjz2gyd7e25f3gfunyd.onion:9601",
-]
-
-## Addresses we want to advertise to peers
-external_addrs = ["tor://youraddress.onion:9601"]
-
-## P2P accept addresses
-inbound = ["tcp://127.0.0.1:9601"]
-
-## Connection settings with default values applicable for each profile separately
-#outbound_connect_timeout = 60
-#channel_handshake_timeout = 55
-#channel_heartbeat_interval = 90
-```
-
-### Fully anonymous I2p-enabled node
-
-An I2p-enabled node routes traffic over `i2p`. It is enabled by adding
-`i2p` to the `active_profiles` list. You can find a complete example config
-file for `darkirc-i2p.toml` in `${DARKFI_REPO}/bin/darkirc/config`. This node
-configuration is for users that would like to support `darkirc` over the I2p
-network.
-
-You need to configure I2p and launch your eepsite(hidden service) prior to running your
-public node over I2p. Please refer to
-[I2p Nodes](i2p-guide.md#inbound-node-settings).
-
-```toml
-## connection settings
-outbound_peer_discovery_cooloff_time = 60
-
-## Outbound connection slots
-outbound_connections = 8
-
-## Inbound connection slots
-inbound_connections = 64
-
-## Whitelisted transports for outbound connections
-active_profiles = ["i2p"]
-
-## I2p Socks5 proxy
-i2p_socks5_proxy = "socks5://127.0.0.1:4447"
-
-[net.profiles."i2p"]
-## Seed nodes to connect to
-seeds = [
-    "i2p://6l2rdfriixo2nh5pr5bt555lyz56qox2ikzia4kuzm4okje7gtmq.b32.i2p:9602"
-]
-
-## Addresses we want to advertise to peers
-external_addrs = ["i2p://youraddress.b32.i2p:9602"]
-
-## P2P accept addresses
-inbound = ["tcp://127.0.0.1:9602"]
-
-## Connection settings with default values applicable for each profile separately
-#outbound_connect_timeout = 60
-#channel_handshake_timeout = 55
-#channel_heartbeat_interval = 90
-```
-
-### Bridge node
-
-A bridge node is a node that offers connectivity via multiple transport layers. 
-This provides the most benefit for the health of the network. This is the most 
-maximally compatible node for people that wish to support the network. It can
-be enabled by adding multiple profiles to the `active_profiles` list. You can
-find a complete example config file for `darkirc-mixed.toml` in 
-`${DARKFI_REPO}/bin/darkirc/config`. Refer to 
-[Tor Nodes](tor-guide.md#inbound-node-settings) to configure Tor.
-
-<!-- TODO: replace the i2p seed address with an official one-->
-```toml
-## connection settings
-outbound_peer_discovery_cooloff_time = 60
-
-## Outbound connection slots
-outbound_connections = 8
-
-## Inbound connection slots
-inbound_connections = 64
-
-## I2p Socks5 proxy
-i2p_socks5_proxy = "socks5://127.0.0.1:4447"
-
-## Whitelisted transports for outbound connections
-active_profiles = ["tcp+tls", "tor", "i2p"]
-
-## Transports to be mixed
-mixed_profiles = []
-
-[net.profiles."tcp+tls"]
-## Seed nodes to connect to
-seeds = ["tcp+tls://lilith0.dark.fi:9600", "tcp+tls://lilith1.dark.fi:9600"]
-
-## P2P accept addresses
-inbound = ["tcp+tls://0.0.0.0:9600", "tcp+tls://[::]:9600"]
-
-## Addresses we want to advertise to peers
-external_addrs = ["tcp+tls://MY_IP_V4:9600", "tcp+tls://MY_IP_V6:9600", "tcp+tls://my.resolveable.address:9600"]
-
-[net.profiles."tor"]
-## Seed nodes to connect to
-seeds = [
-    "tor://g7fxelebievvpr27w7gt24lflptpw3jeeuvafovgliq5utdst6xyruyd.onion:9601",
-    "tor://yvklzjnfmwxhyodhrkpomawjcdvcaushsj6torjz2gyd7e25f3gfunyd.onion:9601",
-]
-
-## P2P accept addresses
-inbound = ["tcp://127.0.0.1:9601"]
-
-## Addresses we want to advertise to peers
-external_addrs = ["tor://youraddress.onion:9601"]
-
-[net.profiles."i2p"]
-## Seed nodes to connect to
-seeds = [
-    ##TODO: replace with an official seed address
-    "i2p://6l2rdfriixo2nh5pr5bt555lyz56qox2ikzia4kuzm4okje7gtmq.b32.i2p:9602"
-]
-
-## Manual peers to connect to
-#peers = []
-
-## P2P accept addresses
-inbound = ["tcp://127.0.0.1:9602"]
-
-## Addresses we want to advertise to peers
-external_addrs = ["i2p://youraddress.b32.i2p:9602"]
-```
-
-### Autohost
-
-#### Ipv6
-You can autohost a public `IPv6` node without manually specifying your external
-`IPv6` address. Your `Ipv6` address will be automatically detected and used to configure
-an inbound node. To enable this, edit the `inbound` and `external_addrs` fields
-in the `tcp+tls` profile as shown below.
+Then add the query to a clearnet listener:
 
 ```toml
 [net.profiles."tcp+tls"]
-## P2P accept addresses
-inbound = ["tcp+tls://[::]:9600"]
-
-## Addresses we want to advertise to peers
-external_addrs = ["tcp+tls://[::]:9600"]
-
-## Seed nodes to connect to
-seeds = ["tcp+tls://lilith0.dark.fi:9600", "tcp+tls://lilith1.dark.fi:9600"]
-```
-
-#### Tor
-You can autohost a public `Tor` node using `Arti` without manually specifying
-your external address. `Arti` will automatically create an `ephemeral` onion
-address and an inbound node will be setup at that address. To enable this,
-edit the `inbound` field in the `tor` as shown below.
-
-```toml
-[net.profiles."tor"]
-## P2P accept addresses
-inbound = ["tor://127.0.0.1:9601"]
-
-## Addresses we want to advertise to peers
-external_addrs = []
-
-## Seed nodes to connect to
-seeds = [
-    "tor://g7fxelebievvpr27w7gt24lflptpw3jeeuvafovgliq5utdst6xyruyd.onion:9601",
-    "tor://yvklzjnfmwxhyodhrkpomawjcdvcaushsj6torjz2gyd7e25f3gfunyd.onion:9601",
-]
-```
-
-#### UPnP
-
-UPnP (Universal Plug and Play) automatically configures port forwarding
-on compatible routers using the UPnP IGD protocol. This is particularly
-useful for home users behind NAT who cannot manually configure port
-forwarding, or mobile devices which often roam between different networks.
-
-> Note:
->
-> UPnP IGD support must be enabled at compile time using the
-> `upnp-igd` feature flag. For example, when compiling `darkirc`:
->
-> ```shell
-> % cp bin/darkirc/Cargo.toml bin/darkirc/Cargo.toml.back
-> % sed -i -e 's|default = \[\]|default = ["upnp-igd"]|' bin/darkirc/Cargo.toml
-> % make darkirc
-> % mv bin/darkirc/Cargo.toml.back bin/darkirc/Cargo.toml
-> ```
-
-To enable UPnP IGD just add `?upnp_igd=true` to your inbound address.
-UPnP IGD will also auto-discover your external address.
-
-```toml
-[net.profiles."tcp+tls"]
-## P2P accept addresses with UPnP enabled
 inbound = ["tcp+tls://0.0.0.0:9600?upnp_igd=true"]
-
-## Seed nodes to connect to
-seeds = ["tcp+tls://lilith1.dark.fi:9600"]
 ```
 
-DarkFi's UPnP implementation supports these optional configuration parameters:
+Optional URL parameters include `upnp_igd_lease_duration`,
+`upnp_igd_timeout`, `upnp_igd_description`, and
+`upnp_igd_ext_addr_refresh`. Verify the mapping from another network; a log
+message or local router entry alone does not prove reachability.
 
-- `upnp_igd_lease_duration` - Port mapping lease duration in seconds
-- `upnp_igd_timeout` - Gateway discovery timeout in seconds
-- `upnp_igd_description` - Description shown in router admin panel
-- `upnp_igd_ext_addr_refresh` - External address refresh interval in seconds
+## Verify the node
 
-Example with custom options:
-
-```toml
-inbound = ["tcp+tls://0.0.0.0:9600?upnp_igd=true&upnp_igd_lease_duration=600&upnp_igd_description=MyDarkFiNode"]
-```
-
-> Tip:
->
-> When running multiple applications or nodes, use different `upnp_igd_description`
-> values for each one. This makes it easier to identify them in your router's
-> admin panel.
-
-> Tip:
->
-> When possible verify that UPnP is enabled in your router's admin panel.
+Restart DarkIRC, wait for Event Graph sync, and inspect sessions with `dnet`
+after enabling `p2p.get_info` as described in the
+[dnet guide](../../learn/dchat/network-tools/using-dnet.md).
+Test every advertised URL from a separate network using the
+[ping utility](../network-troubleshooting.md#test-an-endpoint). An archive is
+useful to peers only while it remains reachable and retains complete message
+bodies (`fast_mode = false`).

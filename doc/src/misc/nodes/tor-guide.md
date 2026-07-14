@@ -1,173 +1,93 @@
-# Set up a Tor-enabled node
+# Run a Tor-enabled DarkIRC node
 
-_To connect to Tor, we use [Arti](https://gitlab.torproject.org/tpo/core/arti). 
-Arti is an experimental project with incomplete security features.
-See Arti's [roadmap](https://gitlab.torproject.org/tpo/core/arti#roadmap)
-for more  information._
+DarkFi includes an Arti-based `tor` transport. It can make outbound onion
+connections without a separately running Tor daemon. Tor hides the clearnet
+address used to reach DarkIRC peers, subject to Tor's own threat model; it does
+not encrypt public channel contents or make chat metadata unlinkable.
 
-<u><b>Note</b></u>: This page is a general guide for `tor` nodes in the
-DarkFi ecosystem and is applicable to other apps such as `taud` and
-`darkfid`. We use `darkirc` as our main example throughout this guide.
-If you're using another app, the network configurations remain the same
-except for the seed nodes (ports) you connect to.
+## Outbound-only Tor node
 
-## Generating configuration files
-
-For configuration file generation, see [Common Setup Steps](public-guide.md#generating-configuration-files). 
-
-## Configure network settings
-
-Modify the network settings located in the `~/.config/darkfi` directory.
-This  configuration allows your node to send and receive traffic only
-via Tor.
-
-<u><b>Note</b></u>: As you modify the file, if you notice some settings
-are missing, simply add them. Some settings may be commented-out by
-default.
-
-### Outbound node settings
-
-These outbound node settings for your `tor` node configuration is only
-for connecting to the network. You will not advertise an external
-address.
+The generated DarkIRC configuration uses this mode by default:
 
 ```toml
-## connection settings
-outbound_peer_discovery_cooloff_time = 60
-
-## Outbound connection slots
-outbound_connections = 8
-
-## Whitelisted transports for outbound connections
+[net]
 active_profiles = ["tor"]
 
-## Transports to be mixed
-mixed_profiles = []
-
 [net.profiles."tor"]
-## Seed nodes to connect to
 seeds = [
-    "tor://g7fxelebievvpr27w7gt24lflptpw3jeeuvafovgliq5utdst6xyruyd.onion:9601",
-    "tor://yvklzjnfmwxhyodhrkpomawjcdvcaushsj6torjz2gyd7e25f3gfunyd.onion:9601",
+    "tor://g7fxelebievvpr27w7gt24lflptpw3jeeuvafovgliq5utdst6xyruyd.onion:9600",
+    "tor://yvklzjnfmwxhyodhrkpomawjcdvcaushsj6torjz2gyd7e25f3gfunyd.onion:9600",
 ]
 ```
 
-#### SOCKS5 proxy node settings
-If we want to route all our connections through the `SOCKS5` proxy
-provided by Tor, we can add the `socks5` and `socks5+tls` profiles
-to `active_profiles` and enable transport mixing by adding `tor` and
-`tcp+tls` to `mixed_profiles`. Enabling transport mixing helps us
-connect to `tor` and `tcp+tls` endpoints through our SOCKS5 proxy.
+No `inbound` or `external_addrs` setting is needed for an outbound-only node.
 
-When using `Whonix`, this configuration helps prevent the `Tor over
-Tor` issue. Ensure that the `tor_socks5_proxy` field is correctly set.
+## Inbound Tor node
 
-<u><b>Note</b></u>: With this setup, our node will connect to both Tor
-and clearnet nodes through the Socks5 proxy.
+Inbound service improves network capacity. Choose an ephemeral Arti service or
+a static onion service.
+
+### Ephemeral Arti service
+
+Add a `tor://` listener to the Tor profile:
 
 ```toml
-## Whitelisted transports for outbound connections
-active_profiles = ["socks5", "socks5+tls", "tcp+tls", "tor"]
-## Transports to be mixed
-mixed_profiles = ["tor", "tcp+tls"]
-## Tor Socks5 proxy
-tor_socks5_proxy = "socks5://127.0.0.1:9050"
-```
-
-If you prefer to connect only to `tor` nodes, modify the above config
-like below:
-
-```toml
-## Whitelisted transports for outbound connections
-active_profiles = ["socks5", "tor"]
-## Transports to be mixed
-mixed_profiles = ["tor"]
-```
-
-### Inbound node settings
-
-With these settings your node becomes a Tor inbound node. The `inbound` 
-settings are optional, but enabling them will increase the strength and 
-reliability of the network.
-
-There are currently two methods of doing this, both documented below.
-The Arti method allows you to create ephemeral onions that will
-change each time you restart your node. Alternatively you can make a
-non-ephemeral service using the torrc method. In this case the address
-always stays the same, which is useful for nodes such as seed nodes that
-need to be found on the same onion adddress.
-
-#### Using Arti
-
-We can use Arti to create an ephemeral onion on each startup that we
-will receive Inbound connections on. Set this in your config file with
-a port number of your choice:
-
-```
+[net.profiles."tor"]
 inbound = ["tor://127.0.0.1:9601"]
 ```
 
-On running your node, you should get a message like this:
+Arti creates and advertises an ephemeral onion service. Do not add a guessed
+`external_addrs` entry. The onion identity is not intended to survive service
+recreation, so this mode is unsuitable for a stable seed address.
 
-```
-[INFO] [P2P] Starting Inbound session #0 on tor://127.0.0.1:9601/
-```
+### Static onion service
 
-This means your ephemeral onion is active and awaiting connections. 
+For a persistent onion identity, install and configure a Tor daemon according
+to the current Tor documentation. Map public onion port 9600 to a loopback
+listener, for example in `torrc`:
 
-#### Using torrc
-
-Alternatively, we can set up a static Tor daemon and create a hidden
-service.  The following instructions should work on any Linux system.
-
-First, you must install [Tor](https://www.torproject.org/). It can
-usually be installed with your package manager. For example on an `apt`
-based system we can run:
-
-```
-% apt install tor
-```
-
-This will install Tor. Now in `/etc/tor/torrc` we can set up the hidden
-service. For hosting an anonymous `darkirc` node, set up the following
-lines in the file:
-
-```
+```text
 HiddenServiceDir /var/lib/tor/darkfi_darkirc
-HiddenServicePort 9601 127.0.0.1:9601
+HiddenServicePort 9600 127.0.0.1:9601
 ```
 
-Then restart Tor:
-
-```
-% /etc/init.d/tor restart
-```
-
-Find the hostname of your hidden service from the directory:
-
-```
-% cat /var/lib/tor/darkfi_darkirc/hostname
-```
-
-Note your `.onion` address and the ports you used while setting up the
-hidden service, and add the following settings to your configuration file:
+After Tor creates the service, read its hostname using the permissions of the
+Tor service account. Configure DarkIRC to accept the forwarded TCP connection
+and advertise the onion address:
 
 ```toml
-## Inbound connection slots
+[net]
+active_profiles = ["tor"]
 inbound_connections = 64
 
 [net.profiles."tor"]
-## Addresses we want to advertise to peers
-external_addrs = ["tor://youraddress.onion:9601"]
-
-## P2P accept addresses
 inbound = ["tcp://127.0.0.1:9601"]
+external_addrs = ["tor://YOUR_ONION_ADDRESS.onion:9600"]
 ```
 
-## Connect and test your node
+Back up the Tor hidden-service keys securely if the stable onion identity must
+survive migration.
 
-See [Common Setup Steps → Connect and test your node](public-guide.md#connect-and-test-your-node).
+## Use an external Tor SOCKS5 proxy
 
-## Troubleshooting
+This is an alternative to direct Arti onion dialing. Put the proxy address in
+each explicit SOCKS endpoint:
 
-See [Common Setup Steps → Troubleshooting](public-guide.md#troubleshooting).
+```toml
+[net]
+active_profiles = ["socks5"]
+
+[net.profiles."socks5"]
+seeds = [
+    "socks5://127.0.0.1:9050/g7fxelebievvpr27w7gt24lflptpw3jeeuvafovgliq5utdst6xyruyd.onion:9600",
+    "socks5://127.0.0.1:9050/yvklzjnfmwxhyodhrkpomawjcdvcaushsj6torjz2gyd7e25f3gfunyd.onion:9600",
+]
+```
+
+Confirm the proxy is listening before starting DarkIRC. Avoid accidentally
+wrapping a Tor connection in another Tor connection when the host environment
+already transparently routes traffic through Tor.
+
+Restart DarkIRC after profile changes, wait for DAG sync, and use the
+[troubleshooting guide](../network-troubleshooting.md#tor-connections) if onion
+connections fail.

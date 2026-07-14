@@ -26,8 +26,6 @@ BINS = \
 	darkfid \
 	drk \
 	darkirc \
-	genev \
-	genevd \
 	lilith \
 	taud \
 	vanityaddr \
@@ -68,20 +66,6 @@ drk: contracts
 
 darkirc: $(PROOFS_BIN) zkas
 	$(MAKE) -C bin/$@ \
-		PREFIX="$(PREFIX)" \
-		CARGO="$(CARGO)" \
-		RUST_TARGET="$(RUST_TARGET)" \
-		RUSTFLAGS="$(RUSTFLAGS)"
-
-genev: $(PROOFS_BIN)
-	$(MAKE) -C bin/genev/genev-cli \
-		PREFIX="$(PREFIX)" \
-		CARGO="$(CARGO)" \
-		RUST_TARGET="$(RUST_TARGET)" \
-		RUSTFLAGS="$(RUSTFLAGS)"
-
-genevd: $(PROOFS_BIN)
-	$(MAKE) -C bin/genev/genevd \
 		PREFIX="$(PREFIX)" \
 		CARGO="$(CARGO)" \
 		RUST_TARGET="$(RUST_TARGET)" \
@@ -179,8 +163,6 @@ clean:
 	$(MAKE) -C bin/darkfid clean
 	$(MAKE) -C bin/drk clean
 	$(MAKE) -C bin/darkirc clean
-	$(MAKE) -C bin/genev/genev-cli clean
-	$(MAKE) -C bin/genev/genevd clean
 	$(MAKE) -C bin/lilith clean
 	$(MAKE) -C bin/tau/taud clean
 	$(MAKE) -C bin/vanityaddr clean

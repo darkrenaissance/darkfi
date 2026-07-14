@@ -17,7 +17,7 @@
  */
 
 //! Debug Event Graph (DEG) types for inspecting protocol-level
-//! message flow. When DEG is enabled on an [`EventGraph`] instance,
+//! message flow. When DEG is enabled on an [`crate::event_graph::EventGraph`] instance,
 //! every sent/received P2P message produces a [`DegEvent`] that can
 //! be observed through the DEG publisher.
 

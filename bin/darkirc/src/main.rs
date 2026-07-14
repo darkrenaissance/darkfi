@@ -102,9 +102,17 @@ fn sled_cache_capacity_bytes(name: &str, cache_mb: u64) -> Result<u64> {
         .ok_or_else(|| Error::Custom(format!("{name} overflows bytes")))
 }
 
-fn validate_history_window(dags_count: usize, history_retention_dags: usize) -> Result<()> {
+fn history_retention_limit(
+    dags_count: usize,
+    history_retention_dags: usize,
+    archive_mode: bool,
+) -> Result<Option<usize>> {
     if dags_count == 0 {
         return Err(Error::Custom("dags_count must be greater than 0".to_string()))
+    }
+
+    if archive_mode {
+        return Ok(None)
     }
 
     if history_retention_dags == 0 {
@@ -118,7 +126,7 @@ fn validate_history_window(dags_count: usize, history_retention_dags: usize) -> 
         )))
     }
 
-    Ok(())
+    Ok(Some(history_retention_dags))
 }
 
 fn panic_hook(panic_info: &std::panic::PanicHookInfo) {
@@ -158,14 +166,18 @@ struct Args {
     irc_tls_secret: Option<String>,
 
     /// How many recent DAGs to sync at startup.
-    #[structopt(long, default_value = "8")]
+    #[structopt(long, default_value = "24")]
     dags_count: usize,
 
+    #[structopt(long)]
+    /// Retain every rotating DAG instead of pruning old history
+    archive_mode: bool,
+
     #[structopt(long, default_value = "24")]
-    /// How many rotating DAGs to retain locally
+    /// How many rotating DAGs to retain locally in normal mode
     history_retention_dags: usize,
 
-    #[structopt(long, default_value = "~/.local/share/darkfi/darkirc_db")]
+    #[structopt(long, default_value = "~/.local/share/darkfi/darkirc/darkirc_db")]
     /// Datastore (DB) path
     datastore: String,
 
@@ -173,7 +185,7 @@ struct Args {
     /// Sled cache capacity for the datastore, in MiB
     sled_cache_mb: u64,
 
-    #[structopt(long, default_value = "~/.local/share/darkfi/darkirc_zk_keys")]
+    #[structopt(long, default_value = "~/.local/share/darkfi/darkirc/zk_keys")]
     /// Datastore path for RLN proving and verifying keys
     zk_key_datastore: String,
 
@@ -185,7 +197,7 @@ struct Args {
     /// Enable RLN proof generation and verification
     rln_enabled: Option<bool>,
 
-    #[structopt(short, long, default_value = "~/.local/share/darkfi/replayed_darkirc_db")]
+    #[structopt(short, long, default_value = "~/.local/share/darkfi/darkirc/replayed_darkirc_db")]
     /// Replay logs (DB) path
     replay_datastore: String,
 
@@ -489,11 +501,19 @@ pub const DARKIRC_GENESIS_COMMITMENTS_REPR: &[[u8; 32]] = &[
     };
     let replay_mode = args.replay_mode;
 
-    validate_history_window(args.dags_count, args.history_retention_dags)?;
-    info!(
-        "Retaining {} DAG(s) of local history; syncing {} DAG(s) at startup",
-        args.history_retention_dags, args.dags_count,
-    );
+    let max_dags =
+        history_retention_limit(args.dags_count, args.history_retention_dags, args.archive_mode)?;
+    if let Some(retention) = max_dags {
+        info!(
+            "Retaining {retention} DAG(s) of local history; syncing {} DAG(s) at startup",
+            args.dags_count,
+        );
+    } else {
+        info!(
+            "Archive mode enabled; retaining all local DAGs and syncing {} recent DAG(s) at startup",
+            args.dags_count,
+        );
+    }
 
     let sled_cache_capacity = sled_cache_capacity_bytes("sled_cache_mb", args.sled_cache_mb)?;
     info!("Instantiating event DAG with {} MiB sled cache", args.sled_cache_mb);
@@ -551,7 +571,7 @@ pub const DARKIRC_GENESIS_COMMITMENTS_REPR: &[[u8; 32]] = &[
         } else {
             Vec::new()
         },
-        max_dags: Some(args.history_retention_dags),
+        max_dags,
     };
     let event_graph = match if let Some(zk_key_db) = zk_key_db.clone() {
         EventGraph::new_with_zk_key_db(
@@ -979,7 +999,7 @@ mod tests {
     use darkfi::event_graph::rln::MAX_MSG_LIMIT;
     use rand::rngs::OsRng;
 
-    use super::{sled_cache_capacity_bytes, validate_history_window, RlnIdentity, BYTES_PER_MIB};
+    use super::{history_retention_limit, sled_cache_capacity_bytes, RlnIdentity, BYTES_PER_MIB};
 
     #[test]
     fn generated_rln_identity_limit_matches_genesis_budget() {
@@ -1002,21 +1022,26 @@ mod tests {
 
     #[test]
     fn history_window_rejects_zero_startup_sync() {
-        assert!(validate_history_window(0, 24).is_err());
+        assert!(history_retention_limit(0, 24, false).is_err());
     }
 
     #[test]
     fn history_window_rejects_zero_retention() {
-        assert!(validate_history_window(1, 0).is_err());
+        assert!(history_retention_limit(1, 0, false).is_err());
     }
 
     #[test]
     fn history_window_rejects_sync_beyond_retention() {
-        assert!(validate_history_window(25, 24).is_err());
+        assert!(history_retention_limit(25, 24, false).is_err());
     }
 
     #[test]
     fn history_window_allows_sync_inside_retention() {
-        assert!(validate_history_window(48, 168).is_ok());
+        assert_eq!(history_retention_limit(48, 168, false).unwrap(), Some(168));
+    }
+
+    #[test]
+    fn archive_mode_disables_retention_limit() {
+        assert_eq!(history_retention_limit(24, 0, true).unwrap(), None);
     }
 }

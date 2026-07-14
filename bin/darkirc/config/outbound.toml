@@ -2,7 +2,7 @@
 irc_listen = "tcp://127.0.0.1:11066"
 
 ## Sets Datastore Path
-datastore = "~/.config/darkfi/darkirc-outbound"
+datastore = "~/.local/share/darkfi/darkirc/localnet/outbound/darkirc_db"
 
 ## JSON-RPC settings
 [rpc]
@@ -16,6 +16,13 @@ rpc_disabled_methods = ["p2p.get_info"]
 [net]
 # Magic Bytes to distinguish the p2p network
 magic_bytes = [251, 229, 199, 181]
+
+## Permit loopback P2P addresses for this development network
+localnet = true
+
+## Dedicated P2P state
+p2p_datastore = "~/.local/share/darkfi/darkirc/localnet/outbound/p2p"
+hostlist = "~/.local/share/darkfi/darkirc/localnet/outbound/p2p_hostlist.tsv"
 
 ## Connection slots
 outbound_connections = 5
@@ -31,7 +38,7 @@ seeds = ["tcp://127.0.0.1:11001"]
 # inbound=["tcp://127.0.0.1:11002"]
 
 ## P2P external addresses
-#external_addr=["tcp://127.0.0.1:11002"]
+#external_addrs = ["tcp://127.0.0.1:11002"]
 
 ## Peers to connect to
-#peers=["tcp://127.0.0.1:11003"]
+peers = ["tcp://127.0.0.1:11002"]

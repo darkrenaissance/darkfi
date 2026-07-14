@@ -308,7 +308,7 @@ impl RangeCursor {
 
 /// Bidirectional content pagination request.
 ///
-/// The responder uses its [`TimeIndex`] to serve events after the exclusive
+/// The responder uses its [`crate::event_graph::TimeIndex`] to serve events after the exclusive
 /// cursor in the requested direction, up to `limit` events. This is the
 /// primary message for lazy content fetching - the requester already has
 /// headers (DAG structure) and wants bodies.
@@ -344,7 +344,7 @@ impl_p2p_message!(RangeRep, "EventGraph::RangeRep", 0, 0, DEFAULT_METERING_CONFI
 ///
 /// * `handle_event_put` - real-time ingestion of new events,
 ///   including RLN proof verification and recursive parent fetching
-///   (bounded by [`MAX_PARENT_FETCH_DEPTH`]).
+///   (bounded by `MAX_PARENT_FETCH_DEPTH`).
 /// * `handle_static_put` - RLN registration and slashing events.
 /// * `handle_event_req` - serving event content to peers (only
 ///   for IDs we've previously broadcast, to prevent DAG enumeration).
@@ -356,7 +356,7 @@ impl_p2p_message!(RangeRep, "EventGraph::RangeRep", 0, 0, DEFAULT_METERING_CONFI
 ///   relay through a bounded channel with adaptive sleep.
 ///
 /// RLN share metadata is **not** stored on this struct - it lives on
-/// [`EventGraph::rln_state`] so that duplicate/reuse detection works
+/// [`crate::event_graph::EventGraph::rln_state`] so that duplicate/reuse detection works
 /// across all peer connections, not just the one that relayed a
 /// particular event.
 pub struct ProtocolEventGraph {
@@ -712,7 +712,7 @@ impl ProtocolEventGraph {
     /// should be rejected (proof invalid, duplicate, or slashable).
     ///
     /// The actual verification logic lives on
-    /// [`EventGraph::rln_verify_signal`] - this method is a thin
+    /// [`crate::event_graph::EventGraph::rln_verify_signal`] - this method is a thin
     /// wrapper that translates the [`rln::SignalCheck`] outcome
     /// into "accept or reject" plus the slash side effect.
     async fn verify_rln_signal(&self, event: &Event, blob: &[u8]) -> bool {

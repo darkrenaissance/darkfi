@@ -3,7 +3,8 @@
 ## What is DarkFi?
 DarkFi is an ecosystem of anonymous applications. It consists of a layer 1 
 blockchain, a communications service, and a task management service. The
-communications service `darkirc` is an anonymous IRC server. `tau` is a task 
+communications service `darkirc` is a peer-to-peer chat daemon with a local IRC
+interface and optional anonymity transports. `tau` is a task
 management app that gives users the ability to collaborate with others including 
 assigning and syncing tasks across different workspaces. DarkFi is built 
 with strong privacy, censorship-resistance, and free (as in freedom) and open 
@@ -51,8 +52,8 @@ general-purpose CPUs, and is also used by Monero. You can find more information
 about the DarkFi consensus process [here](../arch/consensus.md).
 
 ## How can I chat with DarkFi devs?
-Join [DarkIRC](darkirc/darkirc.md), our peer-to-peer anonymous implementation of 
-an IRC server. There are weekly `#dev` meetings on Mondays.
+Join [DarkIRC](darkirc/darkirc.md), our peer-to-peer chat daemon with a local IRC
+interface. There are weekly `#dev` meetings on Mondays.
 
 ## How can I contribute to the project or build something on top of DarkFi?
 You can visit [here](../dev/contrib/contrib.md)
@@ -68,4 +69,4 @@ If you are having trouble connecting DarkFi applications, please refer to
 Follow the [testnet guide](../testnet/node.md).
 
 ## How can I run my DarkFi nodes over Tor?
-You can setup a Tor enabled node [here](nodes/tor-guide.html).
+You can set up a Tor-enabled node [here](nodes/tor-guide.md).

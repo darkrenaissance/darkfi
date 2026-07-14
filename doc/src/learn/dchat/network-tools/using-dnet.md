@@ -17,8 +17,7 @@ engine that makes everything run.
 
 ### Using a venv
 
-Dnet requires Python 3.12.0. Make sure Python is installed and on the
-latest version.
+Dnet currently requires Python 3.14. Run these commands from `bin/dnet`.
 
 Depending on your setup you may need to install a virtual environment
 for Python. Do so as follows:
@@ -37,7 +36,7 @@ Then install the requirements:
 Run dnet:
 
 ```shell
-% python main.py
+% python dnet
 ```
 
 You will need to reactivate the venv in your current terminal session
@@ -53,19 +52,21 @@ If you don't require a venv, install the requirements and run dnet as follows:
 
 ```shell
 % pip install -r requirements.txt
-% python main.py
+% python dnet
 ```
 
 ## Config
 
-On first run, `dnet` will create a config file in the config directory
-specific to your operating system.
+On first run, `dnet` creates `dnet_config.toml` in DarkFi's platform-specific
+configuration directory (`~/.config/darkfi/` on Linux).
 
 To use `dnet` you will need to open the config file and modify it. Enter
 the RPC ports of the nodes you want to connect to and title them as you
 see fit. The default config file uses localhost, but you can replace
 this with hostnames or external IP addresses. You must also specify
-whether it is a `NORMAL` or a `LILITH` node.
+whether it is a `NORMAL` or a `LILITH` node. DarkIRC's default RPC port is
+9605. Remove `"p2p.get_info"` from DarkIRC's `rpc_disabled_methods` and restart
+the daemon before connecting dnet.
 
 ## Usage
 

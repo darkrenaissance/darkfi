@@ -1,432 +1,227 @@
-# DarkIRC: Strong Anonymity P2P Chat
+# DarkIRC
 
-In DarkFi, we organize our communication using resilient and
-censorship-resistant infrastructure. For chatting, `darkirc` is a
-peer-to-peer implementation of an IRC server in which any user can
-participate anonymously using any IRC frontend and by running the
-IRC daemon. `darkirc` uses the DarkFi P2P engine to synchronize chats
-between hosts.
+DarkIRC is DarkFi's peer-to-peer chat daemon. It exposes a local IRC server so
+standard IRC clients can use it, while DarkFi's P2P network and Event Graph
+synchronize messages between DarkIRC nodes.
 
-## Benefits
+DarkIRC implements a practical subset of IRC rather than the complete IRC
+protocol. Public channel messages are public. A configured channel secret or
+contact keypair encrypts the corresponding message fields with
+`crypto_box::ChaChaBox`, but DarkIRC does not implement the Signal protocol.
 
-* Encrypted using same algorithms as Signal.
-* There are no identities. You cannot see who is in the chat.
-* Completely anonymous. You can rename yourself easily by using the
-  command `/nick foo`. This means all messages are unlinkable.
-* God-fearing based CLI without soy gui shit.
-* p2p decentralized.
-* Optionally run it over Tor or Nym (soon) for network level anonymity.
+Nicknames are included in message events and may be changed at any time. They
+are not proof of a real-world identity. Optional NickServ/RLN identities are a
+separate feature and RLN is disabled by default.
 
-Therefore this is the world's most strongly anonymous chat in existence.
-Nothing else exists like it.
+## Build and install
 
-<u><b>Note</b></u>: `darkirc` follows IRC's [RFC2812](https://www.rfc-editor.org/rfc/rfc2812)
-
-## Building
-
-Follow the instructions in the [README](../../index.html#build) to ensure
-you have all the necessary dependencies. After that, in repo root folder:
+Follow the repository [build prerequisites](../../README.md#build), then build
+DarkIRC from the repository root:
 
 ```shell
-% git checkout a05956d412a091e8b54c1cd4f4264c33b941203d
 % make darkirc
 ```
 
-## Installation (Optional)
-
-It is adviced to use `darkirc` directly from the repo root folder.
-Install system wide only if you can make sure there would be no
-multiple darkirc versions installed:
+The binary is written to `./darkirc`. To install it under
+`$HOME/.cargo/bin`, use the DarkIRC makefile:
 
 ```shell
-% sudo make install darkirc
+% make -C bin/darkirc install
 ```
 
-You have to reinstall `darkirc` on new versions manually.
+Run that command again after building a newer version.
 
-## Building for Android
+### Android
 
-This is for Android 64 bit (which is most phones).
-You will compile darkirc on your computer then copy it to your phone
-and run it in Termux (a command-line terminal for Android).
+The Android container target builds a 64-bit ARM binary suitable for running
+inside Termux:
 
-We will use podman which is a secure replacement for docker. However if you
-prefer to use docker just be aware of
-[the security risks](https://docs.docker.com/engine/security/#docker-daemon-attack-surface).
-Podman is a drop in replacement.
+```shell
+% make -C bin/darkirc podman-android
+```
 
-1. Setup podman on your computer which may look like:
-    1. Install podman package
-    2. Run the podman daemon service under your local user
-        1. Use the command `podman system service`.
-        2. For Docker it's more complicated, see [rootless mode](https://docs.docker.com/engine/security/rootless/).
-2. Run `cd bin/darkirc/ && make podman-android`. The resulting file 
-    will be called `darkirc.aarch64-android` (it might be needed to 
-    make the file executable `chmod +x darkirc.aarch64-android`). 
-    Copy this to your phone.
-3. Install Termux and RevolutionIRC on F-Droid.
-4. Run `termux-setup-storage` and allow access to external storage.
-   Now you can access the phone storage from `/sdcard/` and copy the file
-   into the Termux home.
-5. Run `termux-wake-lock`. This stops Android suspending the daemon.
-6. Run the daemon. You can open new Termux sessions by swiping from
-   the left to bring up the sidebar.
-7. Connect the RevolutionIRC frontend by adding a new server:
-    1. Write a name for the server (i.g `darkirc`).
-    2. Set the server address and port (if using default config these 
-        should be 127.0.0.1:6667).
-    3. Untick `Use SSL/TLS` option.
-    4. Save and connect.
+The result is `bin/darkirc/darkirc.aarch64-android`. Copy it to the phone,
+make it executable, and run it in Termux. Keep the process awake if Android
+would otherwise suspend it, then connect an Android IRC client to
+`127.0.0.1:6667` without IRC TLS. This local IRC connection is distinct from
+the encrypted P2P transports used between DarkIRC nodes.
 
-## Logs
+## Network privacy and message privacy
 
-The public channels have [logs available](https://agorism.dev/log/), and
-additionally there is a mirror on telegram @darkfi_darkirc channel.
-You can also message @darkirc_bot with "sub" to avoid doxxing your username.
-Use "unsub" to unsubscribe.
+These are separate concerns:
 
-## Network-level privacy
+- Direct P2P peers can observe the network address used for a connection.
+- The generated configuration enables the built-in `tor` profile by default.
+  See the [Tor guide](../nodes/tor-guide.md) before changing transports.
+- Nym can be used as an outbound SOCKS5 transport; see the
+  [Nym guide](../nodes/nym-guide.md).
+- Public channels store their channel name, nickname, and message as
+  plaintext Event Graph content.
+- A channel is encrypted only when every participant configures the same
+  channel `secret`. Contact DMs require the keypairs described in the
+  [private-message guide](private_message.md).
 
-Nodes have knowledge of their peers, including the IP addresses of
-connected hosts. We suggest configuring your instance to use a different
-transport so it is not connected via clearnet.
+Transport anonymity depends on the selected network and its threat model. It
+does not make messages unlinkable by itself, and encrypted content can still
+expose metadata through timing, participation, or the IRC client.
 
-DarkFi supports the use of pluggable transports, including [Tor](../nodes/tor-guide.md#configure-network-settings)
-and Nym, to provide network-level privacy. As long as there are live seed
-nodes configured to support a Tor or Nym connection, users can connect to
-`darkirc` and benefit from the protections offered by these protocols.
+## Choose a node mode
 
-Other approaches include connecting via a cloud server or VPN. Research
-the risks involved in these methods before connecting.
+DarkIRC rotates its Event Graph once per hour. The default normal node syncs
+and retains 24 DAGs, a rolling full-day history window.
 
-## Usage (DarkFi Network)
+- [Run a normal node](normal-node.md) for chatting and ordinary P2P
+  participation. Old rotating DAGs are pruned.
+- [Run an archive node](archive-node.md) to retain every rotating DAG received
+  after the archive starts and serve that history to peers.
 
-Upon compiling `darkirc` as described above, the preconfigured defaults
-will allow you to connect to the network and start chatting with the
-rest of the DarkFi community.
+`dags_count` controls startup and reconnect sync depth. `archive_mode` controls
+retention. When archive mode is selected, `history_retention_dags` is ignored,
+but `dags_count` still determines how many recent DAGs are requested during a
+sync. The node-mode guides explain the bootstrap implications.
 
-First, try to start `darkirc` from your command-line so it can spawn its
-configuration file in place. The preconfigured defaults will autojoin
-you to several default channels one of which is `#dev` where we have 
-weekly meetings, and where the community is most active and talks 
-about DarkFi development.
+## First run
+
+Start DarkIRC from the repository root:
 
 ```shell
 % ./darkirc
 ```
 
-`darkirc` will create a configuration file `darkirc_config.toml` by 
-default in `~/.config/darkfi/` you can review and potentially edit. It 
-might be useful if you want to add other channels you want to autojoin 
-(like `#philosophy` and `#memes`), or if you want to set a shared 
-secret for some channel in order for it to be encrypted between its 
-participants. We strongly suggest to make sure you are using the
-desired network transport before proceeding.
+On its first run it creates
+`~/.config/darkfi/darkirc_config.toml` and continues starting. On macOS the
+configuration directory is `~/Library/Application Support/darkfi/`.
 
-When done, you can run `darkirc` for the second time in order for it to
-connect to the network and start participating in the P2P protocol:
+The default runtime state is namespaced under
+`~/.local/share/darkfi/darkirc/`:
 
-```shell
-% ./darkirc
+| Setting | Default |
+| --- | --- |
+| `datastore` | `~/.local/share/darkfi/darkirc/darkirc_db` |
+| `zk_key_datastore` | `~/.local/share/darkfi/darkirc/zk_keys` |
+| `replay_datastore` | `~/.local/share/darkfi/darkirc/replayed_darkirc_db` |
+| `net.p2p_datastore` | `~/.local/share/darkfi/darkirc/p2p` |
+| `net.hostlist` | `~/.local/share/darkfi/darkirc/p2p_hostlist.tsv` |
+
+Review the generated `[net]` settings before connecting. Stop the daemon with
+`Ctrl-C`, edit the file, and restart it when changing node mode, storage, RPC,
+or P2P settings. With the defaults, startup sync completes with:
+
+```text
+Event DAG synced successfully (full mode, 24 dag(s))
 ```
 
-The daemon will start conncting to peers and sync its database, you'll 
-know it's finished syncing when you see this log message:
-```shell
-% [EVENTGRAPH] DAG synced successfully!
-```
+## Connect an IRC client
 
-Now connect your favorite IRC client and it should replay missed 
-messages that have been sent by people.
+DarkIRC listens on `tcp://127.0.0.1:6667` by default. For WeeChat, add the
+local server after starting the client:
 
-
-## Clients
-
-### Weechat
-
-In this section, we'll briefly cover how to use the [Weechat IRC
-client](https://github.com/weechat/weechat) to connect and chat with
-`darkirc`.
-
-Normally, you should be able to install weechat using your
-distribution's package manager. If not, have a look at the weechat
-[git repository](https://github.com/weechat/weechat) for instructions
-on how to install it on your computer.
-
-Once installed, we can configure a new server which will represent our
-`darkirc` instance. First, start weechat, and in its window - run the
-following commands (there is an assumption that `irc_listen` in the
-`darkirc` config file is set to `127.0.0.1:6667`):
-
-```
+```text
 /server add darkfi localhost/6667 -notls -autoconnect
 /save
-/quit
+/connect darkfi
 ```
 
-This will set up the server, save the settings, and exit weechat.
-You are now ready to begin using the chat. Simply start weechat
-and everything should work.
+The displayed nick list is reconstructed from messages the local node has
+seen; it is not a live global presence list. Change nickname with `/nick foo`.
 
-When you join, you should see users nicknames on the right panel.
-those nicknames are users who previously sent messages and you got 
-those messages as history when you synced.
-Normally nicks would not be shown since there is no concept of 
-nicknames or registration on this p2p anonymous chat.
+After editing only `autojoin`, `[channel.*]`, or `[contact.*]`, reload those
+settings without restarting:
 
-You can change your nickname using `/nick foo`, and navigate channels
-using F5/F6 or ALT+X where X is the channel number displayed.
-You can also use ALT+up/down.
-
-Whenever you edit `darkirc_config.toml` file and if you have your 
-`darkirc` daemon running you don't need to restart it to reload the 
-config, you just need to send a `rehash` command from IRC client for 
-the changes to reflect, like so:
-
-```
+```text
 /rehash
 ```
 
-## Usage (Local Deployment)
+All other configuration changes require a daemon restart.
 
-These steps below are only for developers who wish to make a testing
-deployment. The previous sections are sufficient to join the chat.
+## Encrypted channels
 
-### Seed Node
+Generate a shared channel secret:
 
-First you must run a seed node. The seed node is a static host which
-nodes can connect to when they first connect to the network. The
-`seed_session` simply connects to a seed node and runs `protocol_seed`,
-which requests a list of addresses from the seed node and disconnects
-straight after receiving them.
+```shell
+% ./darkirc --gen-channel-secret
+```
 
-The first time you run the program, a config file will be created in
-`~/.config/darkfi` if you are using Linux or in 
-`~/Library/Application Support/darkfi/` on MacOS. 
-You must specify an inbound accept address in your config file to configure a seed node:
+Configure the exact same secret on every participant's node:
 
 ```toml
-## P2P accept addresses
-inbound=["127.0.0.1:9600"]
+[channel."#project"]
+secret = "BASE58_CHANNEL_SECRET"
+topic = "Private project channel"
 ```
 
-Note that the above config doesn't specify an external address since
-the seed node shouldn't be advertised in the list of connectable
-nodes. The seed node does not participate as a normal node in the
-p2p network. It simply allows new nodes to discover other nodes in
-the network during the bootstrapping phase.
+Exchange this secret over an authenticated, confidential channel. Anyone with
+the secret can read all encrypted messages for that channel that they obtain;
+there is no per-member key rotation or forward secrecy.
 
-### Inbound Node
+## Local two-node deployment
 
-This is a node accepting inbound connections on the network but which
-is not making any outbound connections.
-
-The external addresses are important and must be correct.
-
-To run an inbound node, your config file must contain the following
-info:
-		
-```toml
-## P2P accept addresses
-inbound=["127.0.0.1:9600"]
-
-## P2P external addresses
-external_addr=["127.0.0.1:9600"]
-
-## Seed nodes to connect to 
-seeds=["127.0.0.1:9601"]
-```
-### Outbound Node
-
-This is a node which has 8 outbound connection slots and no inbound
-connections.  This means the node has 8 slots which will actively
-search for unique nodes to connect to in the p2p network.
-
-In your config file:
+For development, use two independent configurations and datastores. The first
+node listens on `127.0.0.1:9700`:
 
 ```toml
-## Connection slots
-outbound_connections=8
+irc_listen = "tcp://127.0.0.1:6667"
+datastore = "~/.local/share/darkfi/darkirc/localnet/a/darkirc_db"
 
-## Seed nodes to connect to 
-seeds=["127.0.0.1:9601"]
-```
-
-### Attaching the IRC Frontend
-
-Assuming you have run the above 3 commands to create a small model
-testnet, and both inbound and outbound nodes above are connected,
-you can test them out using weechat.
-
-To create separate weechat instances, use the `--dir` command:
-
-    weechat --dir /tmp/a/
-    weechat --dir /tmp/b/
-
-Then in both clients, you must set the option to connect to temporary
-servers:
-
-    /set irc.look.temporary_servers on
-
-Finally you can attach to the local darkirc instances:
-
-    /connect localhost/6667
-    /connect localhost/6668
-
-And send messages to yourself.
-
-### Running a Fullnode
-
-See the script `script/run_node.sh` for an example of how to deploy
-a full node which does seed session synchronization, and accepts both
-inbound and outbound connections.
-
-## Global Buffer
-
-Copy [this script](https://github.com/narodnik/weechat-global-buffer/blob/main/buffclone.py) 
-to `~/.local/share/weechat/python/autoload/`, and you will create a single buffer 
-which aggregates messages from all channels. It's useful to monitor 
-activity from all channels without needing to flick through them.
-
-You may need to install `weechat-python` to enable Python scripting support
-in your weechat.
-
-## Emojis
-
-Install the `noto` fonts to have the full unicode set. Popular Linux distros
-should have packages for them.
-
-Once installed you can view all the emojis in your terminal. Note, you may need
-to regenerate your font cache (or just restart) after installing them.
-
-## Further Customization
-
-Group channels under respective networks:
-
-```
-/set irc.look.server_buffer independent
-/set irc.look.new_channel_position near_server
-```
-
-Filter all join-part-quit messages (only relevant for other networks):
-
-```
-/set irc.look.smart_filter on
-/filter add joinquit * irc_join,irc_part,irc_quit,irc_nick,irc_account,irc_chghost *
-```
-
-For customizing the colors, see
-[this article](https://blog.swwomm.com/2020/07/weechat-light-theme.html).
-
-### Settings Editor
-
-Make sure you run `/save`, `/quit` to reload your config after these changes.
-
-To see the Weechat settings editor, simply type `/set` in the main buffer.
-You can then type prefixes like "autojoin" and press enter to find all settings
-related to that. To change it type ALT+enter. Everything in Weechat is
-customizable!
-
-The help is your friend. Every command has help.
-
-```
-/help key
-/help server
-```
-
-For example to set the shortcut ALT-w to close a buffer,
-use `/key bind meta-w /close`.
-
-### Other IRC Networks
-
-For more fun, you can join Libera IRC. Note this may potentially dox your node,
-especially if you have autoconnect enabled since Libera is not anon.
-
-```
-/server add libera irc.libera.chat/6697 -ssl -autoconnect
-/save
-/connect libera
-/join #rust
-/join #linux
-/join #math
-```
-
-You can find more channels with `/list`. Then add your favorite channels to the
-libera autojoin list.
-
-Note that your nick is temporary. If you want to claim a nick, you will need to
-[register with the NickServer](https://libera.chat/guides/registration).
-
-## Troubleshooting
-
-If you encounter connectivity issues refer to
-[Network troubleshooting](../network-troubleshooting.md)
-for further troubleshooting resources.
-
-## Operator Security Notes
-
-DarkIRC's datastore contains both public event graph state and local account
-secrets. Back up the whole `--datastore` directory before recovery work, and
-export important local accounts with `NickServ INFO <account_name>` before
-discarding a store. A clean event graph resync can recover public DAG state from
-peers, but it cannot recover nullifiers and trapdoors that were only stored
-locally.
-
-Do not edit RLN counters or static DAG state by hand. DarkIRC persists the next
-RLN `message_id` before proof creation so a crash cannot roll the counter back
-and self-slash the account on restart. The static DAG is also the source of
-truth for network registrations and slashes. For the full set of invariants, see
-[Event Graph Security Invariants](../event_graph/security_invariants.md).
-
-## Hosting Instances
-
-The main thing is that all participating nodes must have a separate clean config
-to the DarkIRC instance that doesn't include seeds or nodes from other networks.
-Otherwise the P2P networks will bleed into each other. You want them to remain
-distinct.
-
-You have two options:
-
-1. The simplest is just setting up a persistent node, and adding a manual
-   connection. This is good when your network is small and you might not have
-   enough nodes for the P2P network to sustain itself.
-2. The proper way is to setup seed nodes that are first queried on startup,
-   and then used to bootstrap the P2P network.
-
-Additionally if you want to separate multiple transports like Tor, you will need
-nodes that bridge between the networks. Or you can just run everything
-completely over Tor.
-
-First make sure the storages are separate in `mynet_config.toml`:
-
-```
-datastore = "~/.local/darkfi/mynet_db"
+[rpc]
+rpc_listen = "tcp://127.0.0.1:9705"
 
 [net]
-hostlist = "~/.local/darkfi/mynet/hostlist.tsv"
+localnet = true
+active_profiles = ["tcp"]
+p2p_datastore = "~/.local/share/darkfi/darkirc/localnet/a/p2p"
+hostlist = "~/.local/share/darkfi/darkirc/localnet/a/p2p_hostlist.tsv"
+
+[net.profiles."tcp"]
+inbound = ["tcp://127.0.0.1:9700"]
 ```
 
-To setup a manual connection:
+The second node connects to it manually:
 
-```
-peers = ["tcp+tls://mynet-manual.peer:16754"]
+```toml
+irc_listen = "tcp://127.0.0.1:6668"
+datastore = "~/.local/share/darkfi/darkirc/localnet/b/darkirc_db"
+
+[rpc]
+rpc_listen = "tcp://127.0.0.1:9706"
+
+[net]
+localnet = true
+active_profiles = ["tcp"]
+p2p_datastore = "~/.local/share/darkfi/darkirc/localnet/b/p2p"
+hostlist = "~/.local/share/darkfi/darkirc/localnet/b/p2p_hostlist.tsv"
+
+[net.profiles."tcp"]
+peers = ["tcp://127.0.0.1:9700"]
 ```
 
-Also make sure, the seeds are set to either be blank, or use your custom seed
-node:
+Start both with `./darkirc --config PATH`. Connect separate IRC clients to
+ports 6667 and 6668. `localnet = true` is required because loopback P2P
+addresses are rejected in ordinary network mode.
 
-```
-seeds = ["tcp+tls://mynet-seed.peer:5645"]
-```
+## Custom networks
 
-For hosting the seed node, you can either use the generic seed node called
-'lilith' which is generic, or you can simply just run a normal DarkIRC node
-which has the inbound correctly set.
+Keep a custom DarkIRC network isolated from the public network:
 
-To make your network distinct, an extra measure is to modify the magic bytes
-used in messages. This means any nodes that do drift into your custom instance
-will be unable to connect anyway.
+- give every instance distinct DarkIRC, P2P, hostlist, and RPC paths;
+- use only custom `peers` and `seeds` under the appropriate
+  `[net.profiles."..."]` table;
+- use the same non-public `net.magic_bytes` on every custom node; and
+- do not reuse a datastore created with different Event Graph consensus
+  parameters.
 
-```
-magic_bytes=[127, 64, 12, 201]
-```
+Changing `magic_bytes` separates P2P handshakes; it does not change DarkIRC's
+compiled Event Graph genesis or RLN commitment set.
+
+## Operations and recovery
+
+The DarkIRC datastore contains public Event Graph state and can also contain
+local NickServ account secrets. Stop the process and back up the complete
+`datastore` directory before recovery or migration. A clean resync can recover
+public DAG state from suitable peers, but it cannot recover local nullifiers
+and trapdoors that were never backed up or exported.
+
+Do not hand-edit RLN counters, static DAG state, or individual sled trees. See
+[Event Graph recovery](../event_graph/recovery.md) and
+[security invariants](../event_graph/security_invariants.md). For connection
+problems, see [network troubleshooting](../network-troubleshooting.md).

@@ -10,7 +10,7 @@ needed.
 
 `EventGraph` stores several sled trees in the application's datastore.
 For DarkIRC this is the `--datastore` path, defaulting to
-`~/.local/share/darkfi/darkirc_db`. This is not the same as the P2P
+`~/.local/share/darkfi/darkirc/darkirc_db`. This is not the same as the P2P
 `p2p_datastore` path.
 
 Important trees are:

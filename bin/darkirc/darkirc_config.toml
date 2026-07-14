@@ -13,11 +13,14 @@
 ## How many recent DAGs to sync at startup. Each DAG is 1 hour of
 ## message history. This can be larger than 24 if history_retention_dags
 ## is also larger.
-#dags_count = 8
+#dags_count = 24
 
-## How many rotating DAGs to retain locally. This controls how much
-## history the node can serve or lazily sync without old DAGs being
-## pruned from sled.
+## Archive mode never prunes rotating DAGs. Storage use grows for as long as
+## the node runs. history_retention_dags is ignored when this is enabled.
+#archive_mode = false
+
+## How many rotating DAGs a normal node retains locally. This controls how
+## much history the node can serve or lazily sync before old DAGs are pruned.
 #history_retention_dags = 24
 
 ## Sets Datastore Path
@@ -31,7 +34,7 @@
 #rln_enabled = false
 
 ## Datastore path for RLN proving and verifying keys
-#zk_key_datastore = "~/.local/share/darkfi/darkirc_zk_keys"
+#zk_key_datastore = "~/.local/share/darkfi/darkirc/zk_keys"
 
 ## Sled cache capacity for the RLN key datastore, in MiB
 #zk_key_sled_cache_mb = 16
@@ -67,7 +70,7 @@ autojoin = [
 
 ## Running darkirc in header-only mode
 ## history won't be fetched but DAG sync fast
-#fast_mod = false
+#fast_mode = false
 
 ## JSON-RPC settings
 [rpc]
@@ -83,7 +86,7 @@ rpc_disabled_methods = ["p2p.get_info"]
 magic_bytes = [251, 229, 199, 181]
 
 # Path to the P2P datastore
-p2p_datastore = "~/.local/share/darkfi/darkirc"
+p2p_datastore = "~/.local/share/darkfi/darkirc/p2p"
 
 # Path to a configured hostlist for saving known peers
 hostlist = "~/.local/share/darkfi/darkirc/p2p_hostlist.tsv"
@@ -215,7 +218,7 @@ seeds = [
 ## IRC channel settings
 ## ====================
 ##
-## You can create a shared secret with `darkirc --gen-secret`.
+## You can create a shared secret with `darkirc --gen-channel-secret`.
 ## Never share this secret over unencrypted channels or with someone
 ## who you do not want to be able to read all the channel messages.
 ## Use it like this example:
@@ -252,9 +255,8 @@ topic = "LunarDAO talk"
 ## ================
 ##
 ## In this section we configure our contacts and people we want to
-## have encrypted DMs with. Whenever something in the configuration
-## is changed, you can send a SIGHUP signal to the running darkirc
-## instance to reload these.
+## have encrypted DMs with. After changing contacts, send /rehash from
+## an IRC client (or restart darkirc) to reload them.
 ##
 ## The format is:
 ## [contact."nickname"]

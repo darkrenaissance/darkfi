@@ -1,121 +1,74 @@
-# darkirc Specification
+# DarkIRC protocol and data reference
 
-## PrivMsgEvent
+This page describes the current DarkIRC-specific data placed in the Event
+Graph and the IRC surface exposed to local clients. The underlying peer
+protocol is documented in the [Event Graph network protocol](../event_graph/network_protocol.md).
 
-This is the main message type inside `darkirc`. The `PrivMsgEvent` is an
-[event action](../event_graph/network_protocol.md#event).
+## Event content
 
+Each chat event serializes the following `Privmsg` structure:
 
-| Description   | Data Type  | Comments                                                   | 
-|---------------|------------|------------------------------------------------------------|
-| `nickname`    | `String`   | The nickname for the sender (must be less than 32 chars)   |
-| `target`      | `String`   | The target for the message (recipient)                     |
-| `message`     | `String`   | The actual content of the message                          |
+| Field | Type | Current meaning |
+| --- | --- | --- |
+| `version` | `u8` | Format version; newly emitted messages currently use `0`. |
+| `msg_type` | `u8` | Message subtype; newly emitted messages currently use `0`. |
+| `channel` | `String` | Channel name, or an encrypted dummy value for a DM. |
+| `nick` | `String` | Sender nickname, or an encrypted dummy value for a DM. |
+| `msg` | `String` | Message body or encoded ciphertext. |
 
-## ChannelInfo
+Nicknames and channel names are limited to 24 bytes. Message bodies and topics
+are limited to 512 bytes. The IRC input buffer is limited to 1024 bytes.
 
-Preconfigured channel in the configuration file.
+### Public channels
 
-In the TOML configuration file, the channel is set as such:
+Without a configured channel secret, `channel`, `nick`, and `msg` are stored as
+plaintext. Public channel history should be treated as public and persistent.
 
-```toml
-[channel."#dev"]
-secret = "GvH4kno3kUu6dqPrZ8zjMhqxTUDZ2ev16EdprZiZJgj1"
-topic = "DarkFi Development Channel"
-```
+### Encrypted channels
 
-| Description  | Data Type     | Comments                                                      |
-|--------------|---------------| --------------------------------------------------------------|
-| `topic`      | `String`      | Optional topic for the channel                                |
-| `secret`     | `String`      | Optional NaCl box for the channel, used for {en,de}cryption.  |
-| `joined`     | `bool`        | Indicate whether the user has joined the channel              |
-| `names`      | `Vec<String>` | All nicknames which are visible on the channel                |
-
-
-## ContactInfo
-
-Preconfigured contact in the configuration file.
-
-In the TOML configuration file, the contact is set as such:
+For a `[channel."#name"]` with a `secret`, DarkIRC constructs a
+`crypto_box::ChaChaBox` from that 32-byte base58 secret. The channel name,
+padded nickname, and message are encrypted independently and encoded with
+base58. Every participant must configure the identical secret.
 
 ```toml
-[contact."nick"]
-contact_pubkey = "7CkVuFgwTUpJn5Sv67Q3fyEDpa28yrSeL5Hg2GqQ4jfM"
+[channel."#project"]
+secret = "BASE58_32_BYTE_SECRET"
+topic = "Private project channel"
 ```
 
-| Description   | Data Type     | Comments                                             |
-|---------------|---------------| -----------------------------------------------------|
-| `pubkey`      | `String`      | A Public key for the contact to encrypt the message  |
+Generate a secret with `darkirc --gen-channel-secret`.
 
-## IrcConfig
+### Direct messages
 
-The base Irc configuration for each new `IrcClient`.
+For a configured contact, DarkIRC encrypts dummy channel and nickname fields
+and encrypts the message with the contact ChaCha box. Contact configuration
+requires the contact's public key and the local secret key:
 
-| Description     | Data Type                       | Comments                                                                        |
-|-----------------|-------------------------------- | --------------------------------------------------------------------------------|
-| `is_nick_init`  | `bool`                          | Confirmation of receiving /nick command                                         |
-| `is_user_init`  | `bool`                          | Confirmation of receiving /user command                                         |
-| `is_cap_end`    | `bool`                          | Indicate whether the irc client finished the Client Capability Negotiation      |
-| `is_pass_init`  | `bool`                          | Confirmation of checking the password in the configuration file                 |
-| `is_registered` | `bool`                          | Indicate the `IrcClient` is initialized and ready to sending/receiving messages |
-| `nickname`      | `String`                        | The irc client nickname                                                         |
-| `password`      | `String`                        | The password for the irc client. (it could be empty)                            |
-| `private_key`   | `Option<String>`                | A private key to decrypt direct messages from contacts                          |
-| `capabilities`  | `HashMap<String, bool>`         | A list of capabilities for the irc clients and the server to negotiate          |
-| `auto_channels` | `Vec<String>`                   | Auto join channels for the irc clients                                          |
-| `channels`      | `HashMap<String, ChannelInfo>`  | A list of preconfigured channels in the configuration file                      |
-| `contacts`      | `HashMap<String, ContactInfo>`  | A list of preconfigured contacts in the configuration file for direct message   |
-
-## IrcServer
-
-The server start listening to an address specifed in the configuration file. 
-
-For each irc client get connected, an `IrcClient` instance created.
-
-| Description               | Data Type                     | Comments                                              |
-|---------------------------|-------------------------------| ------------------------------------------------------|
-| `settings`                | `Settings`                    | The base settings parsed from the configuration file  |
-| `clients_subscriptions`   | `SubscriberPtr<ClientSubMsg>` | Channels to notify the `IrcClient`s about new data    |
-
-##  IrcClient
-
-The `IrcClient` handle all irc opeartions and commands from the irc client.
-
-| Description       | Data Type                     | Comments                                                                  |
-|-------------------|-------------------------------|---------------------------------------------------------------------------|
-| `write_stream`    | `WriteHalf<Stream>`           | A writer for sending data to the connection stream                        |
-| `read_stream`     | `ReadHalf<Stream>`            | Read data from the connection stream                                      |
-| `address`         | `SocketAddr`                  | The actual address for the irc client connection                          |
-| `irc_config`      | `IrcConfig`                   | Base configuration for irc                                                |
-| `server_notifier` | `Channel<(NotifierMsg, u64)>` | A Channel to notify the server about a new data from the irc client       |
-| `subscription`    | `Subscription<ClientSubMsg>`  | A channel to receive notification from the server                         |
-
-
-## Communications between the server and the clients
-
-Two Communication channels get initialized by the server for every new `IrcClient`. 
-
-The channel `Channel<(NotifierMsg, u64)>` used  by the `IrcClient` to
-notify the server about new messages/queries received from the irc client.
-
-The channel `Subscription<ClientSubMsg>` used by the server to notify
-`IrcClient`s about new messages/queries fetched from the `View`. 
-
-### ClientSubMsg
-
-```rust
-	enum ClientSubMsg {
-		Privmsg(`PrivMsgEvent`),
-		Config(`IrcConfig`),	
-	}
+```toml
+[contact."Bob"]
+dm_chacha_public = "BOBS_BASE58_PUBLIC_KEY"
+my_dm_chacha_secret = "ALICES_BASE58_SECRET_KEY"
 ```
 
-### NotifierMsg 
+See [encrypted direct messages](private_message.md) for the two-party setup and
+security limitations.
 
-```rust
-	enum NotifierMsg {
-		Privmsg(`PrivMsgEvent`),
-		UpdateConfig,
-	}
-```
+## Local IRC interface
 
+DarkIRC currently handles these IRC commands:
+
+`ADMIN`, `CAP`, `INFO`, `JOIN`, `LIST`, `MODE`, `MOTD`, `NAMES`, `NICK`,
+`PART`, `PASS`, `PING`, `PRIVMSG`, `REHASH`, `TOPIC`, `USER`, and `VERSION`.
+
+It provides the custom client capabilities `no-history` and `no-autojoin`.
+NickServ commands are sent with `PRIVMSG NickServ ...` when RLN is enabled.
+DarkIRC does not claim complete RFC 2812 compatibility; commands that depend
+on conventional centralized IRC server state may be absent or have P2P-specific
+semantics.
+
+## Reloadable configuration
+
+`REHASH` reloads `autojoin`, `[channel.*]`, and `[contact.*]` from the active
+configuration file. P2P, datastore, history, archive, RPC, listener, password,
+and RLN settings require a daemon restart.

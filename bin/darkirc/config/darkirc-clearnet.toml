@@ -15,7 +15,7 @@ autojoin = [
 magic_bytes = [251, 229, 199, 181]
 
 ## Path to the P2P datastore
-datastore = "~/.local/share/darkfi/darkirc"
+p2p_datastore = "~/.local/share/darkfi/darkirc/p2p"
 
 ## Path to a configured hostlist for saving known peers
 hostlist = "~/.local/share/darkfi/darkirc/p2p_hostlist.tsv"
@@ -34,10 +34,10 @@ mixed_profiles = []
 
 [net.profiles."tcp+tls"]
 ## Seed nodes to connect to
-seeds = ["tcp+tls://lilith1.dark.fi:25551"]
+seeds = ["tcp+tls://lilith0.dark.fi:9600", "tcp+tls://lilith1.dark.fi:9600"]
 
 ## Addresses we want to advertise to peers
-external_addrs = ["tcp+tls://MY_IP_V4:26661", "tcp+tls://MY_IP_V6:26661", "tcp+tls://my.resolveable.address:26661"]
+external_addrs = ["tcp+tls://MY_IP_V4:9600", "tcp+tls://MY_IP_V6:9600", "tcp+tls://my.resolvable.address:9600"]
 
 ## P2P accept addresses
-inbound = ["tcp+tls://0.0.0.0:26661", "tcp+tls://[::]:26661"]
+inbound = ["tcp+tls://0.0.0.0:9600", "tcp+tls://[::]:9600"]

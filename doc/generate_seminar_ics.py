@@ -4,7 +4,7 @@ import hashlib
 from datetime import datetime
 from sys import argv
 
-from prettytable import PrettyTable, HEADER
+from prettytable import HRuleStyle, PrettyTable
 
 EVENTS = [
     {
@@ -62,7 +62,7 @@ def print_table():
     x = PrettyTable()
     x.field_names = ["Date", "Track", "Topic", "#", "Title", "Rec"]
     x.align = "l"
-    x.hrules = HEADER
+    x.hrules = HRuleStyle.HEADER
     x.junction_char = "|"
 
     for event in EVENTS:

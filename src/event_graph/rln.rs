@@ -190,7 +190,7 @@ pub struct SlashBlob {
     pub merkle_root: pallas::Base,
 }
 
-/// Ephemeral data attached to an [`EventPut`] when RLN is active.
+/// Ephemeral data attached to an [`crate::event_graph::proto::EventPut`] when RLN is active.
 #[derive(Clone, SerialEncodable, SerialDecodable)]
 pub struct Blob {
     /// The RLN signal proof.
@@ -513,7 +513,7 @@ impl Default for RlnState {
     }
 }
 
-/// Outcome of [`EventGraph::rln_verify_signal`].
+/// Outcome of [`crate::event_graph::EventGraph::rln_verify_signal`].
 #[derive(Debug)]
 pub enum SignalCheck {
     /// Proof valid, no conflict; the share has been recorded.
@@ -533,7 +533,7 @@ pub enum SignalCheck {
     Slashable(Vec<(pallas::Base, pallas::Base)>),
 }
 
-/// Outcome of [`EventGraph::rln_verify_static_event`].
+/// Outcome of [`crate::event_graph::EventGraph::rln_verify_static_event`].
 ///
 /// Distinguishes "drop silently" (e.g. propagation race, unknown
 /// root) from "the sender is malicious" (e.g. attestation didn't

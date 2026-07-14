@@ -1,37 +1,8 @@
-# Dnetview
+# dnet
 
-A simple tui to explore darkfi darkirc network topology.
+`dnet` is the Python TUI for inspecting DarkFi P2P sessions and messages. The
+old `dnetview` binary and `make BINS=dnetview` instructions no longer apply.
 
-dnetview displays: 
-
-1. all active nodes
-2. outgoing, incoming and manual sessions
-3. each associated connection and recent messages.
-
-## Install 
-
-```shell
-% git clone https://codeberg.org/darkrenaissance/darkfi
-% cd darkfi
-% make BINS=dnetview
-```
-
-## Usage
-
-Run dnetview as follows:
-
-```shell
-dnetview -v
-```
-
-On first run, dnetview will create a config file in .config/darkfi. You
-must manually enter the RPC ports of the nodes you want to connect to
-and title them as you see fit.
-
-Dnetview creates a logging file in /tmp/dnetview.log. To see json data
-and other debug info, tail the file like so:
-
-```shell
-tail -f /tmp/dnetview.log
-```
-
+See the maintained [dnet guide](../learn/dchat/network-tools/using-dnet.md).
+For DarkIRC, configure dnet to connect to RPC port 9605 and remove
+`"p2p.get_info"` from `rpc_disabled_methods` before restarting DarkIRC.

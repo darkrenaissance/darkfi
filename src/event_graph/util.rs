@@ -124,7 +124,9 @@ pub fn generate_genesis(config: &EventGraphConfig) -> Result<Event> {
         config.initial_genesis
     } else {
         let passed = hours_since(config.initial_genesis)?;
-        let rotations = passed / config.hours_rotation;
+        let rotations = passed
+            .checked_div(config.hours_rotation)
+            .ok_or_else(|| Error::Custom("event graph rotation period cannot be 0".into()))?;
         let offset_hours = rotations.saturating_mul(config.hours_rotation);
         let offset_ms = offset_hours.saturating_mul(HOUR_MS);
         config.initial_genesis.saturating_add(offset_ms)

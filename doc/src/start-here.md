@@ -23,16 +23,17 @@ DarkFi loosely follows the standardized Unix directory structure.
 
 ## Using DarkFi
 
-Refer to the main [README](../index.html) file for instructions on how
+Refer to the main [README](README.md) file for instructions on how
 to install Rust and necessary dependencies.
 
 Then proceed to the [Running a Node](testnet/node.md) guide.
 
 ## Join the Community
 
-Although we have a Telegram, we don't believe in centralized
-proprietary apps, and our core community organizes through our own
-fully anonymous p2p chat system which has support for Tor and i2p.
+Our core community organizes through DarkIRC, our peer-to-peer chat daemon.
+DarkIRC supports multiple transports, including Tor and I2P. Public channels
+remain public, and the privacy properties depend on the configured transport
+and message-encryption settings.
 
 Every Monday at 14:00 UTC (DST) or 15:00 UTC (ST) in #dev we have our
 main project meeting.
@@ -63,8 +64,9 @@ Source code is under `src/` subdirectory. Main interesting modules are:
 * `net/` is our own p2p network. There are sessions such as incoming or
   outgoing that have channels (connections). Protocols are attached to
   channels depending on the session. The p2p network is also
-  multi-transport with support for TCP (+TLS), Tor and i2p. So you can
-  access the p2p fully anonymously (network level privacy).
+  multi-transport with support for TCP (+TLS), Tor and I2P. An anonymity
+  transport can hide a node's clearnet address from application peers, subject
+  to that transport's threat model.
 * `event_graph/` which is a DAG sync protocol used for ensuring
   eventual consistency of data, such as with chat systems (you don't
   drop any messages).
@@ -124,11 +126,11 @@ Inside `bin/` contains utilities and applications:
 * `tau/` is an anon p2p task manager which we use. We don't use Github
   issues, and seek to minimize our dependence on centralized services.
   Eventually we want to be fully p2p and attack resistant.
-* `darkirc/` is our main community chat. It uses [RLN](crypto/rln.md);
-  you stake money and if you post twice in an epoch then you get
-  slashed which prevents spam. There is a free tier. It uses the
-  `event_graph` for synchronizing the history. You can attach any IRC
-  frontend to use it.
+* `darkirc/` is our main community chat. It uses `event_graph` to synchronize
+  hourly message DAGs and exposes a local IRC interface. Optional
+  [RLN](crypto/rln.md) rate limiting exists but is disabled by default; the
+  current implementation uses compiled pregenerated identities rather than a
+  public staking/free-tier workflow.
 * `zkas/` is our ZK compiler.
 * `zkrunner/` contains our ZK debugger (run `zkrunner` with `--trace`),
   and `zkrender` which renders a graphic of the circuit layout.
