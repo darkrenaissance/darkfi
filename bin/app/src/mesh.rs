@@ -34,15 +34,33 @@ pub const COLOR_GREEN: Color = [0., 1., 0., 1.];
 pub const COLOR_BLUE: Color = [0., 0., 1., 1.];
 #[allow(dead_code)]
 pub const COLOR_PINK: Color = [0.8, 0.3, 0.8, 1.];
+#[allow(dead_code)]
 pub const COLOR_CYAN: Color = [0., 1., 1., 1.];
+#[allow(dead_code)]
 pub const COLOR_TEAL: Color = [0.0784, 0.6824, 0.7216, 1.];
 #[allow(dead_code)]
+pub const COLOR_MINT: Color = [0.467, 1.0, 0.745, 1.0];
+#[allow(dead_code)]
+pub const COLOR_MINT_OP: Color = [0.573, 0.847, 0.714, 1.0];
+#[allow(dead_code)]
+pub const COLOR_INACTIVE: Color = [0.596, 0.765, 0.682, 1.0];
+#[allow(dead_code)]
 pub const COLOR_PURPLE: Color = [1., 0., 1., 1.];
+#[allow(dead_code)]
 pub const COLOR_WHITE: Color = [1., 1., 1., 1.];
 #[allow(dead_code)]
 pub const COLOR_BLACK: Color = [1., 1., 1., 1.];
 #[allow(dead_code)]
 pub const COLOR_GREY: Color = [0.5, 0.5, 0.5, 1.];
+#[allow(dead_code)]
+pub const DONE_MENU_BTN_GRADIENT: [[f32; 4]; 4] =
+    [[0., 0.1, 0.15, 1.], [0., 0.1, 0.15, 1.], [0., 0., 0., 1.], [0., 0., 0., 1.]];
+#[allow(dead_code)]
+pub const CANCEL_MENU_BTN_GRADIENT: [[f32; 4]; 4] =
+    [[0., 0., 0., 1.], [0., 0., 0., 1.], [0.1, 0., 0., 1.], [0.1, 0., 0., 1.]];
+#[allow(dead_code)]
+pub const MINT_BTN_GRADIENT: [[f32; 4]; 4] =
+    [[0., 0.1, 0.15, 1.], [0., 0.1, 0.15, 1.], [0., 0., 0., 1.], [0., 0., 0., 1.]];
 
 #[derive(Clone)]
 pub struct MeshInfo {
