@@ -84,17 +84,3 @@ pub fn get_screen_density() -> f32 {
 pub fn is_ime_visible() -> bool {
     call_mainactivity_bool_method!("isImeVisible")
 }
-
-/// OpenSSL's statically linked `libcrypto` registers `OPENSSL_cleanup` through
-/// `atexit()`. Bionic only exports `atexit` as the versioned symbol
-/// `atexit@@LIBC`, so the bare, unversioned reference baked into `libcrypto.a`
-/// cannot be resolved by the dynamic loader and aborts `dlopen` with
-/// `cannot locate symbol "atexit"`. Defining `atexit` here lets
-/// `libdarkfi-app.so` satisfy the symbol itself. The handler is dropped on
-/// purpose: Android kills the process on exit, so `OPENSSL_cleanup` has nothing
-/// to reclaim.
-#[no_mangle]
-pub extern "C" fn atexit(func: Option<extern "C" fn()>) -> std::ffi::c_int {
-    let _ = func;
-    0
-}
