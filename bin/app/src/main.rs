@@ -432,29 +432,9 @@ async fn load_plugins(
     plugin.link(fud);
 
     let drk = create_drk("drk");
-    let sg_root2 = sg_root.clone();
-    let ex2 = ex.clone();
-    let (drk_pimpl_send, drk_pimpl_recv) = smol::channel::bounded(1);
     let drk = drk
-        .setup(move |me| async move {
-            // Drk uses rusqlite which is not Send, so we run it on a dedicated thread
-            let handle = std::thread::spawn(move || {
-                let (pimpl, local_ex) = smol::block_on(plugin::DrkPlugin::new(me, sg_root2, ex2))
-                    .expect("Drk pimpl setup");
-
-                // Send Pimpl back to the setup closure
-                smol::block_on(drk_pimpl_send.send(pimpl)).unwrap();
-
-                // Block on local executor to process spawned tasks forever
-                smol::block_on(local_ex.run(async { futures::future::pending::<()>().await }));
-            });
-
-            // Wait for Pimpl to be created
-            let pimpl = drk_pimpl_recv.recv().await.unwrap();
-
-            drop(handle);
-
-            pimpl
+        .setup(|me| async {
+            plugin::DrkPlugin::new(me, sg_root.clone(), ex.clone()).await.expect("Drk pimpl setup")
         })
         .await;
 

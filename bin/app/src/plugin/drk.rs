@@ -133,11 +133,11 @@ pub struct DrkPlugin {
 }
 
 impl DrkPlugin {
-    pub async fn new<'a>(
+    pub async fn new(
         node: SceneNodeWeak,
         sg_root: SceneNodePtr,
         ex: ExecutorPtr,
-    ) -> Result<(Pimpl, Arc<smol::LocalExecutor<'a>>)> {
+    ) -> Result<Pimpl> {
         let node_ref = node.upgrade().unwrap();
 
         let setting_root = Arc::new(SceneNode::new("setting", SceneNodeType::SettingRoot));
@@ -208,12 +208,9 @@ impl DrkPlugin {
             scan_progress_pub: Publisher::new(),
         });
 
-        let local_ex = smol::LocalExecutor::new();
-        let local_ex = Arc::new(local_ex);
-
         // Start background task to process build_tx requests from channel
         let me3 = Arc::downgrade(&self_);
-        let build_tx_processor = local_ex.spawn(async move {
+        let build_tx_processor = ex.spawn(async move {
             while let Ok(request) = build_tx_rx.recv().await {
                 if let Some(self_) = me3.upgrade() {
                     match self_.build_tx_request(request).await {
@@ -232,42 +229,42 @@ impl DrkPlugin {
         let node_ref = node.upgrade().unwrap();
         let me2 = Arc::downgrade(&self_);
         let method_sub = node_ref.subscribe_method_call("get_default_address").unwrap();
-        let get_address_task = local_ex.spawn(async move {
+        let get_address_task = ex.spawn(async move {
             while Self::process_get_default_address(&me2, &method_sub).await {}
         });
 
         let node_ref = node.upgrade().unwrap();
         let me2 = Arc::downgrade(&self_);
         let method_sub_balances = node_ref.subscribe_method_call("get_balances").unwrap();
-        let get_balances_task = local_ex.spawn(async move {
+        let get_balances_task = ex.spawn(async move {
             while Self::process_get_balances(&me2, &method_sub_balances).await {}
         });
 
         let node_ref = node.upgrade().unwrap();
         let me2 = Arc::downgrade(&self_);
         let method_sub_tx_status = node_ref.subscribe_method_call("get_tx_status").unwrap();
-        let get_tx_status_task = local_ex.spawn(async move {
+        let get_tx_status_task = ex.spawn(async move {
             while Self::process_get_tx_status(&me2, &method_sub_tx_status).await {}
         });
 
         let node_ref = node.upgrade().unwrap();
         let me2 = Arc::downgrade(&self_);
         let method_sub_build_tx = node_ref.subscribe_method_call("build_tx").unwrap();
-        let build_tx_task = local_ex.spawn(async move {
+        let build_tx_task = ex.spawn(async move {
             while Self::process_build_tx(&me2, &method_sub_build_tx).await {}
         });
 
         let node_ref = node.upgrade().unwrap();
         let me2 = Arc::downgrade(&self_);
         let method_sub_broadcast_tx = node_ref.subscribe_method_call("broadcast_tx").unwrap();
-        let broadcast_tx_task = local_ex.spawn(async move {
+        let broadcast_tx_task = ex.spawn(async move {
             while Self::process_broadcast_tx(&me2, &method_sub_broadcast_tx).await {}
         });
 
         let tasks = vec![get_address_task, get_balances_task, get_tx_status_task, build_tx_task, broadcast_tx_task, build_tx_processor];
-        self_.clone().start(ex.clone(), local_ex.clone(), tasks).await;
+        self_.clone().start(ex.clone(), tasks).await;
 
-        Ok((Pimpl::Drk(self_), local_ex))
+        Ok(Pimpl::Drk(self_))
     }
 
     async fn apply_settings(_self: Arc<Self>, _batch: BatchGuardPtr) {
@@ -630,7 +627,7 @@ impl DrkPlugin {
         true
     }
 
-    async fn start(self: Arc<Self>, ex: ExecutorPtr, local_ex: Arc<smol::LocalExecutor<'_>>, tasks: Vec<smol::Task<()>>) {
+    async fn start(self: Arc<Self>, ex: ExecutorPtr, tasks: Vec<smol::Task<()>>) {
         let endpoint = Url::parse(DARKFID_ENDPOINT).unwrap();
 
         let self2 = self.clone();
@@ -639,7 +636,7 @@ impl DrkPlugin {
         let ex_ = ex.clone();
         let progress_sub = self.scan_progress_pub.clone().subscribe().await;
 
-        let scan_progress_task = local_ex.spawn(async move {
+        let scan_progress_task = ex.spawn(async move {
             let mut first_height = None;
             loop {
                 let (height, final_height) = progress_sub.receive().await;
@@ -664,7 +661,7 @@ impl DrkPlugin {
         let self2 = self.clone();
 
         // Task that handles the RPC subscription with retry logic
-        let subscribe_task = local_ex.spawn(async move {
+        let subscribe_task = ex.spawn(async move {
             loop {
                 i!("Attempting to connect to darkfid daemon at {}", endpoint);
                 let subscribe_rpc_task = StoppableTask::new();
@@ -706,7 +703,7 @@ impl DrkPlugin {
         });
 
         let self2 = self.clone();
-        let subscribe_recv_task = local_ex.spawn(async move {
+        let subscribe_recv_task = ex.spawn(async move {
             loop {
                 let recv = shell_receiver.recv().await;
 
