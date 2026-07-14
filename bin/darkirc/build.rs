@@ -27,8 +27,4 @@ fn main() {
             println!("cargo:rustc-env=COMMITISH={}", commitish.trim());
         }
     }
-
-    if std::env::var("CARGO_CFG_TARGET_OS").unwrap() == "android" {
-        println!("cargo:rustc-link-search={}/sqlcipher", env!("CARGO_MANIFEST_DIR"));
-    }
 }
