@@ -43,10 +43,6 @@ RUN cd /opt/ && \
     rm android-ndk-r29-linux.zip
 ENV NDK_HOME /opt/android-ndk-r29/
 
-# Needed for cross compiling openssl which is used by bundled sqlcipher in drk
-ENV AR /opt/android-ndk-r29/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-ar
-ENV RANLIB /opt/android-ndk-r29/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-ranlib
-
 # Copy contents to container. Should only use this on a clean directory
 WORKDIR /root/
 RUN git clone https://github.com/narodnik/cargo-quad-apk cargo-apk
