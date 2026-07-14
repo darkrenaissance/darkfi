@@ -24,8 +24,8 @@ use tracing::instrument;
 
 use crate::{
     ExecutorPtr, gfx::{DrawCall, DrawInstruction, Rectangle, RenderApi, Renderer, gfxtag}, mesh::{Color, MeshBuilder}, prop::{
-        BatchGuardPtr, PropertyAtomicGuard, PropertyBool, PropertyColor, PropertyFloat32,
-        PropertyRect, PropertyStr, PropertyUint32, PropertyEnum, Role,
+        BatchGuardPtr, PropertyAtomicGuard, PropertyBool, PropertyColor, PropertyEnum, PropertyFloat32,
+        PropertyRect, PropertyStr, PropertyUint32, Role,
     }, scene::{Pimpl, SceneNodeWeak}, text, util::i18n::I18nBabelFish
 };
 
@@ -199,6 +199,7 @@ impl UIObject for Text {
         on_modify.when_change(self.rect.prop(), Self::redraw);
         on_modify.when_change(self.z_index.prop(), Self::redraw);
         on_modify.when_change(self.text.prop(), Self::redraw);
+        on_modify.when_change(self.text_align.prop(), Self::redraw);
         on_modify.when_change(self.font_size.prop(), Self::redraw);
         on_modify.when_change(self.text_color.prop(), Self::redraw);
         on_modify.when_change(self.debug.prop(), Self::redraw);

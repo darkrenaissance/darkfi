@@ -58,6 +58,7 @@ const MENU_ICON_OFFSET: f32 = 55.;
 const MENU_ICON_OFFSET: f32 = 24.;
 
 macro_rules! d { ($($arg:tt)*) => { debug!(target: "ui::menu", $($arg)*); } }
+macro_rules! t { ($($arg:tt)*) => { trace!(target: "ui::menu", $($arg)*); } }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum ItemStatus {
@@ -300,9 +301,8 @@ impl Menu {
 
             if is_edit_mode {
                 let font_size = self.font_size.get();
-                let handle_padding = self.handle_padding.get();
-                let x_half_size = font_size * 0.7;
-                let x_center = handle_padding / 2.;
+                let x_half_size = font_size * 0.85;
+                let x_center = MENU_ICON_OFFSET + font_size * 0.4;
 
                 if let Some(item_idx) = self.get_selected_item_index(pos.y) {
                     let item_name = self.items.get_str(item_idx).unwrap();
@@ -536,6 +536,7 @@ impl Menu {
 
         loop {
             self.motion_cv.wait().await;
+            self.motion_cv.reset();
 
             let mut speed = self.speed.load(Ordering::Relaxed);
             if speed.abs() < EPSILON {
@@ -715,7 +716,8 @@ impl UIObject for Menu {
             loop {
                 cv.wait().await;
                 let Some(self_) = me2.upgrade() else {
-                    panic!("Self destroyed before motion_task stopped");
+                    t!("Menu destroyed before motion_task stopped");
+                    break;
                 };
                 self_.handle_movement().await;
                 cv.reset();
@@ -795,10 +797,8 @@ impl UIObject for Menu {
 
         if is_edit_mode {
             let font_size = self.font_size.get();
-            let handle_padding = self.handle_padding.get();
-            let hammy_half_size = font_size * 0.7;
-            let hammy_center = rect.w - handle_padding / 2.;
-
+            let hammy_half_size = font_size * 1.4;
+            let hammy_center = rect.w - MENU_ICON_OFFSET - font_size * 0.56;
             let hammy_min = hammy_center - hammy_half_size;
             let hammy_max = hammy_center + hammy_half_size;
 
@@ -949,10 +949,8 @@ impl UIObject for Menu {
 
                 if is_edit_mode {
                     let font_size = self.font_size.get();
-                    let handle_padding = self.handle_padding.get();
-                    let hammy_half_size = font_size * 0.7;
-                    let hammy_center = rect.w - handle_padding / 2.;
-
+                    let hammy_half_size = font_size * 2.0;
+                    let hammy_center = rect.w - MENU_ICON_OFFSET - font_size * 0.56;
                     let hammy_min = hammy_center - hammy_half_size;
                     let hammy_max = hammy_center + hammy_half_size;
 

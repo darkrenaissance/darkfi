@@ -17,10 +17,10 @@
  */
 
 use crate::{
-    error::{Error, Result}, expr::{SExprMachine, SExprVal}, gfx::{Dimension, Rectangle}, prop::PropertyType, scene::SceneNode as SceneNode3
+    error::{Error, Result}, expr::{SExprMachine, SExprVal}, gfx::{Dimension, Rectangle}, scene::SceneNode as SceneNode3
 };
 
-use super::{PropertyAtomicGuard, PropertyPtr, Role};
+use super::{PropertyAtomicGuard, PropertyPtr, PropertyType, Role};
 
 #[derive(Clone)]
 pub struct PropertyBool {

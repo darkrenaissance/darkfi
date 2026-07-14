@@ -1813,6 +1813,9 @@ impl UIObject for BaseEdit {
         } else {
             d!("BaseEdit focused");
             self.is_focused.set(atom, true);
+
+            let node = self.node();
+            node.trigger("focus_request", vec![]).await.unwrap();
         }
 
         // Move mouse pos within this widget
