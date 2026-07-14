@@ -164,7 +164,7 @@ impl DrkPlugin {
         if let Err(e) = drk.initialize_dao().await {
             e!("Failed to initialize DAO: {e}");
         }
-        if let Err(e) = drk.initialize_deployooor() {
+        if let Err(e) = drk.initialize_deployooor().await {
             e!("Failed to initialize Deployooor: {e}");
         }
 
@@ -183,7 +183,7 @@ impl DrkPlugin {
                         Ok(addrs) => {
                             if let Some((key_id, _, _, _)) = addrs.last() {
                                 i!("Setting address with key_id {} as default", key_id);
-                                if let Err(e) = drk.set_default_address(*key_id as usize) {
+                                if let Err(e) = drk.set_default_address(*key_id as u16).await {
                                     e!("Failed to set default address: {e}");
                                 }
                             }
