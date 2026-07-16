@@ -80,6 +80,16 @@ const BLACKLIST_MAX_LEN: usize = 10000;
 /// 24 hours is appropriate for long-running daemons.
 const REGISTRY_PRUNE_AGE_SECS: u64 = 86400;
 
+/// Maximum number of lifecycle entries retained under normal operation.
+///
+/// Only `Free` entries are evicted. If active lifecycle states alone exceed this
+/// limit, they are retained until their operations finish.
+const REGISTRY_MAX_LEN: usize = 20000;
+
+/// Capacity pruning removes enough old `Free` entries to avoid sorting the
+/// registry on every subsequent insertion once it reaches the high-water mark.
+const REGISTRY_PRUNE_TARGET_LEN: usize = 18000;
+
 pub type HostsPtr = Arc<Hosts>;
 
 /// Mutually exclusive states for host lifecycle management.
@@ -653,6 +663,20 @@ impl Hosts {
 
         if let Ok(ref state) = result {
             registry.insert(addr, state.clone());
+
+            if registry.len() > REGISTRY_MAX_LEN {
+                let pruned = Self::prune_registry_capacity(
+                    &mut registry,
+                    REGISTRY_MAX_LEN,
+                    REGISTRY_PRUNE_TARGET_LEN,
+                );
+                if pruned > 0 {
+                    debug!(
+                        target: "net::hosts::try_register",
+                        "Pruned {pruned} entries after reaching registry capacity",
+                    );
+                }
+            }
         }
 
         result
@@ -668,8 +692,10 @@ impl Hosts {
 
     /// Prune stale entries from the registry.
     ///
-    /// Removes hosts that have been in `Free` state longer than `REGISTRY_PRUNE_AGE_SECS`.
-    /// This prevents unbounded growth of the registry over long-running sessions.
+    /// Removes hosts that have been in `Free` state longer than
+    /// `REGISTRY_PRUNE_AGE_SECS`, then enforces `REGISTRY_MAX_LEN`. Capacity
+    /// pruning removes the oldest `Free` entries first and never evicts active
+    /// lifecycle states.
     ///
     /// Returns the number of entries pruned.
     pub fn prune_registry(&self) -> usize {
@@ -691,10 +717,43 @@ impl Hosts {
             true
         });
 
+        Self::prune_registry_capacity(&mut registry, REGISTRY_MAX_LEN, REGISTRY_PRUNE_TARGET_LEN);
+
         let pruned = before - registry.len();
         if pruned > 0 {
-            debug!(target: "net::hosts::prune_registry", "Pruned {pruned} stale entries");
+            debug!(target: "net::hosts::prune_registry", "Pruned {pruned} registry entries");
         }
+        pruned
+    }
+
+    fn prune_registry_capacity(
+        registry: &mut HashMap<Url, HostState>,
+        max_len: usize,
+        target_len: usize,
+    ) -> usize {
+        debug_assert!(target_len <= max_len);
+
+        if registry.len() <= max_len {
+            return 0
+        }
+
+        let remove_count = registry.len() - target_len;
+        let mut free_entries = registry
+            .iter()
+            .filter_map(|(url, state)| match state {
+                HostState::Free(age) => Some((url.clone(), *age)),
+                _ => None,
+            })
+            .collect::<Vec<_>>();
+        free_entries.sort_unstable_by_key(|(_, age)| *age);
+
+        let mut pruned = 0;
+        for (url, _) in free_entries.into_iter().take(remove_count) {
+            if registry.remove(&url).is_some() {
+                pruned += 1;
+            }
+        }
+
         pruned
     }
 
@@ -1369,7 +1428,7 @@ mod tests {
     }
 
     #[test]
-    fn test_prune_registry() {
+    fn test_prune_registry_by_age() {
         let hosts = make_hosts();
         let now = UNIX_EPOCH.elapsed().unwrap().as_secs();
 
@@ -1396,5 +1455,50 @@ mod tests {
         assert!(!registry.contains_key(&old_url));
         assert!(registry.contains_key(&new_url));
         assert!(registry.contains_key(&active_url));
+    }
+
+    #[test]
+    fn test_prune_registry_by_capacity() {
+        let hosts = make_hosts();
+        let oldest_connect = Url::parse("tcp://oldest-connect.example.com:123").unwrap();
+        let oldest_refine = Url::parse("tcp://oldest-refine.example.com:123").unwrap();
+        let recent = Url::parse("tcp://recent.example.com:123").unwrap();
+        let connect = Url::parse("tcp://connect.example.com:123").unwrap();
+        let refine = Url::parse("tcp://refine.example.com:123").unwrap();
+
+        {
+            let mut registry = hosts.registry.lock();
+            registry.insert(oldest_connect.clone(), HostState::Free(1));
+            registry.insert(oldest_refine.clone(), HostState::Free(2));
+            registry.insert(recent.clone(), HostState::Free(3));
+            registry.insert(connect.clone(), HostState::Connect);
+            registry.insert(refine.clone(), HostState::Refine);
+
+            let pruned = Hosts::prune_registry_capacity(&mut registry, 4, 3);
+            assert_eq!(pruned, 2);
+            assert_eq!(registry.len(), 3);
+            assert!(!registry.contains_key(&oldest_connect));
+            assert!(!registry.contains_key(&oldest_refine));
+            assert!(registry.contains_key(&recent));
+            assert!(matches!(registry.get(&connect), Some(HostState::Connect)));
+            assert!(matches!(registry.get(&refine), Some(HostState::Refine)));
+        }
+
+        assert!(hosts.try_register(oldest_connect, HostState::Connect).is_ok());
+        assert!(hosts.try_register(oldest_refine, HostState::Refine).is_ok());
+    }
+
+    #[test]
+    fn test_unregister_repeated_url_reuses_registry_entry() {
+        let hosts = make_hosts();
+        let url = Url::parse("tcp://repeated.example.com:123").unwrap();
+
+        hosts.registry.lock().insert(url.clone(), HostState::Free(0));
+        hosts.unregister(&url).unwrap();
+        hosts.unregister(&url).unwrap();
+
+        let registry = hosts.registry.lock();
+        assert_eq!(registry.len(), 1);
+        assert!(matches!(registry.get(&url), Some(HostState::Free(age)) if *age > 0));
     }
 }
