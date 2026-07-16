@@ -128,6 +128,11 @@ impl<T> Publisher<T> {
     pub fn dropped_notifications(&self) -> usize {
         self.dropped_notifications.load(Ordering::Relaxed)
     }
+
+    /// Number of currently registered subscriptions.
+    pub fn active_subscriptions(&self) -> usize {
+        self.subs.lock().len()
+    }
 }
 
 impl<T: Clone> Publisher<T> {

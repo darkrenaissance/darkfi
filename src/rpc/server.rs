@@ -16,9 +16,10 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::{collections::HashSet, io::ErrorKind, sync::Arc};
+use std::{collections::HashSet, future::Future, io::ErrorKind, sync::Arc};
 
 use async_trait::async_trait;
+use parking_lot::Mutex as SyncMutex;
 use smol::{
     io::{BufReader, ReadHalf, WriteHalf},
     lock::{Mutex, MutexGuard},
@@ -78,13 +79,88 @@ pub trait RequestHandler<T>: Sync + Send {
     }
 }
 
+#[derive(Default)]
+struct ConnectionTaskState {
+    closing: bool,
+    tasks: HashSet<StoppableTaskPtr>,
+}
+
+#[derive(Default)]
+struct ConnectionTasks {
+    state: SyncMutex<ConnectionTaskState>,
+}
+
+impl ConnectionTasks {
+    /// Register and start a child while holding the task-set lock. This prevents
+    /// a fast child from finishing before it has been registered and prevents
+    /// new children from racing with connection shutdown.
+    fn start<'a, MainFut>(
+        self: &Arc<Self>,
+        task: StoppableTaskPtr,
+        main: MainFut,
+        ex: Arc<smol::Executor<'a>>,
+    ) where
+        MainFut: Future<Output = Result<()>> + Send + 'a,
+    {
+        let mut state = self.state.lock();
+        if state.closing {
+            return
+        }
+
+        debug!(target: "rpc::server", "Adding background task {} to map", task.task_id);
+        state.tasks.insert(task.clone());
+
+        let tasks = self.clone();
+        let task_ = task.clone();
+        task.start(
+            main,
+            move |_| async move {
+                debug!(
+                    target: "rpc::server",
+                    "Removing background task {} from map", task_.task_id,
+                );
+                tasks.state.lock().tasks.remove(&task_);
+            },
+            Error::DetachedTaskStopped,
+            ex,
+        );
+    }
+
+    fn close(&self) -> Vec<StoppableTaskPtr> {
+        let mut state = self.state.lock();
+        state.closing = true;
+        state.tasks.iter().cloned().collect()
+    }
+
+    fn stop_all_nowait(&self) {
+        for task in self.close() {
+            task.stop_nowait();
+        }
+    }
+
+    async fn stop_all(&self) {
+        for task in self.close() {
+            task.stop().await;
+        }
+        debug_assert!(self.state.lock().tasks.is_empty());
+    }
+}
+
+struct ConnectionTasksGuard(Arc<ConnectionTasks>);
+
+impl Drop for ConnectionTasksGuard {
+    fn drop(&mut self) {
+        self.0.stop_all_nowait();
+    }
+}
+
 /// Auxiliary function to handle a request in the background.
 async fn handle_request<T>(
     writer: Arc<Mutex<WriteHalf<Box<dyn PtStream>>>>,
     addr: Url,
     rh: Arc<impl RequestHandler<T> + 'static>,
     ex: Arc<smol::Executor<'_>>,
-    tasks: Arc<Mutex<HashSet<Arc<StoppableTask>>>>,
+    tasks: Arc<ConnectionTasks>,
     settings: RpcSettings,
     req: JsonRequest,
 ) -> Result<()> {
@@ -103,13 +179,12 @@ async fn handle_request<T>(
             let task = StoppableTask::new();
 
             // Clone what needs to go in the background
-            let task_ = task.clone();
             let addr_ = addr.clone();
-            let tasks_ = tasks.clone();
             let writer_ = writer.clone();
 
             // Detach the subscriber so we can multiplex further requests
-            task.clone().start(
+            tasks.start(
+                task,
                 async move {
                     // Subscribe to the inner method subscriber
                     let subscription = subscriber.publisher.subscribe().await;
@@ -126,12 +201,10 @@ async fn handle_request<T>(
                         #[allow(clippy::collapsible_else_if)]
                         if settings.use_http() {
                             if let Err(e) = http_write_to_stream(&mut writer_lock, &notification).await {
-                                subscription.unsubscribe().await;
                                 return Err(e.into())
                             }
                         } else {
                             if let Err(e) = write_to_stream(&mut writer_lock, &notification).await {
-                                subscription.unsubscribe().await;
                                 return Err(e.into())
                             }
                         }
@@ -139,19 +212,8 @@ async fn handle_request<T>(
                         drop(writer_lock);
                     }
                 },
-                move |_| async move {
-                    debug!(
-                        target: "rpc::server",
-                        "Removing background task {} from map", task_.task_id,
-                    );
-                    tasks_.lock().await.remove(&task_);
-                },
-                Error::DetachedTaskStopped,
                 ex.clone(),
             );
-
-            debug!(target: "rpc::server", "Adding background task {} to map", task.task_id);
-            tasks.lock().await.insert(task);
         }
 
         JsonResult::SubscriberWithReply(subscriber, reply) => {
@@ -167,13 +229,12 @@ async fn handle_request<T>(
 
             let task = StoppableTask::new();
             // Clone what needs to go in the background
-            let task_ = task.clone();
             let addr_ = addr.clone();
-            let tasks_ = tasks.clone();
             let writer_ = writer.clone();
 
             // Detach the subscriber so we can multiplex further requests
-            task.clone().start(
+            tasks.start(
+                task,
                 async move {
                     // Start the subscriber loop
                     let subscription = subscriber.publisher.subscribe().await;
@@ -189,33 +250,18 @@ async fn handle_request<T>(
                         #[allow(clippy::collapsible_else_if)]
                         if settings.use_http() {
                             if let Err(e) = http_write_to_stream(&mut writer_lock, &notification).await {
-                                subscription.unsubscribe().await;
-                                drop(writer_lock);
                                 return Err(e.into())
                             }
                         } else {
                             if let Err(e) = write_to_stream(&mut writer_lock, &notification).await {
-                                subscription.unsubscribe().await;
-                                drop(writer_lock);
                                 return Err(e.into())
                             }
                         }
                         drop(writer_lock);
                     }
                 },
-                move |_| async move {
-                    debug!(
-                        target: "rpc::server",
-                        "Removing background task {} from map", task_.task_id,
-                    );
-                    tasks_.lock().await.remove(&task_);
-                },
-                Error::DetachedTaskStopped,
                 ex.clone(),
             );
-
-            debug!(target: "rpc::server", "Adding background task {} to map", task.task_id);
-            tasks.lock().await.insert(task);
         }
 
         JsonResult::Request(_) | JsonResult::Notification(_) => {
@@ -268,16 +314,18 @@ async fn handle_request<T>(
 /// Accept function that should run inside a loop for accepting incoming
 /// JSON-RPC requests and passing them to the [`RequestHandler`].
 #[allow(clippy::type_complexity)]
-pub async fn accept<'a, T: 'a>(
+async fn accept_with_tasks<'a, T: 'a>(
     reader: Arc<Mutex<BufReader<ReadHalf<Box<dyn PtStream>>>>>,
     writer: Arc<Mutex<WriteHalf<Box<dyn PtStream>>>>,
     addr: Url,
     rh: Arc<impl RequestHandler<T> + 'static>,
+    tasks: Arc<ConnectionTasks>,
     settings: RpcSettings,
     ex: Arc<smol::Executor<'a>>,
 ) -> Result<()> {
-    // We'll hold our background tasks here
-    let tasks = Arc::new(Mutex::new(HashSet::new()));
+    // Ensure cancellation signals all children even before the connection
+    // task's stop handler gets a chance to await them.
+    let _tasks_guard = ConnectionTasksGuard(tasks.clone());
 
     loop {
         let mut buf = Vec::with_capacity(INIT_BUF_SIZE);
@@ -330,12 +378,9 @@ pub async fn accept<'a, T: 'a>(
         // Create a new task to handle request in the background
         let task = StoppableTask::new();
 
-        // Clone what needs to go in the background
-        let task_ = task.clone();
-        let tasks_ = tasks.clone();
-
         // Detach the task
-        task.clone().start(
+        tasks.start(
+            task,
             handle_request(
                 writer.clone(),
                 addr.clone(),
@@ -345,20 +390,26 @@ pub async fn accept<'a, T: 'a>(
                 settings.clone(),
                 req,
             ),
-            move |_| async move {
-                debug!(
-                    target: "rpc::server",
-                    "Removing background task {} from map", task_.task_id,
-                );
-                tasks_.lock().await.remove(&task_);
-            },
-            Error::DetachedTaskStopped,
             ex.clone(),
         );
-
-        debug!(target: "rpc::server", "Adding background task {} to map", task.task_id);
-        tasks.lock().await.insert(task);
     }
+}
+
+/// Accept incoming JSON-RPC requests and stop all request and subscriber tasks
+/// before returning.
+#[allow(clippy::type_complexity)]
+pub async fn accept<'a, T: 'a>(
+    reader: Arc<Mutex<BufReader<ReadHalf<Box<dyn PtStream>>>>>,
+    writer: Arc<Mutex<WriteHalf<Box<dyn PtStream>>>>,
+    addr: Url,
+    rh: Arc<impl RequestHandler<T> + 'static>,
+    settings: RpcSettings,
+    ex: Arc<smol::Executor<'a>>,
+) -> Result<()> {
+    let tasks = Arc::new(ConnectionTasks::default());
+    let result = accept_with_tasks(reader, writer, addr, rh, tasks.clone(), settings, ex).await;
+    tasks.stop_all().await;
+    result
 }
 
 /// Wrapper function around [`accept()`] to take the incoming connection and
@@ -412,17 +463,32 @@ async fn run_accept_loop<'a, T: 'a>(
                 let task = StoppableTask::new();
                 let task_ = task.clone();
                 let ex_ = ex.clone();
+                let tasks = Arc::new(ConnectionTasks::default());
+                let tasks_ = tasks.clone();
+
+                // Register before starting so a connection that closes
+                // immediately cannot finish before it is tracked.
+                let mut connections = rh.connections_mut().await;
+                connections.insert(task.clone());
                 task.clone().start(
-                    accept(reader, writer, url.clone(), rh.clone(), settings.clone(), ex_),
+                    accept_with_tasks(
+                        reader,
+                        writer,
+                        url.clone(),
+                        rh.clone(),
+                        tasks,
+                        settings.clone(),
+                        ex_,
+                    ),
                     |_| async move {
+                        tasks_.stop_all().await;
                         verbose!(target: "rpc::server", "[RPC] Closed conn from {url}");
                         rh_.clone().unmark_connection(task_.clone()).await;
                     },
                     Error::ChannelStopped,
                     ex.clone(),
                 );
-
-                rh.clone().mark_connection(task.clone()).await;
+                drop(connections);
             }
 
             // As per accept(2) recommendation:
@@ -519,11 +585,15 @@ pub async fn listen_and_serve<'a, T: 'a>(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{rpc::client::RpcClient, system::msleep};
+    use crate::{
+        rpc::client::RpcClient,
+        system::{msleep, Publisher},
+    };
     use smol::{net::TcpListener, Executor};
 
     struct RpcServer {
         rpc_connections: Mutex<HashSet<StoppableTaskPtr>>,
+        subscriber: JsonSubscriber,
     }
 
     #[async_trait]
@@ -531,6 +601,7 @@ mod tests {
         async fn handle_request(&self, req: JsonRequest) -> JsonResult {
             match req.method.as_str() {
                 "ping" => return self.pong(req.id, req.params).await,
+                "subscribe" => return self.subscriber.clone().into(),
                 _ => panic!(),
             }
         }
@@ -559,7 +630,10 @@ mod tests {
             };
             drop(listener);
 
-            let rpc_server = Arc::new(RpcServer { rpc_connections: Mutex::new(HashSet::new()) });
+            let rpc_server = Arc::new(RpcServer {
+                rpc_connections: Mutex::new(HashSet::new()),
+                subscriber: JsonSubscriber::new("event"),
+            });
             let rpc_server_ = rpc_server.clone();
 
             let server_task = StoppableTask::new();
@@ -611,6 +685,84 @@ mod tests {
 
             // After the server is stopped, the connections tasks should also be stopped
             assert!(rpc_server.active_connections().await == 0);
+
+            Ok(())
+        }))
+    }
+
+    #[test]
+    fn subscriber_tasks_follow_connection_lifetime() -> Result<()> {
+        let executor = Arc::new(Executor::new());
+
+        smol::block_on(executor.run(async {
+            let listener = TcpListener::bind("127.0.0.1:0").await?;
+            let sockaddr = listener.local_addr()?;
+            let settings = RpcSettings {
+                listen: Url::parse(&format!("tcp://127.0.0.1:{}", sockaddr.port()))?,
+                disabled_methods: vec![],
+            };
+            drop(listener);
+
+            let rpc_server = Arc::new(RpcServer {
+                rpc_connections: Mutex::new(HashSet::new()),
+                subscriber: JsonSubscriber::new("event"),
+            });
+            let rpc_server_ = rpc_server.clone();
+
+            let server_task = StoppableTask::new();
+            server_task.clone().start(
+                listen_and_serve(settings.clone(), rpc_server.clone(), None, executor.clone()),
+                |res| async move {
+                    match res {
+                        Ok(()) | Err(Error::RpcServerStopped) => {
+                            rpc_server_.stop_connections().await
+                        }
+                        Err(e) => panic!("{e}"),
+                    }
+                },
+                Error::RpcServerStopped,
+                executor.clone(),
+            );
+
+            msleep(500).await;
+
+            for _ in 0..32 {
+                let client =
+                    Arc::new(RpcClient::new(settings.listen.clone(), executor.clone()).await?);
+                let client_ = client.clone();
+                let subscriber_task = executor.spawn(async move {
+                    client_
+                        .subscribe(
+                            JsonRequest::new("subscribe", JsonValue::Array(vec![])),
+                            Publisher::new(),
+                        )
+                        .await
+                });
+
+                for _ in 0..100 {
+                    if rpc_server.subscriber.publisher.active_subscriptions() == 1 {
+                        break
+                    }
+                    msleep(10).await;
+                }
+                assert_eq!(rpc_server.subscriber.publisher.active_subscriptions(), 1);
+
+                client.stop().await;
+                assert!(subscriber_task.await.is_err());
+
+                for _ in 0..100 {
+                    if rpc_server.active_connections().await == 0 {
+                        break
+                    }
+                    msleep(10).await;
+                }
+                assert_eq!(rpc_server.active_connections().await, 0);
+                assert_eq!(rpc_server.subscriber.publisher.active_subscriptions(), 0);
+            }
+
+            server_task.stop().await;
+            assert_eq!(rpc_server.active_connections().await, 0);
+            assert_eq!(rpc_server.subscriber.publisher.active_subscriptions(), 0);
 
             Ok(())
         }))
