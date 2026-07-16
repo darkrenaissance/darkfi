@@ -20,6 +20,7 @@ use darkfi::{
     system::{Publisher, PublisherPtr, StoppableTask, sleep},
     tx::Transaction,
     util::parse::encode_base10,
+    Result as DarkFiResult,
 };
 use darkfi_money_contract::model::TokenId;
 use darkfi_serial::{serialize, Decodable, Encodable};
@@ -504,17 +505,14 @@ impl DrkPlugin {
     }
 
     /// Build a transaction without broadcasting it
-    pub async fn build_tx(&self, amount: &str, token_id: TokenId, recipient: PublicKey) -> Result<Transaction> {
+    pub async fn build_tx(&self, amount: &str, token_id: TokenId, recipient: PublicKey) -> DarkFiResult<Transaction> {
         let drk = self.drk.read().await;
 
-        drk.transfer(amount, token_id, recipient, None, None, false).await.map_err(|e| {
-            e!("Failed to build transaction: {e}");
-            Error::ServiceFailed
-        })
+        drk.transfer(amount, token_id, recipient, None, None, false).await
     }
 
     /// Build a transaction from a BuildTxRequest (called by background task)
-    async fn build_tx_request(&self, request: BuildTxRequest) -> Result<(Transaction, String, Address, String)> {
+    async fn build_tx_request(&self, request: BuildTxRequest) -> DarkFiResult<(Transaction, String, Address, String)> {
         let drk = self.drk.read().await;
         let aliases = drk.get_aliases_mapped_by_token().await.unwrap_or_default();
         let token_symbol = aliases.get(&request.token_id.to_string()).unwrap_or(&"UNKN".to_string()).to_string();

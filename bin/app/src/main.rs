@@ -627,14 +627,38 @@ async fn load_plugins(
             let error_message = String::decode(&mut cur).unwrap();
             let atom = &mut renderer2.make_guard(gfxtag!("tx built error"));
 
-            // TODO: display error somewhere
+            // Display error message in step3
+            if let Some(error_node) = sg_root2.lookup_node("/window/content/wallet/send_step3_layer/error") {
+                error_node.set_property_str(atom, Role::App, "text", error_message).unwrap();
+            }
 
-            // Reset button state
-            if let Some(btn_node) = sg_root2.lookup_node("/window/content/wallet/send_step3_layer/send_amount_button") {
-                btn_node.set_property_bool(atom, Role::App, "is_active", true).unwrap();
-                if let Some(label_node) = sg_root2.lookup_node("/window/content/wallet/send_step3_layer/send_amount_button_label") {
-                    label_node.set_property_str(atom, Role::App, "text", "add amount").unwrap();
-                }
+            // Reset step4 send button to disabled state
+            if let Some(send_label_node) = sg_root2.lookup_node("/window/content/wallet/send_step4_layer/send_send_btn_label") {
+                send_label_node.set_property_str(atom, Role::App, "text", "send").unwrap();
+                let prop = send_label_node.get_property("text_color").unwrap();
+                prop.set_f32(atom, Role::App, 0, 0.5).unwrap();
+                prop.set_f32(atom, Role::App, 1, 0.5).unwrap();
+                prop.set_f32(atom, Role::App, 2, 0.5).unwrap();
+                prop.set_f32(atom, Role::App, 3, 1.).unwrap();
+            }
+            if let Some(send_bg_grey_node) = sg_root2.lookup_node("/window/content/wallet/send_step4_layer/send_send_btn_bg_grey") {
+                send_bg_grey_node.set_property_bool(atom, Role::App, "is_visible", true).unwrap();
+            }
+            if let Some(send_bg_node) = sg_root2.lookup_node("/window/content/wallet/send_step4_layer/send_send_btn_bg") {
+                send_bg_node.set_property_bool(atom, Role::App, "is_visible", false).unwrap();
+            }
+
+            // Go back to step3
+            if let Some(step4) = sg_root2.lookup_node("/window/content/wallet/send_step4_layer") {
+                step4.set_property_bool(atom, Role::App, "is_visible", false).unwrap();
+            }
+            if let Some(step3) = sg_root2.lookup_node("/window/content/wallet/send_step3_layer") {
+                step3.set_property_bool(atom, Role::App, "is_visible", true).unwrap();
+            }
+
+            // Focus the amount input
+            if let Some(amount_input) = sg_root2.lookup_node("/window/content/wallet/send_step3_layer/send_amount_wrapper/send_amount_input") {
+                let _ = amount_input.call_method("focus", vec![]).await;
             }
         }
     });

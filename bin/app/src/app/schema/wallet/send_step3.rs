@@ -108,11 +108,16 @@ pub async fn make(
     let step2_is_visible3 = step2_is_visible.clone();
     let step3_is_visible1 = step3_is_visible.clone();
     let renderer = app.renderer.clone();
+    let sg_root2 = app.sg_root.clone();
     let (slot, recvr) = Slot::new("send_back_clicked3");
     node.register("click", slot).unwrap();
     let listen_click = app.ex.spawn(async move {
         while let Ok(_) = recvr.recv().await {
             let atom = &mut renderer.make_guard(gfxtag!("send step3 back button"));
+            // Reset error message on back button click
+            if let Some(error_node) = sg_root2.lookup_node("/window/content/wallet/send_step3_layer/error") {
+                error_node.set_property_str(atom, Role::App, "text", "").unwrap();
+            }
             step3_is_visible1.set(atom, false);
             step2_is_visible3.set(atom, true);
         }
@@ -306,6 +311,29 @@ pub async fn make(
     let amount_wrapper = amount_wrapper.setup(|me| Layer::new(me, app.renderer.clone())).await;
     send_step3_layer.link(amount_wrapper.clone());
 
+    // Error message text
+    let error_node = create_text("error");
+    let prop = error_node.get_property("rect").unwrap();
+    prop.set_f32(atom, Role::App, 0, PADDING_X).unwrap();
+    let code = cc.compile(format!("{amount_y} + AMOUNT_FONTSIZE + PADDING_Y")).unwrap();
+    prop.set_expr(atom, Role::App, 1, code).unwrap();
+    let code = cc.compile("w - PADDING_X * 2").unwrap();
+    prop.set_expr(atom, Role::App, 2, code).unwrap();
+    prop.set_f32(atom, Role::App, 3, HINT_FONTSIZE).unwrap();
+    prop.add_depend(&addr_h_prop, 0, "addr_height");
+    error_node.set_property_f32(atom, Role::App, "font_size", HINT_FONTSIZE).unwrap();
+    error_node.set_property_str(atom, Role::App, "text", "").unwrap();
+    error_node.set_property_enum(atom, Role::App, "overflow_wrap", "anywhere").unwrap();
+    error_node.set_property_enum(atom, Role::App, "text_align", "center").unwrap();
+    let prop = error_node.get_property("text_color").unwrap();
+    prop.set_f32(atom, Role::App, 0, 1.).unwrap();
+    prop.set_f32(atom, Role::App, 1, 0.3).unwrap();
+    prop.set_f32(atom, Role::App, 2, 0.3).unwrap();
+    prop.set_f32(atom, Role::App, 3, 1.).unwrap();
+    error_node.set_property_u32(atom, Role::App, "z_index", 2).unwrap();
+    let error_node = error_node.setup(|me| Text::new(me, window_scale.clone(), app.renderer.clone(), i18n_fish.clone())).await;
+    send_step3_layer.link(error_node.clone());
+
     // Amount input
     let input_node = create_decimal_edit("send_amount_input");
     input_node.set_property_bool(atom, Role::App, "is_active", true).unwrap();
@@ -474,6 +502,11 @@ pub async fn make(
     let listen_amount_text = app.ex.spawn(async move {
         while let Ok(_) = amount_text_sub.receive().await {
             let atom = &mut renderer.make_guard(gfxtag!("wallet amount input recv"));
+            // Reset error message on amount change
+            if let Some(error_node) = sg_root.lookup_node("/window/content/wallet/send_step3_layer/error") {
+                error_node.set_property_str(atom, Role::App, "text", "").unwrap();
+            }
+
             let label_text_color = add_amount_label_node_for_validation.get_property("text_color").unwrap();
             let btn_bg_valid_visible = btn_bg_valid_clone.get_property("is_visible").unwrap();
             let btn_bg_invalid_visible = btn_bg_invalid_clone.get_property("is_visible").unwrap();
@@ -541,6 +574,12 @@ pub async fn make(
     node.register("click", slot).unwrap();
     let listen_click = app.ex.spawn(async move {
         while let Ok(_) = recvr.recv().await {
+            let atom = &mut renderer.make_guard(gfxtag!("add amount button"));
+            // Reset error message on button click
+            if let Some(error_node) = sg_root.lookup_node("/window/content/wallet/send_step3_layer/error") {
+                error_node.set_property_str(atom, Role::App, "text", "").unwrap();
+            }
+
             let text = amount_input2.get_property_str("text").unwrap();
             // Use sanitized amount (empty text becomes "0")
             let sanitized_text = if text.is_empty() { "0".to_string() } else { text.clone() };
@@ -555,8 +594,6 @@ pub async fn make(
                 }
             };
             if is_valid {
-                let atom = &mut renderer.make_guard(gfxtag!("switch to step4 and show building"));
-
                 // Store the amount (use sanitized value)
                 let mut data = send_tx_data4.lock().unwrap();
                 data.amount = Some(sanitized_text.clone());

@@ -454,6 +454,11 @@ pub async fn make(
                 recipient_node.set_property_str(atom, Role::App, "text", recipient_str).unwrap();
             }
 
+            // Reset error message when transitioning from step2 to step3
+            if let Some(error_node) = sg_root.lookup_node("/window/content/wallet/send_step3_layer/error") {
+                error_node.set_property_str(atom, Role::App, "text", "").unwrap();
+            }
+
             step2_is_visible2.set(atom, false);
             if let Some(step3) = sg_root.lookup_node("/window/content/wallet/send_step3_layer") {
                 step3.set_property_bool(atom, Role::App, "is_visible", true).unwrap();
