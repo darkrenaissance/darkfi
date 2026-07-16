@@ -201,7 +201,7 @@ impl DarkfiMinersRegistryState {
             "Broadcasting new block to network",
         );
         let message = ProposalMessage(proposal);
-        p2p_handler.p2p.broadcast(&message).await;
+        p2p_handler.p2p.broadcast(&message).await?;
 
         Ok(())
     }

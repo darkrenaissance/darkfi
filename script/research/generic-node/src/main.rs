@@ -311,11 +311,11 @@ async fn broadcast_messages(node_id: u64, p2p: P2pPtr) -> Result<()> {
         // Broadcast a generic string message
         let string_msg =
             GenericStringMessage { msg: format!("Hello from node {node_id}({counter})!") };
-        p2p.broadcast(&string_msg).await;
+        p2p.broadcast(&string_msg).await?;
 
         // Broadcast a generic number message
         let number_msg = GenericNumberMessage { num: node_id + counter };
-        p2p.broadcast(&number_msg).await;
+        p2p.broadcast(&number_msg).await?;
 
         // Perform a direct request to each peer and grab their response
         let peers = p2p.hosts().channels();

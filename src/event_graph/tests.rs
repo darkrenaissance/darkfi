@@ -1422,7 +1422,7 @@ async fn propagation_with_real_blob(ex: Arc<Executor<'static>>) {
     nodes[0].header_dag_insert(vec![event.header.clone()], &dag_name).await.unwrap();
     nodes[0].dag_insert(slice::from_ref(&event), &dag_name).await.unwrap();
     nodes[0].dag_blob_store(&event.id(), &blob).unwrap();
-    nodes[0].p2p.broadcast(&EventPut(event.clone(), blob.clone())).await;
+    nodes[0].p2p.broadcast(&EventPut(event.clone(), blob.clone())).await.unwrap();
 
     sleep(5).await;
 
@@ -1472,7 +1472,7 @@ async fn event_put_ingests_body_after_header_only_sync(ex: Arc<Executor<'static>
     }
     assert!(nodes[4].dag_blob_fetch(&event.id()).unwrap().is_none());
 
-    nodes[0].p2p.broadcast(&EventPut(event.clone(), blob.clone())).await;
+    nodes[0].p2p.broadcast(&EventPut(event.clone(), blob.clone())).await.unwrap();
     sleep(5).await;
 
     let store = nodes[4].dag_store.read().await;
@@ -1500,7 +1500,7 @@ async fn empty_blob_rejected(ex: Arc<Executor<'static>>) {
     let dag_ts = nodes[0].current_genesis.read().await.header.timestamp;
     let event = Event::new(b"unauthenticated".to_vec(), &nodes[0]).await.unwrap();
 
-    nodes[0].p2p.broadcast(&EventPut(event.clone(), vec![])).await;
+    nodes[0].p2p.broadcast(&EventPut(event.clone(), vec![])).await.unwrap();
     sleep(5).await;
 
     for (i, eg) in nodes.iter().enumerate().skip(1) {
@@ -1539,7 +1539,7 @@ async fn malformed_event_rejected_before_rln(ex: Arc<Executor<'static>>) {
     malformed.content.extend_from_slice(b"-tampered");
     assert!(!malformed.content_matches_header());
 
-    nodes[0].p2p.broadcast(&EventPut(malformed.clone(), blob)).await;
+    nodes[0].p2p.broadcast(&EventPut(malformed.clone(), blob)).await.unwrap();
     sleep(5).await;
 
     let epoch = epoch_of(malformed.header.timestamp);
@@ -1584,7 +1584,7 @@ async fn genesis_with_blob_rejected(ex: Arc<Executor<'static>>) {
     let event = Event { header, content: b"forged-genesis".to_vec() };
     let fake_blob = b"this-should-not-be-here".to_vec();
 
-    nodes[0].p2p.broadcast(&EventPut(event.clone(), fake_blob)).await;
+    nodes[0].p2p.broadcast(&EventPut(event.clone(), fake_blob)).await.unwrap();
     sleep(5).await;
 
     for (i, eg) in nodes.iter().enumerate().skip(1) {
@@ -1876,7 +1876,7 @@ async fn fetch_parents_rejects_child_when_parent_body_rejected(ex: Arc<Executor<
         seed_rotating_event_unchecked(eg, &parent, &bad_parent_blob, &dag_name).await;
     }
 
-    nodes[0].p2p.broadcast(&EventPut(child.clone(), child_blob)).await;
+    nodes[0].p2p.broadcast(&EventPut(child.clone(), child_blob)).await.unwrap();
     sleep(5).await;
 
     let store = nodes[4].dag_store.read().await;
@@ -1936,7 +1936,7 @@ async fn dormant_user_can_post_after_long_silence(ex: Arc<Executor<'static>>) {
     nodes[0].header_dag_insert(vec![event.header.clone()], &dag_name).await.unwrap();
     nodes[0].dag_insert(slice::from_ref(&event), &dag_name).await.unwrap();
     nodes[0].dag_blob_store(&event.id(), &blob).unwrap();
-    nodes[0].p2p.broadcast(&EventPut(event.clone(), blob)).await;
+    nodes[0].p2p.broadcast(&EventPut(event.clone(), blob)).await.unwrap();
 
     sleep(5).await;
 

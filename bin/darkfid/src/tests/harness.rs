@@ -176,7 +176,7 @@ impl Harness {
             let proposal = Proposal::new(block.clone());
             self.alice.validator.write().await.append_proposal(&proposal, None).await?;
             let message = ProposalMessage(proposal);
-            self.alice.p2p_handler.p2p.broadcast(&message).await;
+            self.alice.p2p_handler.p2p.broadcast(&message).await?;
         }
 
         // Sleep a bit so blocks can be propagated and then

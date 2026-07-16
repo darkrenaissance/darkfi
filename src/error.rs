@@ -141,6 +141,9 @@ pub enum Error {
     #[error("Network service stopped")]
     NetworkServiceStopped,
 
+    #[error("P2P broadcast concurrency limit reached")]
+    BroadcastLimitReached,
+
     #[error("Create listener bound to {0} failed")]
     BindFailed(String),
 

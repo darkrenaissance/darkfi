@@ -2757,8 +2757,7 @@ impl EventGraph {
     }
 
     pub async fn static_broadcast(&self, ev: Event, blob: Vec<u8>) -> Result<()> {
-        self.p2p.broadcast(&StaticPut(ev, blob)).await;
-        Ok(())
+        self.p2p.broadcast(&StaticPut(ev, blob)).await
     }
 
     fn static_persist_serialized(&self, ev_id: &blake3::Hash, ev_bytes: &[u8]) -> Result<()> {

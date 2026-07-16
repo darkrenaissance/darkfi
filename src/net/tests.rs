@@ -37,11 +37,13 @@ use crate::{
         hosts::HostColor,
         message::{GetAddrsMessage, Message},
         metering::{MeteringConfiguration, DEFAULT_METERING_CONFIGURATION},
+        p2p::MAX_CONCURRENT_BROADCASTS,
         settings::NetworkProfile,
         P2p, Settings,
     },
     system::{sleep, timeout::timeout},
     util::logger::{setup_test_logger, Level},
+    Error,
 };
 
 fn init_logger() {
@@ -723,4 +725,91 @@ async fn p2p_shutdown_drains_channels_across_restarts_real(ex: Arc<Executor<'sta
             assert_eq!(channel.cleanup_task_count().await, 0);
         }
     }
+}
+
+#[test]
+fn p2p_broadcasts_are_bounded_and_drained() {
+    test_body!(p2p_broadcasts_are_bounded_and_drained_real, 2);
+}
+
+async fn p2p_broadcasts_are_bounded_and_drained_real(ex: Arc<Executor<'static>>) {
+    const REJECTED_BROADCASTS: usize = 1024;
+
+    #[derive(SerialEncodable, SerialDecodable)]
+    struct SlowMessage(u32);
+    crate::impl_p2p_message!(
+        SlowMessage,
+        "slow",
+        4,
+        1,
+        MeteringConfiguration {
+            threshold: 1,
+            sleep_step: 60_000,
+            expiry_time: crate::util::time::NanoTimestamp(0),
+        }
+    );
+
+    let port = get_random_available_port();
+    let listen_url = Url::parse(&format!("tcp://127.0.0.1:{port}")).unwrap();
+    let server_settings = Settings {
+        localnet: true,
+        inbound_addrs: vec![listen_url.clone()],
+        inbound_connections: 1,
+        outbound_connections: 0,
+        active_profiles: vec!["tcp".to_string()],
+        ..Default::default()
+    };
+    let client_settings = Settings {
+        localnet: true,
+        peers: vec![listen_url],
+        inbound_connections: 0,
+        outbound_connections: 0,
+        active_profiles: vec!["tcp".to_string()],
+        ..Default::default()
+    };
+
+    let server = P2p::new(server_settings, ex.clone()).await.unwrap();
+    let client = P2p::new(client_settings, ex).await.unwrap();
+    server.clone().start().await.unwrap();
+    client.clone().start().await.unwrap();
+
+    timeout(Duration::from_secs(5), async {
+        while client.hosts().channels().is_empty() || server.hosts().channels().is_empty() {
+            Timer::after(Duration::from_millis(10)).await;
+        }
+    })
+    .await
+    .expect("manual connection was not established");
+
+    let channel = client.hosts().channels().first().unwrap().clone();
+    let receiving_channel = server.hosts().channels().first().unwrap().clone();
+    receiving_channel.message_subsystem().add_dispatch::<SlowMessage>().await;
+    let channels = vec![channel.clone()];
+
+    // Prime metering so every admitted broadcast waits for two minutes.
+    // This models a slow peer without making the test itself wait.
+    channel.send(&SlowMessage(0)).await.unwrap();
+
+    for i in 0..MAX_CONCURRENT_BROADCASTS {
+        client.broadcast_to(&SlowMessage(i as u32), &channels).await.unwrap();
+    }
+    assert_eq!(client.active_broadcasts(), MAX_CONCURRENT_BROADCASTS);
+
+    for i in 0..REJECTED_BROADCASTS {
+        assert!(matches!(
+            client.broadcast_to(&SlowMessage(i as u32), &channels).await,
+            Err(Error::BroadcastLimitReached)
+        ));
+    }
+    assert_eq!(client.active_broadcasts(), MAX_CONCURRENT_BROADCASTS);
+    assert_eq!(client.rejected_broadcasts(), REJECTED_BROADCASTS);
+
+    client.stop().await;
+    assert_eq!(client.active_broadcasts(), 0);
+    assert!(matches!(
+        client.broadcast_to(&SlowMessage(0), &channels).await,
+        Err(Error::NetworkServiceStopped)
+    ));
+
+    server.stop().await;
 }

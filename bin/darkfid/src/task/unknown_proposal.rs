@@ -224,7 +224,17 @@ async fn handle_unknown_proposal(node: &DarkfiNodePtr, channel: u32, proposal: &
 
         // Broadcast proposal to rest nodes
         let message = ProposalMessage(proposal.clone());
-        node.p2p_handler.p2p.broadcast_with_exclude(&message, &[channel.address().clone()]).await;
+        if let Err(e) = node
+            .p2p_handler
+            .p2p
+            .broadcast_with_exclude(&message, &[channel.address().clone()])
+            .await
+        {
+            debug!(
+                target: "darkfid::task::handle_unknown_proposal",
+                "Proposal broadcast was not admitted: {e}"
+            );
+        }
 
         // Notify proposals subscriber
         let enc_prop = JsonValue::String(base64::encode(&serialize_async(proposal).await));
@@ -480,7 +490,9 @@ async fn handle_reorg(
 
     // Broadcast proposal to the network
     let message = ProposalMessage(proposal.clone());
-    node.p2p_handler.p2p.broadcast(&message).await;
+    if let Err(e) = node.p2p_handler.p2p.broadcast(&message).await {
+        debug!(target: "darkfid::task::handle_reorg", "Proposal broadcast was not admitted: {e}");
+    }
 
     // Notify proposals subscriber
     let enc_prop = JsonValue::String(base64::encode(&serialize_async(proposal).await));

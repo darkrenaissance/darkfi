@@ -154,7 +154,10 @@ impl DarkfiNode {
             return server_error(RpcError::TxSimulationFail, id, None)
         };
 
-        self.p2p_handler.p2p.broadcast(&tx).await;
+        if let Err(e) = self.p2p_handler.p2p.broadcast(&tx).await {
+            error!(target: "darkfid::rpc::tx_broadcast", "Transaction broadcast was not admitted: {e}");
+            return JsonError::new(InternalError, None, id).into()
+        }
         if !self.p2p_handler.p2p.is_connected() {
             warn!(target: "darkfid::rpc::tx_broadcast", "No connected channels to broadcast tx");
         }
@@ -240,7 +243,10 @@ impl DarkfiNode {
                     return JsonError::new(InternalError, None, id).into()
                 }
             };
-            self.p2p_handler.p2p.broadcast(&tx).await;
+            if let Err(e) = self.p2p_handler.p2p.broadcast(&tx).await {
+                error!(target: "darkfid::rpc::tx_rebroadcast_pending", "Transaction broadcast was not admitted: {e}");
+                return JsonError::new(InternalError, None, id).into()
+            }
         }
 
         JsonResponse::new(JsonValue::Boolean(true), id).into()

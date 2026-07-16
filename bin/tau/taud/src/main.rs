@@ -355,7 +355,9 @@ async fn start_sync_loop(
                     } else {
                         // Otherwise, broadcast it. Taud runs EventGraph with RLN disabled,
                         // so the blob is intentionally empty.
-                        p2p.broadcast(&EventPut(event, vec![])).await;
+                        if let Err(e) = p2p.broadcast(&EventPut(event, vec![])).await {
+                            error!(target: "taud", "Event broadcast was not admitted: {e}");
+                        }
                     }
                 }
             }

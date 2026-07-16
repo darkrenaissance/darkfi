@@ -35,7 +35,7 @@ use std::{
 
 use async_trait::async_trait;
 use smol::lock::{Mutex as AsyncMutex, OnceCell};
-use tracing::{info, warn};
+use tracing::{debug, info, warn};
 use url::Url;
 
 use super::{
@@ -598,7 +598,12 @@ impl PeerDiscovery {
                 let get_addrs =
                     GetAddrsMessage { max: getaddrs_max.unwrap_or(1), transports: active_profiles };
 
-                self.p2p().broadcast(&get_addrs).await;
+                if let Err(e) = self.p2p().broadcast(&get_addrs).await {
+                    debug!(
+                        target: "net::direct_session::peer_discovery",
+                        "GetAddrs broadcast was not admitted: {e}"
+                    );
+                }
 
                 // Wait for a hosts store update event
                 let store_sub = self.p2p().hosts().subscribe_store().await;

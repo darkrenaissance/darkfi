@@ -251,12 +251,12 @@ async fn send_event(stream: &mut Box<dyn PtStream>, daemon: &Daemon) -> Result<(
     }
 
     if !peers_with_matched_version.is_empty() {
-        p2p.broadcast_to(&EventPut(event.clone()), &peers_with_matched_version).await;
+        p2p.broadcast_to(&EventPut(event.clone()), &peers_with_matched_version).await?;
     }
     if !peers_with_different_version.is_empty() {
         let mut event = event;
         event.timestamp /= 1000;
-        p2p.broadcast_to(&EventPut(event), &peers_with_different_version).await;
+        p2p.broadcast_to(&EventPut(event), &peers_with_different_version).await?;
     }
 
     Ok(())

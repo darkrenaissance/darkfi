@@ -37,7 +37,7 @@ use darkfi_serial::{
     SerialEncodable,
 };
 use smol::Executor;
-use tracing::{error, warn};
+use tracing::{debug, error, warn};
 
 use super::{
     event::Header,
@@ -1113,10 +1113,14 @@ impl ProtocolEventGraph {
                     (RATELIMIT_SAMPLE_IDX - RATELIMIT_MIN_COUNT)) as u64;
                 msleep(ms).await;
             }
-            self.event_graph
+            if let Err(e) = self
+                .event_graph
                 .p2p
                 .broadcast_with_exclude(&ep, &[self.channel.address().clone()])
-                .await;
+                .await
+            {
+                debug!(target: "event_graph::protocol", "Broadcast was not admitted: {e}");
+            }
         }
     }
 }

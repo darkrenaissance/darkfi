@@ -661,7 +661,12 @@ impl PeerDiscoveryBase for PeerDiscovery {
                     transports: active_profiles,
                 };
 
-                self.p2p().broadcast(&get_addrs).await;
+                if let Err(e) = self.p2p().broadcast(&get_addrs).await {
+                    debug!(
+                        target: "net::outbound_session::peer_discovery",
+                        "GetAddrs broadcast was not admitted: {e}"
+                    );
+                }
 
                 // Wait for a hosts store update event
                 let store_sub = self.p2p().hosts().subscribe_store().await;

@@ -505,7 +505,9 @@ impl DarkIrc {
             error!(target: "darkirc", "Failed inserting new event to DAG: {}", e);
         }
 
-        self.p2p.broadcast(&EventPut(event, vec![])).await;
+        if let Err(e) = self.p2p.broadcast(&EventPut(event, vec![])).await {
+            error!(target: "darkirc", "Event broadcast was not admitted: {e}");
+        }
     }
 
     async fn apply_settings(self_: Arc<Self>, _: BatchGuardPtr) {

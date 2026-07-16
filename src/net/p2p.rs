@@ -17,9 +17,10 @@
  */
 
 use std::{
-    collections::HashMap,
+    collections::{HashMap, HashSet},
+    future::Future,
     sync::{
-        atomic::{AtomicBool, Ordering},
+        atomic::{AtomicBool, AtomicUsize, Ordering},
         Arc, Weak,
     },
 };
@@ -45,9 +46,9 @@ use super::{
     settings::Settings,
 };
 use crate::{
-    system::{ExecutorPtr, Publisher, PublisherPtr, Subscription},
+    system::{ExecutorPtr, Publisher, PublisherPtr, StoppableTask, StoppableTaskPtr, Subscription},
     util::{logger::verbose, path::expand_path},
-    Result,
+    Error, Result,
 };
 
 #[cfg(target_family = "unix")]
@@ -55,6 +56,95 @@ use smol::fs::unix::PermissionsExt;
 
 /// Atomic pointer to the p2p interface
 pub type P2pPtr = Arc<P2p>;
+
+/// Maximum number of detached broadcasts retained by a P2P instance.
+/// Calls beyond this limit are rejected with [`Error::BroadcastLimitReached`]
+/// rather than queued, keeping retained payloads and channel lists bounded.
+pub const MAX_CONCURRENT_BROADCASTS: usize = 64;
+
+struct BroadcastTaskState {
+    accepting: bool,
+    tasks: HashSet<StoppableTaskPtr>,
+}
+
+struct BroadcastTasks {
+    state: Mutex<BroadcastTaskState>,
+    rejected: AtomicUsize,
+}
+
+impl BroadcastTasks {
+    fn new() -> Arc<Self> {
+        Arc::new(Self {
+            state: Mutex::new(BroadcastTaskState { accepting: true, tasks: HashSet::new() }),
+            rejected: AtomicUsize::new(0),
+        })
+    }
+
+    fn start<'a, MainFut>(
+        self: &Arc<Self>,
+        main: MainFut,
+        ex: Arc<smol::Executor<'a>>,
+    ) -> Result<()>
+    where
+        MainFut: Future<Output = Result<()>> + Send + 'a,
+    {
+        let task = StoppableTask::new();
+        let mut state = self.state.lock();
+        if !state.accepting {
+            return Err(Error::NetworkServiceStopped)
+        }
+        if state.tasks.len() >= MAX_CONCURRENT_BROADCASTS {
+            self.rejected.fetch_add(1, Ordering::Relaxed);
+            return Err(Error::BroadcastLimitReached)
+        }
+
+        state.tasks.insert(task.clone());
+        let tasks = self.clone();
+        let task_ = task.clone();
+        task.start(
+            main,
+            move |_| async move {
+                tasks.state.lock().tasks.remove(&task_);
+            },
+            Error::DetachedTaskStopped,
+            ex,
+        );
+        Ok(())
+    }
+
+    fn close(&self) -> Vec<StoppableTaskPtr> {
+        let mut state = self.state.lock();
+        state.accepting = false;
+        state.tasks.iter().cloned().collect()
+    }
+
+    fn stop_all_nowait(&self) {
+        for task in self.close() {
+            task.stop_nowait();
+        }
+    }
+
+    async fn stop_all(&self) {
+        for task in self.close() {
+            task.stop().await;
+        }
+        debug_assert!(self.state.lock().tasks.is_empty());
+    }
+
+    fn reopen(&self) {
+        let mut state = self.state.lock();
+        debug_assert!(state.tasks.is_empty());
+        state.accepting = true;
+    }
+
+    fn active(&self) -> usize {
+        self.state.lock().tasks.len()
+    }
+
+    fn rejected(&self) -> usize {
+        self.rejected.load(Ordering::Relaxed)
+    }
+}
 
 /// Toplevel peer-to-peer networking interface
 pub struct P2p {
@@ -86,6 +176,8 @@ pub struct P2p {
     stopping: AtomicBool,
     /// All started channels, including those still performing their handshake.
     channels: Mutex<HashMap<u32, Weak<Channel>>>,
+    /// Bounded set of detached broadcast tasks owned by this P2P instance.
+    broadcast_tasks: Arc<BroadcastTasks>,
 }
 
 impl P2p {
@@ -128,6 +220,7 @@ impl P2p {
             dnet_publisher: Publisher::new(),
             stopping: AtomicBool::new(false),
             channels: Mutex::new(HashMap::new()),
+            broadcast_tasks: BroadcastTasks::new(),
         });
 
         register_default_protocols(self_.clone()).await;
@@ -137,6 +230,7 @@ impl P2p {
 
     /// Starts inbound, outbound, and manual sessions.
     pub async fn start(self: Arc<Self>) -> Result<()> {
+        self.broadcast_tasks.reopen();
         self.stopping.store(false, Ordering::SeqCst);
 
         debug!(target: "net::p2p::start", "P2P::start() [BEGIN] [magic_bytes={:?}]",
@@ -183,6 +277,10 @@ impl P2p {
     pub async fn stop(&self) {
         self.stopping.store(true, Ordering::SeqCst);
 
+        // Reject new broadcasts and cancel retained payloads/channel pointers
+        // before stopping their channels.
+        self.broadcast_tasks.stop_all().await;
+
         // Stop connection producers before draining established channels.
         self.session_inbound().stop().await;
         self.session_manual().stop().await;
@@ -226,13 +324,17 @@ impl P2p {
     }
 
     /// Broadcasts a message concurrently across all active peers.
-    pub async fn broadcast<M: Message>(&self, message: &M) {
+    pub async fn broadcast<M: Message>(&self, message: &M) -> Result<()> {
         self.broadcast_with_exclude(message, &[]).await
     }
 
     /// Broadcasts a message concurrently across active peers, excluding
     /// the ones provided in `exclude_list`.
-    pub async fn broadcast_with_exclude<M: Message>(&self, message: &M, exclude_list: &[Url]) {
+    pub async fn broadcast_with_exclude<M: Message>(
+        &self,
+        message: &M,
+        exclude_list: &[Url],
+    ) -> Result<()> {
         let mut channels = Vec::new();
         for channel in self.hosts().peers() {
             if exclude_list.contains(channel.address()) {
@@ -244,18 +346,49 @@ impl P2p {
     }
 
     /// Broadcast a message concurrently to all given peers.
-    pub async fn broadcast_to<M: Message>(&self, message: &M, channel_list: &[ChannelPtr]) {
+    ///
+    /// The send runs in the background when admitted. If
+    /// [`MAX_CONCURRENT_BROADCASTS`] sends are already active, this returns
+    /// [`Error::BroadcastLimitReached`] without retaining the message or
+    /// channel list. Calls made during shutdown return
+    /// [`Error::NetworkServiceStopped`].
+    pub async fn broadcast_to<M: Message>(
+        &self,
+        message: &M,
+        channel_list: &[ChannelPtr],
+    ) -> Result<()> {
+        if self.is_stopping() {
+            return Err(Error::NetworkServiceStopped)
+        }
+
         if channel_list.is_empty() {
             verbose!(target: "net::p2p::broadcast", "[P2P] No connected channels found for broadcast");
-            return
+            return Ok(())
         }
 
         // Serialize the provided message
         let message = SerializedMessage::new(message).await;
 
-        // Spawn a detached task to actually send the message to the channels,
-        // so we don't block wiating channels that are rate limited.
-        self.executor.spawn(broadcast_serialized_to::<M>(message, channel_list.to_vec())).detach();
+        // Keep rate-limited sends detached while bounding and tracking every
+        // task so shutdown can cancel and drain them.
+        let channels = channel_list.to_vec();
+        self.broadcast_tasks.start(
+            async move {
+                broadcast_serialized_to::<M>(message, channels).await;
+                Ok(())
+            },
+            self.executor.clone(),
+        )
+    }
+
+    /// Number of broadcasts currently retained by this P2P instance.
+    pub fn active_broadcasts(&self) -> usize {
+        self.broadcast_tasks.active()
+    }
+
+    /// Number of broadcasts rejected because the concurrency limit was full.
+    pub fn rejected_broadcasts(&self) -> usize {
+        self.broadcast_tasks.rejected()
     }
 
     /// Check whether this node has connections to any peers. This method will
@@ -365,6 +498,12 @@ impl P2p {
     /// Grab the channel pointer of provided channel ID, if it exists.
     pub fn get_channel(&self, id: u32) -> Option<ChannelPtr> {
         self.hosts.get_channel(id)
+    }
+}
+
+impl Drop for P2p {
+    fn drop(&mut self) {
+        self.broadcast_tasks.stop_all_nowait();
     }
 }
 

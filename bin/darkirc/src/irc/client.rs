@@ -320,7 +320,11 @@ impl Client {
                                     return Err(e)
                                 }
 
-                                self.server.darkirc.p2p.broadcast(&EventPut(event, blob)).await;
+                                if let Err(e) =
+                                    self.server.darkirc.p2p.broadcast(&EventPut(event, blob)).await
+                                {
+                                    error!("[IRC CLIENT] Event broadcast was not admitted: {e}");
+                                }
                             }
                         }
 

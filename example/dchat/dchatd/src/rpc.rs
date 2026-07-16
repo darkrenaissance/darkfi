@@ -20,7 +20,7 @@ use async_trait::async_trait;
 use darkfi::{net::P2pPtr, system::StoppableTaskPtr};
 use smol::lock::MutexGuard;
 use std::collections::HashSet;
-use tracing::debug;
+use tracing::{debug, error};
 
 use darkfi::rpc::{
     jsonrpc::{ErrorCode, JsonError, JsonRequest, JsonResponse, JsonResult},
@@ -62,7 +62,9 @@ impl Dchat {
     async fn send(&self, id: i64, params: JsonValue) -> JsonResult {
         let msg = params[0].get::<String>().unwrap().to_string();
         let dchatmsg = DchatMsg { msg };
-        self.p2p.broadcast(&dchatmsg).await;
+        if let Err(e) = self.p2p.broadcast(&dchatmsg).await {
+            error!(target: "dchatd::rpc", "Message broadcast was not admitted: {e}");
+        }
         JsonResponse::new(JsonValue::Boolean(true), id).into()
     }
 

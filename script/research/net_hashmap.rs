@@ -84,7 +84,7 @@ where
     /// Additionally, this change will be broadcasted to the P2P network.
     pub async fn insert(&mut self, k: K, v: V) -> Result<Option<V>> {
         let message = NetHashMapInsert { k: k.clone(), v: v.clone() };
-        self.p2p.broadcast(&message).await;
+        self.p2p.broadcast(&message).await?;
         Ok(self.hashmap.insert(k, v))
     }
 
@@ -101,7 +101,7 @@ where
         Q: Hash + Eq + Send + Sync + Encodable + Decodable + 'static,
     {
         let message = NetHashMapRemove { k: k.clone() };
-        self.p2p.broadcast(&message).await;
+        self.p2p.broadcast(&message).await?;
         Ok(self.hashmap.remove(&k))
     }
 

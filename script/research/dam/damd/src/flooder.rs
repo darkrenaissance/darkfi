@@ -209,7 +209,7 @@ async fn flood_bar(p2p: P2pPtr, subscriber: JsonSubscriber, limit: u32) -> Resul
         let notification = format!("Broadcasting bar message: {message}");
         info!(target: "damd::flooder::flood_bar", "{notification}");
         subscriber.notify(vec![JsonValue::String(notification)].into()).await;
-        p2p.broadcast(&Bar { message }).await;
+        p2p.broadcast(&Bar { message }).await?;
         message_index += 1;
 
         // Check limit

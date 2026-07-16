@@ -268,7 +268,13 @@ impl<M: Message + Clone, R: Message + Clone + Debug> ProtocolGeneric<M, R> {
             // Handle action signal
             match action {
                 ProtocolGenericAction::Broadcast => {
-                    self.p2p.broadcast_with_exclude(&msg_copy, &exclude_list).await
+                    if let Err(e) = self.p2p.broadcast_with_exclude(&msg_copy, &exclude_list).await
+                    {
+                        debug!(
+                            target: "net::protocol_generic::handle_receive_message",
+                            "Broadcast was not admitted: {e}"
+                        );
+                    }
                 }
                 ProtocolGenericAction::Response(r) => {
                     if let Err(e) = self.channel.send(&r).await {
