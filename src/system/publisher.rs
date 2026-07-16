@@ -16,14 +16,24 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::{collections::HashMap, sync::Arc};
+use std::{
+    collections::HashMap,
+    sync::{
+        atomic::{AtomicUsize, Ordering},
+        Arc,
+    },
+};
 
+use parking_lot::Mutex;
 use rand::{rngs::OsRng, Rng};
-use smol::lock::Mutex;
-use tracing::warn;
 
 pub type PublisherPtr<T> = Arc<Publisher<T>>;
 pub type SubscriptionId = usize;
+
+/// Maximum number of pending notifications retained by each subscription.
+/// When full, the oldest notification is discarded so producers never block
+/// and the subscriber receives the newest state or shutdown signal.
+pub const PUBLISHER_QUEUE_CAPACITY: usize = 1024;
 
 #[derive(Debug)]
 /// Subscription to the Publisher. Created using `publisher.subscribe().await`.
@@ -50,9 +60,15 @@ impl<T: Clone> Subscription<T> {
         }
     }
 
-    /// Must be called manually since async Drop is not possible in Rust
+    /// Remove this subscription immediately. Dropping it has the same effect.
     pub async fn unsubscribe(&self) {
-        self.parent.clone().unsubscribe(self.id).await
+        self.parent.unsubscribe(self.id)
+    }
+}
+
+impl<T> Drop for Subscription<T> {
+    fn drop(&mut self) {
+        self.parent.unsubscribe(self.id)
     }
 }
 
@@ -60,12 +76,24 @@ impl<T: Clone> Subscription<T> {
 #[derive(Debug)]
 pub struct Publisher<T> {
     subs: Mutex<HashMap<SubscriptionId, smol::channel::Sender<T>>>,
+    queue_capacity: usize,
+    dropped_notifications: AtomicUsize,
 }
 
-impl<T: Clone> Publisher<T> {
+impl<T> Publisher<T> {
     /// Construct a new publisher.
     pub fn new() -> Arc<Self> {
-        Arc::new(Self { subs: Mutex::new(HashMap::new()) })
+        Self::with_capacity(PUBLISHER_QUEUE_CAPACITY)
+    }
+
+    /// Construct a publisher with a custom per-subscription queue capacity.
+    pub fn with_capacity(queue_capacity: usize) -> Arc<Self> {
+        assert!(queue_capacity > 0, "publisher queue capacity must be nonzero");
+        Arc::new(Self {
+            subs: Mutex::new(HashMap::new()),
+            queue_capacity,
+            dropped_notifications: AtomicUsize::new(0),
+        })
     }
 
     fn random_id() -> SubscriptionId {
@@ -77,24 +105,32 @@ impl<T: Clone> Publisher<T> {
     /// Then when your main loop begins calling `sub.receive().await`, the messages will
     /// already be queued.
     pub async fn subscribe(self: Arc<Self>) -> Subscription<T> {
-        let (sender, recvr) = smol::channel::unbounded();
+        let (sender, recvr) = smol::channel::bounded(self.queue_capacity);
 
         // Poor-man's do/while
-        let mut subs = self.subs.lock().await;
+        let mut subs = self.subs.lock();
         let mut sub_id = Self::random_id();
         while subs.contains_key(&sub_id) {
             sub_id = Self::random_id();
         }
 
         subs.insert(sub_id, sender);
+        drop(subs);
 
-        Subscription { id: sub_id, recv_queue: recvr, parent: self.clone() }
+        Subscription { id: sub_id, recv_queue: recvr, parent: self }
     }
 
-    async fn unsubscribe(self: Arc<Self>, sub_id: SubscriptionId) {
-        self.subs.lock().await.remove(&sub_id);
+    fn unsubscribe(&self, sub_id: SubscriptionId) {
+        self.subs.lock().remove(&sub_id);
     }
 
+    /// Number of oldest notifications discarded due to full subscriber queues.
+    pub fn dropped_notifications(&self) -> usize {
+        self.dropped_notifications.load(Ordering::Relaxed)
+    }
+}
+
+impl<T: Clone> Publisher<T> {
     /// Publish a message to all listening subscriptions.
     pub async fn notify(&self, message_result: T) {
         self.notify_with_exclude(message_result, &[]).await
@@ -102,26 +138,32 @@ impl<T: Clone> Publisher<T> {
 
     /// Publish a message to all listening subscriptions but exclude some subset.
     pub async fn notify_with_exclude(&self, message_result: T, exclude_list: &[SubscriptionId]) {
-        for (id, sub) in (*self.subs.lock().await).iter() {
+        let mut overflowed = 0;
+        self.subs.lock().retain(|id, sub| {
             if exclude_list.contains(id) {
-                continue
+                return true
             }
 
-            if let Err(e) = sub.send(message_result.clone()).await {
-                warn!(
-                    target: "system::publisher",
-                    "[system::publisher] Error returned sending message in notify_with_exclude() call! {e}"
-                );
+            match sub.force_send(message_result.clone()) {
+                Ok(Some(_)) => {
+                    overflowed += 1;
+                    true
+                }
+                Ok(None) => true,
+                Err(_) => false,
             }
+        });
+
+        if overflowed > 0 {
+            self.dropped_notifications.fetch_add(overflowed, Ordering::Relaxed);
         }
     }
 
-    /// Clear inactive subscribtions.
-    /// Returns a flag indicating if we have active subscriptions
-    /// after cleanup.
+    /// Clear inactive subscriptions.
+    /// Returns `true` when no active subscriptions remain after cleanup.
     pub async fn clear_inactive(&self) -> bool {
         // Grab a lock over current jobs
-        let mut subs = self.subs.lock().await;
+        let mut subs = self.subs.lock();
 
         // Find inactive subscriptions
         let mut dropped = vec![];
@@ -136,7 +178,64 @@ impl<T: Clone> Publisher<T> {
             subs.remove(&sub);
         }
 
-        // Return flag indicating if we still have subscriptions
+        // Return whether no subscriptions remain.
         subs.is_empty()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn dropped_subscription_removes_sender() {
+        smol::block_on(async {
+            let publisher = Publisher::<u32>::new();
+            let subscription = publisher.clone().subscribe().await;
+            assert_eq!(publisher.subs.lock().len(), 1);
+
+            drop(subscription);
+            assert!(publisher.subs.lock().is_empty());
+        });
+    }
+
+    #[test]
+    fn slow_subscription_keeps_newest_notifications() {
+        smol::block_on(async {
+            let publisher = Publisher::with_capacity(2);
+            let subscription = publisher.clone().subscribe().await;
+
+            publisher.notify(1).await;
+            publisher.notify(2).await;
+            publisher.notify(3).await;
+
+            assert_eq!(subscription.receive().await, 2);
+            assert_eq!(subscription.receive().await, 3);
+            assert_eq!(publisher.dropped_notifications(), 1);
+        });
+    }
+
+    #[test]
+    fn explicit_unsubscribe_removes_sender() {
+        smol::block_on(async {
+            let publisher = Publisher::<u32>::new();
+            let subscription = publisher.clone().subscribe().await;
+
+            subscription.unsubscribe().await;
+            assert!(publisher.subs.lock().is_empty());
+        });
+    }
+
+    #[test]
+    fn notify_removes_closed_sender() {
+        smol::block_on(async {
+            let publisher = Publisher::<u32>::new();
+            let (sender, receiver) = smol::channel::bounded(1);
+            drop(receiver);
+            publisher.subs.lock().insert(1, sender);
+
+            publisher.notify(1).await;
+            assert!(publisher.subs.lock().is_empty());
+        });
     }
 }
