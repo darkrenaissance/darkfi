@@ -53,7 +53,7 @@ use std::{collections::HashSet, sync::atomic::Ordering::SeqCst};
 
 use darkfi::Result;
 use darkfi_serial::deserialize_async_partial;
-use tracing::{error, info};
+use tracing::{error, info, warn};
 
 use super::{
     client::{Client, ReplyType},
@@ -991,7 +991,10 @@ impl Client {
     // <file:./client.rs::r = self.incoming.receive().fuse() => {>
     // for which the logic for delivery should be kept in sync
     async fn get_history(&self, channels: &HashSet<String>) -> Result<Vec<ReplyType>> {
-        if channels.is_empty() || *self.caps.read().await.get("no-history").unwrap() {
+        let has_contacts = !self.server.contacts.read().await.is_empty();
+        if (channels.is_empty() && !has_contacts) ||
+            *self.caps.read().await.get("no-history").unwrap()
+        {
             return Ok(vec![])
         }
 
@@ -1030,8 +1033,18 @@ impl Client {
             // If the PRIVMSG is intended for any of the given
             // channels or contacts, add it as a reply and
             // mark it as seen in the seen_events tree.
-            let contacts = self.server.contacts.read().await;
-            if !channels.contains(&privmsg.channel) && !contacts.contains_key(&privmsg.channel) {
+            let intended_for_client = channels.contains(&privmsg.channel) ||
+                self.server.contacts.read().await.contains_key(&privmsg.channel);
+            if !intended_for_client {
+                continue
+            }
+
+            let lines = super::client::message_lines(&privmsg.msg);
+            if lines.is_empty() {
+                warn!(
+                    "[IRC CLIENT] Refusing to mark historical event {event_id} as seen: \
+                     PRIVMSG has no deliverable lines"
+                );
                 continue
             }
 
@@ -1041,23 +1054,17 @@ impl Client {
             }
 
             // Handle message lines individually
-            for line in privmsg.msg.lines() {
-                // Skip empty lines
-                if line.is_empty() {
-                    continue;
-                }
-
+            for (index, line) in lines.iter().enumerate() {
                 // Format the message
                 let msg = format!("PRIVMSG {} :{line}", privmsg.channel);
 
-                // Send it to the client
-                replies.push(ReplyType::Client((privmsg.nick.clone(), msg)));
-            }
-
-            // Mark the message as seen for this USER
-            if let Err(e) = self.mark_seen(&event_id).await {
-                error!("[IRC CLIENT] (get_history) self.mark_seen({event_id}) failed: {e}");
-                return Err(e)
+                // Mark the event seen only after its final line is written.
+                let delivered_event = (index + 1 == lines.len()).then_some(event_id);
+                replies.push(ReplyType::HistoricalClient((
+                    privmsg.nick.clone(),
+                    msg,
+                    delivered_event,
+                )));
             }
         }
 

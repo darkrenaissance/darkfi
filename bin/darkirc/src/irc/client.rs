@@ -22,6 +22,7 @@ use std::{
         atomic::{AtomicBool, AtomicUsize, Ordering::SeqCst},
         Arc,
     },
+    time::Duration,
 };
 
 use darkfi::{
@@ -30,13 +31,14 @@ use darkfi::{
     Error, Result,
 };
 use darkfi_serial::{deserialize_async_partial, serialize_async};
-use futures::FutureExt;
+use futures::{FutureExt, StreamExt};
 use sled_overlay::sled;
 use smol::{
     io::{self, AsyncBufRead, AsyncBufReadExt, AsyncWriteExt, BufReader},
     lock::{OnceCell, RwLock},
     net::SocketAddr,
     prelude::{AsyncRead, AsyncWrite},
+    Timer,
 };
 use tracing::{debug, error, warn};
 
@@ -98,18 +100,49 @@ fn enqueue_pending_privmsg(args_queue: &mut VecDeque<Privmsg>, privmsg: Privmsg)
     true
 }
 
+pub(super) fn message_lines(message: &str) -> Vec<&str> {
+    message.split(['\r', '\n']).filter(|line| !line.is_empty()).collect()
+}
+
 /// Reply types, we can either send server replies, or client replies.
 pub enum ReplyType {
     /// Server reply, we have to use numerics
     Server((u16, String)),
     /// Client reply, message from someone to some{one,where}
     Client((String, String)),
+    /// Historical client reply. The event is marked seen after its final line
+    /// has been written successfully.
+    HistoricalClient((String, String, Option<blake3::Hash>)),
     /// Pong reply, we just use server origin
     Pong(String),
     /// CAP reply
     Cap(String),
     /// NOTICE reply (from, to, what)
     Notice((String, String, String)),
+}
+
+fn format_reply(reply: &ReplyType) -> String {
+    match reply {
+        ReplyType::Server((rpl, msg)) => format!(":{SERVER_NAME} {rpl:03} {msg}"),
+        ReplyType::Client((nick, msg)) | ReplyType::HistoricalClient((nick, msg, _)) => {
+            format!(":{nick}!~anon@darkirc {msg}")
+        }
+        ReplyType::Pong(origin) => format!(":{SERVER_NAME} PONG :{origin}"),
+        ReplyType::Cap(msg) => format!(":{SERVER_NAME} {msg}"),
+        ReplyType::Notice((src, dst, msg)) => {
+            format!(":{src}!~anon@darkirc NOTICE {dst} :{msg}")
+        }
+    }
+}
+
+async fn write_irc_frame<W>(writer: &mut W, mut frame: String) -> Result<()>
+where
+    W: AsyncWrite + Unpin,
+{
+    frame.push_str("\r\n");
+    writer.write_all(frame.as_bytes()).await?;
+    writer.flush().await?;
+    Ok(())
 }
 
 /// Stateful IRC client handler, used for each client connection
@@ -203,6 +236,7 @@ impl Client {
         let mut line = String::new();
 
         let mut args_queue: VecDeque<_> = VecDeque::new();
+        let mut queue_timer = Timer::interval(Duration::from_secs(1));
 
         loop {
             futures::select! {
@@ -230,6 +264,15 @@ impl Client {
                         return Err(Error::ChannelStopped)
                     }
 
+                    // Preserve send order when sync completed between client
+                    // commands: publish the queued messages before the command
+                    // that just arrived.
+                    if self.server.darkirc.event_graph.is_synced() && !args_queue.is_empty() {
+                        let pending = self.pending_privmsgs_to_events(&args_queue).await?;
+                        self.publish_events(pending).await?;
+                        args_queue.clear();
+                    }
+
                     // We'll be strict here and disconnect the client
                     // in case line processing failed in any way.
                     match self.process_client_line(&line, &mut writer, &mut args_queue).await {
@@ -237,95 +280,7 @@ impl Client {
                         // This means we add it to our DAG, and the DAG will
                         // handle the rest of the propagation.
                         Ok(Some(events)) => {
-                            for event in events {
-                                // Update the last sent event.
-                                let event_id = event.header.id();
-                                *self.last_sent.write().await = event_id;
-                                let current_genesis = self.server.darkirc.event_graph.current_genesis.read().await;
-                                let dag_name = current_genesis.header.timestamp.to_string();
-                                drop(current_genesis);
-
-                                // Build the RLN signal blob before touching the local
-                                // DAG when RLN is enabled. With RLN disabled, outbound
-                                // events deliberately carry no proof blob.
-                                let blob = if self.server.darkirc.event_graph.rln_enabled() {
-                                    let (rln_identity, mid) = match self
-                                        .server
-                                        .reserve_rln_message_id(event.header.timestamp)
-                                        .await?
-                                    {
-                                        RlnMessageReservation::Reserved {
-                                            identity,
-                                            message_id,
-                                        } => (identity, message_id),
-                                        RlnMessageReservation::MissingIdentity => {
-                                            warn!(
-                                                "[IRC CLIENT] No RLN identity registered; \
-                                                 refusing to send. Use \
-                                                 `/msg NickServ REGISTER ...` to register."
-                                            );
-                                            continue
-                                        }
-                                        RlnMessageReservation::BudgetExhausted => {
-                                            warn!(
-                                                "[IRC CLIENT] RLN message budget \
-                                                 exhausted for this epoch; dropping \
-                                                 message to avoid slash"
-                                            );
-                                            continue
-                                        }
-                                    };
-                                    match rln_identity
-                                        .create_signal(
-                                            &event,
-                                            mid,
-                                            &self.server.darkirc.event_graph,
-                                        )
-                                        .await
-                                    {
-                                        Ok(blob) => serialize_async(&blob).await,
-                                        Err(e) => {
-                                            error!(
-                                                "[IRC CLIENT] Failed creating RLN \
-                                                 signal proof: {e}"
-                                            );
-                                            return Err(e)
-                                        }
-                                    }
-                                } else {
-                                    Vec::new()
-                                };
-
-                                // Commit our outbound signal through
-                                // the safe public API. It inserts the
-                                // header, verifies and stores the RLN
-                                // blob, then commits the event body.
-                                if let Err(e) = self
-                                    .server
-                                    .darkirc
-                                    .event_graph
-                                    .insert_signal_with_blob(&event, &blob, &dag_name)
-                                    .await
-                                {
-                                    error!(
-                                        "[IRC CLIENT] Failed inserting verified \
-                                         signal event: {e}"
-                                    );
-                                    continue
-                                }
-
-                                // We sent this, so it should be considered seen.
-                                if let Err(e) = self.mark_seen(&event_id).await {
-                                    error!("[IRC CLIENT] (multiplex_connection) self.mark_seen({event_id}) failed: {e}");
-                                    return Err(e)
-                                }
-
-                                if let Err(e) =
-                                    self.server.darkirc.p2p.broadcast(&EventPut(event, blob)).await
-                                {
-                                    error!("[IRC CLIENT] Event broadcast was not admitted: {e}");
-                                }
-                            }
+                            self.publish_events(events).await?;
                         }
 
                         // If we got nothing, we just pass.
@@ -341,6 +296,16 @@ impl Client {
 
                     // Clear the line buffer
                     line = String::new();
+                }
+
+                // Flush messages accepted while the Event Graph was syncing,
+                // even when the user does not send another message after sync.
+                _ = queue_timer.next().fuse() => {
+                    if self.server.darkirc.event_graph.is_synced() && !args_queue.is_empty() {
+                        let pending = self.pending_privmsgs_to_events(&args_queue).await?;
+                        self.publish_events(pending).await?;
+                        args_queue.clear();
+                    }
                 }
 
                 // Process message from the network. These should only be PRIVMSG.
@@ -387,11 +352,18 @@ impl Client {
                     // channels or contacts, ignore it
                     // otherwise add it as a reply and mark it as seen
                     // in the seen_events tree.
-                    let channels = self.channels.read().await;
-                    let contacts = self.server.contacts.read().await;
-                    if !channels.contains(&privmsg.channel) &&
-                        !contacts.contains_key(&privmsg.channel)
-                    {
+                    let intended_for_client = self.channels.read().await.contains(&privmsg.channel) ||
+                        self.server.contacts.read().await.contains_key(&privmsg.channel);
+                    if !intended_for_client {
+                        continue
+                    }
+
+                    let lines = message_lines(&privmsg.msg);
+                    if lines.is_empty() {
+                        warn!(
+                            "[IRC CLIENT] Refusing to mark event {event_id} as seen: \
+                             PRIVMSG has no deliverable lines"
+                        );
                         continue
                     }
 
@@ -403,21 +375,13 @@ impl Client {
                     drop(chans_lock);
 
                     // Handle message lines individually
-                    for line in privmsg.msg.lines() {
-                        // Skip empty lines
-                        if line.is_empty() {
-                            continue
-                        }
-
+                    for line in lines {
                         // Format the message
                         let msg = format!("PRIVMSG {} :{line}", privmsg.channel);
 
                         // Send it to the client
                         let reply = ReplyType::Client((privmsg.nick.clone(), msg));
-                        if let Err(e) = self.reply(&mut writer, &reply).await {
-                            error!("[IRC CLIENT] Failed writing PRIVMSG to client: {e}");
-                            continue
-                        }
+                        self.reply(&mut writer, &reply).await?;
                     }
 
                     // Mark the message as seen for this USER
@@ -462,26 +426,108 @@ impl Client {
         }
     }
 
+    async fn pending_privmsgs_to_events(
+        &self,
+        args_queue: &VecDeque<Privmsg>,
+    ) -> Result<Vec<Event>> {
+        let mut events = Vec::with_capacity(args_queue.len());
+        for privmsg in args_queue.iter().cloned() {
+            events.push(self.privmsg_to_event(privmsg).await?);
+        }
+        Ok(events)
+    }
+
+    async fn publish_events(&self, events: Vec<Event>) -> Result<()> {
+        for event in events {
+            // Update the last sent event.
+            let event_id = event.header.id();
+            *self.last_sent.write().await = event_id;
+            let current_genesis = self.server.darkirc.event_graph.current_genesis.read().await;
+            let dag_name = current_genesis.header.timestamp.to_string();
+            drop(current_genesis);
+
+            // Build the RLN signal blob before touching the local DAG when RLN
+            // is enabled. With RLN disabled, outbound events deliberately carry
+            // no proof blob.
+            let blob = if self.server.darkirc.event_graph.rln_enabled() {
+                let (rln_identity, mid) =
+                    match self.server.reserve_rln_message_id(event.header.timestamp).await? {
+                        RlnMessageReservation::Reserved { identity, message_id } => {
+                            (identity, message_id)
+                        }
+                        RlnMessageReservation::MissingIdentity => {
+                            warn!(
+                                "[IRC CLIENT] No RLN identity registered; refusing to send. Use \
+                                 `/msg NickServ REGISTER ...` to register."
+                            );
+                            continue
+                        }
+                        RlnMessageReservation::BudgetExhausted => {
+                            warn!(
+                                "[IRC CLIENT] RLN message budget exhausted for this epoch; \
+                                 dropping message to avoid slash"
+                            );
+                            continue
+                        }
+                    };
+                match rln_identity
+                    .create_signal(&event, mid, &self.server.darkirc.event_graph)
+                    .await
+                {
+                    Ok(blob) => serialize_async(&blob).await,
+                    Err(e) => {
+                        error!("[IRC CLIENT] Failed creating RLN signal proof: {e}");
+                        return Err(e)
+                    }
+                }
+            } else {
+                Vec::new()
+            };
+
+            // Commit our outbound signal through the safe public API. It inserts
+            // the header, verifies and stores the RLN blob, then commits the event
+            // body.
+            if let Err(e) = self
+                .server
+                .darkirc
+                .event_graph
+                .insert_signal_with_blob(&event, &blob, &dag_name)
+                .await
+            {
+                error!("[IRC CLIENT] Failed inserting verified signal event: {e}");
+                continue
+            }
+
+            // We sent this, so it should be considered seen.
+            if let Err(e) = self.mark_seen(&event_id).await {
+                error!(
+                    "[IRC CLIENT] (multiplex_connection) self.mark_seen({event_id}) failed: {e}"
+                );
+                return Err(e)
+            }
+
+            if let Err(e) = self.server.darkirc.p2p.broadcast(&EventPut(event, blob)).await {
+                error!("[IRC CLIENT] Event broadcast was not admitted: {e}");
+            }
+        }
+
+        Ok(())
+    }
+
     /// Send a reply to the IRC client. Matches on the reply type.
     async fn reply<W>(&self, writer: &mut W, reply: &ReplyType) -> Result<()>
     where
         W: AsyncWrite + Unpin,
     {
-        let r = match reply {
-            ReplyType::Server((rpl, msg)) => format!(":{SERVER_NAME} {rpl:03} {msg}"),
-            ReplyType::Client((nick, msg)) => format!(":{nick}!~anon@darkirc {msg}"),
-            ReplyType::Pong(origin) => format!(":{SERVER_NAME} PONG :{origin}"),
-            ReplyType::Cap(msg) => format!(":{SERVER_NAME} {msg}"),
-            ReplyType::Notice((src, dst, msg)) => {
-                format!(":{src}!~anon@darkirc NOTICE {dst} :{msg}")
-            }
-        };
+        let r = format_reply(reply);
 
         debug!("[{}] <-- {r}", self.addr);
 
-        writer.write(r.as_bytes()).await?;
-        writer.write(b"\r\n").await?;
-        writer.flush().await?;
+        write_irc_frame(writer, r).await?;
+
+        if let ReplyType::HistoricalClient((_, _, Some(event_id))) = reply {
+            self.mark_seen(event_id).await?;
+        }
 
         Ok(())
     }
@@ -600,17 +646,8 @@ impl Client {
                 return Ok(None)
             }
 
-            // Check if we have queued PRIVMSGs, if we do send all of them first.
-            let mut pending_events = vec![];
-            if !args_queue.is_empty() {
-                for _ in 0..args_queue.len() {
-                    let privmsg = args_queue.pop_front().unwrap();
-                    pending_events.push(self.privmsg_to_event(privmsg).await?);
-                }
-                return Ok(Some(pending_events))
-            }
-
-            // If queue is empty, create an event and return it
+            // The connection loop drains any messages queued during sync before
+            // processing this current message.
             let Some(privmsg) = self.args_to_privmsg(args).await else {
                 self.penalty.fetch_add(1, SeqCst);
                 return Ok(None)
@@ -676,14 +713,44 @@ impl Client {
 
 #[cfg(test)]
 mod tests {
-    use std::collections::VecDeque;
+    use std::{
+        collections::VecDeque,
+        pin::Pin,
+        task::{Context, Poll},
+    };
 
-    use smol::io::{BufReader, Cursor};
+    use smol::io::{AsyncWrite, BufReader, Cursor};
 
     use super::{
-        enqueue_pending_privmsg, read_bounded_line, MAX_IRC_LINE_LEN, MAX_PENDING_PRIVMSGS,
+        enqueue_pending_privmsg, format_reply, message_lines, read_bounded_line, write_irc_frame,
+        ReplyType, MAX_IRC_LINE_LEN, MAX_PENDING_PRIVMSGS,
     };
     use crate::Privmsg;
+
+    struct ShortWriter {
+        bytes: Vec<u8>,
+        max_write: usize,
+    }
+
+    impl AsyncWrite for ShortWriter {
+        fn poll_write(
+            mut self: Pin<&mut Self>,
+            _cx: &mut Context<'_>,
+            buf: &[u8],
+        ) -> Poll<std::io::Result<usize>> {
+            let written = buf.len().min(self.max_write);
+            self.bytes.extend_from_slice(&buf[..written]);
+            Poll::Ready(Ok(written))
+        }
+
+        fn poll_flush(self: Pin<&mut Self>, _cx: &mut Context<'_>) -> Poll<std::io::Result<()>> {
+            Poll::Ready(Ok(()))
+        }
+
+        fn poll_close(self: Pin<&mut Self>, _cx: &mut Context<'_>) -> Poll<std::io::Result<()>> {
+            Poll::Ready(Ok(()))
+        }
+    }
 
     #[test]
     fn read_bounded_line_accepts_line_within_limit() {
@@ -719,6 +786,26 @@ mod tests {
 
         assert!(!enqueue_pending_privmsg(&mut queue, privmsg()));
         assert_eq!(queue.len(), MAX_PENDING_PRIVMSGS);
+    }
+
+    #[test]
+    fn irc_frame_is_complete_when_writer_accepts_short_writes() {
+        smol::block_on(async {
+            let reply =
+                ReplyType::Client(("alice".to_string(), "PRIVMSG alice :hello".to_string()));
+            let frame = format_reply(&reply);
+            let mut writer = ShortWriter { bytes: vec![], max_write: 3 };
+
+            write_irc_frame(&mut writer, frame).await.unwrap();
+
+            assert_eq!(writer.bytes, b":alice!~anon@darkirc PRIVMSG alice :hello\r\n");
+        });
+    }
+
+    #[test]
+    fn message_lines_cannot_inject_irc_frames() {
+        assert_eq!(message_lines("one\r\ntwo\n\rthree"), ["one", "two", "three"]);
+        assert!(message_lines("\r\n").is_empty());
     }
 
     fn privmsg() -> Privmsg {
