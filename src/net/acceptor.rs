@@ -51,6 +51,26 @@ use crate::{
 /// Atomic pointer to Acceptor
 pub type AcceptorPtr = Arc<Acceptor>;
 
+/// Releases an inbound connection slot when its tracking task exits.
+struct InboundSlotGuard {
+    acceptor: AcceptorPtr,
+    cv: Arc<CondVar>,
+}
+
+impl InboundSlotGuard {
+    fn new(acceptor: AcceptorPtr, cv: Arc<CondVar>) -> Self {
+        Self { acceptor, cv }
+    }
+}
+
+impl Drop for InboundSlotGuard {
+    fn drop(&mut self) {
+        let previous = self.acceptor.conn_count.fetch_sub(1, SeqCst);
+        debug_assert!(previous > 0, "inbound connection counter underflow");
+        self.cv.notify();
+    }
+}
+
 /// Create inbound socket connections
 pub struct Acceptor {
     channel_publisher: PublisherPtr<Result<ChannelPtr>>,
@@ -132,6 +152,11 @@ impl Acceptor {
         self.channel_publisher.clone().subscribe().await
     }
 
+    #[cfg(test)]
+    pub(super) fn connection_count(&self) -> usize {
+        self.conn_count.load(SeqCst)
+    }
+
     /// Run the accept loop in a new thread and error if a connection problem occurs
     fn accept(self: Arc<Self>, listener: Box<dyn PtListener>, ex: ExecutorPtr) {
         let self_ = self.clone();
@@ -191,15 +216,13 @@ impl Acceptor {
                     // This task will subscribe on the new channel and decrement
                     // the connection counter. Along with that, it will notify
                     // the CondVar that might be waiting to allow new connections.
-                    let self_ = self.clone();
                     let channel_ = channel.clone();
-                    let cv_ = cv.clone();
+                    let slot_guard = InboundSlotGuard::new(self.clone(), cv.clone());
                     ex.spawn(async move {
-                        let stop_sub = channel_.subscribe_stop().await?;
-                        stop_sub.receive().await;
-                        self_.conn_count.fetch_sub(1, SeqCst);
-                        cv_.notify();
-                        Ok::<(), crate::Error>(())
+                        if let Ok(stop_sub) = channel_.subscribe_stop().await {
+                            stop_sub.receive().await;
+                        }
+                        drop(slot_guard);
                     })
                     .detach();
 

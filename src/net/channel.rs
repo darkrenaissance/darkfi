@@ -186,11 +186,14 @@ impl Channel {
     pub async fn subscribe_stop(&self) -> Result<Subscription<Error>> {
         debug!(target: "net::channel::subscribe_stop", "START {self:?}");
 
+        let sub = self.stop_publisher.clone().subscribe().await;
+
+        // Subscribe before checking the stopped state so a concurrent stop
+        // cannot happen between the check and subscription registration.
         if self.is_stopped() {
+            sub.unsubscribe().await;
             return Err(Error::ChannelStopped)
         }
-
-        let sub = self.stop_publisher.clone().subscribe().await;
 
         debug!(target: "net::channel::subscribe_stop", "END {self:?}");
 

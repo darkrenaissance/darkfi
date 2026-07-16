@@ -23,11 +23,12 @@ use std::{
     net::TcpListener,
     panic,
     sync::Arc,
+    time::Duration,
 };
 
 use darkfi_serial::{async_trait, SerialDecodable, SerialEncodable};
 use rand::{prelude::SliceRandom, rngs::ThreadRng, Rng};
-use smol::{channel, future, Executor};
+use smol::{channel, future, net::TcpStream, Executor, Timer};
 use tracing::{error, info, warn};
 use url::Url;
 
@@ -39,7 +40,7 @@ use crate::{
         settings::NetworkProfile,
         P2p, Settings,
     },
-    system::sleep,
+    system::{sleep, timeout::timeout},
     util::logger::{setup_test_logger, Level},
 };
 
@@ -611,4 +612,53 @@ async fn p2p_channel_invalid_message_length_gets_banned_real(ex: Arc<Executor<'s
     assert_eq!(node2_p2p.hosts().container.fetch_all(HostColor::Black).len(), 1);
     node1_p2p.stop().await;
     node2_p2p.stop().await;
+}
+
+#[test]
+fn p2p_inbound_slots_survive_rapid_disconnects() {
+    test_body!(p2p_inbound_slots_survive_rapid_disconnects_real, 2);
+}
+
+async fn p2p_inbound_slots_survive_rapid_disconnects_real(ex: Arc<Executor<'static>>) {
+    const CONNECTION_LIMIT: usize = 8;
+    const CONNECTION_ATTEMPTS: usize = 2048;
+
+    let port = get_random_available_port();
+    let addr = format!("127.0.0.1:{port}");
+    let listen_url = Url::parse(&format!("tcp://{addr}")).unwrap();
+    let settings = Settings {
+        localnet: true,
+        inbound_addrs: vec![listen_url],
+        inbound_connections: CONNECTION_LIMIT,
+        outbound_connections: 0,
+        active_profiles: vec!["tcp".to_string()],
+        ..Default::default()
+    };
+
+    let p2p = P2p::new(settings, ex).await.unwrap();
+    p2p.clone().start().await.unwrap();
+
+    for _ in 0..CONNECTION_ATTEMPTS {
+        let stream = timeout(Duration::from_secs(1), TcpStream::connect(&addr))
+            .await
+            .expect("inbound listener stalled")
+            .expect("failed connecting to inbound listener");
+        drop(stream);
+    }
+
+    timeout(Duration::from_secs(5), async {
+        while p2p.session_inbound().connection_count().await != 0 {
+            Timer::after(Duration::from_millis(10)).await;
+        }
+    })
+    .await
+    .expect("inbound connection slots were not released");
+
+    let stream = timeout(Duration::from_secs(1), TcpStream::connect(&addr))
+        .await
+        .expect("inbound listener did not recover")
+        .expect("failed reconnecting to inbound listener");
+    drop(stream);
+
+    p2p.stop().await;
 }

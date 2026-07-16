@@ -130,6 +130,11 @@ impl InboundSession {
         }
     }
 
+    #[cfg(test)]
+    pub(crate) async fn connection_count(&self) -> usize {
+        self.acceptors.lock().await.iter().map(|acceptor| acceptor.connection_count()).sum()
+    }
+
     /// Start accepting connections for inbound session.
     async fn start_accept_session(
         self: Arc<Self>,
