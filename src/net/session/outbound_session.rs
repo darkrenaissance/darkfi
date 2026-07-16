@@ -105,7 +105,7 @@ impl OutboundSession {
     /// Stops the outbound session.
     pub(crate) async fn stop(&self) {
         debug!(target: "net::outbound_session", "Stopping outbound session..");
-        let slots = &*self.slots.lock().await;
+        let slots = std::mem::take(&mut *self.slots.lock().await);
         let mut futures = FuturesUnordered::new();
 
         for slot in slots {

@@ -382,7 +382,7 @@ pub struct ProtocolEventGraph {
 #[async_trait]
 impl ProtocolBase for ProtocolEventGraph {
     async fn start(self: Arc<Self>, ex: Arc<Executor<'_>>) -> Result<()> {
-        self.jobsman.clone().start(ex.clone());
+        self.jobsman.clone().start(ex.clone()).await?;
         self.jobsman.clone().spawn(self.clone().handle_event_put(), ex.clone()).await;
         self.jobsman.clone().spawn(self.clone().handle_static_put(), ex.clone()).await;
         self.jobsman.clone().spawn(self.clone().handle_event_req(), ex.clone()).await;

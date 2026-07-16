@@ -546,7 +546,7 @@ impl ProtocolHolepunch {
 impl ProtocolBase for ProtocolHolepunch {
     async fn start(self: Arc<Self>, ex: Arc<Executor<'_>>) -> Result<()> {
         debug!(target: "net::protocol_holepunch", "Starting on {}", self.channel.display_address());
-        self.jobsman.clone().start(ex.clone());
+        self.jobsman.clone().start(ex.clone()).await?;
         self.jobsman.clone().spawn(self.clone().handle_relay_requests(), ex.clone()).await;
         self.jobsman.clone().spawn(self.clone().handle_connect_instructions(), ex.clone()).await;
         self.jobsman.spawn(self.clone().nonce_cleanup_loop(), ex).await;

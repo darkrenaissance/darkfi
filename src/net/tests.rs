@@ -662,3 +662,65 @@ async fn p2p_inbound_slots_survive_rapid_disconnects_real(ex: Arc<Executor<'stat
 
     p2p.stop().await;
 }
+
+#[test]
+fn p2p_shutdown_drains_channels_across_restarts() {
+    test_body!(p2p_shutdown_drains_channels_across_restarts_real, 2);
+}
+
+async fn p2p_shutdown_drains_channels_across_restarts_real(ex: Arc<Executor<'static>>) {
+    const LIFECYCLE_COUNT: usize = 3;
+
+    let port = get_random_available_port();
+    let listen_url = Url::parse(&format!("tcp://127.0.0.1:{port}")).unwrap();
+    let server_settings = Settings {
+        localnet: true,
+        inbound_addrs: vec![listen_url.clone()],
+        inbound_connections: 8,
+        outbound_connections: 0,
+        active_profiles: vec!["tcp".to_string()],
+        ..Default::default()
+    };
+    let client_settings = Settings {
+        localnet: true,
+        peers: vec![listen_url],
+        inbound_connections: 0,
+        outbound_connections: 0,
+        active_profiles: vec!["tcp".to_string()],
+        ..Default::default()
+    };
+
+    let server = P2p::new(server_settings, ex.clone()).await.unwrap();
+    let client = P2p::new(client_settings, ex).await.unwrap();
+
+    for _ in 0..LIFECYCLE_COUNT {
+        server.clone().start().await.unwrap();
+        client.clone().start().await.unwrap();
+
+        timeout(Duration::from_secs(5), async {
+            while server.hosts().channels().is_empty() || client.hosts().channels().is_empty() {
+                Timer::after(Duration::from_millis(10)).await;
+            }
+        })
+        .await
+        .expect("manual connection was not established");
+
+        let channels = server
+            .hosts()
+            .channels()
+            .into_iter()
+            .chain(client.hosts().channels())
+            .collect::<Vec<_>>();
+
+        client.stop().await;
+        server.stop().await;
+
+        assert!(client.hosts().channels().is_empty());
+        assert!(server.hosts().channels().is_empty());
+        assert_eq!(server.session_inbound().connection_count().await, 0);
+        for channel in channels {
+            assert!(channel.is_stopped());
+            assert_eq!(channel.cleanup_task_count().await, 0);
+        }
+    }
+}

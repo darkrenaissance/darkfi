@@ -80,7 +80,7 @@ impl net::ProtocolBase for ProtocolDebugmsg {
     /// waits for pong reply. Waits for ping and replies with a pong.
     async fn start(self: Arc<Self>, executor: Arc<Executor<'_>>) -> Result<()> {
         debug!(target: "p2pdbg", "Protocoldebugmsg::start() [START]");
-        self.jobsman.clone().start(executor.clone());
+        self.jobsman.clone().start(executor.clone()).await?;
         self.jobsman.clone().spawn(self.clone().handle_receive_debugmsg(), executor.clone()).await;
         debug!(target: "p2pdbg", "ProtocolDebugmsg::start() [END]");
         Ok(())

@@ -16,19 +16,23 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::sync::{
-    atomic::{AtomicBool, Ordering},
-    Arc,
+use std::{
+    collections::HashMap,
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        Arc, Weak,
+    },
 };
 
 use futures::{stream::FuturesUnordered, TryFutureExt};
 use futures_rustls::rustls::crypto::{ring, CryptoProvider};
+use parking_lot::Mutex;
 use smol::{fs, lock::RwLock as AsyncRwLock, stream::StreamExt};
 use tracing::{debug, error, info};
 use url::Url;
 
 use super::{
-    channel::ChannelPtr,
+    channel::{Channel, ChannelPtr},
     dnet::DnetEvent,
     hosts::{Hosts, HostsPtr},
     message::{Message, SerializedMessage},
@@ -78,6 +82,10 @@ pub struct P2p {
     pub dnet_enabled: AtomicBool,
     /// The publisher for which we can give dnet info over
     dnet_publisher: PublisherPtr<DnetEvent>,
+    /// Prevents channel registration while shutdown is in progress.
+    stopping: AtomicBool,
+    /// All started channels, including those still performing their handshake.
+    channels: Mutex<HashMap<u32, Weak<Channel>>>,
 }
 
 impl P2p {
@@ -118,6 +126,8 @@ impl P2p {
             session_direct: DirectSession::new(p2p.clone()),
             dnet_enabled: AtomicBool::new(false),
             dnet_publisher: Publisher::new(),
+            stopping: AtomicBool::new(false),
+            channels: Mutex::new(HashMap::new()),
         });
 
         register_default_protocols(self_.clone()).await;
@@ -127,6 +137,8 @@ impl P2p {
 
     /// Starts inbound, outbound, and manual sessions.
     pub async fn start(self: Arc<Self>) -> Result<()> {
+        self.stopping.store(false, Ordering::SeqCst);
+
         debug!(target: "net::p2p::start", "P2P::start() [BEGIN] [magic_bytes={:?}]",
                self.settings.read().await.magic_bytes.0);
         info!(target: "net::p2p::start", "[P2P] Starting P2P subsystem");
@@ -169,13 +181,48 @@ impl P2p {
 
     /// Stop the running P2P subsystem
     pub async fn stop(&self) {
-        // Stop the sessions
-        self.session_manual().stop().await;
+        self.stopping.store(true, Ordering::SeqCst);
+
+        // Stop connection producers before draining established channels.
         self.session_inbound().stop().await;
+        self.session_manual().stop().await;
         self.session_seedsync().stop().await;
         self.session_outbound().stop().await;
         self.session_refine().stop().await;
         self.session_direct().stop().await;
+
+        let channels = self.tracked_channels();
+        let stops = FuturesUnordered::new();
+        for channel in channels {
+            stops.push(async move { channel.stop().await });
+        }
+        stops.collect::<Vec<_>>().await;
+
+        debug_assert!(self.tracked_channels().is_empty(), "P2P stopped with active channels");
+        debug_assert!(self.hosts.channels().is_empty(), "P2P stopped with registered channels");
+    }
+
+    pub(crate) fn is_stopping(&self) -> bool {
+        self.stopping.load(Ordering::SeqCst)
+    }
+
+    pub(crate) fn track_channel(&self, channel: &ChannelPtr) -> bool {
+        let mut channels = self.channels.lock();
+        if self.is_stopping() {
+            return false
+        }
+
+        channels.retain(|_, channel| channel.strong_count() > 0);
+        channels.insert(channel.info.id, Arc::downgrade(channel));
+        true
+    }
+
+    pub(crate) fn untrack_channel(&self, channel_id: u32) {
+        self.channels.lock().remove(&channel_id);
+    }
+
+    fn tracked_channels(&self) -> Vec<ChannelPtr> {
+        self.channels.lock().values().filter_map(Weak::upgrade).collect()
     }
 
     /// Broadcasts a message concurrently across all active peers.

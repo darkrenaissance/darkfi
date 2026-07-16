@@ -61,6 +61,26 @@ pub const SESSION_ALL: SessionBitFlag = 0b111111;
 
 pub type SessionWeakPtr = Weak<dyn Session + Send + Sync + 'static>;
 
+struct ChannelSetupGuard(Option<ChannelPtr>);
+
+impl ChannelSetupGuard {
+    fn new(channel: ChannelPtr) -> Self {
+        Self(Some(channel))
+    }
+
+    fn disarm(&mut self) {
+        self.0 = None;
+    }
+}
+
+impl Drop for ChannelSetupGuard {
+    fn drop(&mut self) {
+        if let Some(channel) = self.0.take() {
+            channel.stop_nowait();
+        }
+    }
+}
+
 /// Removes channel from the list of connected channels when a stop signal
 /// is received.
 pub async fn remove_sub_on_stop(
@@ -154,6 +174,10 @@ pub trait Session: Sync {
     ) -> Result<()> {
         trace!(target: "net::session::register_channel", "[START]");
 
+        if self.p2p().is_stopping() {
+            return Err(Error::NetworkServiceStopped)
+        }
+
         // Protocols should all be initialized but not started.
         // We do this so that the protocols can begin receiving and buffering
         // messages while the handshake protocol is ongoing. They are currently
@@ -173,7 +197,8 @@ pub trait Session: Sync {
             self.perform_handshake_protocols(protocol_version, channel.clone(), executor.clone());
 
         // Switch on the channel
-        channel.clone().start(executor.clone());
+        channel.clone().start(executor.clone())?;
+        let mut setup_guard = ChannelSetupGuard::new(channel.clone());
 
         // Wait for handshake to finish.
         match handshake_task.await {
@@ -185,6 +210,7 @@ pub trait Session: Sync {
                 debug!(target: "net::session::register_channel",
                 "Handshake error {e} {}", channel.clone().display_address());
 
+                channel.stop().await;
                 return Err(e)
             }
         }
@@ -196,8 +222,13 @@ pub trait Session: Sync {
         // Now start all the protocols. They are responsible for managing their own
         // lifetimes and correctly selfdestructing when the channel ends.
         for protocol in protocols {
-            protocol.start(executor.clone()).await?;
+            if let Err(e) = protocol.start(executor.clone()).await {
+                channel.stop().await;
+                return Err(e)
+            }
         }
+
+        setup_guard.disarm();
 
         trace!(target: "net::session::register_channel", "[END]");
 
@@ -235,12 +266,20 @@ pub trait Session: Sync {
                 }
 
                 // Attempt to add channel to registry
+                if self.p2p().is_stopping() {
+                    return Err(Error::NetworkServiceStopped)
+                }
+
                 self.p2p().hosts().register_channel(channel.clone()).await;
 
                 // Subscribe to stop, so we can remove from registry
-                executor
-                    .spawn(remove_sub_on_stop(self.p2p(), channel, self.type_id(), stop_sub))
-                    .detach();
+                let cleanup_task = executor.spawn(remove_sub_on_stop(
+                    self.p2p(),
+                    channel.clone(),
+                    self.type_id(),
+                    stop_sub,
+                ));
+                channel.add_cleanup_task(cleanup_task).await?;
 
                 // Channel is ready for use
                 Ok(())

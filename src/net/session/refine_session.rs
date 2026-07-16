@@ -132,7 +132,9 @@ impl RefineSession {
                     self.perform_handshake_protocols(proto_ver, channel.clone(), p2p.executor());
 
                 debug!(target: "net::refinery::handshake_node", "Starting channel {url}");
-                channel.clone().start(p2p.executor());
+                if channel.clone().start(p2p.executor()).is_err() {
+                    return false
+                }
 
                 // Ensure the channel gets stopped by adding a timeout to the handshake. Otherwise if
                 // the handshake does not finish channel.stop() will never get called, resulting in

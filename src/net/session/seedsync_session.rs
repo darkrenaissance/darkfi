@@ -118,7 +118,7 @@ impl SeedSyncSession {
     /// Stop the seedsync session.
     pub(crate) async fn stop(&self) {
         debug!(target: "net::seedsync_session", "Stopping seed sync session...");
-        let slots = &*self.slots.lock().await;
+        let slots = std::mem::take(&mut *self.slots.lock().await);
         let mut futures = FuturesUnordered::new();
 
         for slot in slots {

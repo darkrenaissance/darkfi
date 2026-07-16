@@ -533,7 +533,7 @@ impl ProtocolFud {
 impl ProtocolBase for ProtocolFud {
     async fn start(self: Arc<Self>, executor: Arc<Executor<'_>>) -> Result<()> {
         debug!(target: "fud::ProtocolFud::start()", "START");
-        self.jobsman.clone().start(executor.clone());
+        self.jobsman.clone().start(executor.clone()).await?;
         self.jobsman.clone().spawn(self.clone().handle_fud_ping_request(), executor.clone()).await;
         self.jobsman
             .clone()

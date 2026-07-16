@@ -16,7 +16,10 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::sync::Arc;
+use std::sync::{
+    atomic::{AtomicBool, Ordering},
+    Arc,
+};
 
 use smol::{future::Future, lock::Mutex, Executor, Task};
 use tracing::{debug, trace};
@@ -31,12 +34,13 @@ pub struct ProtocolJobsManager {
     name: &'static str,
     channel: ChannelPtr,
     tasks: Mutex<Vec<Task<Result<()>>>>,
+    stopped: AtomicBool,
 }
 
 impl ProtocolJobsManager {
     /// Create a new protocol jobs manager
     pub fn new(name: &'static str, channel: ChannelPtr) -> ProtocolJobsManagerPtr {
-        Arc::new(Self { name, channel, tasks: Mutex::new(vec![]) })
+        Arc::new(Self { name, channel, tasks: Mutex::new(vec![]), stopped: AtomicBool::new(false) })
     }
 
     /// Returns configured name
@@ -45,8 +49,9 @@ impl ProtocolJobsManager {
     }
 
     /// Runs the task on an executor
-    pub fn start(self: Arc<Self>, executor: Arc<Executor<'_>>) {
-        executor.spawn(self.handle_stop()).detach()
+    pub async fn start(self: Arc<Self>, executor: Arc<Executor<'_>>) -> Result<()> {
+        let channel = self.channel.clone();
+        channel.add_cleanup_task(executor.spawn(self.handle_stop())).await
     }
 
     /// Spawns a new task and adds it to the internal queue
@@ -54,7 +59,14 @@ impl ProtocolJobsManager {
     where
         F: Future<Output = Result<()>> + Send + 'a,
     {
-        self.tasks.lock().await.push(executor.spawn(future))
+        let task = executor.spawn(future);
+        let mut tasks = self.tasks.lock().await;
+        if self.stopped.load(Ordering::SeqCst) || self.channel.is_stopped() {
+            drop(tasks);
+            let _ = task.cancel().await;
+            return
+        }
+        tasks.push(task)
     }
 
     /// Waits for a stop signal, then closes all tasks.
@@ -68,11 +80,12 @@ impl ProtocolJobsManager {
             stop_sub.receive().await;
         }
 
+        self.stopped.store(true, Ordering::SeqCst);
         self.close_all_tasks().await
     }
 
     /// Closes all open tasks. Takes all the tasks from the internal queue.
-    async fn close_all_tasks(self: Arc<Self>) {
+    async fn close_all_tasks(&self) {
         debug!(
             target: "net::protocol_jobs_manager",
             "ProtocolJobsManager::close_all_tasks() [START, name={}, addr={}]",

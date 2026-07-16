@@ -187,7 +187,7 @@ impl ProtocolBase for ProtocolPing {
     /// waits for pong reply. Waits for ping and replies with a pong.
     async fn start(self: Arc<Self>, ex: Arc<Executor<'_>>) -> Result<()> {
         debug!(target: "net::protocol_ping::start", "START => address={}", self.channel.display_address());
-        self.jobsman.clone().start(ex.clone());
+        self.jobsman.clone().start(ex.clone()).await?;
         self.jobsman.clone().spawn(self.clone().run_ping_pong(), ex.clone()).await;
         self.jobsman.clone().spawn(self.clone().reply_to_ping(), ex).await;
         debug!(target: "net::protocol_ping::start", "END => address={}", self.channel.display_address());

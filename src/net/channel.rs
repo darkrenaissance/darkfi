@@ -33,7 +33,7 @@ use rand::{rngs::OsRng, Rng};
 use smol::{
     io::{self, AsyncRead, AsyncReadExt, AsyncWriteExt, ReadHalf, WriteHalf},
     lock::{Mutex as AsyncMutex, OnceCell},
-    Executor,
+    Executor, Task,
 };
 use tracing::{debug, trace};
 use url::Url;
@@ -95,8 +95,12 @@ pub struct Channel {
     stop_publisher: PublisherPtr<Error>,
     /// Task that is listening for the stop signal
     receive_task: StoppableTaskPtr,
+    /// Cleanup jobs that must finish before the channel is fully stopped.
+    cleanup_tasks: AsyncMutex<Vec<Task<()>>>,
     /// A boolean marking if this channel is stopped
     stopped: AtomicBool,
+    /// A boolean marking if the receive task has been started.
+    started: AtomicBool,
     /// Weak pointer to respective session
     pub(in crate::net) session: SessionWeakPtr,
     /// The version message of the node we are connected to.
@@ -139,7 +143,9 @@ impl Channel {
             message_subsystem,
             stop_publisher: Publisher::new(),
             receive_task: StoppableTask::new(),
+            cleanup_tasks: AsyncMutex::new(Vec::new()),
             stopped: AtomicBool::new(false),
+            started: AtomicBool::new(false),
             session,
             version: OnceCell::new(),
             info,
@@ -159,8 +165,18 @@ impl Channel {
 
     /// Starts the channel. Runs a receive loop to start receiving messages
     /// or handles a network failure.
-    pub fn start(self: Arc<Self>, executor: Arc<Executor<'_>>) {
+    pub fn start(self: Arc<Self>, executor: Arc<Executor<'_>>) -> Result<()> {
         debug!(target: "net::channel::start", "START {self:?}");
+
+        if self.is_stopped() || self.started.swap(true, SeqCst) {
+            return Err(Error::ChannelStopped)
+        }
+
+        if !self.p2p().track_channel(&self) {
+            self.started.store(false, SeqCst);
+            self.stopped.store(true, SeqCst);
+            return Err(Error::NetworkServiceStopped)
+        }
 
         let self_ = self.clone();
         self.receive_task.clone().start(
@@ -171,14 +187,43 @@ impl Channel {
         );
 
         debug!(target: "net::channel::start", "END {self:?}");
+        Ok(())
     }
 
     /// Stops the channel.
     /// Notifies all publishers that the channel has been closed in `handle_stop()`.
     pub async fn stop(&self) {
         debug!(target: "net::channel::stop", "START {self:?}");
+        if !self.started.load(SeqCst) {
+            return
+        }
         self.receive_task.stop().await;
         debug!(target: "net::channel::stop", "END {self:?}");
+    }
+
+    /// Registers cleanup work that must complete before [`Channel::stop`]
+    /// returns. If shutdown has already begun, waits for the cleanup directly.
+    pub(crate) async fn add_cleanup_task(&self, task: Task<()>) -> Result<()> {
+        let mut cleanup_tasks = self.cleanup_tasks.lock().await;
+        if self.is_stopped() {
+            drop(cleanup_tasks);
+            task.await;
+            return Err(Error::ChannelStopped)
+        }
+
+        cleanup_tasks.push(task);
+        Ok(())
+    }
+
+    /// Requests channel shutdown without waiting for cleanup. Used to make
+    /// cancellation of an in-progress channel setup safe.
+    pub(crate) fn stop_nowait(&self) {
+        self.receive_task.stop_nowait();
+    }
+
+    #[cfg(test)]
+    pub(crate) async fn cleanup_task_count(&self) -> usize {
+        self.cleanup_tasks.lock().await.len()
     }
 
     /// Creates a subscription to a stopped signal.
@@ -404,6 +449,13 @@ impl Channel {
                 self.message_subsystem.trigger_error(e).await;
             }
         }
+
+        let cleanup_tasks = std::mem::take(&mut *self.cleanup_tasks.lock().await);
+        for task in cleanup_tasks {
+            task.await;
+        }
+
+        self.p2p().untrack_channel(self.info.id);
 
         debug!(target: "net::channel::handle_stop", "[END] {self:?}");
     }

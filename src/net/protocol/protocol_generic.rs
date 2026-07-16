@@ -297,7 +297,7 @@ impl<M: Message + Clone, R: Message + Clone + Debug> ProtocolGeneric<M, R> {
 impl<M: Message + Clone, R: Message + Clone + Debug> ProtocolBase for ProtocolGeneric<M, R> {
     async fn start(self: Arc<Self>, ex: Arc<Executor<'_>>) -> Result<()> {
         debug!(target: "net::protocol_generic::start", "START");
-        self.jobsman.clone().start(ex.clone());
+        self.jobsman.clone().start(ex.clone()).await?;
         self.jobsman.clone().spawn(self.clone().handle_receive_message(), ex).await;
         debug!(target: "net::protocol_generic::start", "END");
         Ok(())

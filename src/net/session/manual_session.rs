@@ -88,10 +88,10 @@ impl ManualSession {
 
     /// Stops the manual session.
     pub async fn stop(&self) {
-        let slots = &*self.slots.lock().await;
+        let slots = std::mem::take(&mut *self.slots.lock().await);
         let mut futures = FuturesUnordered::new();
 
-        for slot in slots {
+        for slot in &slots {
             futures.push(slot.stop());
         }
 

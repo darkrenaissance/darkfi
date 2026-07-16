@@ -116,15 +116,14 @@ impl InboundSession {
     pub async fn stop(&self) {
         if self.p2p().settings().read().await.inbound_addrs.is_empty() {
             verbose!(target: "net::inbound_session", "[P2P] Stopping inbound session.");
-            return
         }
 
-        let acceptors = &*self.acceptors.lock().await;
+        let acceptors = std::mem::take(&mut *self.acceptors.lock().await);
         for acceptor in acceptors {
             acceptor.stop().await;
         }
 
-        let accept_tasks = &*self.accept_tasks.lock().await;
+        let accept_tasks = std::mem::take(&mut *self.accept_tasks.lock().await);
         for accept_task in accept_tasks {
             accept_task.stop().await;
         }

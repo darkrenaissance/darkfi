@@ -295,7 +295,7 @@ impl ProtocolBase for ProtocolAddress {
         let getaddrs_max = settings.getaddrs_max;
         drop(settings);
 
-        self.jobsman.clone().start(ex.clone());
+        self.jobsman.clone().start(ex.clone()).await?;
 
         self.jobsman.clone().spawn(self.clone().send_my_addrs(), ex.clone()).await;
 

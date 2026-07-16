@@ -68,7 +68,7 @@ impl net::ProtocolBase for ProtocolDchat {
     // ANCHOR: start
     async fn start(self: Arc<Self>, executor: Arc<Executor<'_>>) -> Result<()> {
         debug!(target: "dchat", "ProtocolDchat::ProtocolBase::start() [START]");
-        self.jobsman.clone().start(executor.clone());
+        self.jobsman.clone().start(executor.clone()).await?;
         self.jobsman.clone().spawn(self.clone().handle_receive_msg(), executor.clone()).await;
         debug!(target: "dchat", "ProtocolDchat::ProtocolBase::start() [STOP]");
         Ok(())

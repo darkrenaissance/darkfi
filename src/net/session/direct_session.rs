@@ -98,9 +98,13 @@ impl DirectSession {
     pub async fn stop(&self) {
         self.peer_discovery.clone().stop().await;
 
-        for (_, task) in self.retries_tasks.lock().await.iter() {
+        let retries_tasks = std::mem::take(&mut *self.retries_tasks.lock().await);
+        for (_, task) in retries_tasks {
             task.stop().await;
         }
+
+        self.tasks.lock().await.clear();
+        self.channels_usage.lock().await.clear();
     }
 
     /// Notify the peer discovery task to start it.
@@ -116,6 +120,10 @@ impl DirectSession {
     /// return it (even if the channel was not created by the direct session).
     /// Otherwise it will create a new channel to `addr` in the direct session.
     pub async fn get_channel(self: Arc<Self>, addr: &Url) -> Result<ChannelPtr> {
+        if self.p2p().is_stopping() {
+            return Err(Error::NetworkServiceStopped)
+        }
+
         // Check existing channels
         let channels = self.p2p().hosts().channels();
         if let Some(channel) =
@@ -123,7 +131,7 @@ impl DirectSession {
         {
             let mut channels_usage = self.channels_usage.lock().await;
             if channel.is_stopped() {
-                channel.clone().start(self.p2p().executor());
+                channel.clone().start(self.p2p().executor())?;
             }
             if channel.session_type_id() & SESSION_DIRECT != 0 {
                 channels_usage.entry(channel.info.id).and_modify(|count| *count += 1).or_insert(1);
