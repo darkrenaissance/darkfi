@@ -29,7 +29,7 @@ use darkfi::{
     event_graph::{
         self,
         proto::{EventPut, ProtocolEventGraph},
-        EventGraph, EventGraphPtr,
+        EventGraph, EventGraphConfig, EventGraphPtr,
     },
     net::{
         session::SESSION_DEFAULT,
@@ -254,8 +254,14 @@ impl DarkIrc {
             db.clone(),
             std::path::PathBuf::new(),
             false,
-            false, // TODO: should be configurable
-            1,
+            EventGraphConfig {
+                initial_genesis: 1_704_067_200_000,
+                hours_rotation: 1,
+                genesis_contents: b"darkirc".to_vec(),
+                rln_enabled: false,
+                pregenerated_identity_commitments: vec![],
+                max_dags: Some(24),
+            },
             ex.clone(),
         )
         .await
@@ -330,7 +336,7 @@ impl DarkIrc {
 
             i!("Syncing event DAG (attempt #{sync_attempt})");
             // TODO: sync_selected args should be configurable
-            match self.event_graph.sync_selected(24, false).await {
+            match self.event_graph.sync_selected(24).await {
                 Ok(()) => break,
                 Err(e) => {
                     // TODO: Maybe at this point we should prune or something?
@@ -481,7 +487,7 @@ impl DarkIrc {
         // TODO: messages should be encrypted here with:
         // self.try_encrypt(&mut msg).await;
         let evgr = self.event_graph.clone();
-        let mut event = event_graph::Event::new(serialize_async(&msg).await, &evgr).await;
+        let mut event = event_graph::Event::new(serialize_async(&msg).await, &evgr).await.unwrap();
         event.header.timestamp = timest;
         let msg_id = msg_id(&msg, timest);
 
@@ -501,7 +507,7 @@ impl DarkIrc {
         // Broadcast the msg
         let current_genesis = self.event_graph.current_genesis.read().await;
         let dag_name = current_genesis.header.timestamp.to_string();
-        if let Err(e) = evgr.dag_insert(&[event.clone()], &dag_name).await {
+        if let Err(e) = evgr.insert_signal_with_blob(&event, &[], &dag_name).await {
             error!(target: "darkirc", "Failed inserting new event to DAG: {}", e);
         }
 

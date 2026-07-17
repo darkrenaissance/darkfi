@@ -173,6 +173,7 @@ pub async fn make(
     let listen_click = app.ex.spawn(async move {
         while let Ok(_) = recvr.recv().await {
             let addr = receive_address_text2.get();
+            info!(target: "app", "Copy receive address: {addr}");
             clipboard::set(&addr);
         }
     });
