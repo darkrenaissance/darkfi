@@ -45,7 +45,6 @@ pub async fn make(
     i18n_fish: &I18nBabelFish,
     window_scale: PropertyFloat32,
     send_tx_data: Arc<std::sync::Mutex<SendTxData>>,
-    step1_is_visible: PropertyBool,
     step2_is_visible: PropertyBool,
 ) -> SceneNodePtr {
     let atom = &mut PropertyAtomicGuard::none();
@@ -76,9 +75,6 @@ pub async fn make(
     let send_step3_layer = send_step3_layer.setup(|me| Layer::new(me, app.renderer.clone())).await;
     wallet_layer.link(send_step3_layer.clone());
     let step3_is_visible = PropertyBool::wrap(&send_step3_layer, Role::App, "is_visible", 0).unwrap();
-
-    let step4_is_visible = app.sg_root.lookup_node("/window/content/wallet/send_step4_layer")
-        .and_then(|l| PropertyBool::wrap(&l, Role::App, "is_visible", 0).ok());
 
     create_bg_mesh(app, atom, &send_step3_layer, "send_bg3").await;
     create_header_bg(app, atom, &send_step3_layer, "send_header_bg3").await;
@@ -471,8 +467,6 @@ pub async fn make(
         .await;
     amount_wrapper.link(token_symbol_node.clone());
 
-    y += PADDING_Y * 2. + BUTTON_HEIGHT + 10.;
-
     // Add amount button with states
     let (node, btn_bg_valid, btn_bg_invalid, add_amount_label_node) = create_bottom_button_with_states(
         app,
@@ -524,10 +518,9 @@ pub async fn make(
                 (data.token_id, data.token_symbol.clone().unwrap_or_default())
             };
             if let Some(token_id) = token_id {
-                update_amount_screen(
+                let available_balance = update_amount_screen(
                     atom,
                     &sg_root,
-                    &sanitized_amount,
                     &token_id,
                     &token_symbol,
                     &amount_wrapper2,
@@ -535,7 +528,6 @@ pub async fn make(
                     &token_symbol_node2,
                     Some(&available_balance_node2),
                 ).await;
-                let available_balance = get_balance(&sg_root, &token_id).await;
                 let is_valid = if sanitized_amount == "0" {
                     false
                 } else {
@@ -597,19 +589,24 @@ pub async fn make(
                 // Store the amount (use sanitized value)
                 let mut data = send_tx_data4.lock().unwrap();
                 data.amount = Some(sanitized_text.clone());
+                let token_symbol = data.token_symbol.clone().unwrap();
+                let recipient_str = data.recipient_str.clone().unwrap();
+                let amount = data.amount.clone().unwrap();
+                let token_id = data.token_id;
+                let recipient = data.recipient;
 
                 // Update step4 display with transaction data
                 if let Some(token_symbol_node) = sg_root.lookup_node("/window/content/wallet/send_step4_layer/send_selected_token_symbol4") {
-                    token_symbol_node.set_property_str(atom, Role::App, "text", &data.token_symbol.clone().unwrap()).unwrap();
+                    token_symbol_node.set_property_str(atom, Role::App, "text", &token_symbol).unwrap();
                 }
                 if let Some(amount_token_node) = sg_root.lookup_node("/window/content/wallet/send_step4_layer/send_amount_wrapper4/send_amount_token_symbol4") {
-                    amount_token_node.set_property_str(atom, Role::App, "text", &data.token_symbol.clone().unwrap()).unwrap();
+                    amount_token_node.set_property_str(atom, Role::App, "text", &token_symbol).unwrap();
                 }
                 if let Some(recipient_node) = sg_root.lookup_node("/window/content/wallet/send_step4_layer/send_recipient_value4") {
-                    recipient_node.set_property_str(atom, Role::App, "text", &data.recipient_str.clone().unwrap()).unwrap();
+                    recipient_node.set_property_str(atom, Role::App, "text", &recipient_str).unwrap();
                 }
                 if let Some(amount_node) = sg_root.lookup_node("/window/content/wallet/send_step4_layer/send_amount_wrapper4/send_amount_text4") {
-                    amount_node.set_property_str(atom, Role::App, "text", &data.amount.clone().unwrap()).unwrap();
+                    amount_node.set_property_str(atom, Role::App, "text", &amount).unwrap();
                 }
 
                 // Switch to step4 and set send button to "building tx..."
@@ -617,7 +614,7 @@ pub async fn make(
                 if let Some(step4) = sg_root.lookup_node("/window/content/wallet/send_step4_layer") {
                     step4.set_property_bool(atom, Role::App, "is_visible", true).unwrap();
                 }
-                if let Some(send_label_node) = sg_root.lookup_node("/window/content/wallet/send_step4_layer/send_send_btn_label") {
+                if let Some(send_label_node) = sg_root.lookup_node("/window/content/wallet/send_step4_layer/send_btn_label") {
                     send_label_node.set_property_str(atom, Role::App, "text", "building tx...").unwrap();
                     let prop = send_label_node.get_property("text_color").unwrap();
                     prop.set_f32(atom, Role::App, 0, 0.5).unwrap();
@@ -625,21 +622,21 @@ pub async fn make(
                     prop.set_f32(atom, Role::App, 2, 0.5).unwrap();
                     prop.set_f32(atom, Role::App, 3, 1.).unwrap();
                 }
-                if let Some(send_bg_grey_node) = sg_root.lookup_node("/window/content/wallet/send_step4_layer/send_send_btn_bg_grey") {
+                if let Some(send_bg_grey_node) = sg_root.lookup_node("/window/content/wallet/send_step4_layer/send_btn_bg_grey") {
                     send_bg_grey_node.set_property_bool(atom, Role::App, "is_visible", true).unwrap();
                 }
-                if let Some(send_bg_node) = sg_root.lookup_node("/window/content/wallet/send_step4_layer/send_send_btn_bg") {
+                if let Some(send_bg_node) = sg_root.lookup_node("/window/content/wallet/send_step4_layer/send_btn_bg") {
                     send_bg_node.set_property_bool(atom, Role::App, "is_visible", false).unwrap();
                 }
 
                 // Build the transaction via DrkPlugin
                 if let (Some(drk_node), Some(token_id), Some(recipient)) = (
                     sg_root.lookup_node("/plugin/drk"),
-                    data.token_id,
-                    data.recipient,
+                    token_id,
+                    recipient,
                 ) {
                     let mut encoded_data = vec![];
-                    data.amount.clone().unwrap().encode(&mut encoded_data).unwrap();
+                    amount.encode(&mut encoded_data).unwrap();
                     token_id.encode(&mut encoded_data).unwrap();
                     recipient.public_key().encode(&mut encoded_data).unwrap();
 
@@ -682,11 +679,9 @@ pub async fn make(
                 if let Some(token_id) = token_id {
                     if !token_symbol.is_empty() {
                         let atom = &mut renderer_clone.make_guard(gfxtag!("update amount positions on visible"));
-                        let current_amount = input_node_clone.get_property_str("text").unwrap();
                         update_amount_screen(
                             atom,
                             &sg_root,
-                            &current_amount,
                             &token_id,
                             &token_symbol,
                             &amount_wrapper_clone,

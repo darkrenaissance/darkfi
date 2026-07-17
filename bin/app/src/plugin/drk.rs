@@ -19,13 +19,12 @@
 use darkfi::{
     system::{Publisher, PublisherPtr, StoppableTask, sleep},
     tx::Transaction,
-    util::parse::encode_base10,
     Result as DarkFiResult,
 };
 use darkfi_money_contract::model::TokenId;
 use darkfi_serial::{serialize, Decodable, Encodable};
 use darkfi_sdk::crypto::{keypair::{Address, Network, PublicKey, StandardAddress}};
-use drk::{Drk, money::BALANCE_BASE10_DECIMALS, rpc::subscribe_blocks};
+use drk::{Drk, rpc::subscribe_blocks};
 use smol::lock::RwLock;
 use smol::channel::unbounded;
 use std::{
@@ -86,8 +85,6 @@ macro_rules! e { ($($arg:tt)*) => { error!(target: "plugin::drk", $($arg)*); } }
 
 #[derive(Debug, Clone)]
 enum TxStatus {
-    Building,
-    Broadcasting,
     Confirming,
     Confirmed,
     Error(String),
@@ -96,8 +93,6 @@ enum TxStatus {
 impl TxStatus {
     fn text(&self) -> String {
         match self {
-            TxStatus::Building => "Building transaction...".to_string(),
-            TxStatus::Broadcasting => "Broadcasting transaction...".to_string(),
             TxStatus::Confirming => "Confirming transaction...".to_string(),
             TxStatus::Confirmed => "Transaction confirmed".to_string(),
             TxStatus::Error(ref err) => format!("Error sending transaction: {err}"),
@@ -301,7 +296,6 @@ impl DrkPlugin {
 
         let mut result: Vec<(String, TokenId, u64)> = Vec::new();
         for (token_id_str, balance) in balances {
-            let encoded = encode_base10(balance, BALANCE_BASE10_DECIMALS);
             let alias = aliases.get(&token_id_str).cloned().unwrap_or_else(|| "UNKN".to_string());
             let token_id = token_id_str.parse::<TokenId>().unwrap();
 
@@ -315,14 +309,14 @@ impl DrkPlugin {
     }
 
     /// Emit balances_updated signal
-    pub async fn emit_balances_updated(&self) {
+    async fn emit_balances_updated(&self) {
         if let Some(node) = self.node.upgrade() {
             let _ = node.trigger("balances_updated", vec![]).await;
         }
     }
 
     /// Emit tx_updated signal
-    pub async fn emit_tx_updated(&self, state: &TxState) {
+    async fn emit_tx_updated(&self, state: &TxState) {
         if let Some(node) = self.node.upgrade() {
             let mut data = vec![];
             state.id.clone().encode(&mut data).unwrap();
@@ -333,7 +327,7 @@ impl DrkPlugin {
             let _ = node.trigger("tx_updated", data).await;
         }
     }
-    pub async fn emit_tx_status_updated(&self, status: &TxStatus) {
+    async fn emit_tx_status_updated(&self, status: &TxStatus) {
         if let Some(node) = self.node.upgrade() {
             let mut data = vec![];
             None::<String>.encode(&mut data).unwrap();
@@ -346,7 +340,7 @@ impl DrkPlugin {
     }
 
     /// Emit tx_built signal when transaction is built
-    pub async fn emit_tx_built(&self, amount: String, token_symbol: String, recipient: Address, tx: Transaction) {
+    async fn emit_tx_built(&self, amount: String, token_symbol: String, recipient: Address, tx: Transaction) {
         if let Some(node) = self.node.upgrade() {
             let mut data = vec![];
             amount.encode(&mut data).unwrap();
@@ -358,7 +352,7 @@ impl DrkPlugin {
     }
 
     /// Emit tx_built_error signal when transaction building fails
-    pub async fn emit_tx_built_error(&self, error: String) {
+    async fn emit_tx_built_error(&self, error: String) {
         if let Some(node) = self.node.upgrade() {
             let mut data = vec![];
             error.encode(&mut data).unwrap();
@@ -621,6 +615,7 @@ impl DrkPlugin {
             recipient: None,
         };
         self_.emit_tx_updated(&state).await;
+        self_.emit_balances_updated().await;
 
         true
     }

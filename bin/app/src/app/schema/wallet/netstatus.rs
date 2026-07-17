@@ -33,8 +33,8 @@ use crate::{
 pub async fn make(
     app: &App,
     wallet_layer: SceneNodePtr,
-    i18n_fish: &I18nBabelFish,
-    window_scale: PropertyFloat32,
+    _i18n_fish: &I18nBabelFish,
+    _window_scale: PropertyFloat32,
 ) -> SceneNodePtr {
     let atom = &mut PropertyAtomicGuard::none();
 

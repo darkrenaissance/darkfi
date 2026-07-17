@@ -34,7 +34,6 @@ pub mod netstatus;
 use crate::{
     app::{App, node::create_layer},
     expr,
-    gfx::gfxtag,
     prop::{PropertyAtomicGuard, PropertyFloat32, Role},
     scene::SceneNodePtr,
     ui::Layer,

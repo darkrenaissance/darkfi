@@ -17,7 +17,6 @@
  */
 
 use std::sync::Arc;
-use darkfi::util::parse::encode_base10;
 use darkfi_sdk::crypto::keypair::Address;
 
 use crate::{
@@ -103,9 +102,6 @@ pub async fn make(
     let send_step2_layer = send_step2_layer.setup(|me| Layer::new(me, app.renderer.clone())).await;
     wallet_layer.link(send_step2_layer.clone());
     let step2_is_visible = PropertyBool::wrap(&send_step2_layer, Role::App, "is_visible", 0).unwrap();
-
-    let step3_is_visible = app.sg_root.lookup_node("/window/content/wallet/send_step3_layer")
-        .and_then(|l| PropertyBool::wrap(&l, Role::App, "is_visible", 0).ok());
 
     create_bg_mesh(app, atom, &send_step2_layer, "send_bg2").await;
     create_header_bg(app, atom, &send_step2_layer, "send_header_bg2").await;
@@ -348,8 +344,6 @@ pub async fn make(
     let node = node.setup(|me| Button::new(me, app.renderer.clone())).await;
     send_step2_layer.link(node);
 
-    y += RECIPIENT_INPUT_MARGIN + RECIPIENT_INPUT_HEIGHT;
-
     // Add recipient button
     let (node, btn_bg_valid, btn_bg_invalid, add_recipient_label_node) = create_bottom_button_with_states(
         app,
@@ -440,12 +434,6 @@ pub async fn make(
                     token_symbol_node.set_property_str(atom, Role::Internal, "text", token_symbol).unwrap();
                     if let Pimpl::Edit(edit) = token_symbol_node.pimpl() {
                         edit.on_text_prop_changed();
-                    }
-
-                    // Update available balance
-                    let available_balance = encode_base10(get_balance(&sg_root, &data.token_id.unwrap()).await, BALANCE_BASE10_DECIMALS);
-                    if let Some(available_balance_node) = sg_root.lookup_node("/window/content/wallet/send_step3_layer/send_available_balance") {
-                        available_balance_node.set_property_str(atom, Role::App, "text", format!("{available_balance} available")).unwrap();
                     }
                 }
             }

@@ -43,9 +43,7 @@ pub async fn make(
     i18n_fish: &I18nBabelFish,
     window_scale: PropertyFloat32,
     send_tx_data: Arc<std::sync::Mutex<SendTxData>>,
-    step2_is_visible: PropertyBool,
     step3_is_visible: PropertyBool,
-    step1_is_visible: PropertyBool,
 ) -> SceneNodePtr {
     let atom = &mut PropertyAtomicGuard::none();
 
@@ -76,9 +74,6 @@ pub async fn make(
     wallet_layer.link(send_step4_layer.clone());
     let step4_is_visible = PropertyBool::wrap(&send_step4_layer, Role::App, "is_visible", 0).unwrap();
 
-    let tx_status_is_visible = app.sg_root.lookup_node("/window/content/wallet/tx_status_layer")
-        .and_then(|l| PropertyBool::wrap(&l, Role::App, "is_visible", 0).ok());
-
     create_bg_mesh(app, atom, &send_step4_layer, "send_bg4").await;
     create_header_bg(app, atom, &send_step4_layer, "send_header_bg4").await;
 
@@ -107,7 +102,6 @@ pub async fn make(
     let step3_is_visible2 = step3_is_visible.clone();
     let step4_is_visible1 = step4_is_visible.clone();
     let renderer = app.renderer.clone();
-    let sg_root2 = app.sg_root.clone();
     let (slot, recvr) = Slot::new("send_back_clicked4");
     node.register("click", slot).unwrap();
     let listen_click = app.ex.spawn(async move {
@@ -325,24 +319,11 @@ pub async fn make(
     tx_fee_label_node.set_property_f32(atom, Role::App, "font_size", BASE_FONTSIZE).unwrap();
     tx_fee_label_node.set_property_str(atom, Role::App, "text", "Transaction fee").unwrap();
     let prop = tx_fee_label_node.get_property("text_color").unwrap();
-    if COLOR_SCHEME == ColorScheme::DarkMode {
-        prop.set_f32(atom, Role::App, 0, 1.).unwrap();
-        prop.set_f32(atom, Role::App, 1, 1.).unwrap();
-        prop.set_f32(atom, Role::App, 2, 1.).unwrap();
-        prop.set_f32(atom, Role::App, 3, 1.).unwrap();
-    } else {
-        prop.set_f32(atom, Role::App, 0, 0.).unwrap();
-        prop.set_f32(atom, Role::App, 1, 0.).unwrap();
-        prop.set_f32(atom, Role::App, 2, 0.).unwrap();
-        prop.set_f32(atom, Role::App, 3, 1.).unwrap();
-    }
-    tx_fee_label_node.set_property_u32(atom, Role::App, "z_index", 2).unwrap();
-    tx_fee_label_node.set_property_f32(atom, Role::App, "font_size", BASE_FONTSIZE).unwrap();
-    let prop = tx_fee_label_node.get_property("text_color").unwrap();
     prop.set_f32(atom, Role::App, 0, 0.).unwrap();
     prop.set_f32(atom, Role::App, 1, 0.).unwrap();
     prop.set_f32(atom, Role::App, 2, 0.).unwrap();
     prop.set_f32(atom, Role::App, 3, 0.).unwrap();
+    tx_fee_label_node.set_property_u32(atom, Role::App, "z_index", 2).unwrap();
     let tx_fee_label_node = tx_fee_label_node.setup(|me| Text::new(me, window_scale.clone(), app.renderer.clone(), i18n_fish.clone())).await;
     send_step4_layer.link(tx_fee_label_node.clone());
 
@@ -377,14 +358,12 @@ pub async fn make(
         "h - PADDING_X * 2 - BUTTON_HEIGHT",
     ).await;
 
-    y += PADDING_Y * 2. + BUTTON_HEIGHT + 10.;
-
     // Send button (bottom button)
     let (node, _bg_valid, _bg_invalid, _label) = create_bottom_button_with_states(
         app,
         atom,
         &send_step4_layer,
-        "send_send_btn",
+        "send_btn",
         &mut cc,
         "send",
         &window_scale,
@@ -396,12 +375,12 @@ pub async fn make(
     let sg_root = app.sg_root.clone();
     let step4_is_visible1 = step4_is_visible.clone();
     let send_tx_data_for_send = send_tx_data.clone();
-    let (slot, recvr) = Slot::new("send_send_clicked");
+    let (slot, recvr) = Slot::new("send_clicked");
     node.register("click", slot).unwrap();
     let listen_click = app.ex.spawn(async move {
         while let Ok(_) = recvr.recv().await {
             // Skip if the button is disabled
-            if let Some(btn_node) = sg_root.lookup_node("/window/content/wallet/send_step4_layer/send_send_btn_bg") {
+            if let Some(btn_node) = sg_root.lookup_node("/window/content/wallet/send_step4_layer/send_btn_bg") {
                 if !btn_node.get_property_bool("is_visible").unwrap() {
                     continue;
                 }
@@ -462,7 +441,6 @@ pub async fn make(
                 let atom = &mut renderer_clone.make_guard(gfxtag!("update step4 amount positions"));
                 let data = send_tx_data_clone2.lock().unwrap().clone();
 
-                let amount_text = data.amount.unwrap_or_else(|| "0".to_string());
                 let token_symbol = data.token_symbol.unwrap_or_else(|| "".to_string());
                 let token_id = data.token_id.unwrap();
 
@@ -470,7 +448,6 @@ pub async fn make(
                 update_amount_screen(
                     atom,
                     &sg_root,
-                    &amount_text,
                     &token_id,
                     &token_symbol,
                     &amount_wrapper_clone,
@@ -481,7 +458,7 @@ pub async fn make(
 
                 if data.tx_built {
                     // Set send button label
-                    if let Some(send_label_node) = sg_root.lookup_node("/window/content/wallet/send_step4_layer/send_send_btn_label") {
+                    if let Some(send_label_node) = sg_root.lookup_node("/window/content/wallet/send_step4_layer/send_btn_label") {
                         send_label_node.set_property_str(atom, Role::App, "text", "send").unwrap();
                     }
                     // Show transaction fee

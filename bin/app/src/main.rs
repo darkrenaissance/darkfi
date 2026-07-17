@@ -507,8 +507,7 @@ async fn load_plugins(
                 if let Ok(balances) = Vec::<(String, TokenId, u64)>::decode(&mut cur) {
                     let token_rows: Vec<TokenRow> = balances
                         .iter()
-                        .enumerate()
-                        .map(|(i, (symbol, token_id, balance))| {
+                        .map(|(symbol, token_id, balance)| {
                             TokenRow {
                                 id: *token_id,
                                 symbol: symbol.clone(),
@@ -633,7 +632,7 @@ async fn load_plugins(
             }
 
             // Reset step4 send button to disabled state
-            if let Some(send_label_node) = sg_root2.lookup_node("/window/content/wallet/send_step4_layer/send_send_btn_label") {
+            if let Some(send_label_node) = sg_root2.lookup_node("/window/content/wallet/send_step4_layer/send_btn_label") {
                 send_label_node.set_property_str(atom, Role::App, "text", "send").unwrap();
                 let prop = send_label_node.get_property("text_color").unwrap();
                 prop.set_f32(atom, Role::App, 0, 0.5).unwrap();
@@ -641,10 +640,10 @@ async fn load_plugins(
                 prop.set_f32(atom, Role::App, 2, 0.5).unwrap();
                 prop.set_f32(atom, Role::App, 3, 1.).unwrap();
             }
-            if let Some(send_bg_grey_node) = sg_root2.lookup_node("/window/content/wallet/send_step4_layer/send_send_btn_bg_grey") {
+            if let Some(send_bg_grey_node) = sg_root2.lookup_node("/window/content/wallet/send_step4_layer/send_btn_bg_grey") {
                 send_bg_grey_node.set_property_bool(atom, Role::App, "is_visible", true).unwrap();
             }
-            if let Some(send_bg_node) = sg_root2.lookup_node("/window/content/wallet/send_step4_layer/send_send_btn_bg") {
+            if let Some(send_bg_node) = sg_root2.lookup_node("/window/content/wallet/send_step4_layer/send_btn_bg") {
                 send_bg_node.set_property_bool(atom, Role::App, "is_visible", false).unwrap();
             }
 

@@ -66,24 +66,19 @@ pub async fn make(
         i18n_fish,
         window_scale.clone(),
         send_tx_data.clone(),
-        step1_is_visible.clone(),
         step2_is_visible.clone(),
     ).await;
 
     let step3_is_visible = PropertyBool::wrap(&send_step3_layer, Role::App, "is_visible", 0).unwrap();
 
-    let send_step4_layer = send_step4::make(
+    let _send_step4_layer = send_step4::make(
         app,
         wallet_layer.clone(),
         i18n_fish,
         window_scale.clone(),
         send_tx_data.clone(),
-        step2_is_visible.clone(),
         step3_is_visible.clone(),
-        step1_is_visible.clone(),
     ).await;
-
-    let step4_is_visible = PropertyBool::wrap(&send_step4_layer, Role::App, "is_visible", 0).unwrap();
 
     let tx_status_layer = tx_status::make(
         app,
@@ -91,8 +86,6 @@ pub async fn make(
         i18n_fish,
         window_scale.clone(),
         send_tx_data,
-        step3_is_visible,
-        step4_is_visible,
     ).await;
 
     // Add listener for tx built signal to update send button label and show fee
@@ -104,7 +97,7 @@ pub async fn make(
             let mut cur = std::io::Cursor::new(mcall.data);
             let tx = Transaction::decode(&mut cur).unwrap();
             let mut fees: u64 = 0;
-            for (i, call) in tx.calls.iter().enumerate() {
+            for call in tx.calls.iter() {
                 if call.data.is_money_fee() {
                     if let Ok(fee) = darkfi_serial::deserialize(&call.data.data[1..9]) {
                         fees = fees.saturating_add(fee);
@@ -115,7 +108,7 @@ pub async fn make(
             let atom = &mut renderer_for_built.make_guard(gfxtag!("tx built - update send button"));
 
             // Make send button active
-            if let Some(send_label_node) = sg_root_for_built.lookup_node("/window/content/wallet/send_step4_layer/send_send_btn_label") {
+            if let Some(send_label_node) = sg_root_for_built.lookup_node("/window/content/wallet/send_step4_layer/send_btn_label") {
                 send_label_node.set_property_str(atom, Role::App, "text", "send").unwrap();
                 let prop = send_label_node.get_property("text_color").unwrap();
                 prop.set_f32(atom, Role::App, 0, COLOR_CYAN[0]).unwrap();
@@ -123,10 +116,10 @@ pub async fn make(
                 prop.set_f32(atom, Role::App, 2, COLOR_CYAN[2]).unwrap();
                 prop.set_f32(atom, Role::App, 3, COLOR_CYAN[3]).unwrap();
             }
-            if let Some(send_bg_grey_node) = sg_root_for_built.lookup_node("/window/content/wallet/send_step4_layer/send_send_btn_bg_grey") {
+            if let Some(send_bg_grey_node) = sg_root_for_built.lookup_node("/window/content/wallet/send_step4_layer/send_btn_bg_grey") {
                 send_bg_grey_node.set_property_bool(atom, Role::App, "is_visible", false).unwrap();
             }
-            if let Some(send_bg_node) = sg_root_for_built.lookup_node("/window/content/wallet/send_step4_layer/send_send_btn_bg") {
+            if let Some(send_bg_node) = sg_root_for_built.lookup_node("/window/content/wallet/send_step4_layer/send_btn_bg") {
                 send_bg_node.set_property_bool(atom, Role::App, "is_visible", true).unwrap();
             }
 

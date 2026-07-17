@@ -16,14 +16,13 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use darkfi::util::parse::encode_base10;
-use darkfi_serial::{Decodable, Encodable};
+use darkfi_serial::Decodable;
 
 use crate::{
     app::{
         App,
         node::{create_button, create_layer, create_text, create_tokentable, create_vector_art},
-        schema::{COLOR_SCHEME, wallet::netstatus},
+        schema::COLOR_SCHEME,
     },
     expr,
     gfx::gfxtag,
@@ -31,7 +30,7 @@ use crate::{
     prop::{PropertyAtomicGuard, PropertyBool, PropertyFloat32, Role},
     scene::{SceneNodePtr, Slot},
     shape,
-    ui::{Button, Layer, Text, TokenRow, TokenTable, VectorArt, VectorShape},
+    ui::{Button, Layer, Text, TokenTable, VectorArt, VectorShape},
     util::i18n::I18nBabelFish,
 };
 
@@ -54,8 +53,6 @@ pub async fn make(
     cc.add_const_f32("BUTTON_HEIGHT", BUTTON_HEIGHT);
     cc.add_const_f32("BUTTON_FONTSIZE", BUTTON_FONTSIZE);
     cc.add_const_f32("ROW_HEIGHT", ROW_HEIGHT);
-
-    let wallet_is_visible = PropertyBool::wrap(&wallet_layer, Role::App, "is_visible", 0).unwrap();
 
     // ============================================
     // Main Wallet Layer
@@ -307,7 +304,6 @@ pub async fn make(
     prop.set_expr(atom, Role::App, 2, expr::load_var("w")).unwrap();
     prop.set_expr(atom, Role::App, 3, expr::load_var("h")).unwrap();
     tokens_table.set_property_f32(atom, Role::App, "font_size", BASE_FONTSIZE).unwrap();
-    tokens_table.set_property_f32(atom, Role::App, "column_spacing", TOKEN_NAME_OFFSET).unwrap();
     tokens_table.set_property_f32(atom, Role::App, "padding_x", PADDING_X).unwrap();
     tokens_table.set_property_f32(atom, Role::App, "padding_y", PADDING_Y).unwrap();
     tokens_table.set_property_u32(atom, Role::App, "z_index", 2).unwrap();

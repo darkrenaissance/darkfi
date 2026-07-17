@@ -75,7 +75,6 @@ pub struct TokenTable {
     font_size: PropertyFloat32,
     text_color: PropertyColor,
     separator_color: PropertyColor,
-    column_spacing: PropertyFloat32,
     padding_x: PropertyFloat32,
     padding_y: PropertyFloat32,
 
@@ -93,7 +92,6 @@ impl TokenTable {
         let font_size = PropertyFloat32::wrap(node_ref, Role::Internal, "font_size", 0).unwrap();
         let text_color = PropertyColor::wrap(node_ref, Role::Internal, "text_color").unwrap();
         let separator_color = PropertyColor::wrap(node_ref, Role::Internal, "separator_color").unwrap();
-        let column_spacing = PropertyFloat32::wrap(node_ref, Role::Internal, "column_spacing", 0).unwrap();
         let padding_x = PropertyFloat32::wrap(node_ref, Role::Internal, "padding_x", 0).unwrap();
         let padding_y = PropertyFloat32::wrap(node_ref, Role::Internal, "padding_y", 0).unwrap();
         let z_index = PropertyUint32::wrap(node_ref, Role::Internal, "z_index", 0).unwrap();
@@ -111,7 +109,6 @@ impl TokenTable {
             font_size,
             text_color,
             separator_color,
-            column_spacing,
             padding_x,
             padding_y,
             parent_rect: SyncMutex::new(None),

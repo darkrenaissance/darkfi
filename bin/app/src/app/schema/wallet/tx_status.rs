@@ -43,8 +43,6 @@ pub async fn make(
     i18n_fish: &I18nBabelFish,
     window_scale: PropertyFloat32,
     send_tx_data: Arc<std::sync::Mutex<SendTxData>>,
-    step3_is_visible: PropertyBool,
-    step4_is_visible: PropertyBool,
 ) -> SceneNodePtr {
     let atom = &mut PropertyAtomicGuard::none();
 
@@ -251,7 +249,6 @@ pub async fn make(
     let tx_status_layer_clone = tx_status_layer.clone();
     let sg_root = app.sg_root.clone();
     let renderer = app.renderer.clone();
-    let send_tx_data2 = send_tx_data.clone();
     app.tasks.lock().unwrap().push(app.ex.spawn(async move {
         while let Ok(mcall) = set_tx_status_sub.receive().await {
             let atom = &mut renderer.make_guard(gfxtag!("set_tx_status"));
@@ -287,7 +284,6 @@ pub async fn make(
 
     // Subscribe to method for receiving built transaction
     let set_built_tx_sub = tx_status_layer.subscribe_method_call("set_built_tx").unwrap();
-    let renderer = app.renderer.clone();
     let send_tx_data2 = send_tx_data.clone();
     app.tasks.lock().unwrap().push(app.ex.spawn(async move {
         while let Ok(mcall) = set_built_tx_sub.receive().await {

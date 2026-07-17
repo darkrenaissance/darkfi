@@ -18,9 +18,7 @@
 
 use std::sync::Arc;
 
-use darkfi::util::parse::encode_base10;
-use darkfi_money_contract::model::DARK_TOKEN_ID;
-use darkfi_serial::{Decodable, Encodable};
+use darkfi_serial::Decodable;
 
 use crate::{
     app::{
@@ -133,7 +131,6 @@ pub async fn make(
     prop.set_expr(atom, Role::App, 2, expr::load_var("w")).unwrap();
     prop.set_expr(atom, Role::App, 3, expr::load_var("h")).unwrap();
     send_tokens_table.set_property_f32(atom, Role::App, "font_size", BASE_FONTSIZE).unwrap();
-    send_tokens_table.set_property_f32(atom, Role::App, "column_spacing", TOKEN_NAME_OFFSET).unwrap();
     send_tokens_table.set_property_f32(atom, Role::App, "padding_x", PADDING_X).unwrap();
     send_tokens_table.set_property_f32(atom, Role::App, "padding_y", PADDING_Y).unwrap();
     send_tokens_table.set_property_u32(atom, Role::App, "z_index", 2).unwrap();
@@ -191,51 +188,6 @@ pub async fn make(
         }
     });
     app.tasks.lock().unwrap().push(listen_click);
-
-    let step1_is_visible3 = step1_is_visible.clone();
-    let sg_root2 = app.sg_root.clone();
-    let renderer2 = app.renderer.clone();
-    let send_tokens_table2 = send_tokens_table.clone();
-    let step1_is_visible_sub = step1_is_visible.prop().subscribe_modify();
-    let listen_step1_visible = app.ex.spawn(async move {
-        while let Ok(_) = step1_is_visible_sub.receive().await {
-            if step1_is_visible3.get() {
-                let atom = &mut renderer2.make_guard(gfxtag!("wallet - refresh send tokens"));
-
-                if let Some(drk_node) = sg_root2.lookup_node("/plugin/drk") {
-                    if let Ok(Some(response_data)) = drk_node.call_method("get_balances", vec![]).await {
-                        let mut cur = std::io::Cursor::new(response_data);
-                        if let Ok(balances) = Vec::<(String, darkfi_money_contract::model::TokenId, u64)>::decode(&mut cur) {
-                            let token_rows: Vec<TokenRow> = balances
-                                .iter()
-                                .enumerate()
-                                .map(|(i, (symbol, token_id, balance))| TokenRow {
-                                    id: *token_id,
-                                    symbol: symbol.clone(),
-                                    balance: encode_base10(*balance, BALANCE_BASE10_DECIMALS),
-                                })
-                                .collect();
-
-                            let mut data: Vec<u8> = vec![];
-                            for row in &token_rows {
-                                let _ = TokenRow::encode(row, &mut data);
-                            }
-
-                            let _ = send_tokens_table2.call_method("set_tokens", data).await;
-
-                            // Update main wallet balance
-                            if let Some(drk_row) = token_rows.iter().find(|row| row.id == *DARK_TOKEN_ID) {
-                                if let Some(balance_node) = sg_root2.lookup_node("/window/content/wallet/main_layer/wallet_balance") {
-                                    balance_node.set_property_str(atom, Role::App, "text", format!("DRK {}", drk_row.balance)).unwrap();
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    });
-    app.tasks.lock().unwrap().push(listen_step1_visible);
 
     send_step1_layer
 }

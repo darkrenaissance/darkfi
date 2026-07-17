@@ -59,14 +59,13 @@ pub async fn get_balance(sg_root: &SceneNodePtr, token_id: &TokenId) -> u64 {
 pub async fn update_amount_screen(
     atom: &mut PropertyAtomicGuard,
     sg_root: &SceneNodePtr,
-    amount_text: &str,
     token_id: &TokenId,
     token_symbol: &str,
     amount_wrapper_node: &SceneNodePtr,
     amount_input_node: &SceneNodePtr,
     token_node: &SceneNodePtr,
     available_balance_node: Option<&SceneNodePtr>,
-) {
+) -> u64 {
     let mut cc = expr::Compiler::new();
 
     let amount_input_text = amount_input_node.get_property_str("text").unwrap();
@@ -102,10 +101,13 @@ pub async fn update_amount_screen(
     token_rect.set_expr(atom, Role::App, 0, cc.compile("AMOUNT_TOKEN_SPACING + AMOUNT_WIDTH").unwrap()).unwrap();
 
     // Set available balance
+    let balance = get_balance(sg_root, token_id).await;
     if let Some(available_balance_node) = available_balance_node {
-        let available_balance = encode_base10(get_balance(sg_root, token_id).await, BALANCE_BASE10_DECIMALS);
+        let available_balance = encode_base10(balance, BALANCE_BASE10_DECIMALS);
         available_balance_node.set_property_str(atom, Role::App, "text", format!("{available_balance} available")).unwrap();
     }
+
+    balance
 }
 
 /// Creates a title text node with separator line.
