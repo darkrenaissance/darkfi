@@ -379,13 +379,7 @@ async fn spawn_net(name: String, info: &NetInfo, ex: Arc<Executor<'static>>) -> 
         listen_urls.push(url.clone());
     }
 
-    let mut profiles = HashMap::new();
-    profiles.insert("tcp+tls".to_string(), NetworkProfile::default());
-    profiles.insert("tcp".to_string(), NetworkProfile::default());
-    profiles.insert("tor".to_string(), NetworkProfile::tor_default());
-    profiles.insert("i2p".to_string(), NetworkProfile::tor_default());
-    profiles.insert("tor+tls".to_string(), NetworkProfile::tor_default());
-    profiles.insert("i2p+tls".to_string(), NetworkProfile::tor_default());
+    let (active_profiles, profiles) = supported_network_profiles();
 
     // P2P network settings
     let settings = net::Settings {
@@ -400,16 +394,7 @@ async fn spawn_net(name: String, info: &NetInfo, ex: Arc<Executor<'static>>) -> 
         localnet: info.localnet,
         p2p_datastore: Some(info.datastore.clone()),
         hostlist: Some(info.hostlist.clone()),
-        active_profiles: vec![
-            "tcp".to_string(),
-            "tcp+tls".to_string(),
-            "tor".to_string(),
-            "tor+tls".to_string(),
-            "nym".to_string(),
-            "nym+tls".to_string(),
-            "i2p".to_string(),
-            "i2p+tls".to_string(),
-        ],
+        active_profiles,
         ban_policy: BanPolicy::Relaxed,
         profiles,
         ..Default::default()
@@ -424,6 +409,21 @@ async fn spawn_net(name: String, info: &NetInfo, ex: Arc<Executor<'static>>) -> 
 
     let spawn = Spawn { name, p2p };
     Ok(spawn)
+}
+
+fn supported_network_profiles() -> (Vec<String>, HashMap<String, NetworkProfile>) {
+    let definitions = [
+        ("tcp", NetworkProfile::default()),
+        ("tcp+tls", NetworkProfile::default()),
+        ("tor", NetworkProfile::tor_default()),
+        ("tor+tls", NetworkProfile::tor_default()),
+        ("i2p", NetworkProfile::tor_default()),
+        ("i2p+tls", NetworkProfile::tor_default()),
+    ];
+    let active_profiles = definitions.iter().map(|(name, _)| (*name).to_string()).collect();
+    let profiles =
+        definitions.into_iter().map(|(name, profile)| (name.to_string(), profile)).collect();
+    (active_profiles, profiles)
 }
 
 async_daemonize!(realmain);
@@ -505,4 +505,24 @@ async fn realmain(args: Args, ex: Arc<Executor<'static>>) -> Result<()> {
 
     info!(target: "lilith", "Bye!");
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use darkfi::net::hosts::HostContainer;
+
+    use super::supported_network_profiles;
+
+    #[test]
+    fn test_supported_network_profiles_are_consistent() {
+        let (active_profiles, profiles) = supported_network_profiles();
+
+        assert_eq!(active_profiles, ["tcp", "tcp+tls", "tor", "tor+tls", "i2p", "i2p+tls"]);
+        assert_eq!(profiles.len(), active_profiles.len());
+        assert!(active_profiles.iter().all(|profile| profiles.contains_key(profile)));
+        assert!(!active_profiles.iter().any(|profile| profile.starts_with("nym")));
+
+        let shareable = HostContainer::shareable_schemes(&active_profiles, &[], &None, &None);
+        assert_eq!(shareable, active_profiles);
+    }
 }
