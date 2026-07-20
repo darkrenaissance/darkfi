@@ -147,7 +147,7 @@ seeds = ["tcp+tls://lilith0.dark.fi:18340", "tcp+tls://lilith1.dark.fi:18340"]
 # own external addresses
 seeds = [
     "tor://wgxxaifz5gv4iggcflyl67lgmsihffs6bbwobqah4np52t3y3olrnpid.onion:18341",
-    "tor://eu7b6sqsxvyfgmufquwr622fbbaqut7qwvpedzlste3b66bv7jvxlpyd.onion:18341",
+    "tor://inx5s3pdzddvgb5ii3oydutmbvw6fvor3oqu65wtxl3pyevtvrdn4had.onion:18341",
 ]
 
 # Peer nodes to manually connect to
