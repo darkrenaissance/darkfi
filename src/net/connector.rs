@@ -65,7 +65,7 @@ impl Connector {
         let datastore = settings.p2p_datastore.clone();
         let i2p_socks5_proxy = settings.i2p_socks5_proxy.clone();
 
-        let (endpoint, mixed_transport) = if let Some(mixed_host) = HostContainer::mix_host(
+        let Some((endpoint, mixed_transport)) = HostContainer::resolve_dial_endpoints(
             url,
             &settings.active_profiles,
             &settings.mixed_profiles,
@@ -73,10 +73,8 @@ impl Connector {
             &settings.nym_socks5_proxy,
         )
         .first()
-        {
-            (mixed_host.clone(), true)
-        } else {
-            (url.clone(), false)
+        .cloned() else {
+            return Err(Error::UnsupportedTransport(url.scheme().to_string()))
         };
 
         let outbound_connect_timeout = settings.outbound_connect_timeout(endpoint.scheme());

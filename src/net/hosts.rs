@@ -559,6 +559,32 @@ impl HostContainer {
         Ok(())
     }
 
+    /// Resolve the endpoints that can be used to dial an advertised address.
+    ///
+    /// Valid mixed endpoints take precedence over a direct endpoint. This preserves
+    /// the configured transport override while ensuring an inactive address is never
+    /// returned for a direct dial when no compatible mixed route exists.
+    pub fn resolve_dial_endpoints(
+        addr: &Url,
+        transports: &[String],
+        mixed_transports: &[String],
+        tor_socks5_proxy: &Option<Url>,
+        nym_socks5_proxy: &Option<Url>,
+    ) -> Vec<(Url, bool)> {
+        let mixed =
+            Self::mix_host(addr, transports, mixed_transports, tor_socks5_proxy, nym_socks5_proxy);
+
+        if !mixed.is_empty() {
+            return mixed.into_iter().map(|endpoint| (endpoint, true)).collect()
+        }
+
+        if transports.iter().any(|transport| transport == addr.scheme()) {
+            return vec![(addr.clone(), false)]
+        }
+
+        vec![]
+    }
+
     /// Perform transport mixing for a URL, returning alternative connection addresses.
     pub fn mix_host(
         addr: &Url,
@@ -1414,8 +1440,8 @@ mod tests {
     }
 
     #[test]
-    fn test_transport_mixing() {
-        let hosts = HostContainer::mix_host(
+    fn test_transport_mixing_prefers_derived_route() {
+        let endpoints = HostContainer::resolve_dial_endpoints(
             &Url::parse("tcp://dark.fi:28880").unwrap(),
             &["tor".to_string(), "tcp".to_string()],
             &["tcp".to_string()],
@@ -1423,8 +1449,101 @@ mod tests {
             &None,
         );
 
-        assert_eq!(hosts.len(), 1);
-        assert_eq!(hosts[0].scheme(), "tor");
+        assert_eq!(endpoints.len(), 1);
+        assert_eq!(endpoints[0].0, Url::parse("tor://dark.fi:28880").unwrap());
+        assert!(endpoints[0].1);
+    }
+
+    #[test]
+    fn test_transport_mixing_resolves_tls_route() {
+        let endpoints = HostContainer::resolve_dial_endpoints(
+            &Url::parse("tcp+tls://dark.fi:28880").unwrap(),
+            &["tor+tls".to_string()],
+            &["tcp+tls".to_string()],
+            &None,
+            &None,
+        );
+
+        assert_eq!(endpoints.len(), 1);
+        assert_eq!(endpoints[0].0, Url::parse("tor+tls://dark.fi:28880").unwrap());
+        assert!(endpoints[0].1);
+    }
+
+    #[test]
+    fn test_transport_mixing_resolves_proxy_routes() {
+        let tor_proxy = Url::parse("socks5://127.0.0.1:9050").ok();
+        let nym_proxy = Url::parse("socks5://127.0.0.1:1080").ok();
+        let endpoints = HostContainer::resolve_dial_endpoints(
+            &Url::parse("tcp+tls://dark.fi:28880").unwrap(),
+            &["socks5+tls".to_string()],
+            &["tcp+tls".to_string()],
+            &tor_proxy,
+            &nym_proxy,
+        );
+
+        assert_eq!(endpoints.len(), 2);
+        assert_eq!(
+            endpoints[0].0,
+            Url::parse("socks5+tls://127.0.0.1:9050/dark.fi:28880").unwrap()
+        );
+        assert_eq!(
+            endpoints[1].0,
+            Url::parse("socks5+tls://127.0.0.1:1080/dark.fi:28880").unwrap()
+        );
+        assert!(endpoints.iter().all(|(_, mixed)| *mixed));
+    }
+
+    #[test]
+    fn test_transport_mixing_returns_active_direct_route() {
+        let addr = Url::parse("tcp+tls://dark.fi:28880").unwrap();
+        let endpoints = HostContainer::resolve_dial_endpoints(
+            &addr,
+            &["tcp+tls".to_string()],
+            &[],
+            &None,
+            &None,
+        );
+
+        assert_eq!(endpoints, vec![(addr, false)]);
+    }
+
+    #[test]
+    fn test_transport_mixing_rejects_incompatible_route() {
+        let endpoints = HostContainer::resolve_dial_endpoints(
+            &Url::parse("tcp+tls://dark.fi:28880").unwrap(),
+            &["tor".to_string()],
+            &["tcp+tls".to_string()],
+            &None,
+            &None,
+        );
+
+        assert!(endpoints.is_empty());
+    }
+
+    #[test]
+    fn test_transport_mixing_rejects_missing_proxy() {
+        let endpoints = HostContainer::resolve_dial_endpoints(
+            &Url::parse("tcp+tls://dark.fi:28880").unwrap(),
+            &["socks5+tls".to_string()],
+            &["tcp+tls".to_string()],
+            &None,
+            &None,
+        );
+
+        assert!(endpoints.is_empty());
+    }
+
+    #[test]
+    fn test_transport_mixing_rejects_inactive_direct_route() {
+        let endpoints = HostContainer::resolve_dial_endpoints(
+            &Url::parse("tcp+tls://dark.fi:28880").unwrap(),
+            &["tor+tls".to_string()],
+            &[],
+            &None,
+            &None,
+        );
+
+        assert!(endpoints.is_empty());
     }
 
     #[test]
