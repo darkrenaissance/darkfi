@@ -109,13 +109,16 @@ hostlist = "~/.local/share/darkfi/darkirc/p2p_hostlist.tsv"
 # If ports are left empty all ports from this peer will be blocked.
 #blacklist = [["example.com", ["tcp"], [8551, 23331]]]
 
-# Whitelisted transports for outbound connections
+# Transports this node can dial. Leave tcp and tcp+tls out when direct
+# clearnet connections are not permitted.
 active_profiles = ["tor"]
 #active_profiles = ["tcp+tls"]
-#active_profiles = ["tor", "tor+tls"]
 
-# Transports you want to be mixed (e.g. Tor would be allowed to connect to `tcp://`
-# if tcp is added to mixed_profiles and tor is added to active_profiles)
+# Canonical peer schemes that may be reached through a compatible active
+# transport. For example, route learned tcp and tcp+tls peers through Tor with:
+#active_profiles = ["tor", "tor+tls"]
+#mixed_profiles = ["tcp", "tcp+tls"]
+# Keep bootstrap seeds under the active tor and tor+tls profile tables below.
 #mixed_profiles = []
 
 # Tor Socks5 proxy
@@ -174,8 +177,8 @@ seeds = [
 [net.profiles."socks5"]
 ## Seed nodes to connect to
 seeds = [
-    "socks5://127.0.0.1:9050/g7fxelebievvpr27w7gt24lflptpw3jeeuvafovgliq5utdst6xyruyd.onion:9600",
-    "socks5://127.0.0.1:9050/yvklzjnfmwxhyodhrkpomawjcdvcaushsj6torjz2gyd7e25f3gfunyd.onion:9600",
+    "socks5://127.0.0.1:9050/wgxxaifz5gv4iggcflyl67lgmsihffs6bbwobqah4np52t3y3olrnpid.onion:9601",
+    "socks5://127.0.0.1:9050/inx5s3pdzddvgb5ii3oydutmbvw6fvor3oqu65wtxl3pyevtvrdn4had.onion:9601",
 ]
 
 ## Manual peers to connect to

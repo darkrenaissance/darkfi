@@ -66,7 +66,12 @@ async fn sync_forks_real(ex: Arc<Executor<'static>>) -> Result<()> {
     th.validate_fork_chains(3, vec![3, 1, 1]).await;
 
     // We are going to create a third node and try to sync from Bob
-    let mut settings = Settings { localnet: true, inbound_connections: 3, ..Default::default() };
+    let mut settings = Settings {
+        active_profiles: vec!["tcp+tls".to_string()],
+        localnet: true,
+        inbound_connections: 3,
+        ..Default::default()
+    };
 
     let charlie_url = Url::parse("tcp+tls://127.0.0.1:18442")?;
     settings.inbound_addrs = vec![charlie_url];

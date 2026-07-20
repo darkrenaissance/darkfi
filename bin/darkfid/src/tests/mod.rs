@@ -110,7 +110,12 @@ async fn sync_blocks_real(ex: Arc<Executor<'static>>) -> Result<()> {
     }
 
     // We are going to create a third node and try to sync from Bob
-    let mut settings = Settings { localnet: true, inbound_connections: 3, ..Default::default() };
+    let mut settings = Settings {
+        active_profiles: vec!["tcp+tls".to_string()],
+        localnet: true,
+        inbound_connections: 3,
+        ..Default::default()
+    };
     let charlie_url = Url::parse("tcp+tls://127.0.0.1:18342")?;
     settings.inbound_addrs = vec![charlie_url];
     let bob_url = th.bob.p2p_handler.p2p.settings().read().await.inbound_addrs[0].clone();

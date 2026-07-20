@@ -111,8 +111,12 @@ impl Harness {
         };
 
         // Generate validators
-        let mut settings =
-            Settings { localnet: true, inbound_connections: 3, ..Default::default() };
+        let mut settings = Settings {
+            active_profiles: vec!["tcp+tls".to_string()],
+            localnet: true,
+            inbound_connections: 3,
+            ..Default::default()
+        };
 
         // Alice
         let alice_url = Url::parse(&config.alice_url)?;

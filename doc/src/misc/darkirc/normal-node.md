@@ -52,6 +52,56 @@ addresses, proxy settings, and any inbound address you intend to expose. See
 [node configuration guides](../nodes/node-configurations.md) for transport and
 public-listener setups.
 
+## Route learned clearnet peers through Tor
+
+Use transport mixing when the seed advertises canonical clearnet peers but
+direct clearnet connections are not allowed. This configuration uses the
+built-in Arti transports, so it does not require `tor_socks5_proxy`:
+
+```toml
+[net]
+active_profiles = ["tor", "tor+tls"]
+mixed_profiles = ["tcp", "tcp+tls"]
+
+[net.profiles."tor"]
+seeds = [
+    "tor://wgxxaifz5gv4iggcflyl67lgmsihffs6bbwobqah4np52t3y3olrnpid.onion:9601",
+    "tor://inx5s3pdzddvgb5ii3oydutmbvw6fvor3oqu65wtxl3pyevtvrdn4had.onion:9601",
+]
+
+[net.profiles."tor+tls"]
+seeds = [
+    "tor+tls://lilith0.dark.fi:9600",
+    "tor+tls://lilith1.dark.fi:9600",
+]
+```
+
+`active_profiles` are the transports the node may actually dial.
+`mixed_profiles` are canonical schemes accepted from seed and peer discovery.
+The compatible mappings in this example are `tcp` through `tor` and
+`tcp+tls` through `tor+tls`. A learned address such as
+`tcp+tls://peer.example:9600` remains under that canonical URL in the hostlist
+and peer lifecycle, while the connection endpoint is derived as
+`tor+tls://peer.example:9600`. Network diagnostics display the derived route.
+
+The seed entries belong to the active `tor` and `tor+tls` profile tables.
+Profile tables that are only named in `mixed_profiles` do not contribute
+seeds, peers, listeners, or external addresses. Do not move these bootstrap
+addresses into `[net.profiles."tcp"]` or `[net.profiles."tcp+tls"]` unless
+those transports are deliberately active for direct clearnet use.
+
+A valid learned address is placed on the dark list when this node has no
+direct or mixed route for its scheme. With the configuration above, learned
+`tcp` and `tcp+tls` peers are dialable through Tor and remain in the normal
+grey, white, and gold host lifecycle. The dark list is an unsupported-host
+classification; it is distinct from the operator-configured blacklist.
+
+Transport mixing prevents a direct connection for these canonical peer
+schemes, but it does not make public DarkIRC messages private or remove all
+traffic-analysis metadata. The remote clearnet service sees a Tor exit rather
+than the node's IP, subject to Tor's threat model. Use encrypted DarkIRC
+channels separately when message confidentiality is required.
+
 ## Start and connect
 
 Start the node from the repository root:

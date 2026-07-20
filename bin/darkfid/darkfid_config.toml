@@ -176,7 +176,7 @@ seeds = [
 # own external addresses
 seeds = [
     "socks5://127.0.0.1:9050/wgxxaifz5gv4iggcflyl67lgmsihffs6bbwobqah4np52t3y3olrnpid.onion:18341",
-    "socks5://127.0.0.1:9050/eu7b6sqsxvyfgmufquwr622fbbaqut7qwvpedzlste3b66bv7jvxlpyd.onion:18341",
+    "socks5://127.0.0.1:9050/inx5s3pdzddvgb5ii3oydutmbvw6fvor3oqu65wtxl3pyevtvrdn4had.onion:18341",
 ]
 
 # Peer nodes to manually connect to

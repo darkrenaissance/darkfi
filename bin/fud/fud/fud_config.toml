@@ -140,8 +140,8 @@ seeds = [
 [net.profiles."tor"]
 ## Seed nodes to connect to
 seeds = [
-    "tor://g7fxelebievvpr27w7gt24lflptpw3jeeuvafovgliq5utdst6xyruyd.onion:9701",
-    "tor://yvklzjnfmwxhyodhrkpomawjcdvcaushsj6torjz2gyd7e25f3gfunyd.onion:9701",
+    "tor://wgxxaifz5gv4iggcflyl67lgmsihffs6bbwobqah4np52t3y3olrnpid.onion:9701",
+    "tor://inx5s3pdzddvgb5ii3oydutmbvw6fvor3oqu65wtxl3pyevtvrdn4had.onion:9701",
 ]
 
 ## Manual peers to connect to
@@ -171,8 +171,8 @@ seeds = [
 [net.profiles."socks5"]
 ## Seed nodes to connect to
 seeds = [
-    "socks5://127.0.0.1:9050/g7fxelebievvpr27w7gt24lflptpw3jeeuvafovgliq5utdst6xyruyd.onion:9701",
-    "socks5://127.0.0.1:9050/yvklzjnfmwxhyodhrkpomawjcdvcaushsj6torjz2gyd7e25f3gfunyd.onion:9701",
+    "socks5://127.0.0.1:9050/wgxxaifz5gv4iggcflyl67lgmsihffs6bbwobqah4np52t3y3olrnpid.onion:9701",
+    "socks5://127.0.0.1:9050/inx5s3pdzddvgb5ii3oydutmbvw6fvor3oqu65wtxl3pyevtvrdn4had.onion:9701",
 ]
 
 ## Manual peers to connect to
