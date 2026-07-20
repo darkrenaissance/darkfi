@@ -39,8 +39,9 @@ use crate::{
     dht::event::DhtEvent,
     net::{
         connector::Connector,
+        hosts::HostContainer,
         session::{SESSION_DIRECT, SESSION_MANUAL},
-        ChannelPtr, Message, P2pPtr,
+        ChannelPtr, Message, P2pPtr, Settings as NetSettings,
     },
     system::{msleep, ExecutorPtr, Publisher, PublisherPtr, Subscription},
     util::time::Timestamp,
@@ -84,6 +85,30 @@ pub use impl_dht_node_defaults;
 enum DhtLookupType {
     Nodes,
     Value,
+}
+
+/// Keep canonical node addresses that can be dialed directly or through a
+/// configured mixed route.
+fn dialable_node_addresses(
+    addresses: &[Url],
+    settings: &NetSettings,
+    excluded: &[Url],
+) -> Vec<Url> {
+    addresses
+        .iter()
+        .filter(|addr| {
+            !excluded.contains(addr) &&
+                !HostContainer::resolve_dial_endpoints(
+                    addr,
+                    &settings.active_profiles,
+                    &settings.mixed_profiles,
+                    &settings.tor_socks5_proxy,
+                    &settings.nym_socks5_proxy,
+                )
+                .is_empty()
+        })
+        .cloned()
+        .collect()
 }
 
 pub enum DhtLookupReply<N: DhtNode, V> {
@@ -430,9 +455,7 @@ impl<H: DhtHandler> Dht<H> {
         key: blake3::Hash,
         lookup_type: DhtLookupType,
     ) -> (Vec<H::Node>, Vec<H::Value>) {
-        let net_settings = self.p2p.settings().read_arc().await;
-        let active_profiles = net_settings.active_profiles.clone();
-        drop(net_settings);
+        let net_settings = self.p2p.settings().read_arc().await.clone();
         let external_addrs = self.p2p.hosts().external_addrs().await;
 
         let (k, a) = (self.settings.k, self.settings.alpha);
@@ -507,15 +530,8 @@ impl<H: DhtHandler> Dht<H> {
             for _ in 0..a {
                 if !nodes_to_visit.is_empty() {
                     let node = nodes_to_visit.remove(0);
-                    let valid_addrs: Vec<Url> = node
-                        .addresses()
-                        .iter()
-                        .filter(|addr| {
-                            active_profiles.contains(&addr.scheme().to_string()) &&
-                                !external_addrs.contains(addr)
-                        })
-                        .cloned()
-                        .collect();
+                    let valid_addrs =
+                        dialable_node_addresses(&node.addresses(), &net_settings, &external_addrs);
                     if !valid_addrs.is_empty() {
                         futures.push(Box::pin(lookup(node, &key, valid_addrs)));
                     }
@@ -706,13 +722,10 @@ impl<H: DhtHandler> Dht<H> {
     }
 
     pub async fn create_channel_to_node(&self, node: &H::Node) -> Result<(ChannelPtr, H::Node)> {
-        let net_settings = self.p2p.settings().read_arc().await;
-        let active_profiles = net_settings.active_profiles.clone();
-        drop(net_settings);
+        let net_settings = self.p2p.settings().read_arc().await.clone();
 
         // Create a channel
-        let mut addrs = node.addresses().clone();
-        addrs.retain(|addr| active_profiles.contains(&addr.scheme().to_string()));
+        let addrs = dialable_node_addresses(&node.addresses(), &net_settings, &[]);
         for addr in addrs {
             let res = self.create_channel(&addr).await;
 
@@ -766,5 +779,47 @@ impl<H: DhtHandler> Dht<H> {
             channel_cache.remove(&channel.info.id);
             ping_locks.remove(&channel.info.id);
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{dialable_node_addresses, NetSettings};
+    use url::Url;
+
+    #[test]
+    fn test_dht_traversal_keeps_mixed_address_canonical() {
+        let settings = NetSettings {
+            active_profiles: vec!["tor+tls".to_string()],
+            mixed_profiles: vec!["tcp+tls".to_string()],
+            ..Default::default()
+        };
+        let canonical = Url::parse("tcp+tls://mixed.example:28880").unwrap();
+        let derived = Url::parse("tor+tls://mixed.example:28880").unwrap();
+
+        let addresses = dialable_node_addresses(std::slice::from_ref(&canonical), &settings, &[]);
+
+        assert_eq!(addresses, [canonical]);
+        assert!(!addresses.contains(&derived));
+    }
+
+    #[test]
+    fn test_dht_bootstrap_filters_undialable_and_external_addresses() {
+        let settings = NetSettings {
+            active_profiles: vec!["tor".to_string()],
+            mixed_profiles: vec!["tcp".to_string()],
+            ..Default::default()
+        };
+        let mixed = Url::parse("tcp://mixed.example:28880").unwrap();
+        let incompatible = Url::parse("tcp+tls://incompatible.example:28880").unwrap();
+        let external = Url::parse("tor://self.example:28880").unwrap();
+
+        let addresses = dialable_node_addresses(
+            &[mixed.clone(), incompatible, external.clone()],
+            &settings,
+            &[external],
+        );
+
+        assert_eq!(addresses, [mixed]);
     }
 }
