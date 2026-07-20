@@ -1043,7 +1043,7 @@ impl Hosts {
             }
 
             // Skip blacklisted
-            if self.container.contains(HostColor::Black, addr) || self.block_all_ports(addr) {
+            if self.is_blacklisted(addr) {
                 verbose!(target: "net::hosts::filter_addresses", "Filtered {addr}: blacklisted");
                 continue;
             }
@@ -1175,9 +1175,14 @@ impl Hosts {
             None => return false,
         };
 
-        self.container.lists.read()[HostColor::Black as usize]
-            .iter()
-            .any(|(u, _)| u.host() == Some(host.clone()) && u.port().is_none())
+        self.container.lists.read()[HostColor::Black as usize].iter().any(|(u, _)| {
+            u.scheme() == url.scheme() && u.host() == Some(host.clone()) && u.port().is_none()
+        })
+    }
+
+    /// Check exact-port and all-port blacklist entries for a URL.
+    pub(crate) fn is_blacklisted(&self, url: &Url) -> bool {
+        self.container.contains(HostColor::Black, url) || self.block_all_ports(url)
     }
 
     pub fn is_local_host(&self, url: &Url) -> bool {
@@ -1481,9 +1486,18 @@ mod tests {
 
         let test_url = Url::parse("tcp+tls://blocked.com:9999").unwrap();
         assert!(hosts.block_all_ports(&test_url));
+        assert!(hosts.is_blacklisted(&test_url));
+
+        for scheme in ["tcp", "tor", "tor+tls"] {
+            let other_scheme = Url::parse(&format!("{scheme}://blocked.com:9999")).unwrap();
+            assert!(!hosts.block_all_ports(&other_scheme));
+            assert!(!hosts.is_blacklisted(&other_scheme));
+        }
 
         let test_url2 = Url::parse("tcp+tls://example.com:9999").unwrap();
         assert!(!hosts.block_all_ports(&test_url2));
+        assert!(!hosts.is_blacklisted(&test_url2));
+        assert!(hosts.is_blacklisted(&with_port));
     }
 
     #[test]

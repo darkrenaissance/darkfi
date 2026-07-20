@@ -32,7 +32,6 @@ use url::Url;
 
 use super::{
     channel::{Channel, ChannelPtr},
-    hosts::HostColor,
     session::SessionWeakPtr,
     settings::Settings,
     transport::Dialer,
@@ -46,6 +45,27 @@ type DialFailures = Vec<(Url, io::Error)>;
 enum DialRoutesError {
     Stopped(Url),
     Failed(DialFailures),
+}
+
+fn partition_blacklisted_endpoints<F>(
+    endpoints: Vec<(Url, bool)>,
+    mut is_blacklisted: F,
+) -> (Vec<(Url, bool)>, Vec<Url>)
+where
+    F: FnMut(&Url) -> bool,
+{
+    let mut allowed = vec![];
+    let mut blocked = vec![];
+
+    for (endpoint, mixed_transport) in endpoints {
+        if is_blacklisted(&endpoint) {
+            blocked.push(endpoint);
+        } else {
+            allowed.push((endpoint, mixed_transport));
+        }
+    }
+
+    (allowed, blocked)
 }
 
 fn build_dial_routes(endpoints: Vec<(Url, bool)>, settings: &Settings) -> Vec<DialRoute> {
@@ -122,7 +142,8 @@ impl Connector {
     /// Establish an outbound connection
     pub async fn connect(&self, url: &Url) -> Result<(Url, ChannelPtr)> {
         let hosts = self.session.upgrade().unwrap().p2p().hosts();
-        if hosts.container.contains(HostColor::Black, url) || hosts.block_all_ports(url) {
+        // A canonical blacklist match blocks the peer regardless of route.
+        if hosts.is_blacklisted(url) {
             let url = sanitized_url(url);
             verbose!(target: "net::connector::connect", "Peer {url} is blacklisted");
             return Err(Error::ConnectFailed(format!("[{url}]: Peer is blacklisted")));
@@ -141,6 +162,24 @@ impl Connector {
         );
         if endpoints.is_empty() {
             return Err(Error::UnsupportedTransport(url.scheme().to_string()))
+        }
+
+        // A derived endpoint match blocks only that route, allowing a safe
+        // alternative transport to be tried when one is available.
+        let (endpoints, blocked) =
+            partition_blacklisted_endpoints(endpoints, |endpoint| hosts.is_blacklisted(endpoint));
+        for endpoint in blocked {
+            verbose!(
+                target: "net::connector::connect",
+                "Skipping blacklisted connection route {}",
+                sanitized_url(&endpoint),
+            );
+        }
+        if endpoints.is_empty() {
+            return Err(Error::ConnectFailed(format!(
+                "[{}]: All connection routes are blacklisted",
+                sanitized_url(url)
+            )))
         }
 
         let routes = build_dial_routes(endpoints, &settings);
@@ -201,6 +240,35 @@ mod tests {
 
     fn route(url: &str, timeout: u64) -> DialRoute {
         (Url::parse(url).unwrap(), true, Duration::from_secs(timeout))
+    }
+
+    #[test]
+    fn test_mixed_routes_skip_blacklisted_endpoint() {
+        let endpoints = vec![
+            (Url::parse("tor+tls://peer.example:28880").unwrap(), true),
+            (Url::parse("nym+tls://peer.example:28880").unwrap(), true),
+        ];
+
+        let (allowed, blocked) =
+            partition_blacklisted_endpoints(endpoints, |url| url.scheme() == "tor+tls");
+
+        assert_eq!(allowed.len(), 1);
+        assert_eq!(allowed[0].0.scheme(), "nym+tls");
+        assert_eq!(blocked.len(), 1);
+        assert_eq!(blocked[0].scheme(), "tor+tls");
+    }
+
+    #[test]
+    fn test_mixed_routes_reject_all_blacklisted_endpoints() {
+        let endpoints = vec![
+            (Url::parse("tor://peer.example:28880").unwrap(), true),
+            (Url::parse("nym://peer.example:28880").unwrap(), true),
+        ];
+
+        let (allowed, blocked) = partition_blacklisted_endpoints(endpoints, |_| true);
+
+        assert!(allowed.is_empty());
+        assert_eq!(blocked.len(), 2);
     }
 
     #[test]
