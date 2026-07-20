@@ -16,11 +16,34 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+use std::sync::Arc;
+
+use async_trait::async_trait;
 use darkfi_serial::{AsyncDecodable, AsyncEncodable};
 use smol::{io, LocalExecutor};
 use url::Url;
 
-use darkfi::net::transport::{Dialer, Listener};
+use darkfi::net::{
+    channel::Channel,
+    session::{Session, SessionBitFlag, SESSION_OUTBOUND},
+    transport::{Dialer, Listener},
+    P2pPtr,
+};
+
+struct TestSession;
+
+#[async_trait]
+impl Session for TestSession {
+    fn p2p(&self) -> P2pPtr {
+        unreachable!("channel address tests do not access P2P state")
+    }
+
+    fn type_id(&self) -> SessionBitFlag {
+        SESSION_OUTBOUND
+    }
+
+    async fn reload(self: Arc<Self>) {}
+}
 
 #[test]
 fn tcp_transport() {
@@ -55,6 +78,32 @@ fn tcp_transport() {
 }
 
 #[test]
+fn transport_mixed_channel_addresses() {
+    let executor = LocalExecutor::new();
+
+    smol::block_on(executor.run(async {
+        let (stream, _peer) = smol::net::unix::UnixStream::pair().unwrap();
+        let session: Arc<dyn Session + Send + Sync> = Arc::new(TestSession);
+        let canonical = Url::parse("tcp+tls://peer.example:28880").unwrap();
+        let derived = Url::parse("tor+tls://peer.example:28880").unwrap();
+
+        let channel = Channel::new(
+            Box::new(stream),
+            Some(derived.clone()),
+            canonical.clone(),
+            Arc::downgrade(&session),
+            true,
+        )
+        .await;
+
+        assert_eq!(channel.address(), &canonical);
+        assert_eq!(channel.connect_addr(), &canonical);
+        assert_eq!(channel.display_address(), &derived);
+        assert_eq!(channel.resolve_addr(), Some(derived));
+    }));
+}
+
+#[test]
 fn tcp_tls_transport() {
     // Register a CryptoProvider for rustls
     use futures_rustls::rustls::crypto::{ring, CryptoProvider};
@@ -66,7 +115,7 @@ fn tcp_tls_transport() {
         let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
         let port = listener.local_addr().unwrap().port();
         drop(listener);
-        let url = Url::parse(&format!("tcp://127.0.0.1:{port}")).unwrap();
+        let url = Url::parse(&format!("tcp+tls://127.0.0.1:{port}")).unwrap();
 
         let listener =
             Listener::new(url.clone(), None, true).await.unwrap().listen().await.unwrap();
