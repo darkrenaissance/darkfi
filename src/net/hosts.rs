@@ -1021,18 +1021,29 @@ impl Hosts {
                 continue;
             }
 
-            // Store unsupported transports on dark list
-            if !settings.active_profiles.contains(&addr.scheme().to_string()) ||
-                (!self.ipv6_available.load(Ordering::SeqCst) && self.is_ipv6(addr))
-            {
+            let dial_endpoints = HostContainer::resolve_dial_endpoints(
+                addr,
+                &settings.active_profiles,
+                &settings.mixed_profiles,
+                &settings.tor_socks5_proxy,
+                &settings.nym_socks5_proxy,
+            );
+            let direct_ipv6_unavailable =
+                !self.ipv6_available.load(Ordering::SeqCst) && self.is_ipv6(addr);
+            let dialable =
+                dial_endpoints.iter().any(|(_, mixed)| *mixed || !direct_ipv6_unavailable);
+
+            // Store valid addresses that cannot be dialed on the dark list.
+            if !dialable {
                 verbose!(target: "net::hosts::filter_addresses", "Filtered {addr}: unsupported transport (darklist)");
                 self.container.store_and_trim(HostColor::Dark, addr.clone(), *last_seen);
                 self.container.refresh(HostColor::Dark, 86400);
-
-                if !settings.mixed_profiles.contains(&addr.scheme().to_string()) {
-                    continue;
-                }
+                continue;
             }
+
+            // A dialable address cannot simultaneously be dark. This also
+            // removes stale entries loaded under an older configuration.
+            self.container.remove(HostColor::Dark, addr);
 
             // Skip if already in active lists
             if self
@@ -1303,7 +1314,10 @@ mod tests {
     use super::*;
 
     fn make_hosts() -> HostsPtr {
-        let settings = Settings::default();
+        make_hosts_with_settings(Settings::default())
+    }
+
+    fn make_hosts_with_settings(settings: Settings) -> HostsPtr {
         Hosts::new(Arc::new(AsyncRwLock::new(settings)))
     }
 
@@ -1544,6 +1558,116 @@ mod tests {
         );
 
         assert!(endpoints.is_empty());
+    }
+
+    #[test]
+    fn test_filter_classifies_active_host_as_grey() {
+        smol::block_on(async {
+            let settings =
+                Settings { active_profiles: vec!["tcp+tls".to_string()], ..Default::default() };
+            let hosts = make_hosts_with_settings(settings);
+            let addr = Url::parse("tcp+tls://dark.fi:28880").unwrap();
+
+            hosts.insert(HostColor::Grey, &[(addr.clone(), 1)]).await;
+
+            assert!(hosts.container.contains(HostColor::Grey, &addr));
+            assert!(!hosts.container.contains(HostColor::Dark, &addr));
+        });
+    }
+
+    #[test]
+    fn test_filter_classifies_mixed_host_as_grey() {
+        smol::block_on(async {
+            let settings = Settings {
+                active_profiles: vec!["tor+tls".to_string()],
+                mixed_profiles: vec!["tcp+tls".to_string()],
+                ..Default::default()
+            };
+            let hosts = make_hosts_with_settings(settings);
+            let addr = Url::parse("tcp+tls://dark.fi:28880").unwrap();
+            let now = UNIX_EPOCH.elapsed().unwrap().as_secs();
+
+            hosts.insert(HostColor::Grey, &[(addr.clone(), now)]).await;
+
+            assert!(hosts.container.contains(HostColor::Grey, &addr));
+            assert!(!hosts.container.contains(HostColor::Dark, &addr));
+        });
+    }
+
+    #[test]
+    fn test_filter_classifies_incompatible_mixed_host_as_dark() {
+        smol::block_on(async {
+            let settings = Settings {
+                active_profiles: vec!["tor".to_string()],
+                mixed_profiles: vec!["tcp+tls".to_string()],
+                ..Default::default()
+            };
+            let hosts = make_hosts_with_settings(settings);
+            let addr = Url::parse("tcp+tls://dark.fi:28880").unwrap();
+            let now = UNIX_EPOCH.elapsed().unwrap().as_secs();
+
+            hosts.insert(HostColor::Grey, &[(addr.clone(), now)]).await;
+
+            assert!(!hosts.container.contains(HostColor::Grey, &addr));
+            assert!(hosts.container.contains(HostColor::Dark, &addr));
+        });
+    }
+
+    #[test]
+    fn test_filter_classifies_unavailable_direct_ipv6_host_as_dark() {
+        smol::block_on(async {
+            let settings =
+                Settings { active_profiles: vec!["tcp".to_string()], ..Default::default() };
+            let hosts = make_hosts_with_settings(settings);
+            hosts.ipv6_available.store(false, Ordering::SeqCst);
+            let addr = Url::parse("tcp://[2606:4700:4700::1111]:28880").unwrap();
+            let now = UNIX_EPOCH.elapsed().unwrap().as_secs();
+
+            hosts.insert(HostColor::Grey, &[(addr.clone(), now)]).await;
+
+            assert!(!hosts.container.contains(HostColor::Grey, &addr));
+            assert!(hosts.container.contains(HostColor::Dark, &addr));
+        });
+    }
+
+    #[test]
+    fn test_filter_classifies_mixed_ipv6_host_as_grey() {
+        smol::block_on(async {
+            let settings = Settings {
+                active_profiles: vec!["tor".to_string()],
+                mixed_profiles: vec!["tcp".to_string()],
+                ..Default::default()
+            };
+            let hosts = make_hosts_with_settings(settings);
+            hosts.ipv6_available.store(false, Ordering::SeqCst);
+            let addr = Url::parse("tcp://[2606:4700:4700::1111]:28880").unwrap();
+
+            hosts.insert(HostColor::Grey, &[(addr.clone(), 1)]).await;
+
+            assert!(hosts.container.contains(HostColor::Grey, &addr));
+            assert!(!hosts.container.contains(HostColor::Dark, &addr));
+        });
+    }
+
+    #[test]
+    fn test_filter_removes_stale_dark_entry_for_dialable_host() {
+        smol::block_on(async {
+            let settings = Settings {
+                active_profiles: vec!["tor+tls".to_string()],
+                mixed_profiles: vec!["tcp+tls".to_string()],
+                ..Default::default()
+            };
+            let hosts = make_hosts_with_settings(settings);
+            let addr = Url::parse("tcp+tls://dark.fi:28880").unwrap();
+            hosts.container.store(HostColor::Dark, addr.clone(), 1);
+
+            hosts.insert(HostColor::Grey, &[(addr.clone(), 2)]).await;
+            hosts.insert(HostColor::Grey, &[(addr.clone(), 3)]).await;
+
+            assert_eq!(hosts.container.fetch_all(HostColor::Grey).len(), 1);
+            assert!(hosts.container.contains(HostColor::Grey, &addr));
+            assert!(!hosts.container.contains(HostColor::Dark, &addr));
+        });
     }
 
     #[test]
