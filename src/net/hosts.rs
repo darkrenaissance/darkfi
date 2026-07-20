@@ -585,6 +585,39 @@ impl HostContainer {
         vec![]
     }
 
+    /// Return canonical address schemes that can be dialed directly or through
+    /// a configured mixed route.
+    pub fn dialable_schemes(
+        transports: &[String],
+        mixed_transports: &[String],
+        tor_socks5_proxy: &Option<Url>,
+        nym_socks5_proxy: &Option<Url>,
+    ) -> Vec<String> {
+        let mut schemes = transports.to_vec();
+
+        for scheme in mixed_transports {
+            if schemes.contains(scheme) {
+                continue
+            }
+
+            let Ok(addr) = Url::parse(&format!("{scheme}://example.com:1")) else { continue };
+
+            if !Self::mix_host(
+                &addr,
+                transports,
+                mixed_transports,
+                tor_socks5_proxy,
+                nym_socks5_proxy,
+            )
+            .is_empty()
+            {
+                schemes.push(scheme.clone());
+            }
+        }
+
+        schemes
+    }
+
     /// Perform transport mixing for a URL, returning alternative connection addresses.
     pub fn mix_host(
         addr: &Url,
@@ -1558,6 +1591,113 @@ mod tests {
         );
 
         assert!(endpoints.is_empty());
+    }
+
+    #[test]
+    fn test_dialable_schemes_include_valid_mixing_sources() {
+        let schemes = HostContainer::dialable_schemes(
+            &["tor".to_string(), "tor+tls".to_string()],
+            &["tcp".to_string(), "tcp+tls".to_string()],
+            &None,
+            &None,
+        );
+
+        assert_eq!(schemes, ["tor", "tor+tls", "tcp", "tcp+tls"]);
+    }
+
+    #[test]
+    fn test_dialable_schemes_exclude_incompatible_mixing_sources() {
+        let schemes = HostContainer::dialable_schemes(
+            &["tor".to_string()],
+            &["tcp+tls".to_string()],
+            &None,
+            &None,
+        );
+
+        assert_eq!(schemes, ["tor"]);
+    }
+
+    #[test]
+    fn test_dialable_schemes_require_configured_proxy() {
+        let without_proxy = HostContainer::dialable_schemes(
+            &["socks5+tls".to_string()],
+            &["tcp+tls".to_string()],
+            &None,
+            &None,
+        );
+        let with_proxy = HostContainer::dialable_schemes(
+            &["socks5+tls".to_string()],
+            &["tcp+tls".to_string()],
+            &None,
+            &Url::parse("socks5://127.0.0.1:1080").ok(),
+        );
+
+        assert_eq!(without_proxy, ["socks5+tls"]);
+        assert_eq!(with_proxy, ["socks5+tls", "tcp+tls"]);
+    }
+
+    #[test]
+    fn test_dialable_schemes_select_mixed_host() {
+        let container = HostContainer::new();
+        let addr = Url::parse("tcp+tls://dark.fi:28880").unwrap();
+        container.store(HostColor::Grey, addr.clone(), 1);
+        let schemes = HostContainer::dialable_schemes(
+            &["tor+tls".to_string()],
+            &["tcp+tls".to_string()],
+            &None,
+            &None,
+        );
+
+        assert_eq!(container.fetch_random_with_schemes(HostColor::Grey, &schemes), Some((addr, 1)));
+    }
+
+    #[test]
+    fn test_mixed_host_keeps_canonical_url_through_lifecycle() {
+        smol::block_on(async {
+            let settings = Settings {
+                active_profiles: vec!["tor+tls".to_string()],
+                mixed_profiles: vec!["tcp+tls".to_string()],
+                ..Default::default()
+            };
+            let hosts = make_hosts_with_settings(settings.clone());
+            let canonical = Url::parse("tcp+tls://dark.fi:28880").unwrap();
+            let derived = Url::parse("tor+tls://dark.fi:28880").unwrap();
+
+            hosts.insert(HostColor::Grey, &[(canonical.clone(), 1)]).await;
+
+            let schemes = HostContainer::dialable_schemes(
+                &settings.active_profiles,
+                &settings.mixed_profiles,
+                &settings.tor_socks5_proxy,
+                &settings.nym_socks5_proxy,
+            );
+            let selected = hosts
+                .container
+                .fetch_random_with_schemes(HostColor::Grey, &schemes)
+                .expect("mixed peer should be selectable");
+            assert_eq!(selected, (canonical.clone(), 1));
+
+            hosts.try_register(canonical.clone(), HostState::Connect).unwrap();
+            assert_eq!(
+                HostContainer::resolve_dial_endpoints(
+                    &selected.0,
+                    &settings.active_profiles,
+                    &settings.mixed_profiles,
+                    &settings.tor_socks5_proxy,
+                    &settings.nym_socks5_proxy,
+                ),
+                vec![(derived.clone(), true)]
+            );
+
+            hosts.move_host(&canonical, 2, HostColor::Gold).await.unwrap();
+            assert!(hosts.container.contains(HostColor::Gold, &canonical));
+            assert!(!hosts.container.contains(HostColor::Gold, &derived));
+
+            hosts.unregister(&canonical).unwrap();
+            hosts.move_host(&canonical, 2, HostColor::Grey).await.unwrap();
+            assert!(hosts.container.contains(HostColor::Grey, &canonical));
+            assert!(!hosts.container.contains(HostColor::Grey, &derived));
+        });
     }
 
     #[test]

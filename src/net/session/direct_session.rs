@@ -42,7 +42,7 @@ use super::{
     super::{
         connector::Connector,
         dnet::{self, dnetev, DnetEvent},
-        hosts::{HostColor, HostState},
+        hosts::{HostColor, HostContainer, HostState},
         message::GetAddrsMessage,
         p2p::{P2p, P2pPtr},
     },
@@ -274,7 +274,13 @@ impl DirectSession {
 
         let settings = self.p2p().settings().read_arc().await;
         let seeds = settings.seeds.clone();
-        let active_profiles = settings.active_profiles.clone();
+        let dial_endpoints = HostContainer::resolve_dial_endpoints(
+            &addr,
+            &settings.active_profiles,
+            &settings.mixed_profiles,
+            &settings.tor_socks5_proxy,
+            &settings.nym_socks5_proxy,
+        );
         drop(settings);
 
         // Do not establish a connection to a host that is also configured as a seed.
@@ -300,13 +306,17 @@ impl DirectSession {
             )))
         }
 
-        // Abort if we do not support this transport.
-        if !active_profiles.contains(&addr.scheme().to_string()) {
+        // Abort if we cannot dial this transport directly or through mixing.
+        if dial_endpoints.is_empty() {
             return Err(Error::UnsupportedTransport(addr.scheme().to_string()))
         }
 
-        // Abort if this peer is IPv6 and we do not support it.
-        if !hosts.ipv6_available.load(Ordering::SeqCst) && hosts.is_ipv6(&addr) {
+        // Direct IPv6 requires local IPv6 connectivity. A mixed route resolves
+        // the destination through its transport and does not have this requirement.
+        if !hosts.ipv6_available.load(Ordering::SeqCst) &&
+            hosts.is_ipv6(&addr) &&
+            dial_endpoints.iter().all(|(_, mixed)| !mixed)
+        {
             return Err(Error::ConnectFailed(format!("[{addr}]: IPv6 is unavailable")))
         }
 
@@ -538,6 +548,12 @@ impl PeerDiscovery {
                 settings.outbound_peer_discovery_attempt_time;
             let getaddrs_max = settings.getaddrs_max;
             let active_profiles = settings.active_profiles.clone();
+            let dialable_schemes = HostContainer::dialable_schemes(
+                &settings.active_profiles,
+                &settings.mixed_profiles,
+                &settings.tor_socks5_proxy,
+                &settings.nym_socks5_proxy,
+            );
             let seeds = settings.seeds.clone();
             drop(settings);
 
@@ -573,7 +589,7 @@ impl PeerDiscovery {
                         .p2p()
                         .hosts()
                         .container
-                        .fetch_random_with_schemes(*color, &active_profiles)
+                        .fetch_random_with_schemes(*color, &dialable_schemes)
                     {
                         channel = self.p2p().session_direct().get_channel(&url).await.ok();
                         break;

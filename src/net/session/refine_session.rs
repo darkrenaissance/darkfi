@@ -44,7 +44,7 @@ use super::super::p2p::{P2p, P2pPtr};
 use crate::{
     net::{
         connector::Connector,
-        hosts::HostColor,
+        hosts::{HostColor, HostContainer},
         protocol::ProtocolVersion,
         session::{Session, SessionBitFlag, SESSION_REFINE},
     },
@@ -234,7 +234,12 @@ impl GreylistRefinery {
             let settings = self.p2p().settings().read_arc().await;
             let greylist_refinery_interval = settings.greylist_refinery_interval;
             let time_with_no_connections = settings.time_with_no_connections;
-            let active_profiles = settings.active_profiles.clone();
+            let dialable_schemes = HostContainer::dialable_schemes(
+                &settings.active_profiles,
+                &settings.mixed_profiles,
+                &settings.tor_socks5_proxy,
+                &settings.nym_socks5_proxy,
+            );
             drop(settings);
 
             sleep(greylist_refinery_interval).await;
@@ -275,7 +280,7 @@ impl GreylistRefinery {
             }
 
             // Only attempt to refine peers that match our transports.
-            match hosts.container.fetch_random_with_schemes(HostColor::Grey, &active_profiles) {
+            match hosts.container.fetch_random_with_schemes(HostColor::Grey, &dialable_schemes) {
                 Some((url, _last_seen)) => {
                     if !hosts.refinable(&url) {
                         debug!(target: "net::refinery", "Unable to refine addr={}", url);

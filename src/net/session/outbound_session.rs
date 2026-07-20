@@ -45,7 +45,7 @@ use super::{
         channel::ChannelPtr,
         connector::Connector,
         dnet::{self, dnetev, DnetEvent},
-        hosts::{HostColor, HostState},
+        hosts::{HostColor, HostContainer, HostState},
         message::GetAddrsMessage,
         p2p::{P2p, P2pPtr},
     },
@@ -276,7 +276,12 @@ impl Slot {
         // Acquire Settings read lock
         let settings = self.p2p().settings().read_arc().await;
 
-        let transports = settings.active_profiles.clone();
+        let transports = HostContainer::dialable_schemes(
+            &settings.active_profiles,
+            &settings.mixed_profiles,
+            &settings.tor_socks5_proxy,
+            &settings.nym_socks5_proxy,
+        );
         let outbound_connections = settings.outbound_connections;
         let known_peer_percent = settings.known_peer_percent;
         let disable_greys = settings.disable_greys;
