@@ -69,6 +69,11 @@ use crate::{
     Error, Result,
 };
 
+/// Canonical transport schemes that may be exchanged through peer discovery.
+/// Proxy endpoint schemes such as SOCKS5 are intentionally excluded.
+pub const SHAREABLE_SCHEMES: [&str; 9] =
+    ["tor", "tls", "tcp", "nym", "i2p", "tor+tls", "nym+tls", "tcp+tls", "i2p+tls"];
+
 pub const LOCAL_HOST_STRS: [&str; 2] = ["localhost", "localhost.localdomain"];
 
 const WHITELIST_MAX_LEN: usize = 5000;
@@ -612,6 +617,26 @@ impl HostContainer {
             .is_empty()
             {
                 schemes.push(scheme.clone());
+            }
+        }
+
+        schemes
+    }
+
+    /// Return deduplicated canonical schemes suitable for peer discovery.
+    pub fn shareable_schemes(
+        transports: &[String],
+        mixed_transports: &[String],
+        tor_socks5_proxy: &Option<Url>,
+        nym_socks5_proxy: &Option<Url>,
+    ) -> Vec<String> {
+        let mut schemes = vec![];
+
+        for scheme in
+            Self::dialable_schemes(transports, mixed_transports, tor_socks5_proxy, nym_socks5_proxy)
+        {
+            if SHAREABLE_SCHEMES.contains(&scheme.as_str()) && !schemes.contains(&scheme) {
+                schemes.push(scheme);
             }
         }
 
@@ -1649,6 +1674,32 @@ mod tests {
         );
 
         assert_eq!(container.fetch_random_with_schemes(HostColor::Grey, &schemes), Some((addr, 1)));
+    }
+
+    #[test]
+    fn test_shareable_schemes_include_mixing_sources_once() {
+        let schemes = HostContainer::shareable_schemes(
+            &["tor+tls".to_string(), "tor+tls".to_string()],
+            &["tcp+tls".to_string(), "tcp+tls".to_string()],
+            &None,
+            &None,
+        );
+
+        assert_eq!(schemes, ["tor+tls", "tcp+tls"]);
+    }
+
+    #[test]
+    fn test_shareable_schemes_exclude_proxy_endpoints() {
+        let proxy = Url::parse("socks5://127.0.0.1:9050").ok();
+        let mixed = ["tor", "tcp", "tor+tls", "tcp+tls"].map(str::to_string);
+        let schemes = HostContainer::shareable_schemes(
+            &["socks5".to_string(), "socks5+tls".to_string()],
+            &mixed,
+            &proxy,
+            &None,
+        );
+
+        assert_eq!(schemes, ["tor", "tcp", "tor+tls", "tcp+tls"]);
     }
 
     #[test]

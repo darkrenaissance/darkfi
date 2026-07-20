@@ -24,7 +24,7 @@ use tracing::debug;
 use super::{
     super::{
         channel::ChannelPtr,
-        hosts::{HostColor, HostsPtr},
+        hosts::{HostColor, HostContainer, HostsPtr},
         message::{AddrsMessage, GetAddrsMessage},
         message_publisher::MessageSubscription,
         p2p::P2pPtr,
@@ -111,14 +111,19 @@ impl ProtocolBase for ProtocolSeed {
         let settings = self.settings.read().await;
         let outbound_connections = settings.outbound_connections;
         let getaddrs_max = settings.getaddrs_max;
-        let active_profiles = settings.active_profiles.clone();
+        let transports = HostContainer::shareable_schemes(
+            &settings.active_profiles,
+            &settings.mixed_profiles,
+            &settings.tor_socks5_proxy,
+            &settings.nym_socks5_proxy,
+        );
         drop(settings);
 
         // Send get address message
         // We ask for a maximum of u8::MAX addresses from a single node
         let get_addr = GetAddrsMessage {
             max: getaddrs_max.unwrap_or(outbound_connections.min(u32::MAX as usize) as u32),
-            transports: active_profiles,
+            transports,
         };
         self.channel.send(&get_addr).await?;
 

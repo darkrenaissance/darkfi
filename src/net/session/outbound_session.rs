@@ -622,7 +622,12 @@ impl PeerDiscoveryBase for PeerDiscovery {
                 settings.outbound_peer_discovery_attempt_time;
             let outbound_connections = settings.outbound_connections;
             let getaddrs_max = settings.getaddrs_max;
-            let active_profiles = settings.active_profiles.clone();
+            let transports = HostContainer::shareable_schemes(
+                &settings.active_profiles,
+                &settings.mixed_profiles,
+                &settings.tor_socks5_proxy,
+                &settings.nym_socks5_proxy,
+            );
             let seeds = settings.seeds.clone();
             drop(settings);
 
@@ -663,7 +668,7 @@ impl PeerDiscoveryBase for PeerDiscovery {
 
                 let get_addrs = GetAddrsMessage {
                     max: getaddrs_max.unwrap_or(outbound_connections.min(u32::MAX as usize) as u32),
-                    transports: active_profiles,
+                    transports,
                 };
 
                 if let Err(e) = self.p2p().broadcast(&get_addrs).await {

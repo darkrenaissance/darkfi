@@ -547,8 +547,13 @@ impl PeerDiscovery {
             let outbound_peer_discovery_attempt_time =
                 settings.outbound_peer_discovery_attempt_time;
             let getaddrs_max = settings.getaddrs_max;
-            let active_profiles = settings.active_profiles.clone();
             let dialable_schemes = HostContainer::dialable_schemes(
+                &settings.active_profiles,
+                &settings.mixed_profiles,
+                &settings.tor_socks5_proxy,
+                &settings.nym_socks5_proxy,
+            );
+            let transports = HostContainer::shareable_schemes(
                 &settings.active_profiles,
                 &settings.mixed_profiles,
                 &settings.tor_socks5_proxy,
@@ -611,8 +616,7 @@ impl PeerDiscovery {
                     state: "getaddr",
                 });
 
-                let get_addrs =
-                    GetAddrsMessage { max: getaddrs_max.unwrap_or(1), transports: active_profiles };
+                let get_addrs = GetAddrsMessage { max: getaddrs_max.unwrap_or(1), transports };
 
                 if let Err(e) = self.p2p().broadcast(&get_addrs).await {
                     debug!(

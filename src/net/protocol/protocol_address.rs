@@ -25,7 +25,7 @@ use url::Url;
 use super::{
     super::{
         channel::ChannelPtr,
-        hosts::{HostColor, HostsPtr},
+        hosts::{HostColor, HostContainer, HostsPtr, SHAREABLE_SCHEMES},
         message::{AddrsMessage, GetAddrsMessage},
         message_publisher::MessageSubscription,
         p2p::P2pPtr,
@@ -70,13 +70,6 @@ pub struct ProtocolAddress {
 
 const PROTO_NAME: &str = "ProtocolAddress";
 
-/// A vector of all currently accepted transports and valid transport
-/// combinations.  Should be updated if and when new transports are
-/// added. Creates a upper bound on the number of transports a given peer
-/// can request.
-const TRANSPORT_COMBOS: [&str; 9] =
-    ["tor", "tls", "tcp", "nym", "i2p", "tor+tls", "nym+tls", "tcp+tls", "i2p+tls"];
-
 /// Strip query parameters from a URL before broadcasting.
 ///
 /// This prevents leaking internal tracking identifiers (e.g., UPnP cookies)
@@ -85,6 +78,53 @@ fn strip_query_params(url: &Url) -> Url {
     let mut stripped = url.clone();
     stripped.set_query(None);
     stripped
+}
+
+fn select_addrs(container: &HostContainer, request: &GetAddrsMessage) -> Vec<(Url, u64)> {
+    // Ignore private or unknown endpoint schemes and collapse duplicate preferences.
+    let mut requested_transports = vec![];
+    for transport in &request.transports {
+        if SHAREABLE_SCHEMES.contains(&transport.as_str()) &&
+            !requested_transports.contains(transport)
+        {
+            requested_transports.push(transport.clone());
+        }
+    }
+
+    let max = request.max as usize;
+    let response_max = max.saturating_mul(2);
+
+    // Prefer proven and recently refined peers matching the request.
+    let mut addrs =
+        container.fetch_n_random_with_schemes(HostColor::Gold, &requested_transports, max);
+    addrs.append(&mut container.fetch_n_random_with_schemes(
+        HostColor::White,
+        &requested_transports,
+        max,
+    ));
+
+    // Fill the second half with other public peers so uncommon transports
+    // continue to propagate across the network.
+    let remain = response_max.saturating_sub(addrs.len());
+    addrs.append(&mut container.fetch_n_random_excluding_schemes(
+        HostColor::Gold,
+        &requested_transports,
+        remain,
+    ));
+
+    let remain = response_max.saturating_sub(addrs.len());
+    addrs.append(&mut container.fetch_n_random_excluding_schemes(
+        HostColor::White,
+        &requested_transports,
+        remain,
+    ));
+
+    let remain = response_max.saturating_sub(addrs.len());
+    addrs.append(&mut container.fetch_n_random(HostColor::Dark, remain));
+
+    // Dark entries are untrusted and can contain private endpoint schemes.
+    addrs.retain(|addr| SHAREABLE_SCHEMES.contains(&addr.0.scheme()));
+    addrs
 }
 
 impl ProtocolAddress {
@@ -152,69 +192,7 @@ impl ProtocolAddress {
                 "Received GetAddrs({}) message from {}", get_addrs_msg.max, self.channel.display_address(),
             );
 
-            // Filter out transports not meant to be shared like Socks5 and Socks5+tls
-            let requested_transports: Vec<String> = get_addrs_msg
-                .transports
-                .iter()
-                .filter(|tp| TRANSPORT_COMBOS.contains(&tp.as_str()))
-                .cloned()
-                .collect();
-
-            // First we grab address with the requested transports from the gold list
-            debug!(target: "net::protocol_address::handle_receive_get_addrs",
-            "Fetching gold entries with schemes");
-            let mut addrs = self.hosts.container.fetch_n_random_with_schemes(
-                HostColor::Gold,
-                &requested_transports,
-                get_addrs_msg.max as usize,
-            );
-
-            // Then we grab address with the requested transports from the whitelist
-            debug!(target: "net::protocol_address::handle_receive_get_addrs",
-            "Fetching whitelist entries with schemes");
-            addrs.append(&mut self.hosts.container.fetch_n_random_with_schemes(
-                HostColor::White,
-                &requested_transports,
-                get_addrs_msg.max as usize,
-            ));
-
-            // Next we grab addresses without the requested transports
-            // to fill a 2 * max length vector.
-
-            // Then we grab address without the requested transports from the gold list
-            debug!(target: "net::protocol_address::handle_receive_get_addrs",
-            "Fetching gold entries without schemes");
-            let remain = 2 * get_addrs_msg.max as usize - addrs.len();
-            addrs.append(&mut self.hosts.container.fetch_n_random_excluding_schemes(
-                HostColor::Gold,
-                &requested_transports,
-                remain,
-            ));
-
-            // Then we grab address without the requested transports from the white list
-            debug!(target: "net::protocol_address::handle_receive_get_addrs",
-            "Fetching white entries without schemes");
-            let remain = 2 * get_addrs_msg.max as usize - addrs.len();
-            addrs.append(&mut self.hosts.container.fetch_n_random_excluding_schemes(
-                HostColor::White,
-                &requested_transports,
-                remain,
-            ));
-
-            // If there's still space available, take from the Dark list.
-
-            /* NOTE: We share peers from our Dark list because to ensure
-            that non-compatiable transports are shared with other nodes
-            so that they propagate on the network even if they're not
-            popular transports. */
-
-            debug!(target: "net::protocol_address::handle_receive_get_addrs",
-            "Fetching dark entries");
-            let remain = 2 * get_addrs_msg.max as usize - addrs.len();
-            addrs.append(&mut self.hosts.container.fetch_n_random(HostColor::Dark, remain));
-
-            // Filter out transports not meant to be shared like Socks5 and Socks5+tls
-            addrs.retain(|addr| TRANSPORT_COMBOS.contains(&addr.0.scheme()));
+            let addrs = select_addrs(&self.hosts.container, &get_addrs_msg);
 
             debug!(
                 target: "net::protocol_address::handle_receive_get_addrs",
@@ -291,7 +269,12 @@ impl ProtocolBase for ProtocolAddress {
 
         let settings = self.settings.read().await;
         let outbound_connections = settings.outbound_connections;
-        let active_profiles = settings.active_profiles.clone();
+        let transports = HostContainer::shareable_schemes(
+            &settings.active_profiles,
+            &settings.mixed_profiles,
+            &settings.tor_socks5_proxy,
+            &settings.nym_socks5_proxy,
+        );
         let getaddrs_max = settings.getaddrs_max;
         drop(settings);
 
@@ -307,7 +290,7 @@ impl ProtocolBase for ProtocolAddress {
         // We ask for a maximum of u8::MAX addresses from a single node
         let get_addrs = GetAddrsMessage {
             max: getaddrs_max.unwrap_or(outbound_connections.min(u32::MAX as usize) as u32),
-            transports: active_profiles,
+            transports,
         };
         self.channel.send(&get_addrs).await?;
 
@@ -326,19 +309,46 @@ impl ProtocolBase for ProtocolAddress {
 #[cfg(test)]
 mod tests {
     use darkfi_serial::serialize;
+    use smol::lock::RwLock as AsyncRwLock;
+    use std::sync::Arc;
+    use url::Url;
 
-    use crate::net::message::GET_ADDRS_MAX_BYTES;
+    use crate::net::{
+        hosts::{HostColor, HostContainer, Hosts, SHAREABLE_SCHEMES},
+        message::GET_ADDRS_MAX_BYTES,
+        Settings,
+    };
 
-    use super::{GetAddrsMessage, TRANSPORT_COMBOS};
+    use super::{select_addrs, GetAddrsMessage};
 
     // Helps to check if the MAX_BYTES for GetAddrs message is valid as new transports are added
     #[test]
     fn test_get_addrs_msg_size() {
         let message = GetAddrsMessage {
             max: u8::MAX as u32,
-            transports: TRANSPORT_COMBOS.iter().map(|x| x.to_string()).collect(),
+            transports: SHAREABLE_SCHEMES.iter().map(|x| x.to_string()).collect(),
         };
 
         assert_eq!(serialize(&message).len() as u64, GET_ADDRS_MAX_BYTES);
+    }
+
+    #[test]
+    fn test_get_addrs_prefers_transport_mixing_source() {
+        let hosts = Hosts::new(Arc::new(AsyncRwLock::new(Settings::default())));
+        let container = &hosts.container;
+        let mixed = Url::parse("tcp+tls://mixed.example:28880").unwrap();
+        let fallback = Url::parse("tcp://fallback.example:28880").unwrap();
+        container.store(HostColor::Gold, mixed.clone(), 2);
+        container.store(HostColor::Gold, fallback.clone(), 1);
+
+        let transports = HostContainer::shareable_schemes(
+            &["tor+tls".to_string()],
+            &["tcp+tls".to_string()],
+            &None,
+            &None,
+        );
+        let response = select_addrs(container, &GetAddrsMessage { max: 1, transports });
+
+        assert_eq!(response, [(mixed, 2), (fallback, 1)]);
     }
 }
