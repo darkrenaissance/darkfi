@@ -115,6 +115,10 @@ fn sanitized_url(url: &Url) -> String {
     sanitized.to_string()
 }
 
+fn route_description(canonical: &Url, endpoint: &Url) -> String {
+    format!("peer [{}] via route [{}]", sanitized_url(canonical), sanitized_url(endpoint))
+}
+
 fn summarize_failures(failures: &DialFailures) -> String {
     failures
         .iter()
@@ -185,10 +189,17 @@ impl Connector {
         let routes = build_dial_routes(endpoints, &settings);
         drop(settings);
 
+        let canonical = url.clone();
         let result = try_dial_routes(routes, &self.stop_signal, |endpoint, timeout| {
             let datastore = datastore.clone();
             let i2p_socks5_proxy = i2p_socks5_proxy.clone();
+            let canonical = canonical.clone();
             async move {
+                verbose!(
+                    target: "net::connector::connect",
+                    "[P2P] Connecting {}",
+                    route_description(&canonical, &endpoint),
+                );
                 let dialer = Dialer::new(endpoint, datastore, Some(i2p_socks5_proxy), true).await?;
                 dialer.dial(Some(timeout)).await
             }
@@ -240,6 +251,19 @@ mod tests {
 
     fn route(url: &str, timeout: u64) -> DialRoute {
         (Url::parse(url).unwrap(), true, Duration::from_secs(timeout))
+    }
+
+    #[test]
+    fn test_route_description_reports_effective_transport_without_credentials() {
+        let canonical = Url::parse("tcp+tls://irc.dark.fi:9600").unwrap();
+        let endpoint = Url::parse("tor+tls://alice:secret@irc.dark.fi:9600?token=hidden").unwrap();
+
+        let description = route_description(&canonical, &endpoint);
+
+        assert_eq!(
+            description,
+            "peer [tcp+tls://irc.dark.fi:9600/] via route [tor+tls://irc.dark.fi:9600/]"
+        );
     }
 
     #[test]

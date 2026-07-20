@@ -386,7 +386,7 @@ impl Slot {
 
             verbose!(
                 target: "net::outbound_session::try_connect",
-                "[P2P] Connecting outbound slot #{slot} [{host}]"
+                "[P2P] Selected peer for outbound slot #{slot} [{host}]"
             );
 
             dnetev!(self, OutboundSlotConnecting, {
