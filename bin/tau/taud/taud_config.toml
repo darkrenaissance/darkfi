@@ -136,10 +136,10 @@ seeds = [
 #peers = []
 
 ## P2P accept addresses
-#inbound = ["tcp://127.0.0.1:9801"]
+#inbound = ["tcp://127.0.0.1:9802"]
 
 ## Addresses we want to advertise to peers
-#external_addrs = ["i2p://youraddress.b32.i2p:9801"]
+#external_addrs = ["i2p://youraddress.b32.i2p:9802"]
 
 [net.profiles."socks5"]
 ## Seed nodes to connect to
