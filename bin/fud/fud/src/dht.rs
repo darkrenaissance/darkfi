@@ -221,7 +221,7 @@ impl DhtHandler for Fud {
                 if cached.node_id != node.id() {
                     self.dht.remove_node(&cached.node_id).await;
 
-                    for (_, seeders) in self.dht.hash_table.write().await.iter_mut() {
+                    for seeders in self.dht.hash_table.write().await.values_mut() {
                         seeders.retain(|seeder| seeder.node.id() != cached.node_id);
                     }
                 }

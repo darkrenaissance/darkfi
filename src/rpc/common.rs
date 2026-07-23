@@ -53,8 +53,7 @@ pub(super) async fn http_read_from_stream_request(
                 // In HTTP, when we reach '\r\n\r\n' we know we've read the headers.
                 // The rest is the body. Headers should contain Content-Length which
                 // tells us the remaining amount of bytes to read.
-                if total_read > 4 && buf[total_read - 4..total_read] == [b'\r', b'\n', b'\r', b'\n']
-                {
+                if total_read > 4 && buf[total_read - 4..total_read] == *b"\r\n\r\n" {
                     break
                 }
             }
@@ -126,8 +125,7 @@ pub(super) async fn http_read_from_stream_response(
                 // In HTTP, when we reach '\r\n\r\n' we know we've read the headers.
                 // The rest is the body. Headers should contain Content-Length which
                 // tells us the remaining amount of bytes to read.
-                if total_read > 4 && buf[total_read - 4..total_read] == [b'\r', b'\n', b'\r', b'\n']
-                {
+                if total_read > 4 && buf[total_read - 4..total_read] == *b"\r\n\r\n" {
                     break
                 }
             }

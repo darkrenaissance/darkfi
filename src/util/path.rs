@@ -40,7 +40,7 @@ mod home_dir_impl {
     /// Use `$HOME`, fallbacks to `libc::getpwuid_r`, otherwise `None`.
     pub fn home_dir() -> Option<PathBuf> {
         env::var_os("HOME")
-            .and_then(|h| if h.is_empty() { None } else { Some(h) })
+            .filter(|h| !h.is_empty())
             .or_else(|| unsafe { home_fallback() })
             .map(PathBuf::from)
     }

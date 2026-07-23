@@ -40,8 +40,8 @@ impl FunctionParams for deploy::DeployParamsV1 {
     fn fmt_pretty(&self, out: &mut String, depth: usize) -> PyResult<()> {
         let prefix = format!("{}├─ ", "   ".repeat(depth));
         writeln!(out, "{prefix}public_key: {}", self.public_key).unwrap();
-        writeln!(out, "{prefix}wasm_bincode: [{} bytes]", &self.wasm_bincode.len()).unwrap();
-        writeln!(out, "{prefix}ix: [{} bytes]", &self.ix.len()).unwrap();
+        writeln!(out, "{prefix}wasm_bincode: [{} bytes]", self.wasm_bincode.len()).unwrap();
+        writeln!(out, "{prefix}ix: [{} bytes]", self.ix.len()).unwrap();
         Ok(())
     }
 }

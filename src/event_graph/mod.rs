@@ -560,6 +560,7 @@ pub struct RangeSyncPage {
 /// must belong to the outstanding request. Returned events and blobs are
 /// reordered to match the request order, and missing IDs are returned for
 /// retry with another peer.
+#[allow(clippy::type_complexity)]
 pub(crate) fn filter_requested_event_rep(
     requested: &[blake3::Hash],
     events: Vec<Event>,
@@ -1914,6 +1915,7 @@ impl EventGraph {
         Ok((events, blobs, next_cursor, exhausted))
     }
 
+    #[allow(clippy::too_many_arguments)]
     async fn accept_range_page(
         &self,
         dag_ts: u64,
@@ -2615,7 +2617,7 @@ impl EventGraph {
     }
 
     pub async fn fetch_event_from_dags(&self, eid: &blake3::Hash) -> Result<Option<Event>> {
-        for (_, slot) in self.dag_store.read().await.dags.iter() {
+        for slot in self.dag_store.read().await.dags.values() {
             if let Some(b) = slot.main_tree.get(eid.as_bytes())? {
                 return Ok(Some(deserialize_async(&b).await?))
             }
@@ -2653,7 +2655,7 @@ impl EventGraph {
 
     pub async fn order_events(&self) -> Result<Vec<Event>> {
         let mut all = vec![];
-        for (_, slot) in self.dag_store.read().await.dags.iter() {
+        for slot in self.dag_store.read().await.dags.values() {
             for item in slot.main_tree.iter() {
                 let (_, b) = item?;
                 let ev: Event = deserialize_async(&b).await?;
@@ -3196,7 +3198,7 @@ impl EventGraph {
         let mut dag = HashMap::new();
 
         // Walk every rotating DAG.
-        for (_, slot) in self.dag_store.read().await.dags.iter() {
+        for slot in self.dag_store.read().await.dags.values() {
             for item in slot.main_tree.iter() {
                 let (eid, val) = match item {
                     Ok(v) => v,

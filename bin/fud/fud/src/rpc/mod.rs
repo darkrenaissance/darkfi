@@ -205,7 +205,7 @@ impl DefaultRpcInterface {
 
         let resources_read = self.fud.resources.read().await;
         let mut resources: Vec<JsonValue> = vec![];
-        for (_, resource) in resources_read.iter() {
+        for resource in resources_read.values() {
             resources.push(resource.clone().into());
         }
 

@@ -505,7 +505,7 @@ impl Fud {
         };
 
         let mut seeding_resources: Vec<Resource> = vec![];
-        for (_, mut resource) in resources_write.iter_mut() {
+        for mut resource in resources_write.values_mut() {
             if let Some(ref hashes_list) = hashes {
                 if !hashes_list.contains(&resource.hash) {
                     continue;

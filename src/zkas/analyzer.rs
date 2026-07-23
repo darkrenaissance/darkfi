@@ -609,7 +609,7 @@ impl Analyzer {
             }
             match i.typ {
                 StatementType::Assign => {
-                    println!("Pushing result as `{}` to heap", &i.lhs.as_ref().unwrap().name);
+                    println!("Pushing result as `{}` to heap", i.lhs.as_ref().unwrap().name);
                     heap.push(&i.lhs.as_ref().unwrap().name);
                     println!("Heap:\n{heap:#?}\n-----");
                 }

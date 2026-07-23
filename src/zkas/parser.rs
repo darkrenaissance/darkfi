@@ -490,7 +490,7 @@ impl Parser {
                 return Err(self.error.abort(
                     &format!(
                         "Section `{section_name}` already contains the token `{}`.",
-                        &name.token
+                        name.token
                     ),
                     name.line,
                     name.column,
