@@ -20,17 +20,21 @@ use darkfi::util::parse::encode_base10;
 use darkfi_money_contract::model::TokenId;
 use darkfi_serial::Decodable;
 
+use futures::FutureExt;
+use smol::channel::unbounded;
+
 use crate::{
     app::App,
-    app::node::{create_button, create_text, create_vector_art},
+    app::node::{create_button, create_layer, create_text, create_vector_art},
     app::schema::COLOR_SCHEME,
     expr::{self, Compiler},
-    gfx::Renderer,
+    gfx::{gfxtag, Renderer},
     mesh::{COLOR_TEAL, COLOR_CYAN},
     prop::{PropertyAtomicGuard, PropertyFloat32, Role},
     scene::SceneNodePtr,
     scene::Pimpl,
-    ui::{Button, Text, VectorArt, VectorShape},
+    text,
+    ui::{Button, Layer, Text, VectorArt, VectorShape},
     util::i18n::I18nBabelFish,
 };
 
@@ -503,4 +507,144 @@ pub async fn create_bottom_button_with_states(
     layer.link(btn.clone());
 
     (btn, bg_valid, bg_invalid, label_node)
+}
+
+/// Create tooltip component (with auto-hide)
+pub async fn create_tooltip(
+    name: &str,
+    app: &App,
+    parent_layer: &SceneNodePtr,
+    text: &str,
+    atom: &mut PropertyAtomicGuard,
+    window_scale: PropertyFloat32,
+    i18n_fish: &I18nBabelFish,
+) -> (SceneNodePtr, f32) {
+    let text_color = COLOR_CYAN;
+
+    // Get actual text dimensions using make_layout
+    let scale = window_scale.get();
+    let layout = text::make_layout(
+        text,
+        text_color,
+        HINT_FONTSIZE,
+        1.0,
+        scale,
+        None,
+        &[],
+    );
+    let text_width = layout.width();
+    let text_height = HINT_FONTSIZE * 1.2;
+
+    let width = text_width + TOOLTIP_PADDING_X * 2.;
+    let height = text_height + TOOLTIP_PADDING_Y * 2.;
+
+    let mut cc = Compiler::new();
+    cc.add_const_f32("TOOLTIP_WIDTH", width);
+    cc.add_const_f32("TOOLTIP_HEIGHT", height);
+
+    // Create tooltip layer
+    let mut tooltip_layer = create_layer(name);
+    let prop = tooltip_layer.get_property("rect").unwrap();
+    prop.set_f32(atom, Role::App, 0, 0.).unwrap();
+    prop.set_f32(atom, Role::App, 1, 0.).unwrap();
+    prop.set_f32(atom, Role::App, 2, width).unwrap();
+    prop.set_f32(atom, Role::App, 3, height).unwrap();
+    tooltip_layer.set_property_bool(atom, Role::App, "is_visible", false).unwrap();
+    tooltip_layer.set_property_u32(atom, Role::App, "z_index", 3).unwrap();
+
+    tooltip_layer.add_method("show", vec![], None).unwrap();
+
+    let tooltip_layer = tooltip_layer.setup(|me| Layer::new(me, app.renderer.clone())).await;
+    parent_layer.link(tooltip_layer.clone());
+
+    // Create box
+    let node = create_vector_art("bg");
+    let prop = node.get_property("rect").unwrap();
+    prop.set_f32(atom, Role::App, 0, 0.).unwrap();
+    prop.set_f32(atom, Role::App, 1, 0.).unwrap();
+    let code = cc.compile("TOOLTIP_WIDTH").unwrap();
+    prop.set_expr(atom, Role::App, 2, code).unwrap();
+    let code = cc.compile("TOOLTIP_HEIGHT").unwrap();
+    prop.set_expr(atom, Role::App, 3, code).unwrap();
+
+    let mut shape = VectorShape::new();
+    shape.add_outline(
+        expr::const_f32(0.),
+        expr::const_f32(0.),
+        expr::const_f32(width),
+        expr::const_f32(height),
+        1.,
+        text_color,
+    );
+    let node = node.setup(|me| VectorArt::new(me, shape, app.renderer.clone())).await;
+    tooltip_layer.link(node);
+
+    // Create text
+    let node = create_text("text");
+    node.set_property_str(atom, Role::App, "text", text).unwrap();
+    let prop = node.get_property("rect").unwrap();
+    prop.set_f32(atom, Role::App, 0, TOOLTIP_PADDING_X).unwrap();
+    prop.set_f32(atom, Role::App, 1, TOOLTIP_PADDING_Y).unwrap();
+    prop.set_f32(atom, Role::App, 2, text_width).unwrap();
+    prop.set_f32(atom, Role::App, 3, text_height).unwrap();
+    node.set_property_f32(atom, Role::App, "font_size", HINT_FONTSIZE).unwrap();
+
+    let prop = node.get_property("text_color").unwrap();
+    prop.set_f32(atom, Role::App, 0, text_color[0]).unwrap();
+    prop.set_f32(atom, Role::App, 1, text_color[1]).unwrap();
+    prop.set_f32(atom, Role::App, 2, text_color[2]).unwrap();
+    prop.set_f32(atom, Role::App, 3, text_color[3]).unwrap();
+    node.set_property_u32(atom, Role::App, "z_index", 3).unwrap();
+    let node = node.setup(|me| Text::new(me, window_scale.clone(), app.renderer.clone(), i18n_fish.clone())).await;
+    tooltip_layer.link(node);
+
+    // Subscribe to show method for auto-hide behavior
+    let show_method_sub = tooltip_layer.subscribe_method_call("show").unwrap();
+    let tooltip_clone = tooltip_layer.clone();
+    let renderer2 = app.renderer.clone();
+    let (reset_sender, reset_receiver) = unbounded::<()>();
+
+    app.tasks.lock().unwrap().push(app.ex.spawn(async move {
+        loop {
+            // Wait for show() call
+            let _ = show_method_sub.receive().await;
+
+            // Show the tooltip
+            let atom = &mut renderer2.make_guard(gfxtag!("tooltip show"));
+            tooltip_clone.set_property_bool(atom, Role::App, "is_visible", true).unwrap();
+
+            // Send reset signal to hide timer
+            let _ = reset_sender.send(()).await;
+        }
+    }));
+
+    // Hide timer task
+    let tooltip2 = tooltip_layer.clone();
+    let renderer2 = app.renderer.clone();
+    app.tasks.lock().unwrap().push(app.ex.spawn(async move {
+        loop {
+            // Wait for show signal
+            let _ = reset_receiver.recv().await;
+
+            // Sleep 2 seconds, but reset if we get another signal
+            loop {
+                futures::select! {
+                    _ = darkfi::system::sleep(2).fuse() => {
+                        // Timeout completed, hide and break
+                        break;
+                    }
+                    _ = reset_receiver.recv().fuse() => {
+                        // Got another show signal, restart timer
+                        continue;
+                    }
+                }
+            }
+
+            // Hide the tooltip
+            let atom = &mut renderer2.make_guard(gfxtag!("tooltip hide"));
+            tooltip2.set_property_bool(atom, Role::App, "is_visible", false).unwrap();
+        }
+    }));
+
+    (tooltip_layer, width)
 }

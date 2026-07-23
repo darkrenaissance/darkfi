@@ -52,6 +52,9 @@ mod android_ui_consts {
     pub const CHAT_BTN_SIZE: f32 = 200.;
     pub const CHAT_BTN_MARGIN: f32 = 20.;
 
+    pub const TOOLTIP_PADDING_X: f32 = 20.;
+    pub const TOOLTIP_PADDING_Y: f32 = 15.;
+
     pub const NETSTATUS_ICON_SIZE: f32 = 140.;
     pub const SETTINGS_ICON_SIZE: f32 = 140.;
     pub const NETLOGO_SCALE: f32 = 7.;
@@ -102,6 +105,9 @@ mod ui_consts {
     pub const CHAT_BTN_LOGO_SCALE: f32 = 40.;
     pub const CHAT_BTN_SIZE: f32 = 100.;
     pub const CHAT_BTN_MARGIN: f32 = 20.;
+
+    pub const TOOLTIP_PADDING_X: f32 = 10.;
+    pub const TOOLTIP_PADDING_Y: f32 = 6.;
 
     pub const NETSTATUS_ICON_SIZE: f32 = 60.;
     pub const SETTINGS_ICON_SIZE: f32 = 60.;

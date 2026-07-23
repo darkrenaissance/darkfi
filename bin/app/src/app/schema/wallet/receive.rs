@@ -169,18 +169,43 @@ pub async fn make(
 
     let (slot, recvr) = Slot::new("receive_copy_clicked");
     node.register("click", slot).unwrap();
+    let sg_root = app.sg_root.clone();
     let receive_address_text2 = receive_address_text.clone();
     let listen_click = app.ex.spawn(async move {
         while let Ok(_) = recvr.recv().await {
             let addr = receive_address_text2.get();
             info!(target: "app", "Copy receive address: {addr}");
             clipboard::set(&addr);
+
+            // Show tooltip
+            if let Some(tooltip) = sg_root.lookup_node("/window/content/wallet/receive_layer/receive_copy_tooltip") {
+                let _ = tooltip.call_method("show", vec![]).await;
+            }
         }
     });
     app.tasks.lock().unwrap().push(listen_click);
 
     let node = node.setup(|me| Button::new(me, app.renderer.clone())).await;
     receive_layer.link(node);
+
+    // Create tooltip
+    let (tooltip, tooltip_width) = create_tooltip(
+        "receive_copy_tooltip",
+        app,
+        &receive_layer,
+        "copied",
+        atom,
+        window_scale.clone(),
+        i18n_fish,
+    ).await;
+
+    // Position tooltip
+    let tooltip_y_expr = cc.compile(format!("{y} + PADDING_Y * 3 + addr_height + 1")).unwrap();
+    let tooltip_x_expr = cc.compile(format!("(w - {tooltip_width}) / 2")).unwrap();
+    let tooltip_rect = tooltip.get_property("rect").unwrap();
+    tooltip_rect.set_expr(atom, Role::App, 0, tooltip_x_expr).unwrap();
+    tooltip_rect.set_expr(atom, Role::App, 1, tooltip_y_expr).unwrap();
+    tooltip_rect.add_depend(&addr_h_prop, 0, "addr_height");
 
     let sep = create_separator_expr(app, atom, &receive_layer, "receive_address_separator", &mut cc, &format!("{y} + PADDING_Y * 2 + addr_height + 1")).await;
     let prop = sep.get_property("rect").unwrap();
