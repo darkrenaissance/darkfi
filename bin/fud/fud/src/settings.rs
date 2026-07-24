@@ -16,11 +16,15 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+use std::{fs::read_to_string, path::PathBuf};
+
 use structopt::StructOpt;
 use structopt_toml::{serde::Deserialize, StructOptToml};
+use tracing::error;
 
 use darkfi::{
     cli_desc, dht::DhtSettingsOpt, net::settings::SettingsOpt, rpc::settings::RpcSettingsOpt,
+    Error, Result,
 };
 
 use crate::pow::PowSettingsOpt;
@@ -60,13 +64,9 @@ pub struct Args {
     /// Network settings
     pub net: SettingsOpt,
 
-    #[structopt(skip)]
+    #[structopt(flatten)]
     /// Main JSON-RPC settings
     pub rpc: RpcSettingsOpt,
-
-    #[structopt(skip)]
-    /// Management JSON-RPC settings
-    pub management_rpc: RpcSettingsOpt,
 
     #[structopt(flatten)]
     /// DHT settings
@@ -75,4 +75,33 @@ pub struct Args {
     #[structopt(flatten)]
     /// PoW settings
     pub pow: PowSettingsOpt,
+}
+
+/// Helper function to parse management RPC settings from config file.
+/// structopt-toml doesn't support multiple fields with same names (even if
+/// nested) so we can't just have `rpc` and `management_rpc` (both
+/// `RpcSettingsOpt`) in `Args`. This issue causes all CLI arguments to stop
+/// working.
+///
+/// For now `management_rpc` is not in `Args` and parsed separately to prevent
+/// this.
+///
+/// TODO: replace structopt-toml to fix this issue.
+pub fn parse_management_rpc(config_path: &PathBuf) -> Result<Option<RpcSettingsOpt>> {
+    let contents = read_to_string(config_path)?;
+
+    #[derive(Deserialize)]
+    struct Config {
+        management_rpc: Option<RpcSettingsOpt>,
+    }
+
+    let config: Config = match toml::from_str(&contents) {
+        Ok(v) => v,
+        Err(e) => {
+            error!(target: "fud", "Failed parsing TOML config: {e}");
+            return Err(Error::ParseFailed("Failed parsing TOML config"))
+        }
+    };
+
+    Ok(config.management_rpc)
 }

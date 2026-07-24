@@ -34,13 +34,13 @@ use darkfi::{
         settings::RpcSettings,
     },
     system::{Publisher, StoppableTask},
-    util::path::expand_path,
+    util::path::{expand_path, get_config_path},
     Error, Result,
 };
 use fud::{
     proto::ProtocolFud,
     rpc::{management::ManagementRpcInterface, DefaultRpcInterface},
-    settings::{Args, CONFIG_FILE, CONFIG_FILE_CONTENTS},
+    settings::{parse_management_rpc, Args, CONFIG_FILE, CONFIG_FILE_CONTENTS},
     Fud,
 };
 
@@ -133,24 +133,31 @@ async fn realmain(args: Args, ex: Arc<Executor<'static>>) -> Result<()> {
         ex.clone(),
     );
 
-    let management_rpc_settings: RpcSettings = args.management_rpc.into();
-    info!(target: "fud", "Starting management JSON-RPC server on {}", management_rpc_settings.listen);
-    let management_rpc_interface = Arc::new(ManagementRpcInterface::new(fud.clone(), dnet_sub));
-    let management_rpc_task = StoppableTask::new();
-    let management_rpc_interface_ = management_rpc_interface.clone();
-    management_rpc_task.clone().start(
-        listen_and_serve(management_rpc_settings, management_rpc_interface, None, ex.clone()),
-        |res| async move {
-            match res {
-                Ok(()) | Err(Error::RpcServerStopped) => {
-                    management_rpc_interface_.stop_connections().await
+    let mut management_rpc_task = None;
+    let management_rpc_settings =
+        parse_management_rpc(&get_config_path(args.config.clone(), CONFIG_FILE)?)?;
+    if let Some(management_rpc_settings) = management_rpc_settings {
+        let management_rpc_settings: RpcSettings = management_rpc_settings.into();
+        info!(target: "fud", "Starting management JSON-RPC server on {}", management_rpc_settings.listen);
+        let management_rpc_interface = Arc::new(ManagementRpcInterface::new(fud.clone(), dnet_sub));
+        management_rpc_task = Some(StoppableTask::new());
+        let management_rpc_interface_ = management_rpc_interface.clone();
+        management_rpc_task.as_ref().unwrap().clone().start(
+            listen_and_serve(management_rpc_settings, management_rpc_interface, None, ex.clone()),
+            |res| async move {
+                match res {
+                    Ok(()) | Err(Error::RpcServerStopped) => {
+                        management_rpc_interface_.stop_connections().await
+                    }
+                    Err(e) => {
+                        error!(target: "fud", "Failed starting management JSON-RPC server: {e}")
+                    }
                 }
-                Err(e) => error!(target: "fud", "Failed starting management JSON-RPC server: {e}"),
-            }
-        },
-        Error::RpcServerStopped,
-        ex.clone(),
-    );
+            },
+            Error::RpcServerStopped,
+            ex.clone(),
+        );
+    }
 
     if let Err(e) = fud.start().await {
         panic!("Error while starting fud: {e}");
@@ -186,8 +193,10 @@ async fn realmain(args: Args, ex: Arc<Executor<'static>>) -> Result<()> {
     info!(target: "fud", "Stopping main JSON-RPC server...");
     rpc_task.stop().await;
 
-    info!(target: "fud", "Stopping management JSON-RPC server...");
-    management_rpc_task.stop().await;
+    if let Some(management_rpc_task) = management_rpc_task {
+        info!(target: "fud", "Stopping management JSON-RPC server...");
+        management_rpc_task.stop().await;
+    }
 
     info!(target: "fud", "Stopping P2P network...");
     p2p.stop().await;
