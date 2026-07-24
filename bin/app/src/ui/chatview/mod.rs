@@ -76,6 +76,7 @@ fn max(a: f32, b: f32) -> f32 {
     }
 }
 
+#[cfg(feature = "enable-plugin-fud")]
 fn get_file_url(text: &String) -> Option<Url> {
     let url_regex = Regex::new(r"fud://[^\s]+").unwrap();
     url_regex.find(text).and_then(|match_| Url::parse(match_.as_str()).ok())
@@ -509,7 +510,7 @@ impl ChatView {
                 return
             }
 
-            #[cfg(feature = "enable-plugins")]
+            #[cfg(feature = "enable-plugin-fud")]
             {
                 if let Some(url) = get_file_url(&text) {
                     let _ =
@@ -655,7 +656,7 @@ impl ChatView {
                 )
                 .await;
 
-            #[cfg(feature = "enable-plugins")]
+            #[cfg(feature = "enable-plugin-fud")]
             {
                 if let Some(url) = get_file_url(&chatmsg.text) {
                     let _ = msgbuf.insert_filemsg(

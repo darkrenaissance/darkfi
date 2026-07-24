@@ -19,13 +19,13 @@ glam = "0.30.9"
 #zmq = "0.10.0"
 #async_zmq = "0.4.0"
 zeromq = { version = "0.4.1", default-features = false, features = ["async-std-runtime", "all-transport"] }
-darkirc = { path = "../darkirc" }
+darkirc = { path = "../darkirc", optional = true }
 darkfi = {path = "../../", features = ["async-daemonize", "event-graph", "net", "util", "system", "zk"]}
 darkfi-sdk = {path = "../../src/sdk", features = ["async"]}
 darkfi-serial = {path = "../../src/serial", features = ["async"]}
 darkfi_money_contract = { path = "../../src/contract/money/" }
-fud = { path = "../fud/fud/" }
-drk = { path = "../drk/" }
+fud = { path = "../fud/fud/", optional = true }
+drk = { path = "../drk/", optional = true }
 bs58 = "0.5.1"
 thiserror = "2.0.18"
 smol = "2.0.2"
@@ -70,10 +70,14 @@ opt-level = 3
 [features]
 default = ["enable-plugins", "schema-app"]
 emulate-android = []
-enable-plugins = []
 enable-filelog = []
 # Network debugging. Should be disabled in release.
 enable-netdebug = []
+
+enable-plugin-darkirc = ["dep:darkirc"]
+enable-plugin-fud = ["dep:fud"]
+enable-plugin-drk = ["dep:drk"]
+enable-plugins = ["enable-plugin-darkirc", "enable-plugin-fud", "enable-plugin-drk"]
 
 # Main app schema layout
 schema-app = []

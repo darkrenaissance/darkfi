@@ -23,7 +23,7 @@ use std::sync::{Arc, Mutex as SyncMutex};
 #[cfg(target_os = "android")]
 use crate::android;
 
-#[cfg(feature = "enable-plugins")]
+#[cfg(any(feature = "enable-plugin-darkirc", feature = "enable-plugin-fud"))]
 use crate::plugin::PluginSettings;
 use crate::{
     error::Error,

@@ -19,34 +19,51 @@
 use sled_overlay::sled;
 use std::{array::TryFromSliceError, string::FromUtf8Error, sync::Arc};
 
+#[cfg(feature = "enable-plugin-darkirc")]
 pub mod darkirc;
+#[cfg(feature = "enable-plugin-darkirc")]
 pub use darkirc::DarkIrcPtr;
 
+#[cfg(feature = "enable-plugin-darkirc")]
 pub mod darkirc2;
+#[cfg(feature = "enable-plugin-darkirc")]
 pub use darkirc2::DarkIrc2Ptr;
 
+#[cfg(feature = "enable-plugin-fud")]
 pub mod fud;
+#[cfg(feature = "enable-plugin-fud")]
 pub use fud::FudPluginPtr as FudPtr;
 
+#[cfg(feature = "enable-plugin-drk")]
 pub mod drk;
+#[cfg(feature = "enable-plugin-drk")]
 pub use drk::DrkPluginPtr as DrkPtr;
 
+#[cfg(feature = "enable-plugin-darkirc")]
 pub use darkirc::DarkIrc;
+#[cfg(feature = "enable-plugin-darkirc")]
 pub use darkirc2::DarkIrc2;
+#[cfg(feature = "enable-plugin-fud")]
 pub use fud::FudPlugin;
+#[cfg(feature = "enable-plugin-drk")]
 pub use drk::DrkPlugin;
 
+#[cfg(any(feature = "enable-plugin-darkirc", feature = "enable-plugin-fud"))]
 use darkfi::net::Settings as NetSettings;
 
+#[cfg(any(feature = "enable-plugin-darkirc", feature = "enable-plugin-fud"))]
 use crate::{
     prop::{Property, PropertyAtomicGuard, PropertySubType, PropertyType, PropertyValue, Role},
     scene::{SceneNode, SceneNodePtr, SceneNodeType},
 };
 
+#[cfg(any(feature = "enable-plugin-darkirc", feature = "enable-plugin-fud"))]
 pub struct PluginSettings {
     pub setting_root: SceneNodePtr,
     pub sled_tree: sled::Tree,
 }
+
+#[cfg(any(feature = "enable-plugin-darkirc", feature = "enable-plugin-fud"))]
 impl PluginSettings {
     pub fn add_setting(&self, name: &str, default: PropertyValue) -> Option<SceneNodePtr> {
         let atom = &mut PropertyAtomicGuard::none();

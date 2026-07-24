@@ -29,7 +29,6 @@ use std::{
     sync::{Arc, OnceLock, RwLock as SyncRwLock, Weak},
 };
 
-#[cfg(feature = "enable-plugins")]
 use crate::plugin;
 use crate::{
     error::{Error, Result},
@@ -592,13 +591,13 @@ pub enum Pimpl {
     EmojiPicker(ui::EmojiPickerPtr),
     Menu(ui::MenuPtr),
     TokenTable(ui::TokenTablePtr),
-    #[cfg(feature = "enable-plugins")]
+    #[cfg(feature = "enable-plugin-darkirc")]
     DarkIrc(plugin::DarkIrcPtr),
-    #[cfg(feature = "enable-plugins")]
+    #[cfg(feature = "enable-plugin-darkirc")]
     DarkIrc2(plugin::DarkIrc2Ptr),
-    #[cfg(feature = "enable-plugins")]
+    #[cfg(feature = "enable-plugin-fud")]
     Fud(plugin::FudPtr),
-    #[cfg(feature = "enable-plugins")]
+    #[cfg(feature = "enable-plugin-drk")]
     Drk(plugin::DrkPtr),
 }
 

@@ -27,6 +27,7 @@ use darkfi::util::parse::encode_base10;
 use darkfi_money_contract::model::DARK_TOKEN_ID;
 use darkfi_serial::{Decodable, Encodable, deserialize};
 use std::sync::{Arc, OnceLock};
+use smol::Task;
 
 #[macro_use]
 extern crate tracing;
@@ -43,7 +44,6 @@ mod logger;
 mod mesh;
 #[cfg(feature = "enable-netdebug")]
 mod net;
-#[cfg(feature = "enable-plugins")]
 mod plugin;
 mod prop;
 mod pubsub;
@@ -64,7 +64,6 @@ use crate::{
 };
 #[cfg(feature = "enable-netdebug")]
 use net::ZeroMQAdapter;
-#[cfg(feature = "enable-plugins")]
 use {
     // Local imports
     gfx::Renderer,
@@ -80,9 +79,7 @@ use {
 pub use util::ExecutorPtr;
 
 macro_rules! t { ($($arg:tt)*) => { trace!(target: "main", $($arg)*); } }
-#[cfg(feature = "enable-plugins")]
 macro_rules! d { ($($arg:tt)*) => { trace!(target: "main", $($arg)*); } }
-#[cfg(any(feature = "enable-plugins", feature = "enable-netdebug"))]
 macro_rules! i { ($($arg:tt)*) => { trace!(target: "main", $($arg)*); } }
 
 fn panic_hook(panic_info: &std::panic::PanicHookInfo) {
@@ -181,7 +178,6 @@ impl God {
             bg_runtime.push_task(zmq_task);
         }
 
-        #[cfg(feature = "enable-plugins")]
         {
             let ex = bg_ex.clone();
             let cv = cv_app_is_setup.clone();
@@ -191,9 +187,6 @@ impl God {
             });
             bg_runtime.push_task(plug_task);
         }
-
-        #[cfg(not(feature = "enable-plugins"))]
-        warn!(target: "main", "Plugins are disabled in this build");
 
         Self {
             _bg_runtime: bg_runtime,
@@ -262,7 +255,6 @@ impl std::fmt::Debug for God {
 
 static GOD: OnceLock<God> = OnceLock::new();
 
-#[cfg(feature = "enable-plugins")]
 async fn load_plugins(
     ex: ExecutorPtr,
     sg_root: SceneNodePtr,
@@ -275,6 +267,11 @@ async fn load_plugins(
 
     // DarkIrc needs /window to start
     cv.wait().await;
+
+    let mut listeners: Vec<Task<()>> = vec![];
+
+    #[cfg(feature = "enable-plugin-darkirc")]
+    {
     let darkirc = create_darkirc("darkirc");
     let darkirc = darkirc
         .setup(|me| async {
@@ -401,6 +398,12 @@ async fn load_plugins(
 
     plugin.link(darkirc);
 
+    listeners.push(listen_recv);
+    listeners.push(listen_connect);
+    }
+
+    #[cfg(feature = "enable-plugin-fud")]
+    {
     let fud = create_fud("fud");
     let sg_root2 = sg_root.clone();
     let fud = fud
@@ -431,6 +434,11 @@ async fn load_plugins(
 
     plugin.link(fud);
 
+    listeners.push(listen_file_status);
+    }
+
+    #[cfg(feature = "enable-plugin-drk")]
+    {
     let drk = create_drk("drk");
     let drk = drk
         .setup(|me| async {
@@ -664,8 +672,15 @@ async fn load_plugins(
 
     plugin.link(drk);
 
+    listeners.push(listen_connect);
+    listeners.push(listen_balances);
+    listeners.push(listen_tx);
+    listeners.push(listen_tx_built);
+    listeners.push(listen_tx_built_error);
+    }
+
     i!("Plugins loaded");
-    futures::join!(listen_recv, listen_connect, listen_file_status, listen_balances, listen_tx, listen_tx_built, listen_tx_built_error);
+    futures::future::join_all(listeners).await;
 }
 
 pub fn create_darkirc(name: &str) -> SceneNode {
