@@ -535,15 +535,13 @@ impl Menu {
         let resist = self.scroll_resist.get();
 
         loop {
-            self.motion_cv.wait().await;
-            self.motion_cv.reset();
-
             let mut speed = self.speed.load(Ordering::Relaxed);
             if speed.abs() < EPSILON {
-                continue
+                break
             }
 
             while speed.abs() >= EPSILON {
+                speed = self.speed.load(Ordering::Relaxed);
                 let scroll = self.scroll.load(Ordering::Relaxed);
                 self.scrollview(scroll + speed);
                 self.redraw_scroll(&self.renderer);
@@ -553,6 +551,7 @@ impl Menu {
             }
 
             self.speed.store(0., Ordering::Relaxed);
+            break
         }
     }
 
