@@ -23,9 +23,12 @@ use darkfi_serial::Encodable;
 
 use crate::{
     app::{
-        App,
-        node::{create_button, create_layer, create_decimal_edit, create_singleline_edit, create_text, create_vector_art},
+        node::{
+            create_button, create_decimal_edit, create_layer, create_singleline_edit, create_text,
+            create_vector_art,
+        },
         schema::COLOR_SCHEME,
+        App,
     },
     expr,
     gfx::gfxtag,
@@ -74,7 +77,8 @@ pub async fn make(
     send_step3_layer.set_property_u32(atom, Role::App, "z_index", 2).unwrap();
     let send_step3_layer = send_step3_layer.setup(|me| Layer::new(me, app.renderer.clone())).await;
     wallet_layer.link(send_step3_layer.clone());
-    let step3_is_visible = PropertyBool::wrap(&send_step3_layer, Role::App, "is_visible", 0).unwrap();
+    let step3_is_visible =
+        PropertyBool::wrap(&send_step3_layer, Role::App, "is_visible", 0).unwrap();
 
     create_bg_mesh(app, atom, &send_step3_layer, "send_bg3").await;
     create_header_bg(app, atom, &send_step3_layer, "send_header_bg3").await;
@@ -111,7 +115,9 @@ pub async fn make(
         while let Ok(_) = recvr.recv().await {
             let atom = &mut renderer.make_guard(gfxtag!("send step3 back button"));
             // Reset error message on back button click
-            if let Some(error_node) = sg_root2.lookup_node("/window/content/wallet/send_step3_layer/error") {
+            if let Some(error_node) =
+                sg_root2.lookup_node("/window/content/wallet/send_step3_layer/error")
+            {
                 error_node.set_property_str(atom, Role::App, "text", "").unwrap();
             }
             step3_is_visible1.set(atom, false);
@@ -136,7 +142,8 @@ pub async fn make(
     prop.set_f32(atom, Role::App, 3, BASE_FONTSIZE).unwrap();
     node.set_property_f32(atom, Role::App, "font_size", BASE_FONTSIZE).unwrap();
     // Set initial token value from send_tx_data
-    let token_symbol_text = send_tx_data.lock().unwrap().token_symbol.clone().unwrap_or_else(|| "".to_string());
+    let token_symbol_text =
+        send_tx_data.lock().unwrap().token_symbol.clone().unwrap_or_else(|| "".to_string());
     node.set_property_str(atom, Role::App, "text", &token_symbol_text).unwrap();
     let prop = node.get_property("text_color").unwrap();
     if COLOR_SCHEME == ColorScheme::DarkMode {
@@ -164,7 +171,8 @@ pub async fn make(
     prop.set_f32(atom, Role::App, 3, BASE_FONTSIZE).unwrap();
     node.set_property_f32(atom, Role::App, "font_size", BASE_FONTSIZE).unwrap();
     // Set initial token value from send_tx_data
-    let token_name_text = send_tx_data.lock().unwrap().token_name.clone().unwrap_or_else(|| "".to_string());
+    let token_name_text =
+        send_tx_data.lock().unwrap().token_name.clone().unwrap_or_else(|| "".to_string());
     node.set_property_str(atom, Role::App, "text", &token_name_text).unwrap();
     let prop = node.get_property("text_color").unwrap();
     if COLOR_SCHEME == ColorScheme::DarkMode {
@@ -250,7 +258,14 @@ pub async fn make(
     // Separator line
     let mut y_ = y.clone();
     let y2 = format!("{y} + (PADDING_Y * 2. + addr_height) + 1");
-    let node = create_separator(&app.renderer, atom, &send_step3_layer, "send_amount_label_separator", &mut y_).await;
+    let node = create_separator(
+        &app.renderer,
+        atom,
+        &send_step3_layer,
+        "send_amount_label_separator",
+        &mut y_,
+    )
+    .await;
     let prop = node.get_property("rect").unwrap();
     let code = cc.compile(&y2).unwrap();
     prop.set_expr(atom, Role::App, 1, code).unwrap();
@@ -260,7 +275,8 @@ pub async fn make(
     let available_balance_node = create_text("send_available_balance");
     let prop = available_balance_node.get_property("rect").unwrap();
     prop.set_f32(atom, Role::App, 0, PADDING_X).unwrap();
-    let code = cc.compile("h - PADDING_X * 2 - BUTTON_HEIGHT - PADDING_Y - BASE_FONTSIZE - 1").unwrap();
+    let code =
+        cc.compile("h - PADDING_X * 2 - BUTTON_HEIGHT - PADDING_Y - BASE_FONTSIZE - 1").unwrap();
     prop.set_expr(atom, Role::App, 1, code).unwrap();
     prop.set_f32(atom, Role::App, 2, 1000.).unwrap();
     prop.set_f32(atom, Role::App, 3, BASE_FONTSIZE).unwrap();
@@ -279,7 +295,9 @@ pub async fn make(
         prop.set_f32(atom, Role::App, 3, 1.).unwrap();
     }
     available_balance_node.set_property_u32(atom, Role::App, "z_index", 2).unwrap();
-    let available_balance_node = available_balance_node.setup(|me| Text::new(me, window_scale.clone(), app.renderer.clone(), i18n_fish.clone())).await;
+    let available_balance_node = available_balance_node
+        .setup(|me| Text::new(me, window_scale.clone(), app.renderer.clone(), i18n_fish.clone()))
+        .await;
     send_step3_layer.link(available_balance_node.clone());
 
     // Separator line below available balance
@@ -290,7 +308,8 @@ pub async fn make(
         "available_balance_separator",
         &mut cc,
         "h - PADDING_X * 2 - BUTTON_HEIGHT",
-    ).await;
+    )
+    .await;
 
     // Amount wrapper layer
     let amount_y = format!("({y2}) + (h - ({y2}) - BUTTON_HEIGHT - PADDING_X * 2 - PADDING_Y - BASE_FONTSIZE - AMOUNT_FONTSIZE - 1) / 2");
@@ -327,7 +346,9 @@ pub async fn make(
     prop.set_f32(atom, Role::App, 2, 0.3).unwrap();
     prop.set_f32(atom, Role::App, 3, 1.).unwrap();
     error_node.set_property_u32(atom, Role::App, "z_index", 2).unwrap();
-    let error_node = error_node.setup(|me| Text::new(me, window_scale.clone(), app.renderer.clone(), i18n_fish.clone())).await;
+    let error_node = error_node
+        .setup(|me| Text::new(me, window_scale.clone(), app.renderer.clone(), i18n_fish.clone()))
+        .await;
     send_step3_layer.link(error_node.clone());
 
     // Amount input
@@ -337,7 +358,7 @@ pub async fn make(
     // Position at (0, 0) within wrapper - wrapper controls the position
     prop.set_f32(atom, Role::App, 0, 0.).unwrap();
     prop.set_f32(atom, Role::App, 1, 0.).unwrap();
-    cc.add_const_f32("AMOUNT_CHAR_WIDTH", AMOUNT_CHAR_WIDTH+6.); // Initial width for "0"
+    cc.add_const_f32("AMOUNT_CHAR_WIDTH", AMOUNT_CHAR_WIDTH + 6.); // Initial width for "0"
     let code = cc.compile("AMOUNT_CHAR_WIDTH").unwrap();
     prop.set_expr(atom, Role::App, 2, code).unwrap();
     prop.set_f32(atom, Role::App, 3, AMOUNT_FONTSIZE).unwrap();
@@ -377,10 +398,10 @@ pub async fn make(
     prop.set_f32(atom, Role::App, 2, 1.).unwrap();
     prop.set_f32(atom, Role::App, 3, 1.).unwrap();
     input_node.set_property_f32(atom, Role::App, "cursor_ascent", 0.).unwrap();
-    input_node.set_property_f32(atom, Role::App, "cursor_descent", AMOUNT_FONTSIZE*1.3).unwrap();
-    input_node.set_property_f32(atom, Role::App, "select_ascent", AMOUNT_FONTSIZE*1.3).unwrap();
-    input_node.set_property_f32(atom, Role::App, "select_descent", AMOUNT_FONTSIZE/3.).unwrap();
-    input_node.set_property_f32(atom, Role::App, "handle_descent", AMOUNT_FONTSIZE/2.5).unwrap();
+    input_node.set_property_f32(atom, Role::App, "cursor_descent", AMOUNT_FONTSIZE * 1.3).unwrap();
+    input_node.set_property_f32(atom, Role::App, "select_ascent", AMOUNT_FONTSIZE * 1.3).unwrap();
+    input_node.set_property_f32(atom, Role::App, "select_descent", AMOUNT_FONTSIZE / 3.).unwrap();
+    input_node.set_property_f32(atom, Role::App, "handle_descent", AMOUNT_FONTSIZE / 2.5).unwrap();
     input_node.set_property_u32(atom, Role::App, "z_index", 2).unwrap();
 
     input_node.set_property_str(atom, Role::App, "placeholder_text", "0").unwrap();
@@ -448,10 +469,18 @@ pub async fn make(
     prop.set_f32(atom, Role::App, 2, 1.).unwrap();
     prop.set_f32(atom, Role::App, 3, 1.).unwrap();
     token_symbol_node.set_property_f32(atom, Role::App, "cursor_ascent", 0.).unwrap();
-    token_symbol_node.set_property_f32(atom, Role::App, "cursor_descent", AMOUNT_FONTSIZE*1.3).unwrap();
-    token_symbol_node.set_property_f32(atom, Role::App, "select_ascent", AMOUNT_FONTSIZE*1.3).unwrap();
-    token_symbol_node.set_property_f32(atom, Role::App, "select_descent", AMOUNT_FONTSIZE/3.).unwrap();
-    token_symbol_node.set_property_f32(atom, Role::App, "handle_descent", AMOUNT_FONTSIZE/2.5).unwrap();
+    token_symbol_node
+        .set_property_f32(atom, Role::App, "cursor_descent", AMOUNT_FONTSIZE * 1.3)
+        .unwrap();
+    token_symbol_node
+        .set_property_f32(atom, Role::App, "select_ascent", AMOUNT_FONTSIZE * 1.3)
+        .unwrap();
+    token_symbol_node
+        .set_property_f32(atom, Role::App, "select_descent", AMOUNT_FONTSIZE / 3.)
+        .unwrap();
+    token_symbol_node
+        .set_property_f32(atom, Role::App, "handle_descent", AMOUNT_FONTSIZE / 2.5)
+        .unwrap();
     token_symbol_node.set_property_u32(atom, Role::App, "z_index", 2).unwrap();
 
     let token_symbol_node = token_symbol_node
@@ -468,17 +497,19 @@ pub async fn make(
     amount_wrapper.link(token_symbol_node.clone());
 
     // Add amount button with states
-    let (node, btn_bg_valid, btn_bg_invalid, add_amount_label_node) = create_bottom_button_with_states(
-        app,
-        atom,
-        &send_step3_layer,
-        "send_add_amount_btn",
-        &mut cc,
-        "add amount",
-        &window_scale,
-        i18n_fish,
-        false, // Start with invalid state (grey)
-    ).await;
+    let (node, btn_bg_valid, btn_bg_invalid, add_amount_label_node) =
+        create_bottom_button_with_states(
+            app,
+            atom,
+            &send_step3_layer,
+            "send_add_amount_btn",
+            &mut cc,
+            "add amount",
+            &window_scale,
+            i18n_fish,
+            false, // Start with invalid state (grey)
+        )
+        .await;
 
     // Amount input validation listener
     let amount_input2 = input_node.clone();
@@ -497,11 +528,14 @@ pub async fn make(
         while let Ok(_) = amount_text_sub.receive().await {
             let atom = &mut renderer.make_guard(gfxtag!("wallet amount input recv"));
             // Reset error message on amount change
-            if let Some(error_node) = sg_root.lookup_node("/window/content/wallet/send_step3_layer/error") {
+            if let Some(error_node) =
+                sg_root.lookup_node("/window/content/wallet/send_step3_layer/error")
+            {
                 error_node.set_property_str(atom, Role::App, "text", "").unwrap();
             }
 
-            let label_text_color = add_amount_label_node_for_validation.get_property("text_color").unwrap();
+            let label_text_color =
+                add_amount_label_node_for_validation.get_property("text_color").unwrap();
             let btn_bg_valid_visible = btn_bg_valid_clone.get_property("is_visible").unwrap();
             let btn_bg_invalid_visible = btn_bg_invalid_clone.get_property("is_visible").unwrap();
             let amount = amount_input2.get_property_str("text").unwrap();
@@ -527,7 +561,8 @@ pub async fn make(
                     &amount_input2,
                     &token_symbol_node2,
                     Some(&available_balance_node2),
-                ).await;
+                )
+                .await;
                 let is_valid = if sanitized_amount == "0" {
                     false
                 } else {
@@ -661,9 +696,11 @@ pub async fn make(
     let listen_step3_visible = app.ex.spawn(async move {
         while let Ok(_) = step3_is_visible_sub.receive().await {
             if step3_is_visible_clone.get() {
-                loop { // TODO: this waits for draw, there's probably a better way
+                loop {
+                    // TODO: this waits for draw, there's probably a better way
                     darkfi::system::msleep(50).await;
-                    let input_rect = PropertyRect::wrap(&input_node_clone, Role::App, "rect").unwrap();
+                    let input_rect =
+                        PropertyRect::wrap(&input_node_clone, Role::App, "rect").unwrap();
                     if input_rect.has_cached() {
                         break;
                     }
@@ -674,11 +711,15 @@ pub async fn make(
 
                 let (token_id, token_symbol) = {
                     let data = send_tx_data_clone.lock().unwrap();
-                    (data.token_id.clone(), data.token_symbol.clone().unwrap_or_else(|| "".to_string()))
+                    (
+                        data.token_id.clone(),
+                        data.token_symbol.clone().unwrap_or_else(|| "".to_string()),
+                    )
                 };
                 if let Some(token_id) = token_id {
                     if !token_symbol.is_empty() {
-                        let atom = &mut renderer_clone.make_guard(gfxtag!("update amount positions on visible"));
+                        let atom = &mut renderer_clone
+                            .make_guard(gfxtag!("update amount positions on visible"));
                         update_amount_screen(
                             atom,
                             &sg_root,
@@ -688,7 +729,8 @@ pub async fn make(
                             &input_node_clone,
                             &token_symbol_node_clone,
                             Some(&available_balance_node_clone),
-                        ).await;
+                        )
+                        .await;
                     }
                 }
             } else {

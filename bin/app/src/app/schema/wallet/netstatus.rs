@@ -18,16 +18,18 @@
 
 use crate::{
     app::{
+        schema::{
+            create_layer, create_vector_art,
+            wallet::data::{NETLOGO_SCALE, NETSTATUS_ICON_SIZE},
+        },
         App,
-        schema::{create_vector_art, create_layer},
-        schema::wallet::data::{NETSTATUS_ICON_SIZE, NETLOGO_SCALE}
     },
     expr,
     prop::{PropertyAtomicGuard, PropertyFloat32, Role},
-    shape,
     scene::SceneNodePtr,
+    shape,
     ui::{Layer, VectorArt},
-    util::i18n::I18nBabelFish
+    util::i18n::I18nBabelFish,
 };
 
 pub async fn make(

@@ -43,10 +43,10 @@ pub use drk::DrkPluginPtr as DrkPtr;
 pub use darkirc::DarkIrc;
 #[cfg(feature = "enable-plugin-darkirc")]
 pub use darkirc2::DarkIrc2;
-#[cfg(feature = "enable-plugin-fud")]
-pub use fud::FudPlugin;
 #[cfg(feature = "enable-plugin-drk")]
 pub use drk::DrkPlugin;
+#[cfg(feature = "enable-plugin-fud")]
+pub use fud::FudPlugin;
 
 #[cfg(any(feature = "enable-plugin-darkirc", feature = "enable-plugin-fud"))]
 use darkfi::net::Settings as NetSettings;

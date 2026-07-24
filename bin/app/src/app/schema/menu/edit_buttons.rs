@@ -25,7 +25,7 @@ use crate::{
     },
     expr,
     gfx::gfxtag,
-    mesh::{COLOR_CYAN, COLOR_RED, DONE_MENU_BTN_GRADIENT, CANCEL_MENU_BTN_GRADIENT},
+    mesh::{CANCEL_MENU_BTN_GRADIENT, COLOR_CYAN, COLOR_RED, DONE_MENU_BTN_GRADIENT},
     prop::{PropertyAtomicGuard, PropertyBool, PropertyFloat32, Role},
     scene::{SceneNodePtr, Slot},
     ui::{Button, Layer, Text, VectorArt, VectorShape},
@@ -262,10 +262,20 @@ impl EditButtons {
 
         // Cancel and done button click handlers
         self.connect_btn_handler(
-            app, &self.cancel_btn, menu_node, "cancel_clicked", "cancel_edit", sibling.clone(),
+            app,
+            &self.cancel_btn,
+            menu_node,
+            "cancel_clicked",
+            "cancel_edit",
+            sibling.clone(),
         );
         self.connect_btn_handler(
-            app, &self.done_btn, menu_node, "done_clicked", "done_edit", sibling.clone(),
+            app,
+            &self.done_btn,
+            menu_node,
+            "done_clicked",
+            "done_edit",
+            sibling.clone(),
         );
     }
 

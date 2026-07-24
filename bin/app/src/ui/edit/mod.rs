@@ -246,8 +246,10 @@ impl BaseEdit {
         let text = PropertyStr::wrap(node_ref, Role::Internal, "text", 0).unwrap();
         let text_color = PropertyColor::wrap(node_ref, Role::Internal, "text_color").unwrap();
         let text_hi_color = PropertyColor::wrap(node_ref, Role::Internal, "text_hi_color").unwrap();
-        let placeholder_text = PropertyStr::wrap(node_ref, Role::Internal, "placeholder_text", 0).unwrap();
-        let placeholder_color = PropertyColor::wrap(node_ref, Role::Internal, "placeholder_color").unwrap();
+        let placeholder_text =
+            PropertyStr::wrap(node_ref, Role::Internal, "placeholder_text", 0).unwrap();
+        let placeholder_color =
+            PropertyColor::wrap(node_ref, Role::Internal, "placeholder_color").unwrap();
         //let text_cmd_color =
         //    PropertyColor::wrap(node_ref, Role::Internal, "text_cmd_color").unwrap();
         let cursor_color = PropertyColor::wrap(node_ref, Role::Internal, "cursor_color").unwrap();
@@ -274,7 +276,8 @@ impl BaseEdit {
         let priority = PropertyUint32::wrap(node_ref, Role::Internal, "priority", 0).unwrap();
         let debug = PropertyBool::wrap(node_ref, Role::Internal, "debug", 0).unwrap();
 
-        let android_input_type = PropertyUint32::wrap(node_ref, Role::Internal, "android_input_type", 0).unwrap();
+        let android_input_type =
+            PropertyUint32::wrap(node_ref, Role::Internal, "android_input_type", 0).unwrap();
 
         let action_fg_color =
             PropertyColor::wrap(node_ref, Role::Internal, "action_fg_color").unwrap();

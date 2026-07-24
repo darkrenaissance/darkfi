@@ -22,15 +22,12 @@ use ui_consts::*;
 use super::{ColorScheme, CHANNELS, COLOR_SCHEME};
 use crate::{
     app::{
-        node::{
-            create_button, create_layer, create_menu, create_text,
-            create_vector_art,
-        },
+        node::{create_button, create_layer, create_menu, create_text, create_vector_art},
         App,
     },
     expr,
     gfx::gfxtag,
-    mesh::{COLOR_CYAN, DONE_MENU_BTN_GRADIENT, CANCEL_MENU_BTN_GRADIENT},
+    mesh::{CANCEL_MENU_BTN_GRADIENT, COLOR_CYAN, DONE_MENU_BTN_GRADIENT},
     prop::{PropertyAtomicGuard, PropertyBool, PropertyFloat32, Role},
     scene::{SceneNodePtr, Slot},
     shape,
@@ -287,7 +284,7 @@ pub async fn make(app: &App, content: SceneNodePtr, i18n_fish: &I18nBabelFish) {
     node.set_property_u32(atom, Role::App, "z_index", 1).unwrap();
     node.set_property_f32(atom, Role::App, "scale", VERBLOCK_SCALE).unwrap();
     let shape = shape::create_version_block([1., 0., 0.25, 1.]);
-    
+
     let node = node.setup(|me| VectorArt::new(me, shape, app.renderer.clone())).await;
     mainlayer_node.link(node);
 
@@ -376,9 +373,8 @@ pub async fn make(app: &App, content: SceneNodePtr, i18n_fish: &I18nBabelFish) {
     mainlayer_node.link(node);
 
     // Create cancel/done edit buttons
-    let btns = edit_buttons::create_edit_buttons(
-        app, layer_node.clone(), &window_scale, i18n_fish,
-    ).await;
+    let btns =
+        edit_buttons::create_edit_buttons(app, layer_node.clone(), &window_scale, i18n_fish).await;
 
     // Menu
     let node = create_menu("main_menu");
@@ -435,15 +431,7 @@ pub async fn make(app: &App, content: SceneNodePtr, i18n_fish: &I18nBabelFish) {
         prop.push_str(atom, Role::App, *channel).unwrap();
     }
     for channel in [
-        "@john",
-        "@stacy",
-        "@barry",
-        "@steve",
-        "@obombo",
-        "@xyz",
-        "@lunar",
-        "@fren",
-        "@anon",
+        "@john", "@stacy", "@barry", "@steve", "@obombo", "@xyz", "@lunar", "@fren", "@anon",
         "@anon1",
     ] {
         prop.push_str(atom, Role::App, channel).unwrap();
@@ -507,7 +495,8 @@ pub async fn setup_wallet_button(app: &App, menu_layer: SceneNodePtr, i18n_fish:
     .unwrap();
 
     let menulayer_is_visible = PropertyBool::wrap(&menu_layer, Role::App, "is_visible", 0).unwrap();
-    let mainlayer_node = app.sg_root.lookup_node("/window/content/menu_layer/mainbtn_layer").unwrap();
+    let mainlayer_node =
+        app.sg_root.lookup_node("/window/content/menu_layer/mainbtn_layer").unwrap();
 
     // Wallet button
     let node = create_vector_art("walletbtn_bg");
@@ -553,8 +542,13 @@ pub async fn setup_wallet_button(app: &App, menu_layer: SceneNodePtr, i18n_fish:
     let (slot, recvr) = Slot::new("wallet_clicked");
     node.register("click", slot).unwrap();
     let sg_root = app.sg_root.clone();
-    let wallet_is_visible =
-        PropertyBool::wrap(&sg_root.lookup_node("/window/content/wallet").unwrap(), Role::App, "is_visible", 0).unwrap();
+    let wallet_is_visible = PropertyBool::wrap(
+        &sg_root.lookup_node("/window/content/wallet").unwrap(),
+        Role::App,
+        "is_visible",
+        0,
+    )
+    .unwrap();
     let renderer = app.renderer.clone();
     let menulayer_is_visible2 = menulayer_is_visible.clone();
     let listen_click = app.ex.spawn(async move {

@@ -18,12 +18,11 @@
 
 use crate::{
     app::{
-        App,
         node::{create_button, create_layer, create_text, create_vector_art},
         schema::COLOR_SCHEME,
+        App,
     },
-    clipboard,
-    expr,
+    clipboard, expr,
     gfx::gfxtag,
     mesh::COLOR_CYAN,
     prop::{PropertyAtomicGuard, PropertyBool, PropertyFloat32, PropertyStr, Role},
@@ -87,7 +86,8 @@ pub async fn make(
     prop.set_f32(atom, Role::App, 3, HEADER_HEIGHT).unwrap();
 
     let main_is_visible = PropertyBool::wrap(&main_layer, Role::App, "is_visible", 0).unwrap();
-    let receive_is_visible = PropertyBool::wrap(&receive_layer, Role::App, "is_visible", 0).unwrap();
+    let receive_is_visible =
+        PropertyBool::wrap(&receive_layer, Role::App, "is_visible", 0).unwrap();
     let renderer = app.renderer.clone();
     let (slot, recvr) = Slot::new("receive_back_clicked");
     node.register("click", slot).unwrap();
@@ -107,7 +107,17 @@ pub async fn make(
 
     create_title(app, atom, &receive_layer, &window_scale, i18n_fish, "RECEIVE", &mut y).await;
 
-    create_subtitle(app, atom, &receive_layer, &window_scale, i18n_fish, "address", "Address", &mut y).await;
+    create_subtitle(
+        app,
+        atom,
+        &receive_layer,
+        &window_scale,
+        i18n_fish,
+        "address",
+        "Address",
+        &mut y,
+    )
+    .await;
 
     // Address display
     let node = create_text("receive_address");
@@ -178,7 +188,9 @@ pub async fn make(
             clipboard::set(&addr);
 
             // Show tooltip
-            if let Some(tooltip) = sg_root.lookup_node("/window/content/wallet/receive_layer/receive_copy_tooltip") {
+            if let Some(tooltip) =
+                sg_root.lookup_node("/window/content/wallet/receive_layer/receive_copy_tooltip")
+            {
                 let _ = tooltip.call_method("show", vec![]).await;
             }
         }
@@ -197,7 +209,8 @@ pub async fn make(
         atom,
         window_scale.clone(),
         i18n_fish,
-    ).await;
+    )
+    .await;
 
     // Position tooltip
     let tooltip_y_expr = cc.compile(format!("{y} + PADDING_Y * 3 + addr_height + 1")).unwrap();
@@ -207,7 +220,15 @@ pub async fn make(
     tooltip_rect.set_expr(atom, Role::App, 1, tooltip_y_expr).unwrap();
     tooltip_rect.add_depend(&addr_h_prop, 0, "addr_height");
 
-    let sep = create_separator_expr(app, atom, &receive_layer, "receive_address_separator", &mut cc, &format!("{y} + PADDING_Y * 2 + addr_height + 1")).await;
+    let sep = create_separator_expr(
+        app,
+        atom,
+        &receive_layer,
+        "receive_address_separator",
+        &mut cc,
+        &format!("{y} + PADDING_Y * 2 + addr_height + 1"),
+    )
+    .await;
     let prop = sep.get_property("rect").unwrap();
     prop.add_depend(&addr_h_prop, 0, "addr_height");
 

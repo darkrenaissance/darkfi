@@ -29,9 +29,9 @@ use std::{
     sync::{Arc, OnceLock, RwLock as SyncRwLock, Weak},
 };
 
-use crate::plugin;
 use crate::{
     error::{Error, Result},
+    plugin,
     prop::{Property, PropertyAtomicGuard, PropertyPtr, Role},
     pubsub::{Publisher, PublisherPtr, Subscription},
     ui,

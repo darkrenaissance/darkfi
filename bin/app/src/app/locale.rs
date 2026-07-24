@@ -22,9 +22,7 @@ use std::sync::mpsc::sync_channel;
 mod ui_consts {
     pub const LOCALE_PATH: &str = "lang/{locale}/{entry}";
 }
-#[cfg(
-    any(target_os = "linux", target_os = "macos", target_os = "windows")
-)]
+#[cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))]
 mod ui_consts {
     pub const LOCALE_PATH: &str = "assets/lang/{locale}/{entry}";
 }

@@ -16,17 +16,18 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::sync::Arc;
 use darkfi_sdk::crypto::keypair::Address;
+use std::sync::Arc;
 
 use crate::{
     app::{
-        App,
-        node::{create_button, create_layer, create_singleline_edit, create_text, create_vector_art},
+        node::{
+            create_button, create_layer, create_singleline_edit, create_text, create_vector_art,
+        },
         schema::COLOR_SCHEME,
+        App,
     },
-    clipboard,
-    expr,
+    clipboard, expr,
     gfx::gfxtag,
     mesh::COLOR_CYAN,
     prop::{PropertyAtomicGuard, PropertyBool, PropertyFloat32, Role},
@@ -101,7 +102,8 @@ pub async fn make(
     send_step2_layer.set_property_u32(atom, Role::App, "z_index", 2).unwrap();
     let send_step2_layer = send_step2_layer.setup(|me| Layer::new(me, app.renderer.clone())).await;
     wallet_layer.link(send_step2_layer.clone());
-    let step2_is_visible = PropertyBool::wrap(&send_step2_layer, Role::App, "is_visible", 0).unwrap();
+    let step2_is_visible =
+        PropertyBool::wrap(&send_step2_layer, Role::App, "is_visible", 0).unwrap();
 
     create_bg_mesh(app, atom, &send_step2_layer, "send_bg2").await;
     create_header_bg(app, atom, &send_step2_layer, "send_header_bg2").await;
@@ -237,11 +239,17 @@ pub async fn make(
     let prop = recipient_input.get_property("rect").unwrap();
     prop.set_f32(atom, Role::App, 0, RECIPIENT_INPUT_MARGIN + RECIPIENT_INPUT_PADDING_X).unwrap();
     prop.set_f32(atom, Role::App, 1, y).unwrap();
-    let code = cc.compile("parent_w - RECIPIENT_INPUT_MARGIN * 2 - RECIPIENT_INPUT_PADDING_X - PASTE_WIDTH").unwrap();
+    let code = cc
+        .compile("parent_w - RECIPIENT_INPUT_MARGIN * 2 - RECIPIENT_INPUT_PADDING_X - PASTE_WIDTH")
+        .unwrap();
     prop.set_expr(atom, Role::App, 2, code).unwrap();
     prop.set_f32(atom, Role::App, 3, RECIPIENT_INPUT_HEIGHT).unwrap();
-    recipient_input.set_property_f32(atom, Role::App, "font_size", RECIPIENT_INPUT_FONTSIZE).unwrap();
-    recipient_input.set_property_str(atom, Role::App, "placeholder_text", "recipient address...").unwrap();
+    recipient_input
+        .set_property_f32(atom, Role::App, "font_size", RECIPIENT_INPUT_FONTSIZE)
+        .unwrap();
+    recipient_input
+        .set_property_str(atom, Role::App, "placeholder_text", "recipient address...")
+        .unwrap();
     let prop = recipient_input.get_property("placeholder_color").unwrap();
     prop.set_f32(atom, Role::App, 0, 1.).unwrap();
     prop.set_f32(atom, Role::App, 1, 1.).unwrap();
@@ -282,10 +290,18 @@ pub async fn make(
     prop.set_f32(atom, Role::App, 2, 1.).unwrap();
     prop.set_f32(atom, Role::App, 3, 1.).unwrap();
     recipient_input.set_property_f32(atom, Role::App, "cursor_ascent", 0.).unwrap();
-    recipient_input.set_property_f32(atom, Role::App, "cursor_descent", RECIPIENT_INPUT_FONTSIZE*1.3).unwrap();
-    recipient_input.set_property_f32(atom, Role::App, "select_ascent", RECIPIENT_INPUT_FONTSIZE*1.3).unwrap();
-    recipient_input.set_property_f32(atom, Role::App, "select_descent", RECIPIENT_INPUT_FONTSIZE/3.).unwrap();
-    recipient_input.set_property_f32(atom, Role::App, "handle_descent", RECIPIENT_INPUT_FONTSIZE/2.5).unwrap();
+    recipient_input
+        .set_property_f32(atom, Role::App, "cursor_descent", RECIPIENT_INPUT_FONTSIZE * 1.3)
+        .unwrap();
+    recipient_input
+        .set_property_f32(atom, Role::App, "select_ascent", RECIPIENT_INPUT_FONTSIZE * 1.3)
+        .unwrap();
+    recipient_input
+        .set_property_f32(atom, Role::App, "select_descent", RECIPIENT_INPUT_FONTSIZE / 3.)
+        .unwrap();
+    recipient_input
+        .set_property_f32(atom, Role::App, "handle_descent", RECIPIENT_INPUT_FONTSIZE / 2.5)
+        .unwrap();
     recipient_input.set_property_u32(atom, Role::App, "z_index", 2).unwrap();
     let recipient_input = recipient_input
         .setup(|me| {
@@ -345,17 +361,19 @@ pub async fn make(
     send_step2_layer.link(node);
 
     // Add recipient button
-    let (node, btn_bg_valid, btn_bg_invalid, add_recipient_label_node) = create_bottom_button_with_states(
-        app,
-        atom,
-        &send_step2_layer,
-        "send_add_recipient_btn",
-        &mut cc,
-        "add recipient",
-        &window_scale,
-        i18n_fish,
-        false,
-    ).await;
+    let (node, btn_bg_valid, btn_bg_invalid, add_recipient_label_node) =
+        create_bottom_button_with_states(
+            app,
+            atom,
+            &send_step2_layer,
+            "send_add_recipient_btn",
+            &mut cc,
+            "add recipient",
+            &window_scale,
+            i18n_fish,
+            false,
+        )
+        .await;
     let recipient_input2 = recipient_input.clone();
     let recipient_text = recipient_input.get_property("text").unwrap();
     let recipient_text_sub = recipient_text.subscribe_modify();

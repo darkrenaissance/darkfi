@@ -54,11 +54,10 @@ pub fn get() -> Option<String> {
 pub fn set(text: &str) {
     #[cfg(target_os = "linux")]
     if let Some(clipboard) = get_clipboard() {
-        if clipboard.store(
-            clipboard.setter.atoms.clipboard,
-            clipboard.setter.atoms.utf8_string,
-            text,
-        ).is_ok() {
+        if clipboard
+            .store(clipboard.setter.atoms.clipboard, clipboard.setter.atoms.utf8_string, text)
+            .is_ok()
+        {
             return
         }
     }

@@ -18,8 +18,8 @@
 
 use async_trait::async_trait;
 use miniquad::{MouseButton, TouchPhase};
-use rand::{rngs::OsRng, Rng};
 use parking_lot::Mutex as SyncMutex;
+use rand::{rngs::OsRng, Rng};
 use std::sync::{
     atomic::{AtomicBool, Ordering},
     Arc,
@@ -86,9 +86,7 @@ impl Button {
 
     #[instrument(target = "ui::button")]
     async fn redraw(self: Arc<Self>, batch: BatchGuardPtr) {
-        let Some(parent_rect) = self.parent_rect.lock().clone() else {
-            return
-        };
+        let Some(parent_rect) = self.parent_rect.lock().clone() else { return };
 
         let atom = &mut batch.spawn();
 
@@ -225,7 +223,13 @@ impl UIObject for Button {
         }
     }
 
-    fn handle_touch_sync(&self, _renderer: &RendererSync, phase: TouchPhase, id: u64, touch_pos: Point) -> bool {
+    fn handle_touch_sync(
+        &self,
+        _renderer: &RendererSync,
+        phase: TouchPhase,
+        id: u64,
+        touch_pos: Point,
+    ) -> bool {
         if !self.is_active.get() {
             return false
         }
@@ -244,7 +248,7 @@ impl UIObject for Button {
             TouchPhase::Started => {
                 self.mouse_btn_held.store(true, Ordering::Relaxed);
                 true
-            },
+            }
             TouchPhase::Moved => false,
             TouchPhase::Ended => false,
             TouchPhase::Cancelled => false,

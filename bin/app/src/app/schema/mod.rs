@@ -38,9 +38,9 @@ use crate::{
 mod chat;
 mod menu;
 //mod settings;
-mod wallet;
 pub mod test;
 pub mod test_scroll_layer;
+mod wallet;
 
 macro_rules! i { ($($arg:tt)*) => { info!(target: "app::schema", $($arg)*); } }
 macro_rules! e { ($($arg:tt)*) => { error!(target: "app::schema", $($arg)*); } }

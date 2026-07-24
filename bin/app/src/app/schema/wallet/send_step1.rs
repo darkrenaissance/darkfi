@@ -22,16 +22,16 @@ use darkfi_serial::Decodable;
 
 use crate::{
     app::{
-        App,
         node::{create_button, create_layer, create_tokentable, create_vector_art},
         schema::COLOR_SCHEME,
+        App,
     },
     expr,
     gfx::gfxtag,
     prop::{PropertyAtomicGuard, PropertyBool, PropertyFloat32, Role},
     scene::{SceneNodePtr, Slot},
     shape,
-    ui::{Button, Layer, TokenTable, TokenRow, VectorArt},
+    ui::{Button, Layer, TokenRow, TokenTable, VectorArt},
     util::i18n::I18nBabelFish,
 };
 
@@ -73,7 +73,8 @@ pub async fn make(
     send_step1_layer.set_property_u32(atom, Role::App, "z_index", 2).unwrap();
     let send_step1_layer = send_step1_layer.setup(|me| Layer::new(me, app.renderer.clone())).await;
     wallet_layer.link(send_step1_layer.clone());
-    let step1_is_visible = PropertyBool::wrap(&send_step1_layer, Role::App, "is_visible", 0).unwrap();
+    let step1_is_visible =
+        PropertyBool::wrap(&send_step1_layer, Role::App, "is_visible", 0).unwrap();
 
     create_bg_mesh(app, atom, &send_step1_layer, "send_bg").await;
     create_header_bg(app, atom, &send_step1_layer, "send_header_bg").await;
@@ -122,7 +123,17 @@ pub async fn make(
 
     create_title(app, atom, &send_step1_layer, &window_scale, i18n_fish, "SEND", &mut y).await;
 
-    create_subtitle(app, atom, &send_step1_layer, &window_scale, i18n_fish, "pick_label", "Pick a token to send", &mut y).await;
+    create_subtitle(
+        app,
+        atom,
+        &send_step1_layer,
+        &window_scale,
+        i18n_fish,
+        "pick_label",
+        "Pick a token to send",
+        &mut y,
+    )
+    .await;
 
     let send_tokens_table = create_tokentable("tokens_table");
     let prop = send_tokens_table.get_property("rect").unwrap();
@@ -155,9 +166,8 @@ pub async fn make(
     prop.set_f32(atom, Role::App, 2, 0.2784).unwrap();
     prop.set_f32(atom, Role::App, 3, 1.).unwrap();
 
-    let send_tokens_table = send_tokens_table
-        .setup(|me| TokenTable::new(me, app.renderer.clone()))
-        .await;
+    let send_tokens_table =
+        send_tokens_table.setup(|me| TokenTable::new(me, app.renderer.clone())).await;
     send_step1_layer.link(send_tokens_table.clone());
 
     let (slot, recvr) = Slot::new("token_row_clicked");
@@ -176,12 +186,17 @@ pub async fn make(
                 drop(data);
 
                 let atom = &mut renderer.make_guard(gfxtag!("token selection"));
-                if let Some(selected_token_symbol) = sg_root.lookup_node("/window/content/wallet/send_step2_layer/send_selected_token_symbol") {
-                    selected_token_symbol.set_property_str(atom, Role::App, "text", &row.symbol).unwrap();
+                if let Some(selected_token_symbol) = sg_root.lookup_node(
+                    "/window/content/wallet/send_step2_layer/send_selected_token_symbol",
+                ) {
+                    selected_token_symbol
+                        .set_property_str(atom, Role::App, "text", &row.symbol)
+                        .unwrap();
                 }
 
                 step1_is_visible3.set(atom, false);
-                if let Some(step2) = sg_root.lookup_node("/window/content/wallet/send_step2_layer") {
+                if let Some(step2) = sg_root.lookup_node("/window/content/wallet/send_step2_layer")
+                {
                     step2.set_property_bool(atom, Role::App, "is_visible", true).unwrap();
                 }
             }

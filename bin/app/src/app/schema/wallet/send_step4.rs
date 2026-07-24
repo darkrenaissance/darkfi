@@ -22,9 +22,9 @@ use darkfi_serial::{Decodable, Encodable};
 
 use crate::{
     app::{
-        App,
         node::{create_button, create_layer, create_text, create_vector_art},
         schema::COLOR_SCHEME,
+        App,
     },
     expr,
     gfx::gfxtag,
@@ -72,7 +72,8 @@ pub async fn make(
     send_step4_layer.set_property_u32(atom, Role::App, "z_index", 2).unwrap();
     let send_step4_layer = send_step4_layer.setup(|me| Layer::new(me, app.renderer.clone())).await;
     wallet_layer.link(send_step4_layer.clone());
-    let step4_is_visible = PropertyBool::wrap(&send_step4_layer, Role::App, "is_visible", 0).unwrap();
+    let step4_is_visible =
+        PropertyBool::wrap(&send_step4_layer, Role::App, "is_visible", 0).unwrap();
 
     create_bg_mesh(app, atom, &send_step4_layer, "send_bg4").await;
     create_header_bg(app, atom, &send_step4_layer, "send_header_bg4").await;
@@ -239,7 +240,14 @@ pub async fn make(
     // Separator line
     let mut y_ = y.clone();
     let y2 = format!("{y} + (PADDING_Y * 2. + addr_height) + 1");
-    let node = create_separator(&app.renderer, atom, &send_step4_layer, "send_amount_label_separator4", &mut y_).await;
+    let node = create_separator(
+        &app.renderer,
+        atom,
+        &send_step4_layer,
+        "send_amount_label_separator4",
+        &mut y_,
+    )
+    .await;
     let prop = node.get_property("rect").unwrap();
     let code = cc.compile(&y2).unwrap();
     prop.set_expr(atom, Role::App, 1, code).unwrap();
@@ -312,7 +320,8 @@ pub async fn make(
     let tx_fee_label_node = create_text("send_fee_label");
     let prop = tx_fee_label_node.get_property("rect").unwrap();
     prop.set_f32(atom, Role::App, 0, PADDING_X).unwrap();
-    let code = cc.compile("h - PADDING_X * 2 - BUTTON_HEIGHT - PADDING_Y - BASE_FONTSIZE - 1").unwrap();
+    let code =
+        cc.compile("h - PADDING_X * 2 - BUTTON_HEIGHT - PADDING_Y - BASE_FONTSIZE - 1").unwrap();
     prop.set_expr(atom, Role::App, 1, code).unwrap();
     prop.set_f32(atom, Role::App, 2, 1000.).unwrap();
     prop.set_f32(atom, Role::App, 3, BASE_FONTSIZE).unwrap();
@@ -324,14 +333,17 @@ pub async fn make(
     prop.set_f32(atom, Role::App, 2, 0.).unwrap();
     prop.set_f32(atom, Role::App, 3, 0.).unwrap();
     tx_fee_label_node.set_property_u32(atom, Role::App, "z_index", 2).unwrap();
-    let tx_fee_label_node = tx_fee_label_node.setup(|me| Text::new(me, window_scale.clone(), app.renderer.clone(), i18n_fish.clone())).await;
+    let tx_fee_label_node = tx_fee_label_node
+        .setup(|me| Text::new(me, window_scale.clone(), app.renderer.clone(), i18n_fish.clone()))
+        .await;
     send_step4_layer.link(tx_fee_label_node.clone());
 
     // Transaction fee value
     let tx_fee_value_node = create_text("send_fee_value");
     let prop = tx_fee_value_node.get_property("rect").unwrap();
     prop.set_f32(atom, Role::App, 0, PADDING_X).unwrap();
-    let code = cc.compile("h - PADDING_X * 2 - BUTTON_HEIGHT - PADDING_Y - BASE_FONTSIZE - 1").unwrap();
+    let code =
+        cc.compile("h - PADDING_X * 2 - BUTTON_HEIGHT - PADDING_Y - BASE_FONTSIZE - 1").unwrap();
     prop.set_expr(atom, Role::App, 1, code).unwrap();
     let code = cc.compile("w - PADDING_X * 2").unwrap();
     prop.set_expr(atom, Role::App, 2, code).unwrap();
@@ -345,7 +357,9 @@ pub async fn make(
     prop.set_f32(atom, Role::App, 1, 0.).unwrap();
     prop.set_f32(atom, Role::App, 2, 0.).unwrap();
     prop.set_f32(atom, Role::App, 3, 0.).unwrap();
-    let tx_fee_value_node = tx_fee_value_node.setup(|me| Text::new(me, window_scale.clone(), app.renderer.clone(), i18n_fish.clone())).await;
+    let tx_fee_value_node = tx_fee_value_node
+        .setup(|me| Text::new(me, window_scale.clone(), app.renderer.clone(), i18n_fish.clone()))
+        .await;
     send_step4_layer.link(tx_fee_value_node.clone());
 
     // Separator line
@@ -356,7 +370,8 @@ pub async fn make(
         "tx_fee_separator",
         &mut cc,
         "h - PADDING_X * 2 - BUTTON_HEIGHT",
-    ).await;
+    )
+    .await;
 
     // Send button (bottom button)
     let (node, _bg_valid, _bg_invalid, _label) = create_bottom_button_with_states(
@@ -369,7 +384,8 @@ pub async fn make(
         &window_scale,
         i18n_fish,
         true,
-    ).await;
+    )
+    .await;
 
     let renderer = app.renderer.clone();
     let sg_root = app.sg_root.clone();
@@ -380,7 +396,9 @@ pub async fn make(
     let listen_click = app.ex.spawn(async move {
         while let Ok(_) = recvr.recv().await {
             // Skip if the button is disabled
-            if let Some(btn_node) = sg_root.lookup_node("/window/content/wallet/send_step4_layer/send_btn_bg") {
+            if let Some(btn_node) =
+                sg_root.lookup_node("/window/content/wallet/send_step4_layer/send_btn_bg")
+            {
                 if !btn_node.get_property_bool("is_visible").unwrap() {
                     continue;
                 }
@@ -397,17 +415,25 @@ pub async fn make(
             if let (Some(tx), Some(drk_node)) = (tx, sg_root.lookup_node("/plugin/drk")) {
                 let mut encoded_data = vec![];
                 tx.encode(&mut encoded_data).unwrap();
-                if let Ok(Some(response_data)) = drk_node.call_method("broadcast_tx", encoded_data).await {
+                if let Ok(Some(response_data)) =
+                    drk_node.call_method("broadcast_tx", encoded_data).await
+                {
                     let mut cur = std::io::Cursor::new(response_data);
                     if let Ok(tx_id) = String::decode(&mut cur) {
                         d!("Transaction broadcasted: {tx_id}");
                         let mut tx_id_data = vec![];
                         tx_id.encode(&mut tx_id_data).unwrap();
-                        if let Ok(Some(data)) = drk_node.call_method("get_tx_status", tx_id_data).await {
+                        if let Ok(Some(data)) =
+                            drk_node.call_method("get_tx_status", tx_id_data).await
+                        {
                             let mut cur = std::io::Cursor::new(data);
                             if let Ok(status_text) = String::decode(&mut cur) {
-                                if let Some(tx_status) = sg_root.lookup_node("/window/content/wallet/tx_status_layer/status") {
-                                    tx_status.set_property_str(atom, Role::App, "text", status_text).unwrap();
+                                if let Some(tx_status) = sg_root
+                                    .lookup_node("/window/content/wallet/tx_status_layer/status")
+                                {
+                                    tx_status
+                                        .set_property_str(atom, Role::App, "text", status_text)
+                                        .unwrap();
                                 }
                             }
                         }
@@ -432,7 +458,9 @@ pub async fn make(
             if step4_is_visible_clone.get() {
                 loop {
                     darkfi::system::msleep(50).await;
-                    let text_rect = crate::prop::PropertyRect::wrap(&amount_text_node_clone, Role::App, "rect").unwrap();
+                    let text_rect =
+                        crate::prop::PropertyRect::wrap(&amount_text_node_clone, Role::App, "rect")
+                            .unwrap();
                     if text_rect.has_cached() {
                         break;
                     }
@@ -454,22 +482,29 @@ pub async fn make(
                     &amount_text_node_clone,
                     &token_symbol_node_clone,
                     None,
-                ).await;
+                )
+                .await;
 
                 if data.tx_built {
                     // Set send button label
-                    if let Some(send_label_node) = sg_root.lookup_node("/window/content/wallet/send_step4_layer/send_btn_label") {
+                    if let Some(send_label_node) = sg_root
+                        .lookup_node("/window/content/wallet/send_step4_layer/send_btn_label")
+                    {
                         send_label_node.set_property_str(atom, Role::App, "text", "send").unwrap();
                     }
                     // Show transaction fee
-                    if let Some(tx_fee_label) = sg_root.lookup_node("/window/content/wallet/send_step4_layer/send_fee_label") {
+                    if let Some(tx_fee_label) = sg_root
+                        .lookup_node("/window/content/wallet/send_step4_layer/send_fee_label")
+                    {
                         let prop = tx_fee_label.get_property("text_color").unwrap();
                         prop.set_f32(atom, Role::App, 0, 1.).unwrap();
                         prop.set_f32(atom, Role::App, 1, 1.).unwrap();
                         prop.set_f32(atom, Role::App, 2, 1.).unwrap();
                         prop.set_f32(atom, Role::App, 3, 1.).unwrap();
                     }
-                    if let Some(tx_fee_value) = sg_root.lookup_node("/window/content/wallet/send_step4_layer/send_fee_value") {
+                    if let Some(tx_fee_value) = sg_root
+                        .lookup_node("/window/content/wallet/send_step4_layer/send_fee_value")
+                    {
                         let prop = tx_fee_value.get_property("text_color").unwrap();
                         prop.set_f32(atom, Role::App, 0, 1.).unwrap();
                         prop.set_f32(atom, Role::App, 1, 1.).unwrap();
@@ -478,14 +513,18 @@ pub async fn make(
                     }
                 } else {
                     // Hide transaction fee
-                    if let Some(tx_fee_label) = sg_root.lookup_node("/window/content/wallet/send_step4_layer/send_fee_label") {
+                    if let Some(tx_fee_label) = sg_root
+                        .lookup_node("/window/content/wallet/send_step4_layer/send_fee_label")
+                    {
                         let prop = tx_fee_label.get_property("text_color").unwrap();
                         prop.set_f32(atom, Role::App, 0, 0.).unwrap();
                         prop.set_f32(atom, Role::App, 1, 0.).unwrap();
                         prop.set_f32(atom, Role::App, 2, 0.).unwrap();
                         prop.set_f32(atom, Role::App, 3, 0.).unwrap();
                     }
-                    if let Some(tx_fee_value) = sg_root.lookup_node("/window/content/wallet/send_step4_layer/send_fee_value") {
+                    if let Some(tx_fee_value) = sg_root
+                        .lookup_node("/window/content/wallet/send_step4_layer/send_fee_value")
+                    {
                         let prop = tx_fee_value.get_property("text_color").unwrap();
                         prop.set_f32(atom, Role::App, 0, 0.).unwrap();
                         prop.set_f32(atom, Role::App, 1, 0.).unwrap();

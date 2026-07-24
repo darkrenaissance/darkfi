@@ -20,8 +20,8 @@ macro_rules! d { ($($arg:tt)*) => { debug!(target: "app::schema::wallet", $($arg
 macro_rules! e { ($($arg:tt)*) => { error!(target: "app::schema::wallet", $($arg)*); } }
 
 pub mod data;
-pub mod util;
 pub mod main;
+pub mod netstatus;
 pub mod receive;
 pub mod send;
 pub mod send_step1;
@@ -29,10 +29,10 @@ pub mod send_step2;
 pub mod send_step3;
 pub mod send_step4;
 pub mod tx_status;
-pub mod netstatus;
+pub mod util;
 
 use crate::{
-    app::{App, node::create_layer},
+    app::{node::create_layer, App},
     expr,
     prop::{PropertyAtomicGuard, PropertyFloat32, Role},
     scene::SceneNodePtr,
@@ -68,18 +68,8 @@ pub async fn make(app: &App, content: SceneNodePtr, i18n_fish: &I18nBabelFish) {
     let _ = netstatus::make(app, wallet_layer.clone(), i18n_fish, window_scale.clone()).await;
 
     // Create receive layer
-    let _ = receive::make(
-        app,
-        wallet_layer.clone(),
-        i18n_fish,
-        window_scale.clone(),
-    ).await;
+    let _ = receive::make(app, wallet_layer.clone(), i18n_fish, window_scale.clone()).await;
 
     // Create send layer
-    let _ = send::make(
-        app,
-        wallet_layer.clone(),
-        i18n_fish,
-        window_scale.clone(),
-    ).await;
+    let _ = send::make(app, wallet_layer.clone(), i18n_fish, window_scale.clone()).await;
 }

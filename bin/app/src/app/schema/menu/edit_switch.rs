@@ -23,11 +23,7 @@ use crate::{
 
 /// Prolly misplaced for now lel.
 /// Only allow one editor to be active in the list at any one time.
-pub fn edit_switch(
-    tasks: &mut Vec<smol::Task<()>>,
-    edit_nodes: &[SceneNodePtr],
-    ex: ExecutorPtr,
-) {
+pub fn edit_switch(tasks: &mut Vec<smol::Task<()>>, edit_nodes: &[SceneNodePtr], ex: ExecutorPtr) {
     for (i, edit_node) in edit_nodes.iter().enumerate() {
         let others: Vec<SceneNodePtr> =
             edit_nodes[..i].iter().chain(edit_nodes[i + 1..].iter()).cloned().collect();

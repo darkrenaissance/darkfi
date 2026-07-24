@@ -24,15 +24,16 @@ use futures::FutureExt;
 use smol::channel::unbounded;
 
 use crate::{
-    app::App,
-    app::node::{create_button, create_layer, create_text, create_vector_art},
-    app::schema::COLOR_SCHEME,
+    app::{
+        node::{create_button, create_layer, create_text, create_vector_art},
+        schema::COLOR_SCHEME,
+        App,
+    },
     expr::{self, Compiler},
     gfx::{gfxtag, Renderer},
-    mesh::{COLOR_TEAL, COLOR_CYAN},
+    mesh::{COLOR_CYAN, COLOR_TEAL},
     prop::{PropertyAtomicGuard, PropertyFloat32, Role},
-    scene::SceneNodePtr,
-    scene::Pimpl,
+    scene::{Pimpl, SceneNodePtr},
     text,
     ui::{Button, Layer, Text, VectorArt, VectorShape},
     util::i18n::I18nBabelFish,
@@ -41,16 +42,12 @@ use crate::{
 use super::{super::ColorScheme, data::*};
 
 pub async fn get_balance(sg_root: &SceneNodePtr, token_id: &TokenId) -> u64 {
-    let Some(drk_node) = sg_root.lookup_node("/plugin/drk") else {
-        return 0
-    };
+    let Some(drk_node) = sg_root.lookup_node("/plugin/drk") else { return 0 };
     let Ok(Some(response_data)) = drk_node.call_method("get_balances", vec![]).await else {
         return 0
     };
     let mut cur = std::io::Cursor::new(response_data);
-    let Ok(balances) = Vec::<(String, TokenId, u64)>::decode(&mut cur) else {
-        return 0
-    };
+    let Ok(balances) = Vec::<(String, TokenId, u64)>::decode(&mut cur) else { return 0 };
 
     balances
         .iter()
@@ -86,7 +83,9 @@ pub async fn update_amount_screen(
     cc.add_const_f32("AMOUNT_FONTSIZE", AMOUNT_FONTSIZE);
 
     let wrapper_rect = amount_wrapper_node.get_property("rect").unwrap();
-    wrapper_rect.set_expr(atom, Role::App, 0, cc.compile("(w - AMOUNT_TOTAL_WIDTH) / 2").unwrap()).unwrap();
+    wrapper_rect
+        .set_expr(atom, Role::App, 0, cc.compile("(w - AMOUNT_TOTAL_WIDTH) / 2").unwrap())
+        .unwrap();
 
     let width_code = cc.compile("AMOUNT_WIDTH").unwrap();
     let amount_rect = amount_input_node.get_property("rect").unwrap();
@@ -102,13 +101,17 @@ pub async fn update_amount_screen(
 
     // Update token symbol position
     let token_rect = token_node.get_property("rect").unwrap();
-    token_rect.set_expr(atom, Role::App, 0, cc.compile("AMOUNT_TOKEN_SPACING + AMOUNT_WIDTH").unwrap()).unwrap();
+    token_rect
+        .set_expr(atom, Role::App, 0, cc.compile("AMOUNT_TOKEN_SPACING + AMOUNT_WIDTH").unwrap())
+        .unwrap();
 
     // Set available balance
     let balance = get_balance(sg_root, token_id).await;
     if let Some(available_balance_node) = available_balance_node {
         let available_balance = encode_base10(balance, BALANCE_BASE10_DECIMALS);
-        available_balance_node.set_property_str(atom, Role::App, "text", format!("{available_balance} available")).unwrap();
+        available_balance_node
+            .set_property_str(atom, Role::App, "text", format!("{available_balance} available"))
+            .unwrap();
     }
 
     balance
@@ -146,7 +149,9 @@ pub async fn create_title(
         prop.set_f32(atom, Role::App, 3, 1.).unwrap();
     }
     node.set_property_u32(atom, Role::App, "z_index", 2).unwrap();
-    let node = node.setup(|me| Text::new(me, window_scale.clone(), app.renderer.clone(), i18n_fish.clone())).await;
+    let node = node
+        .setup(|me| Text::new(me, window_scale.clone(), app.renderer.clone(), i18n_fish.clone()))
+        .await;
     layer.link(node.clone());
 
     *y += TITLE_PADDING * 2. + TITLE_FONTSIZE + 1.;
@@ -188,7 +193,9 @@ pub async fn create_subtitle(
         prop.set_f32(atom, Role::App, 3, 1.).unwrap();
     }
     node.set_property_u32(atom, Role::App, "z_index", 2).unwrap();
-    let node = node.setup(|me| Text::new(me, window_scale.clone(), app.renderer.clone(), i18n_fish.clone())).await;
+    let node = node
+        .setup(|me| Text::new(me, window_scale.clone(), app.renderer.clone(), i18n_fish.clone()))
+        .await;
     layer.link(node.clone());
 
     *y += PADDING_Y * 2. + TITLE_FONTSIZE + 1.;
@@ -365,7 +372,9 @@ pub async fn create_bottom_button(
         let label_node = create_text(&format!("{}_label", name));
         let prop = label_node.get_property("rect").unwrap();
         prop.set_f32(atom, Role::App, 0, PADDING_X).unwrap();
-        let code = cc.compile("h - PADDING_X - BUTTON_HEIGHT + BUTTON_HEIGHT / 2 - BUTTON_FONTSIZE / 1.8").unwrap();
+        let code = cc
+            .compile("h - PADDING_X - BUTTON_HEIGHT + BUTTON_HEIGHT / 2 - BUTTON_FONTSIZE / 1.8")
+            .unwrap();
         prop.set_expr(atom, Role::App, 1, code).unwrap();
         let code = cc.compile("w - PADDING_X * 2.").unwrap();
         prop.set_expr(atom, Role::App, 2, code).unwrap();
@@ -381,7 +390,9 @@ pub async fn create_bottom_button(
         prop.set_f32(atom, Role::App, 3, COLOR_CYAN[3]).unwrap();
         label_node.set_property_u32(atom, Role::App, "z_index", 3).unwrap();
         let label_node = label_node
-            .setup(|me| Text::new(me, window_scale.clone(), app.renderer.clone(), i18n_fish.clone()))
+            .setup(|me| {
+                Text::new(me, window_scale.clone(), app.renderer.clone(), i18n_fish.clone())
+            })
             .await;
         layer.link(label_node);
     }
@@ -465,7 +476,9 @@ pub async fn create_bottom_button_with_states(
     let label_node = create_text(&format!("{}_label", name));
     let prop = label_node.get_property("rect").unwrap();
     prop.set_f32(atom, Role::App, 0, PADDING_X).unwrap();
-    let code = cc.compile("h - PADDING_X - BUTTON_HEIGHT + BUTTON_HEIGHT / 2 - BUTTON_FONTSIZE / 1.8").unwrap();
+    let code = cc
+        .compile("h - PADDING_X - BUTTON_HEIGHT + BUTTON_HEIGHT / 2 - BUTTON_FONTSIZE / 1.8")
+        .unwrap();
     prop.set_expr(atom, Role::App, 1, code).unwrap();
     let code = cc.compile("w - PADDING_X * 2.").unwrap();
     prop.set_expr(atom, Role::App, 2, code).unwrap();
@@ -523,15 +536,7 @@ pub async fn create_tooltip(
 
     // Get actual text dimensions using make_layout
     let scale = window_scale.get();
-    let layout = text::make_layout(
-        text,
-        text_color,
-        HINT_FONTSIZE,
-        1.0,
-        scale,
-        None,
-        &[],
-    );
+    let layout = text::make_layout(text, text_color, HINT_FONTSIZE, 1.0, scale, None, &[]);
     let text_width = layout.width();
     let text_height = HINT_FONTSIZE * 1.2;
 
@@ -595,7 +600,9 @@ pub async fn create_tooltip(
     prop.set_f32(atom, Role::App, 2, text_color[2]).unwrap();
     prop.set_f32(atom, Role::App, 3, text_color[3]).unwrap();
     node.set_property_u32(atom, Role::App, "z_index", 3).unwrap();
-    let node = node.setup(|me| Text::new(me, window_scale.clone(), app.renderer.clone(), i18n_fish.clone())).await;
+    let node = node
+        .setup(|me| Text::new(me, window_scale.clone(), app.renderer.clone(), i18n_fish.clone()))
+        .await;
     tooltip_layer.link(node);
 
     // Subscribe to show method for auto-hide behavior

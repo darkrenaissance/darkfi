@@ -16,7 +16,10 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::{io::Cursor, sync::{Arc, OnceLock, Weak}};
+use std::{
+    io::Cursor,
+    sync::{Arc, OnceLock, Weak},
+};
 
 use darkfi_serial::{Decodable, Encodable};
 
@@ -24,7 +27,10 @@ use crate::{
     error::Result,
     prop::{BatchGuardPtr, PropertyStr, Role},
     scene::{MethodCallSub, Pimpl, SceneNodePtr, SceneNodeWeak},
-    ui::{chatview::{MessageId, Timestamp}, OnModify},
+    ui::{
+        chatview::{MessageId, Timestamp},
+        OnModify,
+    },
     ExecutorPtr,
 };
 
@@ -51,11 +57,7 @@ impl DarkIrc2 {
         let node_ref = &node.upgrade().unwrap();
         let nick = PropertyStr::wrap(node_ref, Role::Internal, "nick", 0).unwrap();
 
-        let self_ = Arc::new(Self {
-            node: node.clone(),
-            tasks: OnceLock::new(),
-            nick,
-        });
+        let self_ = Arc::new(Self { node: node.clone(), tasks: OnceLock::new(), nick });
 
         self_.clone().start(sg_root, ex).await;
 

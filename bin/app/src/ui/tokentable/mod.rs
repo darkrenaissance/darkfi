@@ -17,7 +17,7 @@
  */
 
 use async_trait::async_trait;
-use darkfi_money_contract::model::{DARK_TOKEN_ID, TokenId};
+use darkfi_money_contract::model::{TokenId, DARK_TOKEN_ID};
 use darkfi_serial::{Decodable, Encodable, SerialEncodable};
 use miniquad::{MouseButton, TouchPhase};
 use parking_lot::Mutex as SyncMutex;
@@ -83,15 +83,13 @@ pub struct TokenTable {
 }
 
 impl TokenTable {
-    pub async fn new(
-        node: SceneNodeWeak,
-        renderer: Renderer,
-    ) -> Pimpl {
+    pub async fn new(node: SceneNodeWeak, renderer: Renderer) -> Pimpl {
         let node_ref = &node.upgrade().unwrap();
         let rect = PropertyRect::wrap(node_ref, Role::Internal, "rect").unwrap();
         let font_size = PropertyFloat32::wrap(node_ref, Role::Internal, "font_size", 0).unwrap();
         let text_color = PropertyColor::wrap(node_ref, Role::Internal, "text_color").unwrap();
-        let separator_color = PropertyColor::wrap(node_ref, Role::Internal, "separator_color").unwrap();
+        let separator_color =
+            PropertyColor::wrap(node_ref, Role::Internal, "separator_color").unwrap();
         let padding_x = PropertyFloat32::wrap(node_ref, Role::Internal, "padding_x", 0).unwrap();
         let padding_y = PropertyFloat32::wrap(node_ref, Role::Internal, "padding_y", 0).unwrap();
         let z_index = PropertyUint32::wrap(node_ref, Role::Internal, "z_index", 0).unwrap();
@@ -160,7 +158,7 @@ impl TokenTable {
                     let mut result = vec![drk];
                     result.extend(other_rows);
                     result
-                },
+                }
                 None => vec![TokenRow {
                     id: *DARK_TOKEN_ID,
                     symbol: "DRK".to_string(),
@@ -237,28 +235,15 @@ impl TokenTable {
         let mut instrs = vec![];
 
         for (i, row) in rows.iter().enumerate() {
-            let row_height = padding_y*2.+font_size+1.;
+            let row_height = padding_y * 2. + font_size + 1.;
             let y_pos = (i as f32) * row_height;
 
             // Render symbol
-            let symbol_layout = text::make_layout(
-                &row.symbol,
-                text_color,
-                font_size,
-                1.0,
-                1.0,
-                None,
-                &[],
-            );
-            instrs.push(DrawInstruction::SetPos(Point::new(
-                padding_x,
-                y_pos+padding_y,
-            )));
-            let symbol_instrs = text::render_layout(
-                &symbol_layout,
-                &self.renderer,
-                gfxtag!("tokentable_symbol"),
-            );
+            let symbol_layout =
+                text::make_layout(&row.symbol, text_color, font_size, 1.0, 1.0, None, &[]);
+            instrs.push(DrawInstruction::SetPos(Point::new(padding_x, y_pos + padding_y)));
+            let symbol_instrs =
+                text::render_layout(&symbol_layout, &self.renderer, gfxtag!("tokentable_symbol"));
             instrs.extend(symbol_instrs);
 
             // Render balance (aligned to right)
@@ -266,25 +251,17 @@ impl TokenTable {
                 text::make_layout(&row.balance, text_color, font_size, 1.0, 1.0, None, &[]);
             let balance_width = balance_layout.width();
             instrs.push(DrawInstruction::SetPos(Point::new(
-                rect.w-balance_width-padding_x,
-                y_pos+padding_y,
+                rect.w - balance_width - padding_x,
+                y_pos + padding_y,
             )));
             let balance_instrs =
                 text::render_layout(&balance_layout, &self.renderer, gfxtag!("tokentable_balance"));
             instrs.extend(balance_instrs);
 
             // Draw separator line at bottom of row
-            instrs.push(DrawInstruction::SetPos(Point::new(
-                0.,
-                y_pos+row_height,
-            )));
+            instrs.push(DrawInstruction::SetPos(Point::new(0., y_pos + row_height)));
             let mut mesh = MeshBuilder::new(gfxtag!("tokentable_separator"));
-            mesh.draw_line(
-                Point::new(0., 0.),
-                Point::new(rect.w+1., 0.),
-                separator_color,
-                1.,
-            );
+            mesh.draw_line(Point::new(0., 0.), Point::new(rect.w + 1., 0.), separator_color, 1.);
             let mesh = mesh.alloc(&self.renderer);
             instrs.push(DrawInstruction::Draw(mesh.draw_untextured()));
         }
@@ -383,18 +360,14 @@ impl UIObject for TokenTable {
             token_held
         };
 
-        let Some(token_held) = token_held else {
-            return false
-        };
+        let Some(token_held) = token_held else { return false };
 
         let rect = self.rect.get();
         if !rect.contains(mouse_pos) {
             return false
         }
 
-        let Some(row) = self.get_row_at_y(mouse_pos.y) else {
-            return false
-        };
+        let Some(row) = self.get_row_at_y(mouse_pos.y) else { return false };
 
         if row.id != token_held {
             return false

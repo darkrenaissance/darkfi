@@ -17,16 +17,15 @@
  */
 
 use darkfi::{
-    system::{Publisher, PublisherPtr, StoppableTask, sleep},
+    system::{sleep, Publisher, PublisherPtr, StoppableTask},
     tx::Transaction,
     Result as DarkFiResult,
 };
 use darkfi_money_contract::model::TokenId;
+use darkfi_sdk::crypto::keypair::{Address, Network, PublicKey, StandardAddress};
 use darkfi_serial::{serialize, Decodable, Encodable};
-use darkfi_sdk::crypto::{keypair::{Address, Network, PublicKey, StandardAddress}};
-use drk::{Drk, rpc::subscribe_blocks};
-use smol::lock::RwLock;
-use smol::channel::unbounded;
+use drk::{rpc::subscribe_blocks, Drk};
+use smol::{channel::unbounded, lock::RwLock};
 use std::{
     io::Cursor,
     sync::{Arc, OnceLock, Weak},
@@ -36,9 +35,7 @@ use url::Url;
 use crate::{
     error::{Error, Result},
     prop::BatchGuardPtr,
-    scene::{
-        MethodCallSub, Pimpl, SceneNode, SceneNodePtr, SceneNodeType, SceneNodeWeak,
-    },
+    scene::{MethodCallSub, Pimpl, SceneNode, SceneNodePtr, SceneNodeType, SceneNodeWeak},
     ExecutorPtr,
 };
 
@@ -129,11 +126,7 @@ pub struct DrkPlugin {
 }
 
 impl DrkPlugin {
-    pub async fn new(
-        node: SceneNodeWeak,
-        sg_root: SceneNodePtr,
-        ex: ExecutorPtr,
-    ) -> Result<Pimpl> {
+    pub async fn new(node: SceneNodeWeak, sg_root: SceneNodePtr, ex: ExecutorPtr) -> Result<Pimpl> {
         let node_ref = node.upgrade().unwrap();
 
         let setting_root = Arc::new(SceneNode::new("setting", SceneNodeType::SettingRoot));
@@ -141,7 +134,17 @@ impl DrkPlugin {
 
         let endpoint = Url::parse(DARKFID_ENDPOINT).unwrap();
 
-        let drk = match Drk::new(Network::Testnet, get_cache_path().to_string_lossy().to_string(), get_wallet_path().to_string_lossy().to_string(), "changeme".to_string(), Some(endpoint), &ex, false).await {
+        let drk = match Drk::new(
+            Network::Testnet,
+            get_cache_path().to_string_lossy().to_string(),
+            get_wallet_path().to_string_lossy().to_string(),
+            "changeme".to_string(),
+            Some(endpoint),
+            &ex,
+            false,
+        )
+        .await
+        {
             Ok(wallet) => wallet,
             Err(e) => {
                 eprintln!("Error initializing wallet: {e}");
@@ -225,9 +228,10 @@ impl DrkPlugin {
         let node_ref = node.upgrade().unwrap();
         let me2 = Arc::downgrade(&self_);
         let method_sub = node_ref.subscribe_method_call("get_default_address").unwrap();
-        let get_address_task = ex.spawn(async move {
-            while Self::process_get_default_address(&me2, &method_sub).await {}
-        });
+        let get_address_task =
+            ex.spawn(
+                async move { while Self::process_get_default_address(&me2, &method_sub).await {} },
+            );
 
         let node_ref = node.upgrade().unwrap();
         let me2 = Arc::downgrade(&self_);
@@ -246,9 +250,10 @@ impl DrkPlugin {
         let node_ref = node.upgrade().unwrap();
         let me2 = Arc::downgrade(&self_);
         let method_sub_build_tx = node_ref.subscribe_method_call("build_tx").unwrap();
-        let build_tx_task = ex.spawn(async move {
-            while Self::process_build_tx(&me2, &method_sub_build_tx).await {}
-        });
+        let build_tx_task =
+            ex.spawn(
+                async move { while Self::process_build_tx(&me2, &method_sub_build_tx).await {} },
+            );
 
         let node_ref = node.upgrade().unwrap();
         let me2 = Arc::downgrade(&self_);
@@ -257,7 +262,14 @@ impl DrkPlugin {
             while Self::process_broadcast_tx(&me2, &method_sub_broadcast_tx).await {}
         });
 
-        let tasks = vec![get_address_task, get_balances_task, get_tx_status_task, build_tx_task, broadcast_tx_task, build_tx_processor];
+        let tasks = vec![
+            get_address_task,
+            get_balances_task,
+            get_tx_status_task,
+            build_tx_task,
+            broadcast_tx_task,
+            build_tx_processor,
+        ];
         self_.clone().start(ex.clone(), tasks).await;
 
         Ok(Pimpl::Drk(self_))
@@ -340,7 +352,13 @@ impl DrkPlugin {
     }
 
     /// Emit tx_built signal when transaction is built
-    async fn emit_tx_built(&self, amount: String, token_symbol: String, recipient: Address, tx: Transaction) {
+    async fn emit_tx_built(
+        &self,
+        amount: String,
+        token_symbol: String,
+        recipient: Address,
+        tx: Transaction,
+    ) {
         if let Some(node) = self.node.upgrade() {
             let mut data = vec![];
             amount.encode(&mut data).unwrap();
@@ -499,18 +517,28 @@ impl DrkPlugin {
     }
 
     /// Build a transaction without broadcasting it
-    pub async fn build_tx(&self, amount: &str, token_id: TokenId, recipient: PublicKey) -> DarkFiResult<Transaction> {
+    pub async fn build_tx(
+        &self,
+        amount: &str,
+        token_id: TokenId,
+        recipient: PublicKey,
+    ) -> DarkFiResult<Transaction> {
         let drk = self.drk.read().await;
 
         drk.transfer(amount, token_id, recipient, None, None, false).await
     }
 
     /// Build a transaction from a BuildTxRequest (called by background task)
-    async fn build_tx_request(&self, request: BuildTxRequest) -> DarkFiResult<(Transaction, String, Address, String)> {
+    async fn build_tx_request(
+        &self,
+        request: BuildTxRequest,
+    ) -> DarkFiResult<(Transaction, String, Address, String)> {
         let drk = self.drk.read().await;
         let aliases = drk.get_aliases_mapped_by_token().await.unwrap_or_default();
-        let token_symbol = aliases.get(&request.token_id.to_string()).unwrap_or(&"UNKN".to_string()).to_string();
-        let recipient: Address = StandardAddress::from_public(drk.network, request.recipient).into();
+        let token_symbol =
+            aliases.get(&request.token_id.to_string()).unwrap_or(&"UNKN".to_string()).to_string();
+        let recipient: Address =
+            StandardAddress::from_public(drk.network, request.recipient).into();
 
         let tx = self.build_tx(&request.amount, request.token_id, request.recipient).await?;
 
@@ -574,9 +602,7 @@ impl DrkPlugin {
 
         t!("method called: broadcast_tx()");
 
-        let Some(send_res) = method_call.send_res else {
-            return true
-        };
+        let Some(send_res) = method_call.send_res else { return true };
 
         // Send empty response immediately to unblock the caller
         let _ = send_res.send(vec![]).await;
@@ -594,14 +620,20 @@ impl DrkPlugin {
         let drk = self_.drk.read().await;
         if let Err(e) = drk.mark_tx_spend(&tx, &mut vec![]).await {
             e!("Failed to mark transaction coins as spent: {e}");
-            self_.emit_tx_status_updated(&TxStatus::Error("failed to mark coins as spent".to_string())).await;
+            self_
+                .emit_tx_status_updated(&TxStatus::Error(
+                    "failed to mark coins as spent".to_string(),
+                ))
+                .await;
             return true
         };
         let tx_id = match drk.broadcast_tx(&tx, &mut vec![]).await {
             Ok(t) => t,
             Err(e) => {
                 e!("Failed to broadcast transaction: {e}");
-                self_.emit_tx_status_updated(&TxStatus::Error("failed to broadcast".to_string())).await;
+                self_
+                    .emit_tx_status_updated(&TxStatus::Error("failed to broadcast".to_string()))
+                    .await;
                 return true
             }
         };
@@ -636,15 +668,14 @@ impl DrkPlugin {
                 if first_height.is_none() {
                     first_height = Some(height);
                 }
-                let progress: f64 = match final_height-first_height.unwrap() {
+                let progress: f64 = match final_height - first_height.unwrap() {
                     0 => 0.,
-                    _ => (height-first_height.unwrap()) as f64 / (final_height-first_height.unwrap()) as f64,
+                    _ => {
+                        (height - first_height.unwrap()) as f64 /
+                            (final_height - first_height.unwrap()) as f64
+                    }
                 };
-                let status: u8 = if progress > 0.5 {
-                    2
-                } else {
-                    1
-                };
+                let status: u8 = if progress > 0.5 { 2 } else { 1 };
                 if let Some(node) = self2.node.upgrade() {
                     let _ = node.trigger("connect", serialize(&status)).await;
                 }
@@ -666,7 +697,12 @@ impl DrkPlugin {
 
                 let _ = self2.node.upgrade().unwrap().trigger("connect", serialize(&0u8)).await;
 
-                if let Err(e) = drk.read().await.scan_blocks(&mut vec![], Some(&shell_sender), &false, Some(progress_pub)).await {
+                if let Err(e) = drk
+                    .read()
+                    .await
+                    .scan_blocks(&mut vec![], Some(&shell_sender), &false, Some(progress_pub))
+                    .await
+                {
                     e!("Failed during drk scanning: {e}");
                     let _ = self2.node.upgrade().unwrap().trigger("connect", serialize(&0u8)).await;
 
@@ -678,7 +714,15 @@ impl DrkPlugin {
 
                 let _ = self2.node.upgrade().unwrap().trigger("connect", serialize(&3u8)).await;
 
-                match subscribe_blocks(&drk, subscribe_rpc_task, shell_sender.clone(), endpoint, &ex).await {
+                match subscribe_blocks(
+                    &drk,
+                    subscribe_rpc_task,
+                    shell_sender.clone(),
+                    endpoint,
+                    &ex,
+                )
+                .await
+                {
                     Ok(()) => {
                         i!("darkfid subscription closed normally (detached task stopped)");
                     }

@@ -33,7 +33,7 @@ use crate::{
     },
     expr,
     gfx::gfxtag,
-    mesh::{COLOR_CYAN, COLOR_INACTIVE, COLOR_MINT, COLOR_MINT_OP, MINT_BTN_GRADIENT,},
+    mesh::{COLOR_CYAN, COLOR_INACTIVE, COLOR_MINT, COLOR_MINT_OP, MINT_BTN_GRADIENT},
     prop::{PropertyBool, PropertyFloat32, Role},
     scene::{SceneNodePtr, Slot},
     shape,
@@ -570,17 +570,17 @@ pub async fn make(
     let prop = node.get_property("rect").unwrap();
     #[cfg(any(target_os = "android", feature = "emulate-android"))]
     {
-    prop.set_f32(atom, Role::App, 0, CONTENT_MARGIN * 3.0).unwrap();
-    prop.set_f32(atom, Role::App, 1, CONTENT_MARGIN * 1.4).unwrap();
-    prop.set_f32(atom, Role::App, 2, 200.).unwrap();
-    prop.set_f32(atom, Role::App, 3, 40.).unwrap();
+        prop.set_f32(atom, Role::App, 0, CONTENT_MARGIN * 3.0).unwrap();
+        prop.set_f32(atom, Role::App, 1, CONTENT_MARGIN * 1.4).unwrap();
+        prop.set_f32(atom, Role::App, 2, 200.).unwrap();
+        prop.set_f32(atom, Role::App, 3, 40.).unwrap();
     }
     #[cfg(not(any(target_os = "android", feature = "emulate-android")))]
     {
-    prop.set_f32(atom, Role::App, 0, CONTENT_MARGIN * 3.0).unwrap();
-    prop.set_f32(atom, Role::App, 1, CONTENT_MARGIN * 1.15).unwrap();
-    prop.set_f32(atom, Role::App, 2, 200.).unwrap();
-    prop.set_f32(atom, Role::App, 3, 40.).unwrap();
+        prop.set_f32(atom, Role::App, 0, CONTENT_MARGIN * 3.0).unwrap();
+        prop.set_f32(atom, Role::App, 1, CONTENT_MARGIN * 1.15).unwrap();
+        prop.set_f32(atom, Role::App, 2, 200.).unwrap();
+        prop.set_f32(atom, Role::App, 3, 40.).unwrap();
     }
     node.set_property_u32(atom, Role::App, "z_index", 2).unwrap();
     node.set_property_f32(atom, Role::App, "font_size", LABEL_FONTSIZE).unwrap();
@@ -635,21 +635,21 @@ pub async fn make(
     let prop = node.get_property("rect").unwrap();
     #[cfg(any(target_os = "android", feature = "emulate-android"))]
     {
-    let code = cc.compile("w / 2 + CONTENT_MARGIN * 3.0").unwrap();
-    prop.set_expr(atom, Role::App, 0, code).unwrap();
-    prop.set_f32(atom, Role::App, 1, CONTENT_MARGIN * 1.4).unwrap();
-    let code = cc.compile("w").unwrap();
-    prop.set_expr(atom, Role::App, 2, code).unwrap();
-    prop.set_f32(atom, Role::App, 3, 40.).unwrap();
+        let code = cc.compile("w / 2 + CONTENT_MARGIN * 3.0").unwrap();
+        prop.set_expr(atom, Role::App, 0, code).unwrap();
+        prop.set_f32(atom, Role::App, 1, CONTENT_MARGIN * 1.4).unwrap();
+        let code = cc.compile("w").unwrap();
+        prop.set_expr(atom, Role::App, 2, code).unwrap();
+        prop.set_f32(atom, Role::App, 3, 40.).unwrap();
     }
     #[cfg(not(any(target_os = "android", feature = "emulate-android")))]
     {
-    let code = cc.compile("w / 2 + CONTENT_MARGIN * 3.0").unwrap();
-    prop.set_expr(atom, Role::App, 0, code).unwrap();
-    prop.set_f32(atom, Role::App, 1, CONTENT_MARGIN * 1.15).unwrap();
-    let code = cc.compile("w").unwrap();
-    prop.set_expr(atom, Role::App, 2, code).unwrap();
-    prop.set_f32(atom, Role::App, 3, 40.).unwrap();
+        let code = cc.compile("w / 2 + CONTENT_MARGIN * 3.0").unwrap();
+        prop.set_expr(atom, Role::App, 0, code).unwrap();
+        prop.set_f32(atom, Role::App, 1, CONTENT_MARGIN * 1.15).unwrap();
+        let code = cc.compile("w").unwrap();
+        prop.set_expr(atom, Role::App, 2, code).unwrap();
+        prop.set_f32(atom, Role::App, 3, 40.).unwrap();
     }
     node.set_property_u32(atom, Role::App, "z_index", 2).unwrap();
     node.set_property_f32(atom, Role::App, "font_size", LABEL_FONTSIZE).unwrap();
@@ -1090,7 +1090,7 @@ pub async fn make(
     prop.set_expr(atom, Role::App, 2, code).unwrap();
     prop.set_f32(atom, Role::App, 3, CHATEDIT_HEIGHT).unwrap();
     node.set_property_u32(atom, Role::App, "z_index", 7).unwrap();
-    
+
     let mut shape = VectorShape::new();
     shape.add_outline(
         expr::const_f32(0.),
@@ -1250,9 +1250,8 @@ pub async fn make(
     editlayer_node.link(node);
 
     // Create cancel/done edit buttons at bottom of screen
-    let btns = edit_buttons::create_edit_buttons(
-        app, content.clone(), &window_scale, i18n_fish,
-    ).await;
+    let btns =
+        edit_buttons::create_edit_buttons(app, content.clone(), &window_scale, i18n_fish).await;
 
     let node = create_menu("nick_menu");
     let prop = node.get_property("rect").unwrap();

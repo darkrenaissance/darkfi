@@ -20,9 +20,9 @@ use darkfi_serial::Decodable;
 
 use crate::{
     app::{
-        App,
         node::{create_button, create_layer, create_text, create_tokentable, create_vector_art},
         schema::COLOR_SCHEME,
+        App,
     },
     expr,
     gfx::gfxtag,
@@ -148,17 +148,24 @@ pub async fn make(
             let atom = &mut renderer.make_guard(gfxtag!("receive button click"));
             main_is_visible2.set(atom, false);
 
-            let receive_layer = sg_root.lookup_node("/window/content/wallet/receive_layer").unwrap();
+            let receive_layer =
+                sg_root.lookup_node("/window/content/wallet/receive_layer").unwrap();
             receive_layer.set_property_bool(atom, Role::App, "is_visible", true).unwrap();
 
             // Get the default address from drk plugin and update the UI
             if let Some(drk_node) = sg_root.lookup_node("/plugin/drk") {
-                if let Ok(Some(response_data)) = drk_node.call_method("get_default_address", vec![]).await {
+                if let Ok(Some(response_data)) =
+                    drk_node.call_method("get_default_address", vec![]).await
+                {
                     let mut cur = std::io::Cursor::new(response_data);
                     if let Ok(address) = String::decode(&mut cur) {
                         d!("Got default address from drk: {address}");
-                        if let Some(receive_address_node) = receive_layer.lookup_node("/receive_address") {
-                            receive_address_node.set_property_str(atom, Role::App, "text", address).unwrap();
+                        if let Some(receive_address_node) =
+                            receive_layer.lookup_node("/receive_address")
+                        {
+                            receive_address_node
+                                .set_property_str(atom, Role::App, "text", address)
+                                .unwrap();
                         }
                     } else {
                         e!("Failed to decode default address response");
@@ -180,7 +187,8 @@ pub async fn make(
     let node = create_text("receive_label");
     let prop = node.get_property("rect").unwrap();
     prop.set_f32(atom, Role::App, 0, PADDING_X).unwrap();
-    prop.set_f32(atom, Role::App, 1, y + PADDING_X + BUTTON_HEIGHT / 2. - BUTTON_FONTSIZE / 1.8).unwrap();
+    prop.set_f32(atom, Role::App, 1, y + PADDING_X + BUTTON_HEIGHT / 2. - BUTTON_FONTSIZE / 1.8)
+        .unwrap();
     let code = cc.compile("w / 2 - PADDING_X * 1.5").unwrap();
     prop.set_expr(atom, Role::App, 2, code).unwrap();
     prop.set_f32(atom, Role::App, 3, BUTTON_HEIGHT).unwrap();
@@ -247,7 +255,8 @@ pub async fn make(
         while let Ok(_) = recvr.recv().await {
             let atom = &mut renderer.make_guard(gfxtag!("send button click"));
             main_is_visible3.set(atom, false);
-            let send_layer = sg_root.lookup_node("/window/content/wallet/send_step1_layer").unwrap();
+            let send_layer =
+                sg_root.lookup_node("/window/content/wallet/send_step1_layer").unwrap();
             send_layer.set_property_bool(atom, Role::App, "is_visible", true).unwrap();
         }
     });
@@ -261,7 +270,8 @@ pub async fn make(
     let prop = node.get_property("rect").unwrap();
     let code = cc.compile("PADDING_X / 2 + w / 2").unwrap();
     prop.set_expr(atom, Role::App, 0, code).unwrap();
-    prop.set_f32(atom, Role::App, 1, y + PADDING_X + BUTTON_HEIGHT / 2. - BUTTON_FONTSIZE / 1.8).unwrap();
+    prop.set_f32(atom, Role::App, 1, y + PADDING_X + BUTTON_HEIGHT / 2. - BUTTON_FONTSIZE / 1.8)
+        .unwrap();
     let code = cc.compile("w / 2 - PADDING_X * 1.5").unwrap();
     prop.set_expr(atom, Role::App, 2, code).unwrap();
     prop.set_f32(atom, Role::App, 3, BUTTON_HEIGHT).unwrap();
@@ -328,15 +338,18 @@ pub async fn make(
     prop.set_f32(atom, Role::App, 2, 0.2784).unwrap();
     prop.set_f32(atom, Role::App, 3, 1.).unwrap();
 
-    let tokens_table = tokens_table
-        .setup(|me| TokenTable::new(me, app.renderer.clone()))
-        .await;
+    let tokens_table = tokens_table.setup(|me| TokenTable::new(me, app.renderer.clone())).await;
     main_layer.link(tokens_table.clone());
 
     main_layer
 }
 
-async fn create_chat_btn(app: &App, atom: &mut PropertyAtomicGuard, cc: &expr::Compiler, parent: &SceneNodePtr) {
+async fn create_chat_btn(
+    app: &App,
+    atom: &mut PropertyAtomicGuard,
+    cc: &expr::Compiler,
+    parent: &SceneNodePtr,
+) {
     let node = create_vector_art("chat_btn_bg");
     let prop = node.get_property("rect").unwrap();
     let code = cc.compile(format!("w - {CHAT_BTN_SIZE} - {CHAT_BTN_MARGIN}")).unwrap();
@@ -394,10 +407,20 @@ async fn create_chat_btn(app: &App, atom: &mut PropertyAtomicGuard, cc: &expr::C
 
     let sg_root = app.sg_root.clone();
     let renderer = app.renderer.clone();
-    let menu_is_visible =
-        PropertyBool::wrap(&sg_root.lookup_node("/window/content/menu_layer").unwrap(), Role::App, "is_visible", 0).unwrap();
-    let wallet_is_visible =
-        PropertyBool::wrap(&sg_root.lookup_node("/window/content/wallet").unwrap(), Role::App, "is_visible", 0).unwrap();
+    let menu_is_visible = PropertyBool::wrap(
+        &sg_root.lookup_node("/window/content/menu_layer").unwrap(),
+        Role::App,
+        "is_visible",
+        0,
+    )
+    .unwrap();
+    let wallet_is_visible = PropertyBool::wrap(
+        &sg_root.lookup_node("/window/content/wallet").unwrap(),
+        Role::App,
+        "is_visible",
+        0,
+    )
+    .unwrap();
     let (slot, recvr) = Slot::new("chat_btn_clicked");
     node.register("click", slot).unwrap();
     let listen_click = app.ex.spawn(async move {

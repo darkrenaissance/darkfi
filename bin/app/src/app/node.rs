@@ -325,7 +325,8 @@ pub fn create_baseedit(name: &str) -> SceneNode {
     let prop = Property::new("placeholder_text", PropertyType::Str, PropertySubType::Null);
     node.add_property(prop).unwrap();
 
-    let mut prop = Property::new("placeholder_color", PropertyType::Float32, PropertySubType::Color);
+    let mut prop =
+        Property::new("placeholder_color", PropertyType::Float32, PropertySubType::Color);
     prop.set_array_len(4);
     prop.set_range_f32(0., 1.);
     node.add_property(prop).unwrap();
@@ -834,12 +835,8 @@ pub fn create_tokentable(name: &str) -> SceneNode {
     )
     .unwrap();
 
-    node.add_method(
-        "set_tokens",
-        vec![("tokens", "Token rows data", CallArgType::Hash)],
-        None,
-    )
-    .unwrap();
+    node.add_method("set_tokens", vec![("tokens", "Token rows data", CallArgType::Hash)], None)
+        .unwrap();
 
     node
 }

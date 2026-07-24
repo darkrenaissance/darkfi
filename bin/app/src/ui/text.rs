@@ -23,10 +23,16 @@ use std::sync::Arc;
 use tracing::instrument;
 
 use crate::{
-    ExecutorPtr, gfx::{DrawCall, DrawInstruction, Rectangle, RenderApi, Renderer, gfxtag}, mesh::{Color, MeshBuilder}, prop::{
-        BatchGuardPtr, PropertyAtomicGuard, PropertyBool, PropertyColor, PropertyEnum, PropertyFloat32,
-        PropertyRect, PropertyStr, PropertyUint32, Role,
-    }, scene::{Pimpl, SceneNodeWeak}, text, util::i18n::I18nBabelFish
+    gfx::{gfxtag, DrawCall, DrawInstruction, Rectangle, RenderApi, Renderer},
+    mesh::{Color, MeshBuilder},
+    prop::{
+        BatchGuardPtr, PropertyAtomicGuard, PropertyBool, PropertyColor, PropertyEnum,
+        PropertyFloat32, PropertyRect, PropertyStr, PropertyUint32, Role,
+    },
+    scene::{Pimpl, SceneNodeWeak},
+    text,
+    util::i18n::I18nBabelFish,
+    ExecutorPtr,
 };
 
 use super::{DrawUpdate, OnModify, UIObject};
@@ -75,7 +81,8 @@ impl Text {
         let text_color = PropertyColor::wrap(node_ref, Role::Internal, "text_color").unwrap();
         let lineheight = PropertyFloat32::wrap(node_ref, Role::Internal, "lineheight", 0).unwrap();
         let text_align = PropertyEnum::wrap(node_ref, Role::Internal, "text_align", 0).unwrap();
-        let overflow_wrap = PropertyEnum::wrap(node_ref, Role::Internal, "overflow_wrap", 0).unwrap();
+        let overflow_wrap =
+            PropertyEnum::wrap(node_ref, Role::Internal, "overflow_wrap", 0).unwrap();
         let use_i18n = PropertyBool::wrap(node_ref, Role::Internal, "use_i18n", 0).unwrap();
         let debug = PropertyBool::wrap(node_ref, Role::Internal, "debug", 0).unwrap();
 
@@ -127,7 +134,18 @@ impl Text {
             text
         };
 
-        text::make_layout2(&text, text_color, font_size, lineheight, window_scale, Some(width), &[], &[], &text_align, &overflow_wrap)
+        text::make_layout2(
+            &text,
+            text_color,
+            font_size,
+            lineheight,
+            window_scale,
+            Some(width),
+            &[],
+            &[],
+            &text_align,
+            &overflow_wrap,
+        )
     }
 
     fn regen_mesh(&self, layout: &parley::Layout<Color>) -> Vec<DrawInstruction> {

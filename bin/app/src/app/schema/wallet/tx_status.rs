@@ -18,18 +18,21 @@
 
 use std::sync::Arc;
 
-use darkfi_serial::Decodable;
 use darkfi::tx::Transaction;
+use darkfi_serial::Decodable;
 
 use crate::{
     app::{
-        App,
         node::{create_layer, create_text},
         schema::COLOR_SCHEME,
+        App,
     },
     expr,
     gfx::gfxtag,
-    prop::{Property, PropertyAtomicGuard, PropertyBool, PropertyFloat32, PropertySubType, PropertyType, Role},
+    prop::{
+        Property, PropertyAtomicGuard, PropertyBool, PropertyFloat32, PropertySubType,
+        PropertyType, Role,
+    },
     scene::{SceneNodePtr, Slot},
     ui::{Layer, Text},
     util::i18n::I18nBabelFish,
@@ -102,7 +105,8 @@ pub async fn make(
     tx_status_layer.set_property_u32(atom, Role::App, "z_index", 3).unwrap();
     let tx_status_layer = tx_status_layer.setup(|me| Layer::new(me, app.renderer.clone())).await;
     wallet_layer.link(tx_status_layer.clone());
-    let tx_status_is_visible = PropertyBool::wrap(&tx_status_layer, Role::App, "is_visible", 0).unwrap();
+    let tx_status_is_visible =
+        PropertyBool::wrap(&tx_status_layer, Role::App, "is_visible", 0).unwrap();
 
     create_bg_mesh(app, atom, &tx_status_layer, "tx_status_bg").await;
     create_header_bg(app, atom, &tx_status_layer, "tx_status_header_bg").await;
@@ -172,7 +176,8 @@ pub async fn make(
         .await;
     tx_status_layer.link(node);
 
-    let sep = create_separator(&app.renderer, atom, &tx_status_layer, "tx_info_separator", &mut 0.).await;
+    let sep =
+        create_separator(&app.renderer, atom, &tx_status_layer, "tx_info_separator", &mut 0.).await;
     let prop = sep.get_property("rect").unwrap();
     let code = cc.compile(format!("{y} + PADDING_Y * 2 + info_height + 1")).unwrap();
     prop.set_expr(atom, Role::App, 1, code).unwrap();
@@ -183,14 +188,22 @@ pub async fn make(
     let prop = hint_node.get_property("rect").unwrap();
     let code = cc.compile("w / 2 - (HINT_FONTSIZE * 0.7 * 31) / 2").unwrap();
     prop.set_expr(atom, Role::App, 0, code).unwrap();
-    let code = cc.compile("h - PADDING_X * 2 - BUTTON_HEIGHT - PADDING_Y - HINT_FONTSIZE * 2").unwrap();
+    let code =
+        cc.compile("h - PADDING_X * 2 - BUTTON_HEIGHT - PADDING_Y - HINT_FONTSIZE * 2").unwrap();
     prop.set_expr(atom, Role::App, 1, code).unwrap();
     let code = cc.compile("HINT_FONTSIZE * 0.7 * 31").unwrap();
     prop.set_expr(atom, Role::App, 2, code).unwrap();
-    prop.set_f32(atom, Role::App, 3, HINT_FONTSIZE/2.).unwrap();
+    prop.set_f32(atom, Role::App, 3, HINT_FONTSIZE / 2.).unwrap();
     hint_node.set_property_f32(atom, Role::App, "font_size", HINT_FONTSIZE).unwrap();
     hint_node.set_property_enum(atom, Role::App, "text_align", "center").unwrap();
-    hint_node.set_property_str(atom, Role::App, "text", "You can close this screen while the transaction is confirming.").unwrap();
+    hint_node
+        .set_property_str(
+            atom,
+            Role::App,
+            "text",
+            "You can close this screen while the transaction is confirming.",
+        )
+        .unwrap();
     let prop = hint_node.get_property("text_color").unwrap();
     prop.set_f32(atom, Role::App, 0, 1.).unwrap();
     prop.set_f32(atom, Role::App, 1, 1.).unwrap();
@@ -210,7 +223,8 @@ pub async fn make(
         "tx_status_hint_separator",
         &mut cc,
         "h - PADDING_X * 2 - BUTTON_HEIGHT",
-    ).await;
+    )
+    .await;
 
     // Close button
     let node = create_bottom_button(
@@ -222,7 +236,8 @@ pub async fn make(
         Some("close"),
         &window_scale,
         i18n_fish,
-    ).await;
+    )
+    .await;
 
     let main_is_visible = PropertyBool::wrap(&main_layer, Role::App, "is_visible", 0).unwrap();
     let renderer = app.renderer.clone();
@@ -267,15 +282,22 @@ pub async fn make(
 
             // Update status text
             if let Some(text) = status_text {
-                if let Some(status_node) = sg_root.lookup_node("/window/content/wallet/tx_status_layer/status") {
+                if let Some(status_node) =
+                    sg_root.lookup_node("/window/content/wallet/tx_status_layer/status")
+                {
                     status_node.set_property_str(atom, Role::App, "text", &text).unwrap();
                 }
             }
 
             // Update transaction info display
-            if let (Some(amount), Some(token_symbol), Some(recipient_str)) = (amount, token_symbol, recipient_str) {
-                if let Some(tx_info) = sg_root.lookup_node("/window/content/wallet/tx_status_layer/tx_info") {
-                    let tx_text = format!("Sending {} {} to {}", amount, token_symbol, recipient_str);
+            if let (Some(amount), Some(token_symbol), Some(recipient_str)) =
+                (amount, token_symbol, recipient_str)
+            {
+                if let Some(tx_info) =
+                    sg_root.lookup_node("/window/content/wallet/tx_status_layer/tx_info")
+                {
+                    let tx_text =
+                        format!("Sending {} {} to {}", amount, token_symbol, recipient_str);
                     tx_info.set_property_str(atom, Role::App, "text", tx_text).unwrap();
                 }
             }

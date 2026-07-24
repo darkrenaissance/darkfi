@@ -17,7 +17,10 @@
  */
 
 use crate::{
-    error::{Error, Result}, expr::{SExprMachine, SExprVal}, gfx::{Dimension, Rectangle}, scene::SceneNode as SceneNode3
+    error::{Error, Result},
+    expr::{SExprMachine, SExprVal},
+    gfx::{Dimension, Rectangle},
+    scene::SceneNode as SceneNode3,
 };
 
 use super::{PropertyAtomicGuard, PropertyPtr, PropertyType, Role};
@@ -255,12 +258,10 @@ impl PropertyEnum {
     pub fn get(&self) -> String {
         // Handle both PropertyValue::Str (defaults) and PropertyValue::Enum (set values)
         match self.prop.get_value(self.idx) {
-            Ok(val) => {
-                match val.as_str() {
-                    Ok(s) => s,
-                    Err(_) => val.as_enum().unwrap(),
-                }
-            }
+            Ok(val) => match val.as_str() {
+                Ok(s) => s,
+                Err(_) => val.as_enum().unwrap(),
+            },
             Err(_) => self.prop.get_enum(self.idx).unwrap(),
         }
     }
