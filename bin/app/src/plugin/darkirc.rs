@@ -293,7 +293,8 @@ impl DarkIrc {
             settings,
         });
         self_.clone().start(sg_root, ex).await;
-        Ok(Pimpl::DarkIrc(self_))
+        //Ok(Pimpl::DarkIrc(self_))
+        Ok(Pimpl::Null)
     }
 
     async fn dag_sync(self: Arc<Self>, channel_sub: Subscription<DarkFiResult<ChannelPtr>>) {

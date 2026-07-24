@@ -906,7 +906,7 @@ pub async fn make(
     prop.set_f32(atom, Role::App, 3, SENDBTN_BOX[3]).unwrap();
 
     let editz_text2 = editz_text.clone();
-    let channel2 = format!("#{channel}");
+    let channel2 = channel.to_string();
     let sg_root = app.sg_root.clone();
     let renderer = app.renderer.clone();
     let sendmsg = move || {

@@ -22,6 +22,9 @@ use std::{array::TryFromSliceError, string::FromUtf8Error, sync::Arc};
 pub mod darkirc;
 pub use darkirc::DarkIrcPtr;
 
+pub mod darkirc2;
+pub use darkirc2::DarkIrc2Ptr;
+
 pub mod fud;
 pub use fud::FudPluginPtr as FudPtr;
 
@@ -29,6 +32,7 @@ pub mod drk;
 pub use drk::DrkPluginPtr as DrkPtr;
 
 pub use darkirc::DarkIrc;
+pub use darkirc2::DarkIrc2;
 pub use fud::FudPlugin;
 pub use drk::DrkPlugin;
 

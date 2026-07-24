@@ -595,6 +595,8 @@ pub enum Pimpl {
     #[cfg(feature = "enable-plugins")]
     DarkIrc(plugin::DarkIrcPtr),
     #[cfg(feature = "enable-plugins")]
+    DarkIrc2(plugin::DarkIrc2Ptr),
+    #[cfg(feature = "enable-plugins")]
     Fud(plugin::FudPtr),
     #[cfg(feature = "enable-plugins")]
     Drk(plugin::DrkPtr),
