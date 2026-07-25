@@ -31,6 +31,7 @@ use futures::{
     stream::{FuturesUnordered, StreamExt},
 };
 use smol::Timer;
+use tracing::warn;
 use url::Url;
 
 #[cfg(feature = "upnp-igd")]
@@ -57,6 +58,33 @@ use crate::{
 
 /// Atomic pointer to Acceptor
 pub type AcceptorPtr = Arc<Acceptor>;
+
+const ACCEPT_RETRY_MIN: Duration = Duration::from_millis(100);
+const ACCEPT_RETRY_MAX: Duration = Duration::from_secs(5);
+
+struct ResourceExhaustionBackoff {
+    next: Duration,
+}
+
+impl ResourceExhaustionBackoff {
+    fn new() -> Self {
+        Self { next: ACCEPT_RETRY_MIN }
+    }
+
+    fn next_delay(&mut self) -> Duration {
+        let delay = self.next;
+        self.next = self.next.saturating_mul(2).min(ACCEPT_RETRY_MAX);
+        delay
+    }
+
+    fn reset(&mut self) {
+        self.next = ACCEPT_RETRY_MIN;
+    }
+}
+
+fn is_descriptor_exhaustion(error: &std::io::Error) -> bool {
+    error.raw_os_error().is_some_and(|code| code == libc::EMFILE || code == libc::ENFILE)
+}
 
 fn with_handshake_timeout(negotiation: PtNegotiation, timeout: Duration) -> PtNegotiation {
     Box::pin(async move {
@@ -209,6 +237,8 @@ impl Acceptor {
         let hosts = self.session.upgrade().unwrap().p2p().hosts();
         let mut negotiations = FuturesUnordered::<PtNegotiation>::new();
         let mut accepting = None;
+        let mut accept_retry = None;
+        let mut resource_backoff = ResourceExhaustionBackoff::new();
 
         loop {
             // Reserve capacity for established channels, transport negotiations,
@@ -219,7 +249,7 @@ impl Acceptor {
                 negotiations.len() +
                 usize::from(accepting.is_some());
 
-            if reserved < limit && accepting.is_none() {
+            if reserved < limit && accepting.is_none() && accept_retry.is_none() {
                 accepting = Some(listener.next());
             }
 
@@ -231,6 +261,7 @@ impl Acceptor {
                 if negotiations.is_empty() {
                     match accept.await {
                         Ok(negotiation) => {
+                            resource_backoff.reset();
                             negotiations
                                 .push(with_handshake_timeout(negotiation, handshake_timeout));
                             continue
@@ -243,6 +274,7 @@ impl Acceptor {
 
                     match select(accept, negotiation).await {
                         Either::Left((Ok(negotiation), _)) => {
+                            resource_backoff.reset();
                             negotiations
                                 .push(with_handshake_timeout(negotiation, handshake_timeout));
                             continue
@@ -256,6 +288,26 @@ impl Acceptor {
                             accepting = Some(accept);
                             continue
                         }
+                    }
+                }
+            } else if let Some(retry) = accept_retry.take() {
+                if negotiations.is_empty() {
+                    retry.await;
+                    continue
+                }
+
+                let negotiation = negotiations.next();
+                pin_mut!(negotiation);
+
+                match select(retry, negotiation).await {
+                    Either::Left((_, _)) => continue,
+                    Either::Right((Some(result), retry)) => {
+                        accept_retry = Some(retry);
+                        result
+                    }
+                    Either::Right((None, retry)) => {
+                        accept_retry = Some(retry);
+                        continue
                     }
                 }
             } else if let Some(result) = negotiations.next().await {
@@ -300,6 +352,17 @@ impl Acceptor {
 
                     // Finally, notify any publishers about the new channel.
                     self.channel_publisher.notify(Ok(channel)).await;
+                }
+
+                Err(e) if is_descriptor_exhaustion(&e) => {
+                    let delay = resource_backoff.next_delay();
+                    warn!(
+                        target: "net::acceptor::run_accept_loop",
+                        "[P2P] Listener descriptor exhaustion: {e}; retrying accepts in {} ms",
+                        delay.as_millis(),
+                    );
+                    accept_retry = Some(Timer::after(delay));
+                    continue
                 }
 
                 // As per accept(2) recommendation:
@@ -384,5 +447,31 @@ impl Acceptor {
             Ok(()) => panic!("Acceptor task should never complete without error status"),
             Err(err) => self.channel_publisher.notify(Err(err)).await,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn descriptor_exhaustion_classification() {
+        assert!(is_descriptor_exhaustion(&std::io::Error::from_raw_os_error(libc::EMFILE)));
+        assert!(is_descriptor_exhaustion(&std::io::Error::from_raw_os_error(libc::ENFILE)));
+        assert!(!is_descriptor_exhaustion(&std::io::Error::from_raw_os_error(libc::EAGAIN)));
+        assert!(!is_descriptor_exhaustion(&std::io::Error::other("listener error")));
+    }
+
+    #[test]
+    fn descriptor_exhaustion_backoff_is_capped_and_resettable() {
+        let mut backoff = ResourceExhaustionBackoff::new();
+        let expected = [100, 200, 400, 800, 1600, 3200, 5000, 5000];
+
+        for millis in expected {
+            assert_eq!(backoff.next_delay(), Duration::from_millis(millis));
+        }
+
+        backoff.reset();
+        assert_eq!(backoff.next_delay(), ACCEPT_RETRY_MIN);
     }
 }
