@@ -689,7 +689,23 @@ async fn p2p_tls_listener_accepts_while_handshake_stalled_real(ex: Arc<Executor<
 
     // Occupy the first accepted socket without sending a TLS ClientHello.
     let stalled = TcpStream::connect(&addr).await.unwrap();
-    Timer::after(Duration::from_millis(100)).await;
+    timeout(Duration::from_secs(1), async {
+        while p2p.session_inbound().listener_health().await[0].negotiating != 1 {
+            Timer::after(Duration::from_millis(10)).await;
+        }
+    })
+    .await
+    .expect("listener health did not report the stalled TLS negotiation");
+
+    let health = p2p.session_inbound().listener_health().await;
+    assert_eq!(health.len(), 1);
+    assert_eq!(health[0].url, listen_url);
+    assert!(health[0].running);
+    assert_eq!(health[0].active, 0);
+    assert_eq!(health[0].negotiating, 1);
+    assert_eq!(health[0].limit, 2);
+    assert!(!health[0].saturated());
+    assert!(!health[0].accept_backoff);
 
     // A second client must complete TLS before the stalled handshake times out.
     let dialer = Dialer::new(listen_url, None, None, true).await.unwrap();

@@ -41,6 +41,7 @@ use darkfi::{
     async_daemonize, cli_desc,
     net::{
         self,
+        acceptor::InboundListenerHealth,
         hosts::HostColor,
         settings::{BanPolicy, MagicBytes, NetworkProfile},
         P2p, P2pPtr,
@@ -128,14 +129,36 @@ impl Spawn {
             addr_vec.push(JsonValue::String(addr.as_ref().to_string()));
         }
 
+        let listeners = self
+            .p2p
+            .session_inbound()
+            .listener_health()
+            .await
+            .iter()
+            .map(listener_health_info)
+            .collect();
+
         JsonValue::Object(HashMap::from([
             ("name".to_string(), JsonValue::String(self.name.clone())),
             ("urls".to_string(), JsonValue::Array(addr_vec)),
+            ("listeners".to_string(), JsonValue::Array(listeners)),
             ("whitelist".to_string(), JsonValue::Array(self.get_whitelist().await)),
             ("greylist".to_string(), JsonValue::Array(self.get_greylist().await)),
             ("goldlist".to_string(), JsonValue::Array(self.get_goldlist().await)),
         ]))
     }
+}
+
+fn listener_health_info(health: &InboundListenerHealth) -> JsonValue {
+    JsonValue::Object(HashMap::from([
+        ("url".to_string(), JsonValue::String(health.url.to_string())),
+        ("running".to_string(), JsonValue::Boolean(health.running)),
+        ("active".to_string(), JsonValue::Number(health.active as f64)),
+        ("negotiating".to_string(), JsonValue::Number(health.negotiating as f64)),
+        ("limit".to_string(), JsonValue::Number(health.limit as f64)),
+        ("saturated".to_string(), JsonValue::Boolean(health.saturated())),
+        ("accept_backoff".to_string(), JsonValue::Boolean(health.accept_backoff)),
+    ]))
 }
 
 /// Defines the network-specific settings
@@ -509,9 +532,32 @@ async fn realmain(args: Args, ex: Arc<Executor<'static>>) -> Result<()> {
 
 #[cfg(test)]
 mod tests {
-    use darkfi::net::hosts::HostContainer;
+    use darkfi::net::{acceptor::InboundListenerHealth, hosts::HostContainer};
+    use tinyjson::JsonValue;
+    use url::Url;
 
-    use super::supported_network_profiles;
+    use super::{listener_health_info, supported_network_profiles};
+
+    #[test]
+    fn test_listener_health_info_reports_saturation() {
+        let health = InboundListenerHealth {
+            url: Url::parse("tor+tls://example.onion:9000").unwrap(),
+            running: true,
+            active: 2,
+            negotiating: 1,
+            limit: 3,
+            accept_backoff: false,
+        };
+
+        let info = listener_health_info(&health);
+        assert_eq!(info["url"], JsonValue::String(health.url.to_string()));
+        assert_eq!(info["running"], JsonValue::Boolean(true));
+        assert_eq!(info["active"], JsonValue::Number(2.0));
+        assert_eq!(info["negotiating"], JsonValue::Number(1.0));
+        assert_eq!(info["limit"], JsonValue::Number(3.0));
+        assert_eq!(info["saturated"], JsonValue::Boolean(true));
+        assert_eq!(info["accept_backoff"], JsonValue::Boolean(false));
+    }
 
     #[test]
     fn test_supported_network_profiles_are_consistent() {

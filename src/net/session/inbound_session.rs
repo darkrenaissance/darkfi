@@ -32,7 +32,7 @@ use url::Url;
 
 use super::{
     super::{
-        acceptor::{Acceptor, AcceptorPtr},
+        acceptor::{Acceptor, AcceptorPtr, InboundListenerHealth},
         channel::ChannelPtr,
         dnet::{self, dnetev, DnetEvent},
         p2p::{P2p, P2pPtr},
@@ -83,7 +83,7 @@ impl InboundSession {
         for (index, accept_addr) in inbound_addrs.iter().enumerate() {
             // First initialize an Acceptor and its Subscriber.
             let parent = Arc::downgrade(&self);
-            let acceptor = Acceptor::new(parent);
+            let acceptor = Acceptor::new(parent, accept_addr.clone());
 
             // Now start the Subscriber. The Subscriber will return a Channel once it has been
             // prepared by the Acceptor.
@@ -134,6 +134,12 @@ impl InboundSession {
         self.acceptors.lock().await.iter().map(|acceptor| acceptor.connection_count()).sum()
     }
 
+    /// Return a runtime health snapshot for every active inbound listener.
+    pub async fn listener_health(&self) -> Vec<InboundListenerHealth> {
+        let limit = self.p2p().settings().read().await.inbound_connections;
+        self.acceptors.lock().await.iter().map(|acceptor| acceptor.health(limit)).collect()
+    }
+
     /// Start accepting connections for inbound session.
     async fn start_accept_session(
         self: Arc<Self>,
@@ -144,7 +150,7 @@ impl InboundSession {
     ) -> Result<()> {
         info!(target: "net::inbound_session", "[P2P] Starting Inbound session #{index} on {accept_addr}");
         // Start listener
-        let result = acceptor.clone().start(accept_addr, ex).await;
+        let result = acceptor.clone().start(ex).await;
         if let Err(e) = &result {
             verbose!(target: "net::inbound_session", "[P2P] Error starting listener #{index}: {e}");
             acceptor.stop().await;

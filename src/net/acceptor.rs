@@ -19,7 +19,7 @@
 use std::{
     io::ErrorKind,
     sync::{
-        atomic::{AtomicUsize, Ordering::SeqCst},
+        atomic::{AtomicBool, AtomicUsize, Ordering::SeqCst},
         Arc,
     },
     time::Duration,
@@ -104,6 +104,35 @@ struct InboundSlotGuard {
     cv: Arc<CondVar>,
 }
 
+/// Current runtime state for an inbound listener.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct InboundListenerHealth {
+    pub url: Url,
+    pub running: bool,
+    pub active: usize,
+    pub negotiating: usize,
+    pub limit: usize,
+    pub accept_backoff: bool,
+}
+
+impl InboundListenerHealth {
+    pub fn saturated(&self) -> bool {
+        self.active + self.negotiating >= self.limit
+    }
+}
+
+/// Releases the transport-negotiation count when a handshake finishes or is cancelled.
+struct NegotiationGuard {
+    acceptor: AcceptorPtr,
+}
+
+impl Drop for NegotiationGuard {
+    fn drop(&mut self) {
+        let previous = self.acceptor.negotiating_count.fetch_sub(1, SeqCst);
+        debug_assert!(previous > 0, "inbound negotiation counter underflow");
+    }
+}
+
 impl InboundSlotGuard {
     fn new(acceptor: AcceptorPtr, cv: Arc<CondVar>) -> Self {
         Self { acceptor, cv }
@@ -120,29 +149,38 @@ impl Drop for InboundSlotGuard {
 
 /// Create inbound socket connections
 pub struct Acceptor {
+    endpoint: Url,
     channel_publisher: PublisherPtr<Result<ChannelPtr>>,
     task: StoppableTaskPtr,
     session: SessionWeakPtr,
     conn_count: AtomicUsize,
+    negotiating_count: AtomicUsize,
+    accept_backoff: AtomicBool,
+    running: AtomicBool,
     #[cfg(feature = "upnp-igd")]
     port_mappings: AsyncMutex<Vec<Arc<dyn PortMapping>>>,
 }
 
 impl Acceptor {
     /// Create new Acceptor object.
-    pub fn new(session: SessionWeakPtr) -> AcceptorPtr {
+    pub fn new(session: SessionWeakPtr, endpoint: Url) -> AcceptorPtr {
         Arc::new(Self {
+            endpoint,
             channel_publisher: Publisher::new(),
             task: StoppableTask::new(),
             session,
             conn_count: AtomicUsize::new(0),
+            negotiating_count: AtomicUsize::new(0),
+            accept_backoff: AtomicBool::new(false),
+            running: AtomicBool::new(false),
             #[cfg(feature = "upnp-igd")]
             port_mappings: AsyncMutex::new(Vec::new()),
         })
     }
 
     /// Start accepting inbound socket connections
-    pub async fn start(self: Arc<Self>, endpoint: Url, ex: ExecutorPtr) -> Result<()> {
+    pub async fn start(self: Arc<Self>, ex: ExecutorPtr) -> Result<()> {
+        let endpoint = self.endpoint.clone();
         let settings = self.session.upgrade().unwrap().p2p().settings();
         let settings = settings.read().await;
         let datastore = settings.p2p_datastore.clone();
@@ -203,6 +241,17 @@ impl Acceptor {
         self.channel_publisher.clone().subscribe().await
     }
 
+    pub fn health(&self, limit: usize) -> InboundListenerHealth {
+        InboundListenerHealth {
+            url: self.endpoint.clone(),
+            running: self.running.load(SeqCst),
+            active: self.conn_count.load(SeqCst),
+            negotiating: self.negotiating_count.load(SeqCst),
+            limit,
+            accept_backoff: self.accept_backoff.load(SeqCst),
+        }
+    }
+
     #[cfg(test)]
     pub(super) fn connection_count(&self) -> usize {
         self.conn_count.load(SeqCst)
@@ -215,6 +264,7 @@ impl Acceptor {
         handshake_timeout: Duration,
         ex: ExecutorPtr,
     ) {
+        self.running.store(true, SeqCst);
         let self_ = self.clone();
         self.task.clone().start(
             self.run_accept_loop(listener, handshake_timeout, ex.clone()),
@@ -222,6 +272,20 @@ impl Acceptor {
             Error::NetworkServiceStopped,
             ex,
         );
+    }
+
+    fn track_negotiation(
+        self: &Arc<Self>,
+        negotiation: PtNegotiation,
+        handshake_timeout: Duration,
+    ) -> PtNegotiation {
+        self.negotiating_count.fetch_add(1, SeqCst);
+        let guard = NegotiationGuard { acceptor: self.clone() };
+
+        Box::pin(async move {
+            let _guard = guard;
+            with_handshake_timeout(negotiation, handshake_timeout).await
+        })
     }
 
     /// Run the accept loop.
@@ -262,8 +326,9 @@ impl Acceptor {
                     match accept.await {
                         Ok(negotiation) => {
                             resource_backoff.reset();
+                            self.accept_backoff.store(false, SeqCst);
                             negotiations
-                                .push(with_handshake_timeout(negotiation, handshake_timeout));
+                                .push(self.track_negotiation(negotiation, handshake_timeout));
                             continue
                         }
                         Err(err) => Err(err),
@@ -275,8 +340,9 @@ impl Acceptor {
                     match select(accept, negotiation).await {
                         Either::Left((Ok(negotiation), _)) => {
                             resource_backoff.reset();
+                            self.accept_backoff.store(false, SeqCst);
                             negotiations
-                                .push(with_handshake_timeout(negotiation, handshake_timeout));
+                                .push(self.track_negotiation(negotiation, handshake_timeout));
                             continue
                         }
                         Either::Left((Err(err), _)) => Err(err),
@@ -293,6 +359,7 @@ impl Acceptor {
             } else if let Some(retry) = accept_retry.take() {
                 if negotiations.is_empty() {
                     retry.await;
+                    self.accept_backoff.store(false, SeqCst);
                     continue
                 }
 
@@ -300,7 +367,10 @@ impl Acceptor {
                 pin_mut!(negotiation);
 
                 match select(retry, negotiation).await {
-                    Either::Left((_, _)) => continue,
+                    Either::Left((_, _)) => {
+                        self.accept_backoff.store(false, SeqCst);
+                        continue
+                    }
                     Either::Right((Some(result), retry)) => {
                         accept_retry = Some(retry);
                         result
@@ -356,6 +426,7 @@ impl Acceptor {
 
                 Err(e) if is_descriptor_exhaustion(&e) => {
                     let delay = resource_backoff.next_delay();
+                    self.accept_backoff.store(true, SeqCst);
                     warn!(
                         target: "net::acceptor::run_accept_loop",
                         "[P2P] Listener descriptor exhaustion: {e}; retrying accepts in {} ms",
@@ -443,6 +514,8 @@ impl Acceptor {
     /// Handles network errors. Panics if errors pass silently, otherwise broadcasts it
     /// to all channel publishers.
     async fn handle_stop(self: Arc<Self>, result: Result<()>) {
+        self.running.store(false, SeqCst);
+        self.accept_backoff.store(false, SeqCst);
         match result {
             Ok(()) => panic!("Acceptor task should never complete without error status"),
             Err(err) => self.channel_publisher.notify(Err(err)).await,
