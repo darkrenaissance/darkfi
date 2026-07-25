@@ -48,7 +48,7 @@ use super::{
     tls::{
         generate_certificate, ClientCertificateVerifier, ServerCertificateVerifier, TLS_DNS_NAME,
     },
-    PtListener, PtStream,
+    PtListener, PtNegotiation, PtStream,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -379,7 +379,7 @@ pub struct QuicListenerIntern {
 
 #[async_trait]
 impl PtListener for QuicListenerIntern {
-    async fn next(&self) -> io::Result<(Box<dyn PtStream>, Url)> {
+    async fn next(&self) -> io::Result<PtNegotiation> {
         // Wait for an incoming connection
         let incoming =
             self.endpoint.accept().await.ok_or_else(|| {
@@ -388,19 +388,21 @@ impl PtListener for QuicListenerIntern {
 
         let peer_addr = incoming.remote_address();
 
-        let connection =
-            incoming.await.map_err(|e| io::Error::other(format!("QUIC accept error: {e}")))?;
+        Ok(Box::pin(async move {
+            let connection =
+                incoming.await.map_err(|e| io::Error::other(format!("QUIC accept error: {e}")))?;
 
-        // Accept a bidirectional stream from the client
-        let (send, recv) = connection
-            .accept_bi()
-            .await
-            .map_err(|e| io::Error::other(format!("QUIC stream accept error: {e}")))?;
+            // Accept a bidirectional stream from the client
+            let (send, recv) = connection
+                .accept_bi()
+                .await
+                .map_err(|e| io::Error::other(format!("QUIC stream accept error: {e}")))?;
 
-        let url = Url::parse(&format!("quic://{peer_addr}")).map_err(|e| {
-            io::Error::new(io::ErrorKind::InvalidData, format!("Invalid peer address: {e}"))
-        })?;
+            let url = Url::parse(&format!("quic://{peer_addr}")).map_err(|e| {
+                io::Error::new(io::ErrorKind::InvalidData, format!("Invalid peer address: {e}"))
+            })?;
 
-        Ok((Box::new(QuicStream::new(send, recv)), url))
+            Ok((Box::new(QuicStream::new(send, recv)) as Box<dyn PtStream>, url))
+        }))
     }
 }

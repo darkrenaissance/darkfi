@@ -151,7 +151,12 @@ async fn rpc_serve(
     ex: Arc<Executor<'_>>,
 ) -> Result<()> {
     loop {
-        match listener.next().await {
+        let connection = match listener.next().await {
+            Ok(negotiation) => negotiation.await,
+            Err(err) => Err(err),
+        };
+
+        match connection {
             Ok((stream, url)) => {
                 info!(target: "evgrd", "Accepted connection from {url}");
                 let daemon = daemon.clone();

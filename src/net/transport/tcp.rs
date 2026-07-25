@@ -33,7 +33,7 @@ use socket2::{Domain, Socket, TcpKeepalive, Type};
 use tracing::debug;
 use url::Url;
 
-use super::{PtListener, PtStream};
+use super::{PtListener, PtNegotiation, PtStream};
 
 trait SocketExt {
     fn enable_reuse_port(&self) -> io::Result<()>;
@@ -192,7 +192,7 @@ impl TcpListener {
 
 #[async_trait]
 impl PtListener for SmolTcpListener {
-    async fn next(&self) -> io::Result<(Box<dyn PtStream>, Url)> {
+    async fn next(&self) -> io::Result<PtNegotiation> {
         let (stream, peer_addr) = match self.accept().await {
             Ok((s, a)) => (s, a),
             Err(e) => return Err(e),
@@ -207,20 +207,15 @@ impl PtListener for SmolTcpListener {
                 ))
             }
         };
-        Ok((Box::new(stream), url))
+        Ok(Box::pin(async move { Ok((Box::new(stream) as Box<dyn PtStream>, url)) }))
     }
 }
 
 #[async_trait]
 impl PtListener for (TlsAcceptor, SmolTcpListener) {
-    async fn next(&self) -> io::Result<(Box<dyn PtStream>, Url)> {
+    async fn next(&self) -> io::Result<PtNegotiation> {
         let (stream, peer_addr) = match self.1.accept().await {
             Ok((s, a)) => (s, a),
-            Err(e) => return Err(e),
-        };
-
-        let stream = match self.0.accept(stream).await {
-            Ok(v) => v,
             Err(e) => return Err(e),
         };
 
@@ -234,6 +229,11 @@ impl PtListener for (TlsAcceptor, SmolTcpListener) {
             }
         };
 
-        Ok((Box::new(TlsStream::Server(stream)), url))
+        let acceptor = self.0.clone();
+        Ok(Box::pin(async move {
+            let stream = acceptor.accept(stream).await?;
+
+            Ok((Box::new(TlsStream::Server(stream)) as Box<dyn PtStream>, url))
+        }))
     }
 }

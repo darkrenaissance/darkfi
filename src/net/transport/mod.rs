@@ -16,7 +16,7 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::{io, time::Duration};
+use std::{future::Future, io, pin::Pin, time::Duration};
 
 use async_trait::async_trait;
 use smol::io::{AsyncRead, AsyncWrite};
@@ -538,8 +538,16 @@ impl PtStream for smol::net::unix::UnixStream {}
 #[cfg(feature = "p2p-quic")]
 impl PtStream for quic::QuicStream {}
 
-/// Wrapper trait for async listeners
+/// A transport negotiation produced after accepting an underlying connection.
+pub type PtNegotiation =
+    Pin<Box<dyn Future<Output = io::Result<(Box<dyn PtStream>, Url)>> + Send + 'static>>;
+
+/// Wrapper trait for async listeners.
+///
+/// `next()` accepts the underlying transport connection and returns the
+/// remaining negotiation separately so callers can continue accepting while
+/// TLS, Tor, or QUIC setup is in progress.
 #[async_trait]
 pub trait PtListener: Send + Unpin {
-    async fn next(&self) -> io::Result<(Box<dyn PtStream>, Url)>;
+    async fn next(&self) -> io::Result<PtNegotiation>;
 }

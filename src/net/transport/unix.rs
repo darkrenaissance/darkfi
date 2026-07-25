@@ -29,7 +29,7 @@ use smol::{
 use tracing::debug;
 use url::Url;
 
-use super::{PtListener, PtStream};
+use super::{PtListener, PtNegotiation, PtStream};
 
 /// Unix Dialer implementation
 #[derive(Debug, Clone)]
@@ -73,7 +73,7 @@ impl UnixListener {
 
 #[async_trait]
 impl PtListener for SmolUnixListener {
-    async fn next(&self) -> io::Result<(Box<dyn PtStream>, Url)> {
+    async fn next(&self) -> io::Result<PtNegotiation> {
         let (stream, _peer_addr) = match self.accept().await {
             Ok((s, a)) => (s, a),
             Err(e) => return Err(e),
@@ -83,6 +83,6 @@ impl PtListener for SmolUnixListener {
         let addr = addr.as_pathname().unwrap().to_str().unwrap();
         let url = Url::parse(&format!("unix://{addr}")).unwrap();
 
-        Ok((Box::new(stream), url))
+        Ok(Box::pin(async move { Ok((Box::new(stream) as Box<dyn PtStream>, url)) }))
     }
 }

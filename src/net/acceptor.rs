@@ -22,8 +22,15 @@ use std::{
         atomic::{AtomicUsize, Ordering::SeqCst},
         Arc,
     },
+    time::Duration,
 };
 
+use futures::{
+    future::{select, Either},
+    pin_mut,
+    stream::{FuturesUnordered, StreamExt},
+};
+use smol::Timer;
 use url::Url;
 
 #[cfg(feature = "upnp-igd")]
@@ -33,7 +40,7 @@ use super::{
     channel::{Channel, ChannelPtr},
     hosts::HostColor,
     session::SessionWeakPtr,
-    transport::{Listener, PtListener},
+    transport::{Listener, PtListener, PtNegotiation},
 };
 
 #[cfg(feature = "upnp-igd")]
@@ -50,6 +57,18 @@ use crate::{
 
 /// Atomic pointer to Acceptor
 pub type AcceptorPtr = Arc<Acceptor>;
+
+fn with_handshake_timeout(negotiation: PtNegotiation, timeout: Duration) -> PtNegotiation {
+    Box::pin(async move {
+        let timer = Timer::after(timeout);
+        pin_mut!(timer);
+
+        match select(negotiation, timer).await {
+            Either::Left((result, _)) => result,
+            Either::Right((_, _)) => Err(ErrorKind::TimedOut.into()),
+        }
+    })
+}
 
 /// Releases an inbound connection slot when its tracking task exits.
 struct InboundSlotGuard {
@@ -96,8 +115,12 @@ impl Acceptor {
 
     /// Start accepting inbound socket connections
     pub async fn start(self: Arc<Self>, endpoint: Url, ex: ExecutorPtr) -> Result<()> {
-        let datastore =
-            self.session.upgrade().unwrap().p2p().settings().read().await.p2p_datastore.clone();
+        let settings = self.session.upgrade().unwrap().p2p().settings();
+        let settings = settings.read().await;
+        let datastore = settings.p2p_datastore.clone();
+        let handshake_timeout =
+            Duration::from_secs(settings.channel_handshake_timeout(endpoint.scheme()));
+        drop(settings);
 
         // Initialize listener
         let listener = Listener::new(endpoint.clone(), datastore, true).await?;
@@ -128,7 +151,7 @@ impl Acceptor {
             self.port_mappings.lock().await.extend(mappings);
         }
 
-        self.accept(ptlistener, ex);
+        self.accept(ptlistener, handshake_timeout, ex);
         Ok(())
     }
 
@@ -158,10 +181,15 @@ impl Acceptor {
     }
 
     /// Run the accept loop in a new thread and error if a connection problem occurs
-    fn accept(self: Arc<Self>, listener: Box<dyn PtListener>, ex: ExecutorPtr) {
+    fn accept(
+        self: Arc<Self>,
+        listener: Box<dyn PtListener>,
+        handshake_timeout: Duration,
+        ex: ExecutorPtr,
+    ) {
         let self_ = self.clone();
         self.task.clone().start(
-            self.run_accept_loop(listener, ex.clone()),
+            self.run_accept_loop(listener, handshake_timeout, ex.clone()),
             |result| self_.handle_stop(result),
             Error::NetworkServiceStopped,
             ex,
@@ -172,31 +200,75 @@ impl Acceptor {
     async fn run_accept_loop(
         self: Arc<Self>,
         listener: Box<dyn PtListener>,
+        handshake_timeout: Duration,
         ex: ExecutorPtr,
     ) -> Result<()> {
         // CondVar used to notify the loop to recheck if new connections can
         // be accepted by the listener.
         let cv = Arc::new(CondVar::new());
         let hosts = self.session.upgrade().unwrap().p2p().hosts();
+        let mut negotiations = FuturesUnordered::<PtNegotiation>::new();
+        let mut accepting = None;
 
         loop {
-            // Refuse new connections if we're up to the connection limit
+            // Reserve capacity for established channels, transport negotiations,
+            // and the raw accept currently in progress.
             let limit =
                 self.session.upgrade().unwrap().p2p().settings().read().await.inbound_connections;
+            let reserved = self.conn_count.load(SeqCst) +
+                negotiations.len() +
+                usize::from(accepting.is_some());
 
-            if self.clone().conn_count.load(SeqCst) >= limit {
+            if reserved < limit && accepting.is_none() {
+                accepting = Some(listener.next());
+            }
+
+            // Keep the raw accept alive when a transport negotiation finishes
+            // first. This allows the listener to continue accepting while TLS,
+            // Tor, or QUIC setup is in progress without exceeding the inbound
+            // connection limit.
+            let connection = if let Some(accept) = accepting.take() {
+                if negotiations.is_empty() {
+                    match accept.await {
+                        Ok(negotiation) => {
+                            negotiations
+                                .push(with_handshake_timeout(negotiation, handshake_timeout));
+                            continue
+                        }
+                        Err(err) => Err(err),
+                    }
+                } else {
+                    let negotiation = negotiations.next();
+                    pin_mut!(negotiation);
+
+                    match select(accept, negotiation).await {
+                        Either::Left((Ok(negotiation), _)) => {
+                            negotiations
+                                .push(with_handshake_timeout(negotiation, handshake_timeout));
+                            continue
+                        }
+                        Either::Left((Err(err), _)) => Err(err),
+                        Either::Right((Some(result), accept)) => {
+                            accepting = Some(accept);
+                            result
+                        }
+                        Either::Right((None, accept)) => {
+                            accepting = Some(accept);
+                            continue
+                        }
+                    }
+                }
+            } else if let Some(result) = negotiations.next().await {
+                result
+            } else {
                 // This will get notified every time an inbound channel is stopped.
-                // These channels are the channels spawned below on listener.next().is_ok().
-                // After the notification, we reset the condvar and retry this loop to see
-                // if we can accept more connections, and if not - we'll be back here.
                 verbose!(target: "net::acceptor::run_accept_loop", "Reached incoming conn limit, waiting...");
                 cv.wait().await;
                 cv.reset();
                 continue
-            }
+            };
 
-            // Now we wait for a new connection.
-            match listener.next().await {
+            match connection {
                 Ok((stream, url)) => {
                     // Check if we reject this peer
                     if hosts.container.contains(HostColor::Black, &url) ||
@@ -262,6 +334,14 @@ impl Acceptor {
                         continue
                     }
                 },
+
+                Err(e) if e.kind() == ErrorKind::TimedOut => {
+                    verbose!(
+                        target: "net::acceptor::run_accept_loop",
+                        "[P2P] Transport handshake timed out"
+                    );
+                    continue
+                }
 
                 // In case a TLS handshake fails, we'll get this:
                 Err(e) if e.kind() == ErrorKind::UnexpectedEof => continue,

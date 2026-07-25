@@ -48,7 +48,7 @@ use tor_rtcompat::PreferredRuntime;
 use tracing::debug;
 use url::Url;
 
-use super::{PtListener, PtStream};
+use super::{PtListener, PtNegotiation, PtStream};
 use crate::util::{encoding::base32, logger::verbose, path::expand_path};
 
 /// A static for `TorClient` reusability
@@ -274,7 +274,7 @@ unsafe impl Sync for TorListenerIntern {}
 
 #[async_trait]
 impl PtListener for TorListenerIntern {
-    async fn next(&self) -> io::Result<(Box<dyn PtStream>, Url)> {
+    async fn next(&self) -> io::Result<PtNegotiation> {
         let mut rendreq_stream = self.rendreq_stream.lock().await;
 
         let Some(rendrequest) = rendreq_stream.next().await else {
@@ -283,42 +283,53 @@ impl PtListener for TorListenerIntern {
 
         drop(rendreq_stream);
 
-        let mut streamreq_stream = match rendrequest.accept().await {
-            Ok(v) => v,
-            Err(e) => {
-                verbose!(
-                    target: "net::tor::PtListener::next",
-                    "[P2P] Failed accepting Tor RendRequest: {e}"
-                );
-                return Err(io::Error::new(ErrorKind::ConnectionAborted, "Connection Aborted"));
-            }
-        };
-
-        let Some(streamrequest) = streamreq_stream.next().await else {
-            return Err(io::Error::new(ErrorKind::ConnectionAborted, "Connection Aborted"));
-        };
-
-        // Validate port correctness
-        match streamrequest.request() {
-            IncomingStreamRequest::Begin(begin) => {
-                if begin.port() != self.port {
+        let port = self.port;
+        Ok(Box::pin(async move {
+            let mut streamreq_stream = match rendrequest.accept().await {
+                Ok(v) => v,
+                Err(e) => {
+                    verbose!(
+                        target: "net::tor::PtListener::next",
+                        "[P2P] Failed accepting Tor RendRequest: {e}"
+                    );
                     return Err(io::Error::new(ErrorKind::ConnectionAborted, "Connection Aborted"));
                 }
-            }
-            &_ => return Err(io::Error::new(ErrorKind::ConnectionAborted, "Connection Aborted")),
-        }
+            };
 
-        let stream = match streamrequest.accept(Connected::new_empty()).await {
-            Ok(v) => v,
-            Err(e) => {
-                verbose!(
-                    target: "net::tor::PtListener::next",
-                    "[P2P] Failed accepting Tor StreamRequest: {e}"
-                );
-                return Err(io::Error::other("Internal Tor error"));
-            }
-        };
+            let Some(streamrequest) = streamreq_stream.next().await else {
+                return Err(io::Error::new(ErrorKind::ConnectionAborted, "Connection Aborted"));
+            };
 
-        Ok((Box::new(stream), Url::parse(&format!("tor://127.0.0.1:{}", self.port)).unwrap()))
+            // Validate port correctness
+            match streamrequest.request() {
+                IncomingStreamRequest::Begin(begin) => {
+                    if begin.port() != port {
+                        return Err(io::Error::new(
+                            ErrorKind::ConnectionAborted,
+                            "Connection Aborted",
+                        ));
+                    }
+                }
+                &_ => {
+                    return Err(io::Error::new(ErrorKind::ConnectionAborted, "Connection Aborted"))
+                }
+            }
+
+            let stream = match streamrequest.accept(Connected::new_empty()).await {
+                Ok(v) => v,
+                Err(e) => {
+                    verbose!(
+                        target: "net::tor::PtListener::next",
+                        "[P2P] Failed accepting Tor StreamRequest: {e}"
+                    );
+                    return Err(io::Error::other("Internal Tor error"));
+                }
+            };
+
+            Ok((
+                Box::new(stream) as Box<dyn PtStream>,
+                Url::parse(&format!("tor://127.0.0.1:{port}")).unwrap(),
+            ))
+        }))
     }
 }

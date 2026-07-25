@@ -59,7 +59,7 @@ fn tcp_transport() {
             Listener::new(url.clone(), None, true).await.unwrap().listen().await.unwrap();
         executor
             .spawn(async move {
-                let (stream, _) = listener.next().await.unwrap();
+                let (stream, _) = listener.next().await.unwrap().await.unwrap();
                 let (mut reader, mut writer) = smol::io::split(stream);
                 io::copy(&mut reader, &mut writer).await.unwrap();
             })
@@ -121,7 +121,7 @@ fn tcp_tls_transport() {
             Listener::new(url.clone(), None, true).await.unwrap().listen().await.unwrap();
         executor
             .spawn(async move {
-                let (stream, _) = listener.next().await.unwrap();
+                let (stream, _) = listener.next().await.unwrap().await.unwrap();
                 let (mut reader, mut writer) = smol::io::split(stream);
                 io::copy(&mut reader, &mut writer).await.unwrap();
             })
@@ -154,7 +154,7 @@ fn quic_transport() {
 
         executor
             .spawn(async move {
-                let (stream, _) = listener.next().await.unwrap();
+                let (stream, _) = listener.next().await.unwrap().await.unwrap();
                 let (mut reader, mut writer) = smol::io::split(stream);
                 io::copy(&mut reader, &mut writer).await.unwrap();
             })
@@ -188,7 +188,7 @@ fn unix_transport() {
             Listener::new(url.clone(), None, true).await.unwrap().listen().await.unwrap();
         executor
             .spawn(async move {
-                let (stream, _) = listener.next().await.unwrap();
+                let (stream, _) = listener.next().await.unwrap().await.unwrap();
                 let (mut reader, mut writer) = smol::io::split(stream);
                 io::copy(&mut reader, &mut writer).await.unwrap();
             })

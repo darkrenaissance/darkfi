@@ -422,7 +422,12 @@ async fn run_accept_loop<'a, T: 'a>(
     ex: Arc<smol::Executor<'a>>,
 ) -> Result<()> {
     loop {
-        match listener.next().await {
+        let connection = match listener.next().await {
+            Ok(negotiation) => negotiation.await,
+            Err(err) => Err(err),
+        };
+
+        match connection {
             Ok((stream, url)) => {
                 let rh_ = rh.clone();
                 verbose!(target: "rpc::server", "[RPC] Server accepted conn from {url}");

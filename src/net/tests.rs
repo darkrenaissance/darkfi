@@ -39,6 +39,7 @@ use crate::{
         metering::{MeteringConfiguration, DEFAULT_METERING_CONFIGURATION},
         p2p::MAX_CONCURRENT_BROADCASTS,
         settings::NetworkProfile,
+        transport::Dialer,
         P2p, Settings,
     },
     system::{sleep, timeout::timeout},
@@ -662,6 +663,84 @@ async fn p2p_inbound_slots_survive_rapid_disconnects_real(ex: Arc<Executor<'stat
         .expect("failed reconnecting to inbound listener");
     drop(stream);
 
+    p2p.stop().await;
+}
+
+#[test]
+fn p2p_tls_listener_accepts_while_handshake_stalled() {
+    test_body!(p2p_tls_listener_accepts_while_handshake_stalled_real, 2);
+}
+
+async fn p2p_tls_listener_accepts_while_handshake_stalled_real(ex: Arc<Executor<'static>>) {
+    let port = get_random_available_port();
+    let addr = format!("127.0.0.1:{port}");
+    let listen_url = Url::parse(&format!("tcp+tls://{addr}")).unwrap();
+    let settings = Settings {
+        localnet: true,
+        inbound_addrs: vec![listen_url.clone()],
+        inbound_connections: 2,
+        outbound_connections: 0,
+        active_profiles: vec!["tcp+tls".to_string()],
+        ..Default::default()
+    };
+
+    let p2p = P2p::new(settings, ex).await.unwrap();
+    p2p.clone().start().await.unwrap();
+
+    // Occupy the first accepted socket without sending a TLS ClientHello.
+    let stalled = TcpStream::connect(&addr).await.unwrap();
+    Timer::after(Duration::from_millis(100)).await;
+
+    // A second client must complete TLS before the stalled handshake times out.
+    let dialer = Dialer::new(listen_url, None, None, true).await.unwrap();
+    let stream = timeout(Duration::from_secs(2), dialer.dial(Some(Duration::from_secs(1))))
+        .await
+        .expect("TLS listener blocked behind a stalled handshake")
+        .expect("second TLS handshake failed");
+
+    drop(stream);
+    drop(stalled);
+    p2p.stop().await;
+}
+
+#[test]
+fn p2p_tls_listener_expires_stalled_handshake() {
+    test_body!(p2p_tls_listener_expires_stalled_handshake_real, 2);
+}
+
+async fn p2p_tls_listener_expires_stalled_handshake_real(ex: Arc<Executor<'static>>) {
+    let port = get_random_available_port();
+    let addr = format!("127.0.0.1:{port}");
+    let listen_url = Url::parse(&format!("tcp+tls://{addr}")).unwrap();
+    let mut profiles = HashMap::new();
+    profiles.insert(
+        "tcp+tls".to_string(),
+        NetworkProfile { channel_handshake_timeout: 1, ..Default::default() },
+    );
+    let settings = Settings {
+        localnet: true,
+        inbound_addrs: vec![listen_url.clone()],
+        inbound_connections: 1,
+        outbound_connections: 0,
+        active_profiles: vec!["tcp+tls".to_string()],
+        profiles,
+        ..Default::default()
+    };
+
+    let p2p = P2p::new(settings, ex).await.unwrap();
+    p2p.clone().start().await.unwrap();
+
+    let stalled = TcpStream::connect(&addr).await.unwrap();
+    Timer::after(Duration::from_millis(1200)).await;
+
+    let dialer = Dialer::new(listen_url, None, None, true).await.unwrap();
+    let stream = timeout(Duration::from_secs(2), dialer.dial(Some(Duration::from_secs(1))))
+        .await
+        .expect("TLS listener did not recover after the handshake deadline")
+        .expect("TLS handshake after deadline failed");
+
+    drop(stream);
+    drop(stalled);
     p2p.stop().await;
 }
 
