@@ -23,7 +23,7 @@ use std::{
         atomic::{AtomicBool, Ordering::SeqCst},
         Arc,
     },
-    time::UNIX_EPOCH,
+    time::{Duration, UNIX_EPOCH},
 };
 
 use darkfi_serial::{
@@ -54,13 +54,18 @@ use super::{
 };
 use crate::{
     net::BanPolicy,
-    system::{msleep, Publisher, PublisherPtr, StoppableTask, StoppableTaskPtr, Subscription},
+    system::{
+        msleep, timeout::timeout, Publisher, PublisherPtr, StoppableTask, StoppableTaskPtr,
+        Subscription,
+    },
     util::{logger::verbose, time::NanoTimestamp},
     Error, Result,
 };
 
 /// Atomic pointer to async channel
 pub type ChannelPtr = Arc<Channel>;
+
+const TRANSPORT_CLOSE_TIMEOUT: Duration = Duration::from_secs(5);
 
 /// Channel debug info
 #[derive(Clone, Debug, SerialEncodable, SerialDecodable)]
@@ -219,6 +224,34 @@ impl Channel {
     /// cancellation of an in-progress channel setup safe.
     pub(crate) fn stop_nowait(&self) {
         self.receive_task.stop_nowait();
+    }
+
+    /// Gracefully close the underlying transport without allowing an
+    /// unresponsive peer to stall channel shutdown indefinitely.
+    async fn close_transport(&self) {
+        let close = async {
+            let writer = &mut *self.writer.lock().await;
+            writer.close().await
+        };
+
+        match timeout(TRANSPORT_CLOSE_TIMEOUT, close).await {
+            Ok(Ok(())) => {}
+            Ok(Err(err)) if err.kind() == io::ErrorKind::NotConnected => {}
+            Ok(Err(err)) => {
+                verbose!(
+                    target: "net::channel::close_transport",
+                    "[P2P] Failed closing channel transport {}: {err}",
+                    self.display_address(),
+                );
+            }
+            Err(_) => {
+                verbose!(
+                    target: "net::channel::close_transport",
+                    "[P2P] Timed out closing channel transport {}",
+                    self.display_address(),
+                );
+            }
+        }
     }
 
     #[cfg(test)]
@@ -454,6 +487,8 @@ impl Channel {
         for task in cleanup_tasks {
             task.await;
         }
+
+        self.close_transport().await;
 
         self.p2p().untrack_channel(self.info.id);
 

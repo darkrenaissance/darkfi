@@ -768,14 +768,24 @@ fn p2p_shutdown_drains_channels_across_restarts() {
 async fn p2p_shutdown_drains_channels_across_restarts_real(ex: Arc<Executor<'static>>) {
     const LIFECYCLE_COUNT: usize = 3;
 
+    for scheme in ["tcp", "tcp+tls"] {
+        p2p_shutdown_drains_transport_across_restarts(scheme, ex.clone(), LIFECYCLE_COUNT).await;
+    }
+}
+
+async fn p2p_shutdown_drains_transport_across_restarts(
+    scheme: &str,
+    ex: Arc<Executor<'static>>,
+    lifecycle_count: usize,
+) {
     let port = get_random_available_port();
-    let listen_url = Url::parse(&format!("tcp://127.0.0.1:{port}")).unwrap();
+    let listen_url = Url::parse(&format!("{scheme}://127.0.0.1:{port}")).unwrap();
     let server_settings = Settings {
         localnet: true,
         inbound_addrs: vec![listen_url.clone()],
         inbound_connections: 8,
         outbound_connections: 0,
-        active_profiles: vec!["tcp".to_string()],
+        active_profiles: vec![scheme.to_string()],
         ..Default::default()
     };
     let client_settings = Settings {
@@ -783,14 +793,14 @@ async fn p2p_shutdown_drains_channels_across_restarts_real(ex: Arc<Executor<'sta
         peers: vec![listen_url],
         inbound_connections: 0,
         outbound_connections: 0,
-        active_profiles: vec!["tcp".to_string()],
+        active_profiles: vec![scheme.to_string()],
         ..Default::default()
     };
 
     let server = P2p::new(server_settings, ex.clone()).await.unwrap();
     let client = P2p::new(client_settings, ex).await.unwrap();
 
-    for _ in 0..LIFECYCLE_COUNT {
+    for _ in 0..lifecycle_count {
         server.clone().start().await.unwrap();
         client.clone().start().await.unwrap();
 
@@ -802,20 +812,28 @@ async fn p2p_shutdown_drains_channels_across_restarts_real(ex: Arc<Executor<'sta
         .await
         .expect("manual connection was not established");
 
-        let channels = server
-            .hosts()
-            .channels()
-            .into_iter()
-            .chain(client.hosts().channels())
-            .collect::<Vec<_>>();
+        let server_channels = server.hosts().channels();
+        let client_channels = client.hosts().channels();
 
         client.stop().await;
+
+        // Stopping the client must close its transport even though client_channels
+        // keeps the Channel object alive. The server should observe EOF and stop
+        // its corresponding channel without waiting for its own P2P shutdown.
+        timeout(Duration::from_secs(5), async {
+            while server_channels.iter().any(|channel| !channel.is_stopped()) {
+                Timer::after(Duration::from_millis(10)).await;
+            }
+        })
+        .await
+        .expect("stopped client retained an open channel transport");
+
         server.stop().await;
 
         assert!(client.hosts().channels().is_empty());
         assert!(server.hosts().channels().is_empty());
         assert_eq!(server.session_inbound().connection_count().await, 0);
-        for channel in channels {
+        for channel in server_channels.into_iter().chain(client_channels) {
             assert!(channel.is_stopped());
             assert_eq!(channel.cleanup_task_count().await, 0);
         }
