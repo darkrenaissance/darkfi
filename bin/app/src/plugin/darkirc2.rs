@@ -452,7 +452,6 @@ impl DarkIrc2 {
                 w!("Skipping encrypted channel: {channel}");
                 continue
             }
-            channel.remove(0);
 
             // Workaround for the chatview hack. This nick is off limits!
             let mut nick = privmsg.nick;

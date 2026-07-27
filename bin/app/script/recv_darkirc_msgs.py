@@ -35,6 +35,6 @@ while True:
     msg = serial.decode_str(cur)
 
     dt = datetime.fromtimestamp(timestamp / 1000.0)
-    print(f"[{dt.strftime('%Y-%m-%d %H:%M:%S')}] #{channel} <{nick}> {msg}")
+    print(f"[{dt.strftime('%Y-%m-%d %H:%M:%S')}] {channel} <{nick}> {msg}")
     print(f"  Message ID: {msg_id}")
     print("-" * 80)

@@ -56,7 +56,7 @@ static MUTED_TARGETS: &[&'static str] = &[
     "event_graph::protocol",
 ];
 #[cfg(not(target_os = "android"))]
-static ALLOW_TRACE: &[&'static str] = &["ui", "app", "gfx", "plugin", "app"];
+static ALLOW_TRACE: &[&'static str] = &["ui", "app", "gfx", "plugin", "app", "main"];
 
 #[cfg(all(target_os = "android", feature = "enable-filelog"))]
 fn logfile_path() -> PathBuf {
