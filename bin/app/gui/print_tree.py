@@ -84,17 +84,17 @@ def print_node_info(parent_path, depth, indent):
         if prop.depends:
             print(f"{ws}    depends: {prop.depends}")
 
-    #for sig in api.get_signals(parent_id):
-    #    print(f"{ws}~{sig}")
-    #    for slot_id, slot in api.get_slots(parent_id, sig):
-    #        print(f"{ws}- '{slot}' ({slot_id})")
+    for sig in api.get_signals(parent_path):
+        print(f"{ws}~{sig}")
+        for slot_id, slot in api.get_slots(parent_path, sig):
+            print(f"{ws}- '{slot}' ({slot_id})")
 
-    #for method_name in api.get_methods(parent_id):
-    #    args, results = api.get_method(parent_id, method_name)
+    for method_name in api.get_methods(parent_path):
+        args, results = api.get_method(parent_path, method_name)
 
-    #    args = [f"{name}: " + PropertyType.to_str(typ) for (name, _, typ) in args]
-    #    results = [f"{name}: " + PropertyType.to_str(typ) for (name, _, typ) in results]
+        args = [f"{name}: " + PropertyType.to_str(typ) for (name, _, typ) in args]
+        results = [f"{name}: " + PropertyType.to_str(typ) for (name, _, typ) in results]
 
-    #    method_str = f"{method_name}(" + ", ".join(args) + ") -> (" + ", ".join(results) + ")"
-    #    print(f"{ws}{method_str}")
+        method_str = f"{method_name}(" + ", ".join(args) + ") -> (" + ", ".join(results) + ")"
+        print(f"{ws}{method_str}")
 

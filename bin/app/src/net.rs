@@ -455,18 +455,14 @@ impl ZeroMQAdapter {
                 */
             }
             Command::GetSignals => {
-                /*
-                let node_id = SceneNodeId::decode(&mut cur).unwrap();
-                debug!(target: "req", "{:?}({})", cmd, node_id);
+                let node_path: ScenePath = String::decode(&mut cur).unwrap().parse()?;
+                debug!(target: "req", "{cmd:?}({node_path})");
 
-                let node = scene_graph.get_node_mut(node_id).ok_or(Error::NodeNotFound)?;
+                let node = self.sg_root.lookup_node(node_path).ok_or(Error::NodeNotFound)?;
 
-                let mut sigs = vec![];
-                for sig in &node.sigs {
-                    sigs.push(sig.name.clone());
-                }
-                sigs.encode(&mut reply).unwrap();
-                */
+                let sigs = node.sigs.read().unwrap();
+                let sig_names: Vec<_> = sigs.iter().map(|sig| sig.name.clone()).collect();
+                sig_names.encode(&mut reply).unwrap();
             }
             Command::RegisterSlot => {
                 /*
@@ -528,44 +524,36 @@ impl ZeroMQAdapter {
                 */
             }
             Command::GetSlots => {
-                /*
-                let node_id = SceneNodeId::decode(&mut cur).unwrap();
+                let node_path: ScenePath = String::decode(&mut cur).unwrap().parse()?;
                 let sig_name = String::decode(&mut cur).unwrap();
-                debug!(target: "req", "{:?}({}, {})", cmd, node_id, sig_name);
+                debug!(target: "req", "{cmd:?}({node_path}, {sig_name})");
 
-                let node = scene_graph.get_node(node_id).ok_or(Error::NodeNotFound)?;
+                let node = self.sg_root.lookup_node(node_path).ok_or(Error::NodeNotFound)?;
                 let signal = node.get_signal(&sig_name).ok_or(Error::SignalNotFound)?;
 
-                let mut slots = vec![];
-                for (slot_id, slot) in signal.get_slots() {
-                    slots.push((slot.name.clone(), slot_id));
-                }
-                slots.encode(&mut reply).unwrap();
-                */
+                let slots = signal.get_slots();
+                let slot_names: Vec<_> =
+                    slots.iter().map(|(slot_id, slot)| (slot.name.clone(), *slot_id)).collect();
+                slot_names.encode(&mut reply).unwrap();
             }
             Command::GetMethods => {
-                /*
-                let node_id = SceneNodeId::decode(&mut cur).unwrap();
-                debug!(target: "req", "{:?}({})", cmd, node_id);
+                let node_path: ScenePath = String::decode(&mut cur).unwrap().parse()?;
+                debug!(target: "req", "{cmd:?}({node_path})");
 
-                let node = scene_graph.get_node(node_id).ok_or(Error::NodeNotFound)?;
+                let node = self.sg_root.lookup_node(node_path).ok_or(Error::NodeNotFound)?;
                 let method_names: Vec<_> = node.methods.iter().map(|m| m.name.clone()).collect();
-
                 method_names.encode(&mut reply).unwrap();
-                */
             }
             Command::GetMethod => {
-                /*
-                let node_id = SceneNodeId::decode(&mut cur).unwrap();
+                let node_path: ScenePath = String::decode(&mut cur).unwrap().parse()?;
                 let method_name = String::decode(&mut cur).unwrap();
-                debug!(target: "req", "{:?}({}, {})", cmd, node_id, method_name);
+                debug!(target: "req", "{:?}({}, {})", cmd, node_path, method_name);
 
-                let node = scene_graph.get_node(node_id).ok_or(Error::NodeNotFound)?;
+                let node = self.sg_root.lookup_node(node_path).ok_or(Error::NodeNotFound)?;
                 let method = node.get_method(&method_name).ok_or(Error::MethodNotFound)?;
 
                 method.args.encode(&mut reply).unwrap();
                 method.result.encode(&mut reply).unwrap();
-                */
             }
             Command::CallMethod => {
                 let node_path: ScenePath = String::decode(&mut cur).unwrap().parse()?;

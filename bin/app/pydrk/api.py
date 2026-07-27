@@ -638,9 +638,9 @@ class Api:
             expr.encode_expr(req, sexpr)
         self._make_request(Command.SET_PROPERTY_VALUE, req)
 
-    def get_signals(self, node_id):
+    def get_signals(self, node_path):
         req = bytearray()
-        serial.write_u32(req, node_id)
+        serial.encode_str(req, node_path)
         cur = self._make_request(Command.GET_SIGNALS, req)
         sigs_len = serial.decode_varint(cur)
         sigs = []
@@ -677,9 +677,9 @@ class Api:
             return None
         return serial.read_u32(cur)
 
-    def get_slots(self, node_id, sig_name):
+    def get_slots(self, node_path, sig_name):
         req = bytearray()
-        serial.write_u32(req, node_id)
+        serial.encode_str(req, node_path)
         serial.encode_str(req, sig_name)
         cur = self._make_request(Command.GET_SLOTS, req)
 
@@ -691,9 +691,9 @@ class Api:
         slots = serial.decode_arr(cur, read_slot)
         return slots
 
-    def get_methods(self, node_id):
+    def get_methods(self, node_path):
         req = bytearray()
-        serial.write_u32(req, node_id)
+        serial.encode_str(req, node_path)
         cur = self._make_request(Command.GET_METHODS, req)
 
         def read_method(cur):
@@ -703,9 +703,9 @@ class Api:
         methods = serial.decode_arr(cur, read_method)
         return methods
 
-    def get_method(self, node_id, method_name):
+    def get_method(self, node_path, method_name):
         req = bytearray()
-        serial.write_u32(req, node_id)
+        serial.encode_str(req, node_path)
         serial.encode_str(req, method_name)
         cur = self._make_request(Command.GET_METHOD, req)
 

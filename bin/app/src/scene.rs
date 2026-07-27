@@ -533,6 +533,13 @@ pub struct Signal {
     slots: SyncRwLock<HashMap<SlotId, Slot>>,
 }
 
+impl Signal {
+    pub fn get_slots(&self) -> Vec<(SlotId, Slot)> {
+        let slots = self.slots.read().unwrap();
+        slots.iter().map(|(id, slot)| (*id, slot.clone())).collect()
+    }
+}
+
 #[derive(Clone, Debug)]
 pub struct MethodCall {
     pub data: CallData,
