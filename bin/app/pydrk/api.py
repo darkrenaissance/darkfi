@@ -648,9 +648,9 @@ class Api:
             sigs.append(serial.decode_str(cur))
         return sigs
 
-    def register_slot(self, node_id, sig_name, slot_name, user_data):
+    def register_slot(self, node_path, sig_name, slot_name, user_data):
         req = bytearray()
-        serial.write_u32(req, node_id)
+        serial.encode_str(req, node_path)
         serial.encode_str(req, sig_name)
         serial.encode_str(req, slot_name)
         serial.encode_varint(req, len(user_data))

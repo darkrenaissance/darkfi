@@ -26,7 +26,7 @@ use crate::{
     expr::SExprCode,
     gfx::{gfxtag, Renderer},
     prop::{PropertyType, Role},
-    scene::{SceneNodeId, SceneNodePtr, ScenePath},
+    scene::{SceneNodeId, SceneNodePtr, ScenePath, Slot},
     ExecutorPtr,
 };
 
@@ -79,10 +79,10 @@ pub struct ZeroMQAdapter {
     */
     sg_root: SceneNodePtr,
     renderer: Renderer,
-    _ex: ExecutorPtr,
+    ex: ExecutorPtr,
 
     zmq_rep: Mutex<zeromq::RepSocket>,
-    _zmq_pub: Mutex<zeromq::PubSocket>,
+    zmq_pub: Mutex<zeromq::PubSocket>,
 }
 
 impl ZeroMQAdapter {
@@ -104,9 +104,9 @@ impl ZeroMQAdapter {
         Arc::new(Self {
             sg_root,
             renderer,
-            _ex: ex,
+            ex,
             zmq_rep: Mutex::new(zmq_rep),
-            _zmq_pub: Mutex::new(zmq_pub),
+            zmq_pub: Mutex::new(zmq_pub),
         })
     }
 
@@ -465,14 +465,13 @@ impl ZeroMQAdapter {
                 sig_names.encode(&mut reply).unwrap();
             }
             Command::RegisterSlot => {
-                /*
-                let node_id = SceneNodeId::decode(&mut cur).unwrap();
+                let node_path: ScenePath = String::decode(&mut cur).unwrap().parse()?;
                 let sig_name = String::decode(&mut cur).unwrap();
                 let slot_name = String::decode(&mut cur).unwrap();
                 let user_data = Vec::<u8>::decode(&mut cur).unwrap();
-                debug!(target: "req", "{:?}({}, {}, {}, {:?})", cmd, node_id, sig_name, slot_name, user_data);
+                debug!(target: "req", "{cmd:?}({node_path}, {sig_name}, {slot_name}, {user_data:?})");
 
-                let node = scene_graph.get_node_mut(node_id).ok_or(Error::NodeNotFound)?;
+                let node = self.sg_root.lookup_node(node_path).ok_or(Error::NodeNotFound)?;
 
                 let (sendr, recvr) = async_channel::unbounded();
                 let slot = Slot { name: slot_name, notify: sendr };
@@ -497,7 +496,6 @@ impl ZeroMQAdapter {
 
                 let slot_id = node.register(&sig_name, slot)?;
                 slot_id.encode(&mut reply).unwrap();
-                */
             }
             Command::UnregisterSlot => {
                 /*

@@ -58,8 +58,6 @@ use prune::PruneMethodHeap;
 mod linalg;
 pub use linalg::{Dimension, Point, Rectangle, Segment, Vector};
 mod shader;
-mod trax;
-use trax::get_trax;
 
 use crate::{
     prop::{BatchGuardId, PropertyAtomicGuard},
@@ -71,7 +69,6 @@ use crate::{
 // This is very noisy so suppress output by default
 const DEBUG_RENDER: bool = false;
 const DEBUG_GFXAPI: bool = false;
-const DEBUG_TRAX: bool = false;
 
 #[macro_export]
 macro_rules! gfxtag {
@@ -363,9 +360,6 @@ impl<'a> RenderContext<'a> {
             let screen_size = miniquad::window::screen_size();
             d!("RenderContext::draw() [screen_size={screen_size:?}]");
         }
-        if DEBUG_TRAX {
-            get_trax().lock().set_curr(0);
-        }
         self.draw_call(&self.draw_calls[&0], 0, DEBUG_RENDER);
         if DEBUG_RENDER {
             d!("RenderContext::draw() [DONE]");
@@ -463,9 +457,6 @@ impl<'a> RenderContext<'a> {
         let old_pipeline = self.gfx_pipeline;
 
         for (idx, instr) in draw_call.instrs.iter().enumerate() {
-            if DEBUG_TRAX {
-                get_trax().lock().set_instr(idx);
-            }
             match instr {
                 GfxDrawInstruction::SetScale(scale) => {
                     self.scale = *scale;
@@ -573,9 +564,6 @@ impl<'a> RenderContext<'a> {
         draw_calls.sort_unstable_by_key(|(_, dc)| dc.z_index);
 
         for (dc_key, dc) in draw_calls {
-            if DEBUG_TRAX {
-                get_trax().lock().set_curr(*dc_key);
-            }
             if is_debug {
                 d!("{ws}drawcall {dc_key}");
             }
@@ -633,9 +621,6 @@ struct Stage {
 
 impl Stage {
     pub fn new() -> Self {
-        if DEBUG_TRAX {
-            get_trax().lock().clear();
-        }
         let mut ctx: Box<dyn RenderingBackend> = window::new_rendering_backend();
 
         let god = GOD.get().unwrap();
@@ -735,9 +720,6 @@ impl Stage {
                         self.method_replace_draw_calls(timest, dcs);
                     }
                 }
-                if DEBUG_TRAX {
-                    get_trax().lock().put_stat(0);
-                }
             }
             GraphicsMethod::StartBatch { batch_id, tag } => {
                 if DEBUG_GFXAPI {
@@ -745,9 +727,6 @@ impl Stage {
                 }
                 if !self.pending_batches.insert(*batch_id, vec![]).is_none() {
                     panic!("batch {batch_id} already open!")
-                }
-                if DEBUG_TRAX {
-                    get_trax().lock().put_stat(0);
                 }
             }
             GraphicsMethod::EndBatch { batch_id, timest } => {
@@ -816,29 +795,17 @@ impl Stage {
             //       ansi_texture(width as usize, height as usize, &data));
         }
         if let Some(_) = self.textures.insert(gfx_texture_id, texture) {
-            if DEBUG_TRAX {
-                get_trax().lock().put_stat(2);
-            }
             panic!("Duplicate texture ID={gfx_texture_id} detected!");
-        }
-        if DEBUG_TRAX {
-            get_trax().lock().put_stat(0);
         }
     }
     pub(self) fn method_delete_texture(&mut self, gfx_texture_id: TextureId) {
         let Some(texture) = self.textures.remove(&gfx_texture_id) else {
-            if DEBUG_TRAX {
-                get_trax().lock().put_stat(2);
-            }
             panic!("unknown texture {gfx_texture_id}")
         };
         if DEBUG_GFXAPI {
             d!("Invoked method: delete_texture({gfx_texture_id} => {texture:?})");
         }
         self.ctx.delete_texture(texture);
-        if DEBUG_TRAX {
-            get_trax().lock().put_stat(0);
-        }
     }
     pub(self) fn method_new_vertex_buffer(&mut self, verts: &[Vertex], gfx_buffer_id: BufferId) {
         let buffer = self.ctx.new_buffer(
@@ -852,13 +819,7 @@ impl Stage {
             //       verts, gfx_buffer_id, buffer);
         }
         if let Some(_) = self.buffers.insert(gfx_buffer_id, buffer) {
-            if DEBUG_TRAX {
-                get_trax().lock().put_stat(2);
-            }
             panic!("Duplicate vertex buffer ID={gfx_buffer_id} detected!")
-        }
-        if DEBUG_TRAX {
-            get_trax().lock().put_stat(0);
         }
     }
     pub(self) fn method_new_index_buffer(&mut self, indices: &[u16], gfx_buffer_id: BufferId) {
@@ -873,29 +834,17 @@ impl Stage {
             //       indices, gfx_buffer_id, buffer);
         }
         if let Some(_) = self.buffers.insert(gfx_buffer_id, buffer) {
-            if DEBUG_TRAX {
-                get_trax().lock().put_stat(2);
-            }
             panic!("Duplicate index buffer ID={gfx_buffer_id} detected!")
-        }
-        if DEBUG_TRAX {
-            get_trax().lock().put_stat(0);
         }
     }
     pub(self) fn method_delete_buffer(&mut self, gfx_buffer_id: BufferId) {
         let Some(buffer) = self.buffers.remove(&gfx_buffer_id) else {
-            if DEBUG_TRAX {
-                get_trax().lock().put_stat(2);
-            }
             panic!("unknown buffer {gfx_buffer_id}");
         };
         if DEBUG_GFXAPI {
             d!("Invoked method: delete_buffer({gfx_buffer_id} => {buffer:?})");
         }
         self.ctx.delete_buffer(buffer);
-        if DEBUG_TRAX {
-            get_trax().lock().put_stat(0);
-        }
     }
     pub(self) fn method_new_anim(&mut self, gfx_anim_id: AnimId, frames_len: usize, oneshot: bool) {
         if DEBUG_GFXAPI {
@@ -940,9 +889,6 @@ impl Stage {
                 if old_val.timest > batch_timest {
                     // Entire batch is stale, reject all
                     t!("Rejected stale batch {batch_timest}: conflict with newer batch {} on {key}", old_val.timest);
-                    if DEBUG_TRAX {
-                        get_trax().lock().put_stat(3); // New stat: rejected batch
-                    }
                     return;
                 }
             }
@@ -957,53 +903,7 @@ impl Stage {
 
             // Insert/replace draw call
             self.draw_calls.insert(key, val);
-
-            if DEBUG_TRAX {
-                get_trax().lock().put_stat(1); // Success
-            }
         }
-    }
-
-    fn trax_method(&self, epoch: EpochIndex, method: &GraphicsMethod) {
-        let mut trax = get_trax().lock();
-        match method {
-            GraphicsMethod::NewTexture((_, _, _, _, gtex_id, tag)) => {
-                trax.put_tex(epoch, *gtex_id, *tag);
-            }
-            GraphicsMethod::DeleteTexture((gtex_id, tag)) => {
-                trax.del_tex(epoch, *gtex_id, *tag);
-            }
-            GraphicsMethod::NewVertexBuffer((verts, gbuff_id, tag)) => {
-                trax.put_verts(epoch, verts.clone(), *gbuff_id, *tag, 0);
-            }
-            GraphicsMethod::NewIndexBuffer((idxs, gbuff_id, tag)) => {
-                trax.put_idxs(epoch, idxs.clone(), *gbuff_id, *tag, 1);
-            }
-            GraphicsMethod::DeleteBuffer((gbuff_id, tag, buftype)) => {
-                trax.del_buf(epoch, *gbuff_id, *tag, *buftype);
-            }
-            GraphicsMethod::NewSeqAnim { .. } => {
-                //trax.put_idxs(epoch, idxs.clone(), *gbuff_id, *tag, 1);
-            }
-            GraphicsMethod::UpdateSeqAnim { .. } => {
-                //trax.put_idxs(epoch, idxs.clone(), *gbuff_id, *tag, 1);
-            }
-            GraphicsMethod::DeleteSeqAnim(..) => {
-                //trax.del_buf(epoch, *gbuff_id, *tag, *buftype);
-            }
-            GraphicsMethod::ReplaceGfxDrawCalls { batch_id, dcs } => {
-                if let Some(bid) = batch_id {
-                    trax.put_dcs(epoch, *bid, dcs);
-                }
-            }
-            GraphicsMethod::StartBatch { batch_id, tag } => {
-                trax.put_start_batch(epoch, *batch_id, *tag);
-            }
-            GraphicsMethod::EndBatch { batch_id, timest: _ } => {
-                trax.put_end_batch(epoch, *batch_id);
-            }
-            GraphicsMethod::Noop => panic!("noop"),
-        };
     }
 
     fn egl_ctx_is_disabled(&self) -> bool {
@@ -1020,15 +920,7 @@ impl Stage {
     fn process_methods(&mut self) {
         // Process as many methods as we can
         while let Ok((epoch, method)) = self.method_recv.try_recv() {
-            if DEBUG_TRAX {
-                self.trax_method(epoch, &method);
-            }
             if epoch < self.epoch {
-                if DEBUG_TRAX {
-                    let mut trax = get_trax().lock();
-                    trax.put_stat(1);
-                    trax.flush();
-                }
                 // Discard old rubbish
                 t!(
                     "Discard method with old epoch: {epoch} curr: {} [method={method:?}]",
@@ -1038,9 +930,6 @@ impl Stage {
             }
             assert_eq!(epoch, self.epoch);
             self.process_method(method);
-            if DEBUG_TRAX {
-                get_trax().lock().flush();
-            }
         }
     }
 
@@ -1050,11 +939,6 @@ impl Stage {
         assert!(self.pending_batches.is_empty());
         // Process all cached methods by the pruner from while the screen was off.
         for method in methods {
-            // Stale methods will be dropped by pruner, so they will not be caught by trax
-            // while the screen is off.
-            if DEBUG_TRAX {
-                self.trax_method(self.epoch, &method);
-            }
             // We discard batches here but process_method uses them so implement this
             // workaround.
             match method {
@@ -1074,9 +958,6 @@ impl Stage {
                 }
 
                 GraphicsMethod::Noop => panic!("noop"),
-            }
-            if DEBUG_TRAX {
-                get_trax().lock().flush();
             }
         }
 
