@@ -17,6 +17,7 @@
  */
 
 use darkfi::system::msleep;
+use darkfi_serial::{deserialize, Encodable};
 use indoc::indoc;
 use sled_overlay::sled;
 use std::fs::File;
@@ -37,6 +38,7 @@ use crate::{
 
 mod chat;
 mod menu;
+use menu::channel::Channel;
 //mod settings;
 pub mod test;
 pub mod test_scroll_layer;
@@ -117,8 +119,8 @@ mod ui_consts {
 
 pub use ui_consts::*;
 
-pub static CHANNELS: &'static [&str] =
-    &["#dev", "#media", "#hackers", "#memes", "#philosophy", "#markets", "#math", "#random"];
+pub static DEFAULT_CHANNELS: &'static [&str] =
+    &["dev", "media", "hackers", "memes", "philosophy", "markets", "math", "random"];
 
 #[derive(PartialEq)]
 enum ColorScheme {
@@ -591,11 +593,30 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish) {
     let chatdb_path = get_chatdb_path();
     let db = sled::open(chatdb_path).expect("cannot open sleddb");
     let channels_tree = db.open_tree("channels").expect("cannot open channels tree");
-    for channel in CHANNELS {
+
+    // Initialize default channels if tree is empty
+    if channels_tree.is_empty() {
+        for channel_name in DEFAULT_CHANNELS {
+            let channel = Channel { name: channel_name.to_string(), secret: None };
+            let mut val = vec![];
+            channel.encode(&mut val).unwrap();
+            channels_tree.insert(channel_name, val).unwrap();
+        }
+        let _ = channels_tree.flush_async().await;
+    }
+
+    // Initialize chat layers from channels in database
+    for item in channels_tree.iter() {
+        let (key, val) = item.unwrap();
+        let channel = deserialize::<Channel>(&val).unwrap();
+        let channel_name = format!("#{}", channel.name);
+
         chat::make(
-            app,
+            &app.sg_root,
+            &app.renderer,
+            &app.ex,
             content.clone(),
-            channel,
+            &channel_name,
             &db,
             i18n_fish,
             emoji_meshes.clone(),
@@ -603,7 +624,16 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish) {
         )
         .await;
     }
-    menu::make(app, content.clone(), i18n_fish, channels_tree).await;
+    menu::make(
+        app,
+        content.clone(),
+        i18n_fish,
+        channels_tree,
+        &db,
+        emoji_meshes.clone(),
+        is_first_time,
+    )
+    .await;
     wallet::make(app, content.clone(), i18n_fish).await;
 
     // Setup wallet button after wallet layer is created

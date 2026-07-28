@@ -1166,6 +1166,19 @@ impl Property {
         })
     }
 
+    // Contains
+
+    pub fn contains_str(&self, s: &str) -> bool {
+        for i in 0..self.get_len() {
+            if let Ok(item) = self.get_str(i) {
+                if item == s {
+                    return true;
+                }
+            }
+        }
+        false
+    }
+
     // Subs
 
     pub fn subscribe_modify(&self) -> Subscription<(Role, ModifyAction, BatchGuardPtr)> {

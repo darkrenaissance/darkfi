@@ -20,7 +20,7 @@ use darkfi_serial::deserialize;
 use sled_overlay::sled;
 use ui_consts::*;
 
-use super::{ColorScheme, CHANNELS, COLOR_SCHEME};
+use super::{ColorScheme, COLOR_SCHEME};
 use crate::{
     app::{
         node::{create_button, create_layer, create_menu, create_text, create_vector_art},
@@ -32,9 +32,13 @@ use crate::{
     prop::{PropertyAtomicGuard, PropertyBool, PropertyFloat32, Role},
     scene::{SceneNodePtr, Slot},
     shape,
-    ui::{Button, Layer, Menu, ShapeVertex, Text, VectorArt, VectorShape},
+    ui::{
+        emoji_picker::EmojiMeshesPtr, Button, Layer, Menu, ShapeVertex, Text, VectorArt,
+        VectorShape,
+    },
     util::i18n::I18nBabelFish,
 };
+use channel::Channel;
 
 #[cfg(any(target_os = "android", feature = "emulate-android"))]
 mod android_ui_consts {
@@ -96,7 +100,7 @@ mod ui_consts {
     pub const LABEL_LINESPACE: f32 = 140.;
 }
 
-mod channel;
+pub mod channel;
 mod contact;
 mod edit_buttons;
 mod edit_switch;
@@ -106,6 +110,9 @@ pub async fn make(
     content: SceneNodePtr,
     i18n_fish: &I18nBabelFish,
     channels_tree: sled::Tree,
+    db: &sled::Db,
+    emoji_meshes: EmojiMeshesPtr,
+    is_first_time: bool,
 ) {
     let window_scale = PropertyFloat32::wrap(
         &app.sg_root.lookup_node("/window").unwrap(),
@@ -190,7 +197,10 @@ pub async fn make(
         window_scale.clone(),
         contact_is_visible.clone(),
         channel_is_visible.clone(),
-        channels_tree,
+        channels_tree.clone(),
+        db,
+        emoji_meshes.clone(),
+        is_first_time,
     )
     .await;
 
@@ -434,14 +444,11 @@ pub async fn make(
     node.set_property_f32(atom, Role::App, "fade_zone", MENU_FADE).unwrap();
 
     let prop = node.get_property("items").unwrap();
-    for channel in CHANNELS {
-        prop.push_str(atom, Role::App, *channel).unwrap();
-    }
-    for channel in [
-        "@john", "@stacy", "@barry", "@steve", "@obombo", "@xyz", "@lunar", "@fren", "@anon",
-        "@anon1",
-    ] {
-        prop.push_str(atom, Role::App, channel).unwrap();
+    for item in channels_tree.iter() {
+        let (key, val) = item.unwrap();
+        let channel = deserialize::<Channel>(&val).unwrap();
+        let channel_name = format!("#{}", channel.name);
+        prop.push_str(atom, Role::App, &channel_name).unwrap();
     }
 
     let (slot, recvr) = Slot::new("menu_clicked");

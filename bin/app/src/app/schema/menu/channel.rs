@@ -32,8 +32,8 @@ pub struct Channel {
 }
 
 use super::{
-    edit_buttons, edit_switch::edit_switch, ColorScheme, BTN_TEXT_Y, CHANNEL_ITEM_HEIGHT,
-    COLOR_SCHEME, MENU_BTN_W_L,
+    super::chat, edit_buttons, edit_switch::edit_switch, ColorScheme, BTN_TEXT_Y,
+    CHANNEL_ITEM_HEIGHT, COLOR_SCHEME, MENU_BTN_W_L,
 };
 use crate::{
     app::{
@@ -50,8 +50,8 @@ use crate::{
     scene::{SceneNodePtr, Slot},
     shape,
     ui::{
-        BaseEdit, BaseEditType, Button, Layer, Menu, ShapeVertex, Shortcut, Text, VectorArt,
-        VectorShape,
+        emoji_picker::EmojiMeshesPtr, BaseEdit, BaseEditType, Button, Layer, Menu, ShapeVertex,
+        Shortcut, Text, VectorArt, VectorShape,
     },
     util::i18n::I18nBabelFish,
 };
@@ -142,6 +142,9 @@ pub async fn make(
     contact_is_visible: PropertyBool,
     channel_is_visible: PropertyBool,
     channels_tree: sled::Tree,
+    db: &sled::Db,
+    emoji_meshes: EmojiMeshesPtr,
+    is_first_time: bool,
 ) -> SceneNodePtr {
     let mut cc = expr::Compiler::new();
     cc.add_const_f32("CHATEDIT_PAD", CHATEDIT_PAD);
@@ -1384,6 +1387,66 @@ pub async fn make(
         &[search_node, nickedit_node, secedit_node],
         app.ex.clone(),
     );
+
+    // Register select signal on nick_menu
+    let (slot, recvr) = Slot::new("channel_selected");
+    menu_node.register("select", slot).unwrap();
+
+    let sg_root = app.sg_root.clone();
+    let renderer = app.renderer.clone();
+    let ex = app.ex.clone();
+    let channels_tree_clone = channels_tree.clone();
+    let content_clone = content.clone();
+    let channel_vis = channel_is_visible.clone();
+    let window_scale_clone = window_scale.clone();
+    let db_clone = db.clone();
+    let i18n_fish_clone = i18n_fish.clone();
+    let emoji_meshes_clone = emoji_meshes.clone();
+
+    let listen_select = app.ex.spawn(async move {
+        while let Ok(data) = recvr.recv().await {
+            let channel_name: String = deserialize(&data).unwrap();
+            let path = format!("/window/content/{}_chat_layer", &channel_name);
+
+            // Check if chat layer already exists
+            if sg_root.lookup_node(&path).is_some() {
+                continue;
+            }
+
+            // Create the chat layer and get the node
+            let node = chat::make(
+                &sg_root,
+                &renderer,
+                &ex,
+                content_clone.clone(),
+                &channel_name,
+                &db_clone,
+                &i18n_fish_clone,
+                emoji_meshes_clone.clone(),
+                is_first_time,
+            )
+            .await;
+
+            // Show the chat layer
+            let atom = &mut renderer.make_guard(gfxtag!("channel_selected"));
+            node.set_property_bool(atom, Role::App, "is_visible", true).unwrap();
+
+            // Add to main_menu items (check if not already there)
+            let main_menu = sg_root.lookup_node("/window/content/menu_layer/main_menu").unwrap();
+            let items_prop = main_menu.get_property("items").unwrap();
+
+            if !items_prop.contains_str(&channel_name) {
+                items_prop.push_str(atom, Role::App, &channel_name).unwrap();
+            }
+
+            // Hide channel screen
+            channel_vis.set(atom, false);
+
+            i!("Selected channel: {}", channel_name);
+        }
+    });
+
+    app.tasks.lock().unwrap().push(listen_select);
 
     content
 }
