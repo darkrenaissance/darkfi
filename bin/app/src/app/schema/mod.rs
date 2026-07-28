@@ -590,6 +590,7 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish) {
 
     let chatdb_path = get_chatdb_path();
     let db = sled::open(chatdb_path).expect("cannot open sleddb");
+    let channels_tree = db.open_tree("channels").expect("cannot open channels tree");
     for channel in CHANNELS {
         chat::make(
             app,
@@ -602,7 +603,7 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish) {
         )
         .await;
     }
-    menu::make(app, content.clone(), i18n_fish).await;
+    menu::make(app, content.clone(), i18n_fish, channels_tree).await;
     wallet::make(app, content.clone(), i18n_fish).await;
 
     // Setup wallet button after wallet layer is created

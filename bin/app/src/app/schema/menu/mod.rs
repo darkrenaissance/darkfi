@@ -17,6 +17,7 @@
  */
 
 use darkfi_serial::deserialize;
+use sled_overlay::sled;
 use ui_consts::*;
 
 use super::{ColorScheme, CHANNELS, COLOR_SCHEME};
@@ -100,7 +101,12 @@ mod contact;
 mod edit_buttons;
 mod edit_switch;
 
-pub async fn make(app: &App, content: SceneNodePtr, i18n_fish: &I18nBabelFish) {
+pub async fn make(
+    app: &App,
+    content: SceneNodePtr,
+    i18n_fish: &I18nBabelFish,
+    channels_tree: sled::Tree,
+) {
     let window_scale = PropertyFloat32::wrap(
         &app.sg_root.lookup_node("/window").unwrap(),
         Role::Internal,
@@ -184,6 +190,7 @@ pub async fn make(app: &App, content: SceneNodePtr, i18n_fish: &I18nBabelFish) {
         window_scale.clone(),
         contact_is_visible.clone(),
         channel_is_visible.clone(),
+        channels_tree,
     )
     .await;
 

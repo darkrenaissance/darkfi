@@ -16,8 +16,20 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use darkfi_serial::deserialize;
+use darkfi_serial::{async_trait, deserialize, Encodable, SerialDecodable, SerialEncodable};
+use sled_overlay::sled;
 use ui_consts::*;
+
+macro_rules! d { ($($arg:tt)*) => { debug!(target: "app::channel", $($arg)*); } }
+macro_rules! i { ($($arg:tt)*) => { info!(target: "app::channel", $($arg)*); } }
+macro_rules! w { ($($arg:tt)*) => { warn!(target: "app::channel", $($arg)*); } }
+macro_rules! e { ($($arg:tt)*) => { error!(target: "app::channel", $($arg)*); } }
+
+#[derive(Clone, Debug, SerialEncodable, SerialDecodable)]
+pub struct Channel {
+    pub name: String,
+    pub secret: Option<String>,
+}
 
 use super::{
     edit_buttons, edit_switch::edit_switch, ColorScheme, BTN_TEXT_Y, CHANNEL_ITEM_HEIGHT,
@@ -129,6 +141,7 @@ pub async fn make(
     window_scale: PropertyFloat32,
     contact_is_visible: PropertyBool,
     channel_is_visible: PropertyBool,
+    channels_tree: sled::Tree,
 ) -> SceneNodePtr {
     let mut cc = expr::Compiler::new();
     cc.add_const_f32("CHATEDIT_PAD", CHATEDIT_PAD);
@@ -1193,7 +1206,7 @@ pub async fn make(
     let node = node.setup(|me| VectorArt::new(me, shape, app.renderer.clone())).await;
     editlayer_node.link(node);
 
-    let node = create_button("addchannel_btn");
+    let mut node = create_button("addchannel_btn");
     node.set_property_bool(atom, Role::App, "is_active", true).unwrap();
     let prop = node.get_property("rect").unwrap();
     prop.set_f32(atom, Role::App, 0, 0.).unwrap();
@@ -1201,8 +1214,14 @@ pub async fn make(
     let code = cc.compile("MENU_BTN_W_L + 45").unwrap();
     prop.set_expr(atom, Role::App, 2, code).unwrap();
     prop.set_f32(atom, Role::App, 3, CHATEDIT_HEIGHT).unwrap();
+
+    let (slot, addchannel_recvr) = Slot::new("add_channel_clicked_handler");
+    node.register("click", slot).unwrap();
+
     let node = node.setup(|me| Button::new(me, app.renderer.clone())).await;
-    editlayer_node.link(node);
+    editlayer_node.link(node.clone());
+
+    let addchannel_btn = node;
 
     let node = create_text("add_channel");
     let prop = node.get_property("rect").unwrap();
@@ -1284,24 +1303,77 @@ pub async fn make(
     node.set_property_f32(atom, Role::App, "fade_zone", MENU_FADE).unwrap();
 
     let prop = node.get_property("items").unwrap();
-    for channel in [
-        "#general",
-        "#random",
-        "#dev",
-        "#announcements",
-        "#memes",
-        "#offtopic",
-        "#support",
-        "#trading",
-        "#newbies",
-        "#intro",
-    ] {
-        prop.push_str(atom, Role::App, channel).unwrap();
+    let mut channel_names: Vec<String> = vec![];
+    for item in channels_tree.iter() {
+        let (_key, val) = item.unwrap();
+        let channel = deserialize::<Channel>(&val).unwrap();
+        channel_names.push(format!("#{}", channel.name));
+    }
+    channel_names.sort();
+    for channel_name in channel_names {
+        prop.push_str(atom, Role::App, &channel_name).unwrap();
     }
 
     let menu_node =
         node.setup(|me| Menu::new(me, window_scale.clone(), app.renderer.clone())).await;
     content_area.link(menu_node.clone());
+
+    // Setup add_channel button handler now that menu_node exists
+    let channels_tree_clone = channels_tree.clone();
+    let nickedit_clone = nickedit_node.clone();
+    let secedit_clone = secedit_node.clone();
+    let menu_prop_clone = menu_node.get_property("items").unwrap();
+    let renderer_clone = app.renderer.clone();
+
+    let save_channel = app.ex.spawn(async move {
+        while let Ok(_) = addchannel_recvr.recv().await {
+            let name_prop = nickedit_clone.get_property("text").unwrap();
+            let name = name_prop.get_str(0).unwrap_or_default();
+
+            let secret_prop = secedit_clone.get_property("text").unwrap();
+            let secret = secret_prop.get_str(0).unwrap_or_default();
+
+            if name.is_empty() {
+                w!("Attempted to add channel with empty name");
+                continue;
+            }
+
+            let name = if name.starts_with('#') { name.trim_start_matches('#') } else { &name };
+
+            let channel_name = format!("#{}", name);
+
+            let channel = Channel {
+                name: name.to_string(),
+                secret: if secret.is_empty() { None } else { Some(secret.clone()) },
+            };
+
+            let mut val = vec![];
+            if let Err(e) = channel.encode(&mut val) {
+                e!("Failed to serialize channel: {e}");
+                continue;
+            }
+
+            let key = name;
+
+            if let Err(e) = channels_tree_clone.insert(key, val) {
+                e!("Failed to save channel: {e}");
+                continue;
+            }
+
+            let _ = channels_tree_clone.flush_async().await;
+
+            let atom = &mut renderer_clone.make_guard(gfxtag!("add_channel"));
+            menu_prop_clone.push_str(atom, Role::App, &channel_name).unwrap();
+
+            i!("Successfully saved channel: {}", channel_name);
+
+            let atom = &mut renderer_clone.make_guard(gfxtag!("clear_channel_fields"));
+            name_prop.set_str(atom, Role::App, 0, "").unwrap();
+            secret_prop.set_str(atom, Role::App, 0, "").unwrap();
+        }
+    });
+
+    app.tasks.lock().unwrap().push(save_channel);
 
     // Connect cancel/done buttons and edit_active signal
     btns.connect_edit_handlers(app, &menu_node, None);

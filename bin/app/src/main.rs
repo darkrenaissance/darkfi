@@ -322,6 +322,9 @@ async fn load_plugins(
                 continue
             }
 
+            /*
+            // TODO: add coloring to menu items
+
             let node_path = format!("/window/content/menu_layer/{channel}_channel_label");
             let menu_label = sg_root2.lookup_node(&node_path).unwrap();
             let prop = menu_label.get_property("text_color").unwrap();
@@ -338,6 +341,7 @@ async fn load_plugins(
                 prop.set_f32(atom, Role::App, 2, 0.51).unwrap();
                 prop.set_f32(atom, Role::App, 3, 1.).unwrap();
             }
+            */
         }
     });
 
