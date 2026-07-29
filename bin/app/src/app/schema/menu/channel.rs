@@ -16,6 +16,7 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+use bs58;
 use darkfi_serial::{async_trait, deserialize, Encodable, SerialDecodable, SerialEncodable};
 use sled_overlay::sled;
 use ui_consts::*;
@@ -28,7 +29,7 @@ macro_rules! e { ($($arg:tt)*) => { error!(target: "app::channel", $($arg)*); } 
 #[derive(Clone, Debug, SerialEncodable, SerialDecodable)]
 pub struct Channel {
     pub name: String,
-    pub secret: Option<String>,
+    pub secret: Option<[u8; 32]>,
 }
 
 use super::{
@@ -1151,14 +1152,14 @@ pub async fn make(
     let (slot, recvr) = Slot::new("receive_copy_clicked");
     node.register("click", slot).unwrap();
     let secedit_node2 = secedit_node.clone();
-    let renderer_clone = app.renderer.clone();
+    let renderer2 = app.renderer.clone();
     let listen_click = app.ex.spawn(async move {
         while let Ok(_) = recvr.recv().await {
             debug!(target: "app::menu", "secret paste button clicked");
             match miniquad::window::clipboard_get() {
                 Some(clipboard_text) => {
                     let text_prop = secedit_node2.get_property("text").unwrap();
-                    let atom = &mut renderer_clone.make_guard(gfxtag!("secret paste"));
+                    let atom = &mut renderer2.make_guard(gfxtag!("secret paste"));
                     text_prop.set_str(atom, Role::App, 0, &clipboard_text).unwrap();
                     if let crate::scene::Pimpl::Edit(edit) = secedit_node2.pimpl() {
                         edit.on_text_prop_changed();
@@ -1322,55 +1323,67 @@ pub async fn make(
     content_area.link(menu_node.clone());
 
     // Setup add_channel button handler now that menu_node exists
-    let channels_tree_clone = channels_tree.clone();
-    let nickedit_clone = nickedit_node.clone();
-    let secedit_clone = secedit_node.clone();
-    let menu_prop_clone = menu_node.get_property("items").unwrap();
-    let renderer_clone = app.renderer.clone();
+    let channels_tree2 = channels_tree.clone();
+    let nickedit2 = nickedit_node.clone();
+    let secedit2 = secedit_node.clone();
+    let menu_prop2 = menu_node.get_property("items").unwrap();
+    let renderer2 = app.renderer.clone();
+    let sg_root2 = app.sg_root.clone();
 
     let save_channel = app.ex.spawn(async move {
         while let Ok(_) = addchannel_recvr.recv().await {
-            let name_prop = nickedit_clone.get_property("text").unwrap();
+            let name_prop = nickedit2.get_property("text").unwrap();
             let name = name_prop.get_str(0).unwrap_or_default();
 
-            let secret_prop = secedit_clone.get_property("text").unwrap();
+            let secret_prop = secedit2.get_property("text").unwrap();
             let secret = secret_prop.get_str(0).unwrap_or_default();
 
             if name.is_empty() {
                 w!("Attempted to add channel with empty name");
                 continue;
             }
+            // TODO: Do more thorough checking of channel names
 
             let name = if name.starts_with('#') { name.trim_start_matches('#') } else { &name };
 
             let channel_name = format!("#{}", name);
 
-            let channel = Channel {
-                name: name.to_string(),
-                secret: if secret.is_empty() { None } else { Some(secret.clone()) },
-            };
+            let mut channel = Channel { name: name.to_string(), secret: None };
+
+            // Try to decode secret field if it is set
+            if !secret.is_empty() {
+                let Ok(bytes) = bs58::decode(&secret).into_vec() else {
+                    w!("Failed to decode secret base58");
+                    continue
+                };
+                if bytes.len() != 32 {
+                    w!("Invalid secret length: {} bytes (expected 32)", bytes.len());
+                    continue
+                }
+
+                let mut arr = [0u8; 32];
+                arr.copy_from_slice(&bytes);
+                channel.secret = Some(arr);
+            }
 
             let mut val = vec![];
-            if let Err(e) = channel.encode(&mut val) {
-                e!("Failed to serialize channel: {e}");
-                continue;
-            }
+            channel.encode(&mut val).unwrap();
 
             let key = name;
 
-            if let Err(e) = channels_tree_clone.insert(key, val) {
-                e!("Failed to save channel: {e}");
-                continue;
-            }
+            channels_tree2.insert(key, val).unwrap();
+            let _ = channels_tree2.flush_async().await;
 
-            let _ = channels_tree_clone.flush_async().await;
+            // Notify darkirc2 to reload channels
+            let darkirc2 = sg_root2.lookup_node("/plugin/darkirc").unwrap();
+            darkirc2.call_method("reload", vec![]).await.unwrap();
 
-            let atom = &mut renderer_clone.make_guard(gfxtag!("add_channel"));
-            menu_prop_clone.push_str(atom, Role::App, &channel_name).unwrap();
+            let atom = &mut renderer2.make_guard(gfxtag!("add_channel"));
+            menu_prop2.push_str(atom, Role::App, &channel_name).unwrap();
 
             i!("Successfully saved channel: {}", channel_name);
 
-            let atom = &mut renderer_clone.make_guard(gfxtag!("clear_channel_fields"));
+            let atom = &mut renderer2.make_guard(gfxtag!("clear_channel_fields"));
             name_prop.set_str(atom, Role::App, 0, "").unwrap();
             secret_prop.set_str(atom, Role::App, 0, "").unwrap();
         }
@@ -1395,21 +1408,26 @@ pub async fn make(
     let sg_root = app.sg_root.clone();
     let renderer = app.renderer.clone();
     let ex = app.ex.clone();
-    let channels_tree_clone = channels_tree.clone();
-    let content_clone = content.clone();
+    let channels_tree2 = channels_tree.clone();
+    let content2 = content.clone();
     let channel_vis = channel_is_visible.clone();
-    let window_scale_clone = window_scale.clone();
-    let db_clone = db.clone();
-    let i18n_fish_clone = i18n_fish.clone();
-    let emoji_meshes_clone = emoji_meshes.clone();
+    let window_scale2 = window_scale.clone();
+    let db2 = db.clone();
+    let i18n_fish2 = i18n_fish.clone();
+    let emoji_meshes2 = emoji_meshes.clone();
 
     let listen_select = app.ex.spawn(async move {
         while let Ok(data) = recvr.recv().await {
-            let channel_name: String = deserialize(&data).unwrap();
-            let path = format!("/window/content/{}_chat_layer", &channel_name);
+            let channel: String = deserialize(&data).unwrap();
+            i!("Selected channel: {channel}");
+            let path = format!("/window/content/{}_chat_layer", &channel);
+
+            let atom = &mut renderer.make_guard(gfxtag!("channel_selected"));
 
             // Check if chat layer already exists
-            if sg_root.lookup_node(&path).is_some() {
+            if let Some(node) = sg_root.lookup_node(&path) {
+                node.set_property_bool(atom, Role::App, "is_visible", true).unwrap();
+                channel_vis.set(atom, false);
                 continue;
             }
 
@@ -1418,31 +1436,28 @@ pub async fn make(
                 &sg_root,
                 &renderer,
                 &ex,
-                content_clone.clone(),
-                &channel_name,
-                &db_clone,
-                &i18n_fish_clone,
-                emoji_meshes_clone.clone(),
+                content2.clone(),
+                &channel,
+                &db2,
+                &i18n_fish2,
+                emoji_meshes2.clone(),
                 is_first_time,
             )
             .await;
 
             // Show the chat layer
-            let atom = &mut renderer.make_guard(gfxtag!("channel_selected"));
             node.set_property_bool(atom, Role::App, "is_visible", true).unwrap();
 
             // Add to main_menu items (check if not already there)
             let main_menu = sg_root.lookup_node("/window/content/menu_layer/main_menu").unwrap();
             let items_prop = main_menu.get_property("items").unwrap();
 
-            if !items_prop.contains_str(&channel_name) {
-                items_prop.push_str(atom, Role::App, &channel_name).unwrap();
+            if !items_prop.contains_str(&channel) {
+                items_prop.push_str(atom, Role::App, &channel).unwrap();
             }
 
             // Hide channel screen
             channel_vis.set(atom, false);
-
-            i!("Selected channel: {}", channel_name);
         }
     });
 

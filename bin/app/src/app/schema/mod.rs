@@ -37,7 +37,7 @@ use crate::{
 };
 
 mod chat;
-mod menu;
+pub mod menu;
 use menu::channel::Channel;
 //mod settings;
 pub mod test;

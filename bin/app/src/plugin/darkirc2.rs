@@ -17,13 +17,15 @@
  */
 
 use std::{
-    collections::HashMap,
+    collections::{HashMap, HashSet},
     io::Cursor,
     sync::{Arc, Mutex as SyncMutex, OnceLock, Weak},
     time::UNIX_EPOCH,
 };
 
 use async_lock::RwLock;
+use async_trait::async_trait;
+use crypto_box::{ChaChaBox, CryptoBox, PublicKey, SecretKey};
 use darkfi::{
     event_graph::{
         self,
@@ -50,6 +52,7 @@ use irc2::{
 use sled_overlay::sled;
 
 use crate::{
+    app::schema::menu::channel::Channel,
     error::{Error, Result},
     prop::{BatchGuardPtr, PropertyAtomicGuard, PropertyStr, Role},
     scene::{MethodCallSub, Pimpl, SceneNode, SceneNodePtr, SceneNodeType, SceneNodeWeak, Slot},
@@ -167,6 +170,7 @@ pub struct DarkIrc2 {
     nick: PropertyStr,
     pub channels: RwLock<HashMap<String, IrcChannel>>,
     pub contacts: RwLock<HashMap<String, IrcContact>>,
+    channels_tree: sled::Tree,
     settings: PluginSettings,
 }
 
@@ -189,6 +193,7 @@ impl DarkIrc2 {
         };
 
         let setting_tree = db.open_tree("settings")?;
+        let channels_tree = db.open_tree("channels")?;
         let settings = PluginSettings { setting_root, sled_tree: setting_tree };
 
         let mut p2p_settings: NetSettings = Default::default();
@@ -285,9 +290,16 @@ impl DarkIrc2 {
 
             channels: RwLock::new(HashMap::new()),
             contacts: RwLock::new(HashMap::new()),
+            channels_tree,
 
             settings,
         });
+
+        // Load channels from database BEFORE starting P2P
+        if let Err(e) = self_.load_channels_from_db().await {
+            e!("Failed to load channels: {e}");
+        }
+
         self_.clone().start(sg_root, ex).await;
         Ok(Pimpl::DarkIrc2(self_))
     }
@@ -549,6 +561,77 @@ impl DarkIrc2 {
         }
     }
 
+    /// Load channels from UI database and populate encryption keys
+    pub async fn load_channels_from_db(&self) -> Result<()> {
+        use darkfi_serial::deserialize;
+
+        let mut channels = self.channels.write().await;
+
+        for item in self.channels_tree.iter() {
+            let (key, val) = item.map_err(|e| {
+                e!("Failed to read channel from database: {e}");
+                Error::SledDbErr
+            })?;
+            let channel_name = String::from_utf8_lossy(&key).to_string();
+
+            // Deserialize UI channel struct
+            let ui_channel = match deserialize::<Channel>(&val) {
+                Ok(ch) => ch,
+                Err(e) => {
+                    w!("Failed to deserialize channel {channel_name}: {e}");
+                    continue
+                }
+            };
+
+            // Convert to IrcChannel with encryption
+            let full_name = format!("#{}", channel_name);
+            let mut irc_channel =
+                IrcChannel { topic: String::new(), nicks: HashSet::new(), saltbox: None };
+
+            if let Some(secret) = ui_channel.secret {
+                // Convert secret array to CryptoBox
+                let public = PublicKey::from_bytes(secret);
+                let secret_key = SecretKey::from_bytes(secret);
+                let saltbox = CryptoBox::new(&public, &secret_key);
+
+                irc_channel.saltbox = Some(Arc::new(saltbox));
+            }
+
+            let is_encrypted = irc_channel.saltbox.is_some();
+            channels.insert(full_name, irc_channel);
+            i!("Loaded channel: #{} (encrypted: {})", channel_name, is_encrypted);
+        }
+
+        Ok(())
+    }
+
+    /// Reload channels from database (called when UI adds/changes channels)
+    pub async fn reload(&self) -> Result<()> {
+        self.load_channels_from_db().await
+    }
+
+    async fn process_reload(me: &Weak<Self>, sub: &MethodCallSub) -> bool {
+        let Ok(method_call) = sub.receive().await else {
+            d!("Reload method closed");
+            return false
+        };
+
+        t!("method called: reload({method_call:?})");
+
+        let Some(self_) = me.upgrade() else {
+            e!("DarkIrc2 destroyed before reload completed");
+            return false
+        };
+
+        if let Err(e) = self_.reload().await {
+            e!("Failed to reload channels: {e}");
+        } else {
+            i!("Successfully reloaded channels");
+        }
+
+        true
+    }
+
     async fn apply_settings(self_: Arc<Self>, _: BatchGuardPtr) {
         self_.settings.save_settings();
 
@@ -616,6 +699,11 @@ impl DarkIrc2 {
                 async move { while Self::process_reconnect(&me2, &reconnect_method_sub).await {} },
             );
 
+        let reload_method_sub = node.subscribe_method_call("reload").unwrap();
+        let me2 = me.clone();
+        let reload_method_task =
+            ex.spawn(async move { while Self::process_reload(&me2, &reload_method_sub).await {} });
+
         let mut on_modify = OnModify::new(ex.clone(), self.node.clone(), me.clone());
         async fn save_nick(self_: Arc<DarkIrc2>, _batch: BatchGuardPtr) {
             let _ = std::fs::write(nick_filename(), self_.nick.get());
@@ -662,8 +750,15 @@ impl DarkIrc2 {
             }
         });
 
-        let mut tasks =
-            vec![send_method_task, reconnect_method_task, ev_task, dag_task, start_task, stop_task];
+        let mut tasks = vec![
+            send_method_task,
+            reconnect_method_task,
+            reload_method_task,
+            ev_task,
+            dag_task,
+            start_task,
+            stop_task,
+        ];
         tasks.append(&mut on_modify.tasks);
         self.tasks.set(tasks).unwrap();
     }

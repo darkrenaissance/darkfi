@@ -39,7 +39,7 @@ pub mod locale;
 use locale::read_locale_ftl;
 mod node;
 use node::create_window;
-mod schema;
+pub mod schema;
 use schema::get_settingsdb_path;
 
 macro_rules! d { ($($arg:tt)*) => { debug!(target: "app", $($arg)*); } }

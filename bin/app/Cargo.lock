@@ -1861,6 +1861,7 @@ dependencies = [
  "chrono",
  "clap 4.6.1",
  "colored",
+ "crypto_box",
  "darkfi",
  "darkfi-sdk",
  "darkfi-serial",
