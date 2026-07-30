@@ -78,6 +78,10 @@ mod ui_consts {
     pub fn get_settingsdb_path() -> PathBuf {
         get_appdata_path().join("settings")
     }
+
+    pub fn get_main_db_path() -> PathBuf {
+        get_appdata_path().join("db")
+    }
 }
 
 #[cfg(not(target_os = "android"))]
@@ -97,6 +101,10 @@ mod desktop_paths {
 
     pub fn get_settingsdb_path() -> PathBuf {
         dirs::cache_dir().unwrap().join("darkfi/app/settings")
+    }
+
+    pub fn get_main_db_path() -> PathBuf {
+        dirs::data_local_dir().unwrap().join("darkfi/app/db")
     }
 }
 
@@ -128,7 +136,7 @@ enum ColorScheme {
     PaperLight,
 }
 
-pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish) {
+pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish, db: sled::Db) {
     let mut cc = Compiler::new();
     cc.add_const_f32("NETSTATUS_ICON_SIZE", NETSTATUS_ICON_SIZE);
     cc.add_const_f32("SETTINGS_ICON_SIZE", SETTINGS_ICON_SIZE);
@@ -590,8 +598,6 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish) {
         let _ = File::create(filename);
     }
 
-    let chatdb_path = get_chatdb_path();
-    let db = sled::open(chatdb_path).expect("cannot open sleddb");
     let channels_tree = db.open_tree("channels").expect("cannot open channels tree");
 
     // Initialize default channels if tree is empty

@@ -64,12 +64,14 @@ use crate::{
 use net::ZeroMQAdapter;
 use {
     // Local imports
+    app::schema::get_main_db_path,
     gfx::Renderer,
     prop::{PropertyBool, PropertyStr, Role},
     scene::Slot,
+    // Global imports
+    sled_overlay::sled,
     std::io::Cursor,
     ui::chatview,
-    // Global imports
     url::Url,
 };
 
@@ -137,6 +139,9 @@ impl God {
         let basename = exe_path.parent().unwrap();
         std::env::set_current_dir(basename).unwrap();
 
+        let db_path = get_main_db_path();
+        let db = sled::open(&db_path).expect("Sled DB failed to open");
+
         let bg_ex = Arc::new(smol::Executor::new());
         let fg_ex = Arc::new(smol::Executor::new());
         let sg_root = SceneNode::root();
@@ -157,8 +162,9 @@ impl God {
         let app2 = app.clone();
         let cv_app_is_setup = Arc::new(CondVar::new());
         let cv = cv_app_is_setup.clone();
+        let db2 = db.clone();
         let app_task = fg_ex.spawn(async move {
-            app2.setup().await.unwrap();
+            app2.setup(db2).await.unwrap();
             cv.notify();
         });
         fg_runtime.push_task(app_task);
@@ -181,7 +187,7 @@ impl God {
             let cv = cv_app_is_setup.clone();
             let renderer = renderer.clone();
             let plug_task = bg_ex.spawn(async move {
-                load_plugins(ex, sg_root, renderer, cv).await;
+                load_plugins(ex, sg_root, renderer, cv, db).await;
             });
             bg_runtime.push_task(plug_task);
         }
@@ -258,6 +264,7 @@ async fn load_plugins(
     sg_root: SceneNodePtr,
     renderer: Renderer,
     cv: Arc<CondVar>,
+    db: sled::Db,
 ) {
     let plugin = SceneNode::new("plugin", SceneNodeType::PluginRoot);
     let plugin = plugin.setup_null();
@@ -273,7 +280,7 @@ async fn load_plugins(
         let darkirc = create_darkirc("darkirc");
         let darkirc = darkirc
             .setup(|me| async {
-                plugin::DarkIrc2::new(me, sg_root.clone(), ex.clone())
+                plugin::DarkIrc2::new(me, sg_root.clone(), ex.clone(), db)
                     .await
                     .expect("DarkIrc pimpl setup")
             })
@@ -774,7 +781,7 @@ pub fn create_darkirc(name: &str) -> SceneNode {
 
     node.add_method("reconnect", vec![], None).unwrap();
 
-    node.add_method("reload", vec![], None).unwrap();
+    node.add_method("rescan", vec![("channel", "Channel", CallArgType::Str)], None).unwrap();
 
     node
 }

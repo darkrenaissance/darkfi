@@ -19,13 +19,12 @@
 use std::{
     collections::{HashMap, HashSet},
     io::Cursor,
-    sync::{Arc, Mutex as SyncMutex, OnceLock, Weak},
+    sync::{Arc, OnceLock, Weak},
     time::UNIX_EPOCH,
 };
 
 use async_lock::RwLock;
-use async_trait::async_trait;
-use crypto_box::{ChaChaBox, CryptoBox, PublicKey, SecretKey};
+use crypto_box::{ChaChaBox, SecretKey};
 use darkfi::{
     event_graph::{
         self,
@@ -42,13 +41,13 @@ use darkfi::{
 };
 use darkfi_serial::{
     deserialize_async, serialize, serialize_async, AsyncEncodable, Decodable, Encodable,
-    SerialDecodable, SerialEncodable,
 };
 use irc2::{
     crypto::saltbox,
     irc::{server::MAX_NICK_LEN, IrcChannel, IrcContact},
     pad, unpad, Privmsg,
 };
+use parking_lot::Mutex as SyncMutex;
 use sled_overlay::sled;
 
 use crate::{
@@ -88,6 +87,9 @@ mod paths {
     pub fn get_evgrdb_path() -> PathBuf {
         get_external_storage_path().join("evgr2")
     }
+    pub fn get_chatdb_path() -> PathBuf {
+        get_external_storage_path().join("chatdb")
+    }
     pub fn get_use_tor_filename() -> PathBuf {
         get_external_storage_path().join("use_tor.txt")
     }
@@ -110,6 +112,9 @@ mod paths {
 
     pub fn get_evgrdb_path() -> PathBuf {
         dirs::data_local_dir().unwrap().join("darkfi/app/evgr2")
+    }
+    pub fn get_chatdb_path() -> PathBuf {
+        dirs::data_local_dir().unwrap().join("darkfi/app/chatdb")
     }
     pub fn get_use_tor_filename() -> PathBuf {
         dirs::data_local_dir().unwrap().join("darkfi/app/use_tor.txt")
@@ -163,7 +168,7 @@ pub type DarkIrc2Ptr = Arc<DarkIrc2>;
 
 pub struct DarkIrc2 {
     node: SceneNodeWeak,
-    tasks: OnceLock<Vec<smol::Task<()>>>,
+    tasks: SyncMutex<Vec<smol::Task<()>>>,
     p2p: P2pPtr,
     event_graph: EventGraphPtr,
     seen_msgs: SyncMutex<SeenMessages>,
@@ -172,10 +177,16 @@ pub struct DarkIrc2 {
     pub contacts: RwLock<HashMap<String, IrcContact>>,
     channels_tree: sled::Tree,
     settings: PluginSettings,
+    ex: ExecutorPtr,
 }
 
 impl DarkIrc2 {
-    pub async fn new(node: SceneNodeWeak, sg_root: SceneNodePtr, ex: ExecutorPtr) -> Result<Pimpl> {
+    pub async fn new(
+        node: SceneNodeWeak,
+        sg_root: SceneNodePtr,
+        ex: ExecutorPtr,
+        db: sled::Db,
+    ) -> Result<Pimpl> {
         let node_ref = &node.upgrade().unwrap();
         let nick = PropertyStr::wrap(node_ref, Role::Internal, "nick", 0).unwrap();
 
@@ -184,7 +195,7 @@ impl DarkIrc2 {
 
         i!("Starting DarkIRC backend");
         let evgr_path = get_evgrdb_path();
-        let db = match sled::open(&evgr_path) {
+        let evgr_db = match sled::open(&evgr_path) {
             Ok(db) => db,
             Err(err) => {
                 e!("Sled database '{}' failed to open: {err}!", evgr_path.display());
@@ -192,8 +203,12 @@ impl DarkIrc2 {
             }
         };
 
-        let setting_tree = db.open_tree("settings")?;
+        let setting_tree = evgr_db.open_tree("settings")?;
+
+        // Use the unified db for reading channels (UI stores channels there)
         let channels_tree = db.open_tree("channels")?;
+        i!("Opened channels tree from unified db");
+
         let settings = PluginSettings { setting_root, sled_tree: setting_tree };
 
         let mut p2p_settings: NetSettings = Default::default();
@@ -280,7 +295,7 @@ impl DarkIrc2 {
 
         let self_ = Arc::new(Self {
             node: node.clone(),
-            tasks: OnceLock::new(),
+            tasks: SyncMutex::new(vec![]),
 
             p2p,
             event_graph,
@@ -293,13 +308,10 @@ impl DarkIrc2 {
             channels_tree,
 
             settings,
+            ex: ex.clone(),
         });
 
-        // Load channels from database BEFORE starting P2P
-        if let Err(e) = self_.load_channels_from_db().await {
-            e!("Failed to load channels: {e}");
-        }
-
+        self_.load_channels_from_db().await;
         self_.clone().start(sg_root, ex).await;
         Ok(Pimpl::DarkIrc2(self_))
     }
@@ -418,8 +430,9 @@ impl DarkIrc2 {
                 }
             };
 
-            // TODO: decrypt messages here:
-            // self.try_decrypt(&mut privmsg, &self.nick.get()).await;
+            // Try to decrypt messages (will decrypt encrypted channels/contacts in place)
+            let mut privmsg = privmsg;
+            self.try_decrypt(&mut privmsg, &self.nick.get()).await;
 
             let mut timest = ev.header.timestamp;
             let msg_id = msg_id(&privmsg, timest);
@@ -430,7 +443,7 @@ impl DarkIrc2 {
 
             let is_self = {
                 let mut is_self = false;
-                let mut seen = self.seen_msgs.lock().unwrap();
+                let mut seen = self.seen_msgs.lock();
                 match seen.get_status(&msg_id) {
                     Some(msg) => {
                         is_self = msg.is_self;
@@ -533,9 +546,8 @@ impl DarkIrc2 {
 
         // Send text to channel
         d!("Sending privmsg: {timest} {channel}: <{nick}> {msg}");
-        let msg = Privmsg { version: 0, msg_type: 0, channel, nick, msg };
-        // TODO: messages should be encrypted here with:
-        // self.try_encrypt(&mut msg).await;
+        let mut msg = Privmsg { version: 0, msg_type: 0, channel, nick, msg };
+        self.try_encrypt(&mut msg).await;
         let evgr = self.event_graph.clone();
         let event = event_graph::Event::with_timestamp(timest, serialize_async(&msg).await, &evgr)
             .await
@@ -545,7 +557,7 @@ impl DarkIrc2 {
         // Keep track of our own messages so we don't apply timestamp correction to them
         // which messes up the msg id.
         {
-            let mut seen = self.seen_msgs.lock().unwrap();
+            let mut seen = self.seen_msgs.lock();
             seen.push(msg_id.clone(), true);
         }
 
@@ -562,20 +574,15 @@ impl DarkIrc2 {
     }
 
     /// Load channels from UI database and populate encryption keys
-    pub async fn load_channels_from_db(&self) -> Result<()> {
-        use darkfi_serial::deserialize;
-
+    pub async fn load_channels_from_db(&self) {
         let mut channels = self.channels.write().await;
 
         for item in self.channels_tree.iter() {
-            let (key, val) = item.map_err(|e| {
-                e!("Failed to read channel from database: {e}");
-                Error::SledDbErr
-            })?;
+            let (key, val) = item.unwrap();
             let channel_name = String::from_utf8_lossy(&key).to_string();
 
             // Deserialize UI channel struct
-            let ui_channel = match deserialize::<Channel>(&val) {
+            let ui_channel = match deserialize_async::<Channel>(&val).await {
                 Ok(ch) => ch,
                 Err(e) => {
                     w!("Failed to deserialize channel {channel_name}: {e}");
@@ -589,11 +596,13 @@ impl DarkIrc2 {
                 IrcChannel { topic: String::new(), nicks: HashSet::new(), saltbox: None };
 
             if let Some(secret) = ui_channel.secret {
-                // Convert secret array to CryptoBox
-                let public = PublicKey::from_bytes(secret);
+                // Convert secret array to SecretKey first, then derive PublicKey
                 let secret_key = SecretKey::from_bytes(secret);
-                let saltbox = CryptoBox::new(&public, &secret_key);
+                let public = secret_key.public_key();
+                let saltbox = ChaChaBox::new(&public, &secret_key);
 
+                // Log the secret in base58 for debugging
+                let secret_b58 = bs58::encode(secret).into_string();
                 irc_channel.saltbox = Some(Arc::new(saltbox));
             }
 
@@ -601,33 +610,81 @@ impl DarkIrc2 {
             channels.insert(full_name, irc_channel);
             i!("Loaded channel: #{} (encrypted: {})", channel_name, is_encrypted);
         }
-
-        Ok(())
     }
 
-    /// Reload channels from database (called when UI adds/changes channels)
-    pub async fn reload(&self) -> Result<()> {
-        self.load_channels_from_db().await
+    async fn rescan_channel_history(self: Arc<Self>, channel: String) {
+        i!("Starting background rescan for channel: {channel}");
+
+        // Fetch and order all events from the DAG (like darkirc does)
+        let Ok(dag_events) = self.event_graph.order_events().await else {
+            e!("Failed to fetch events from DAG");
+            return;
+        };
+
+        let mut found_count = 0;
+
+        for event in dag_events.iter() {
+            // Deserialize Privmsg
+            let mut privmsg = match deserialize_async::<Privmsg>(event.content()).await {
+                Ok(pm) => pm,
+                Err(e) => {
+                    t!("Not a Privmsg event, skipping");
+                    continue;
+                }
+            };
+
+            // Try to decrypt (handles encrypted channels)
+            self.try_decrypt(&mut privmsg, &self.nick.get()).await;
+
+            // Check if message belongs to target channel
+            if privmsg.channel != channel {
+                continue;
+            }
+
+            found_count += 1;
+
+            // Calculate message ID
+            let timest = event.header.timestamp;
+            let msg_id = msg_id(&privmsg, timest);
+
+            // Send to ChatView via notify_recv (handles DB storage and duplicates)
+            self.notify_recv(
+                channel.clone(),
+                timest,
+                msg_id,
+                privmsg.nick.clone(),
+                privmsg.msg.clone(),
+            )
+            .await;
+        }
+
+        i!("Rescan complete for {channel}: found {found_count} messages");
     }
 
-    async fn process_reload(me: &Weak<Self>, sub: &MethodCallSub) -> bool {
+    async fn process_rescan(me: &Weak<Self>, sub: &MethodCallSub) -> bool {
         let Ok(method_call) = sub.receive().await else {
-            d!("Reload method closed");
+            d!("Rescan method closed");
             return false
         };
 
-        t!("method called: reload({method_call:?})");
+        t!("method called: rescan({method_call:?})");
 
         let Some(self_) = me.upgrade() else {
-            e!("DarkIrc2 destroyed before reload completed");
+            e!("DarkIrc2 destroyed before rescan completed");
             return false
         };
 
-        if let Err(e) = self_.reload().await {
-            e!("Failed to reload channels: {e}");
-        } else {
-            i!("Successfully reloaded channels");
-        }
+        // Decode channel name from method data
+        let mut cur = std::io::Cursor::new(&method_call.data);
+        let Ok(channel) = String::decode(&mut cur) else {
+            e!("Rescan method called with invalid channel data");
+            return false
+        };
+
+        self_.load_channels_from_db().await;
+
+        let task = self_.ex.clone().spawn(self_.clone().rescan_channel_history(channel));
+        self_.tasks.lock().push(task);
 
         true
     }
@@ -699,10 +756,10 @@ impl DarkIrc2 {
                 async move { while Self::process_reconnect(&me2, &reconnect_method_sub).await {} },
             );
 
-        let reload_method_sub = node.subscribe_method_call("reload").unwrap();
+        let rescan_method_sub = node.subscribe_method_call("rescan").unwrap();
         let me2 = me.clone();
-        let reload_method_task =
-            ex.spawn(async move { while Self::process_reload(&me2, &reload_method_sub).await {} });
+        let rescan_method_task =
+            ex.spawn(async move { while Self::process_rescan(&me2, &rescan_method_sub).await {} });
 
         let mut on_modify = OnModify::new(ex.clone(), self.node.clone(), me.clone());
         async fn save_nick(self_: Arc<DarkIrc2>, _batch: BatchGuardPtr) {
@@ -753,14 +810,14 @@ impl DarkIrc2 {
         let mut tasks = vec![
             send_method_task,
             reconnect_method_task,
-            reload_method_task,
+            rescan_method_task,
             ev_task,
             dag_task,
             start_task,
             stop_task,
         ];
         tasks.append(&mut on_modify.tasks);
-        self.tasks.set(tasks).unwrap();
+        *self.tasks.lock() = tasks;
     }
 
     /// Try encrypting a given `Privmsg` if there is such a channel/contact.
@@ -785,20 +842,9 @@ impl DarkIrc2 {
 
     /// Try decrypting a given potentially encrypted `Privmsg` object.
     pub async fn try_decrypt(&self, privmsg: &mut Privmsg, self_nickname: &str) {
-        let channel_ciphertext = match bs58::decode(&privmsg.channel).into_vec() {
-            Ok(v) => v,
-            Err(_) => return,
-        };
-
-        let nick_ciphertext = match bs58::decode(&privmsg.nick).into_vec() {
-            Ok(v) => v,
-            Err(_) => return,
-        };
-
-        let msg_ciphertext = match bs58::decode(&privmsg.msg).into_vec() {
-            Ok(v) => v,
-            Err(_) => return,
-        };
+        let Ok(channel_ciphertext) = bs58::decode(&privmsg.channel).into_vec() else { return };
+        let Ok(nick_ciphertext) = bs58::decode(&privmsg.nick).into_vec() else { return };
+        let Ok(msg_ciphertext) = bs58::decode(&privmsg.msg).into_vec() else { return };
 
         for (name, channel) in self.channels.read().await.iter() {
             let Some(saltbox) = &channel.saltbox else { continue };
@@ -845,7 +891,6 @@ impl DarkIrc2 {
             privmsg.channel = name.to_string();
             privmsg.nick = nick;
             privmsg.msg = String::from_utf8_lossy(&msg_dec).into();
-            d!("Successfully decrypted message from {name}");
             return
         }
     }

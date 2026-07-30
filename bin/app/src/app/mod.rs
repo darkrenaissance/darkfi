@@ -68,17 +68,8 @@ impl App {
 
     /// Does not require miniquad to be init. Created the scene graph tree / schema and all
     /// the objects.
-    pub async fn setup(&self) -> Result<Option<i32>, Error> {
+    pub async fn setup(&self, db: sled::Db) -> Result<Option<i32>, Error> {
         t!("App::setup()");
-
-        let db_path = get_settingsdb_path();
-        let db = match sled::open(&db_path) {
-            Ok(db) => db,
-            Err(err) => {
-                e!("Sled database '{}' failed to open: {err}!", db_path.display());
-                return Err(Error::SledDbErr)
-            }
-        };
 
         let setting_root = SceneNode::new("setting", SceneNodeType::SettingRoot);
         let setting_root = setting_root.setup_null();
@@ -127,7 +118,7 @@ impl App {
         self.sg_root.link(setting_root.clone());
 
         #[cfg(feature = "schema-app")]
-        schema::make(&self, window.clone(), &i18n_fish).await;
+        schema::make(&self, window.clone(), &i18n_fish, db).await;
 
         #[cfg(feature = "schema-test")]
         schema::test::make(&self, window.clone(), &i18n_fish).await;

@@ -48,11 +48,11 @@ use crate::{
     gfx::gfxtag,
     mesh::{COLOR_CYAN, COLOR_INACTIVE, COLOR_MINT, COLOR_MINT_OP, MINT_BTN_GRADIENT},
     prop::{PropertyBool, PropertyFloat32, Role},
-    scene::{SceneNodePtr, Slot},
+    scene::{Pimpl, SceneNodePtr, Slot},
     shape,
     ui::{
         emoji_picker::EmojiMeshesPtr, BaseEdit, BaseEditType, Button, Layer, Menu, ShapeVertex,
-        Shortcut, Text, VectorArt, VectorShape,
+        Shortcut, Text, UIObject, VectorArt, VectorShape, Window,
     },
     util::i18n::I18nBabelFish,
 };
@@ -1333,10 +1333,10 @@ pub async fn make(
     let save_channel = app.ex.spawn(async move {
         while let Ok(_) = addchannel_recvr.recv().await {
             let name_prop = nickedit2.get_property("text").unwrap();
-            let name = name_prop.get_str(0).unwrap_or_default();
+            let name = name_prop.get_str(0).unwrap();
 
             let secret_prop = secedit2.get_property("text").unwrap();
-            let secret = secret_prop.get_str(0).unwrap_or_default();
+            let secret = secret_prop.get_str(0).unwrap();
 
             if name.is_empty() {
                 w!("Attempted to add channel with empty name");
@@ -1373,10 +1373,6 @@ pub async fn make(
 
             channels_tree2.insert(key, val).unwrap();
             let _ = channels_tree2.flush_async().await;
-
-            // Notify darkirc2 to reload channels
-            let darkirc2 = sg_root2.lookup_node("/plugin/darkirc").unwrap();
-            darkirc2.call_method("reload", vec![]).await.unwrap();
 
             let atom = &mut renderer2.make_guard(gfxtag!("add_channel"));
             menu_prop2.push_str(atom, Role::App, &channel_name).unwrap();
@@ -1431,12 +1427,13 @@ pub async fn make(
                 continue;
             }
 
+            let content = sg_root.lookup_node("/window/content").unwrap();
             // Create the chat layer and get the node
             let node = chat::make(
                 &sg_root,
                 &renderer,
                 &ex,
-                content2.clone(),
+                content,
                 &channel,
                 &db2,
                 &i18n_fish2,
@@ -1444,6 +1441,11 @@ pub async fn make(
                 is_first_time,
             )
             .await;
+            match node.pimpl() {
+                Pimpl::Layer(layer) => layer.clone().start(ex.clone()).await,
+                _ => panic!("wrong pimpl"),
+            }
+            d!("Added channel layer: {}", node.get_full_path().unwrap());
 
             // Show the chat layer
             node.set_property_bool(atom, Role::App, "is_visible", true).unwrap();
@@ -1458,6 +1460,22 @@ pub async fn make(
 
             // Hide channel screen
             channel_vis.set(atom, false);
+
+            // Force redraw so newly added node parent_rect gets set.
+            // There are other ways to do this but this is easiest for now.
+            // We can think later about doing this better.
+            let win = sg_root.lookup_node("/window").unwrap();
+            match win.pimpl() {
+                Pimpl::Window(win) => win.draw(atom).await,
+                _ => panic!("wrong pimpl"),
+            }
+
+            // Trigger rescan for this channel
+            if let Some(darkirc) = sg_root.lookup_node("/plugin/darkirc") {
+                let mut data = vec![];
+                channel.encode(&mut data).unwrap();
+                darkirc.call_method("rescan", data).await.unwrap();
+            }
         }
     });
 
