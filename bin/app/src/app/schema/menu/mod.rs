@@ -419,18 +419,6 @@ pub async fn make(
     prop.set_f32(atom, Role::App, 2, 1.).unwrap();
     prop.set_f32(atom, Role::App, 3, 1.).unwrap();
 
-    let prop = node.get_property("active_color").unwrap();
-    prop.set_f32(atom, Role::App, 0, 0.36).unwrap();
-    prop.set_f32(atom, Role::App, 1, 1.).unwrap();
-    prop.set_f32(atom, Role::App, 2, 0.51).unwrap();
-    prop.set_f32(atom, Role::App, 3, 1.).unwrap();
-
-    let prop = node.get_property("alert_color").unwrap();
-    prop.set_f32(atom, Role::App, 0, 0.56).unwrap();
-    prop.set_f32(atom, Role::App, 1, 0.61).unwrap();
-    prop.set_f32(atom, Role::App, 2, 1.).unwrap();
-    prop.set_f32(atom, Role::App, 3, 1.).unwrap();
-
     let prop = node.get_property("sep_color").unwrap();
     prop.set_f32(atom, Role::App, 0, 0.4).unwrap();
     prop.set_f32(atom, Role::App, 1, 0.4).unwrap();
@@ -456,6 +444,8 @@ pub async fn make(
     let sg_root = app.sg_root.clone();
     let menu_is_visible = PropertyBool::wrap(&layer_node, Role::App, "is_visible", 0).unwrap();
     let renderer = app.renderer.clone();
+    let role1_group = node.get_property("role1_group").unwrap();
+    let role2_group = node.get_property("role2_group").unwrap();
     let listen_click = app.ex.spawn(async move {
         while let Ok(data) = recvr.recv().await {
             let channel: String = deserialize(&data).unwrap();
@@ -463,6 +453,8 @@ pub async fn make(
             if let Some(node) = sg_root.lookup_node(path) {
                 let atom = &mut renderer.make_guard(gfxtag!("channel_clicked"));
                 info!(target: "app::menu", "clicked: {channel}!");
+                role1_group.remove_str_item(atom, Role::App, &channel);
+                role2_group.remove_str_item(atom, Role::App, &channel);
                 node.set_property_bool(atom, Role::App, "is_visible", true).unwrap();
                 menu_is_visible.set(atom, false);
             }

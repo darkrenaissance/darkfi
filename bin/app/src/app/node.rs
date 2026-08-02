@@ -725,17 +725,17 @@ pub fn create_menu(name: &str) -> SceneNode {
     prop.set_range_f32(0., 1.);
     node.add_property(prop).unwrap();
 
-    let mut prop = Property::new("active_color", PropertyType::Float32, PropertySubType::Color);
-    prop.set_ui_text("Active Color", "Active item text color");
+    let mut prop = Property::new("role1_color", PropertyType::Float32, PropertySubType::Color);
+    prop.set_ui_text("Role1 Color", "Text color for items in role1 group");
     prop.set_array_len(4);
-    prop.set_defaults_f32(vec![1., 1., 1., 1.]).unwrap();
+    prop.set_defaults_f32(vec![0.36, 1., 0.51, 1.]).unwrap();
     prop.set_range_f32(0., 1.);
     node.add_property(prop).unwrap();
 
-    let mut prop = Property::new("alert_color", PropertyType::Float32, PropertySubType::Color);
-    prop.set_ui_text("Alert Color", "Alert item text color");
+    let mut prop = Property::new("role2_color", PropertyType::Float32, PropertySubType::Color);
+    prop.set_ui_text("Role2 Color", "Text color for items in role2 group");
     prop.set_array_len(4);
-    prop.set_defaults_f32(vec![1., 0.3, 0.3, 1.]).unwrap();
+    prop.set_defaults_f32(vec![0.56, 0.61, 1., 1.]).unwrap();
     prop.set_range_f32(0., 1.);
     node.add_property(prop).unwrap();
 
@@ -761,6 +761,16 @@ pub fn create_menu(name: &str) -> SceneNode {
     prop.set_unbounded();
     node.add_property(prop).unwrap();
 
+    let mut prop = Property::new("role1_group", PropertyType::Str, PropertySubType::Null);
+    prop.set_ui_text("Role1 Group", "Items colored with role1 color");
+    prop.set_unbounded();
+    node.add_property(prop).unwrap();
+
+    let mut prop = Property::new("role2_group", PropertyType::Str, PropertySubType::Null);
+    prop.set_ui_text("Role2 Group", "Items colored with role2 color");
+    prop.set_unbounded();
+    node.add_property(prop).unwrap();
+
     node.add_signal(
         "select",
         "Item selected",
@@ -776,12 +786,6 @@ pub fn create_menu(name: &str) -> SceneNode {
         vec![("deleted_items", "List of deleted item names", CallArgType::Str)],
     )
     .unwrap();
-
-    node.add_method("mark_active", vec![("item_name", "Item name", CallArgType::Str)], None)
-        .unwrap();
-
-    node.add_method("mark_alert", vec![("item_name", "Item name", CallArgType::Str)], None)
-        .unwrap();
 
     node.add_method("cancel_edit", vec![], None).unwrap();
 

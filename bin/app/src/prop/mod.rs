@@ -967,6 +967,23 @@ impl Property {
         }
     }
 
+    // Remove by item
+
+    pub fn remove_str_item(
+        self: &Arc<Self>,
+        atom: &mut PropertyAtomicGuard,
+        role: Role,
+        item: &str,
+    ) -> Option<usize> {
+        for i in 0..self.get_len() {
+            if self.get_str(i).unwrap() == item {
+                self.remove_str(atom, role, i).unwrap();
+                return Some(i);
+            }
+        }
+        None
+    }
+
     // Get
 
     pub fn is_bounded(&self) -> bool {

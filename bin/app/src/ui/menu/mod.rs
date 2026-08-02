@@ -24,7 +24,7 @@ use miniquad::{MouseButton, TouchPhase};
 use parking_lot::Mutex as SyncMutex;
 use rand::{rngs::OsRng, Rng};
 use std::{
-    collections::{HashMap, VecDeque},
+    collections::{HashMap, HashSet, VecDeque},
     io::Read,
     sync::{
         atomic::{AtomicBool, Ordering},
@@ -59,12 +59,6 @@ const MENU_ICON_OFFSET: f32 = 24.;
 
 macro_rules! d { ($($arg:tt)*) => { debug!(target: "ui::menu", $($arg)*); } }
 macro_rules! t { ($($arg:tt)*) => { trace!(target: "ui::menu", $($arg)*); } }
-
-#[derive(Clone, Copy, PartialEq, Eq)]
-enum ItemStatus {
-    Active,
-    Alert,
-}
 
 #[derive(Clone)]
 struct TouchInfo {
@@ -139,8 +133,10 @@ pub struct Menu {
     bg_color: PropertyColor,
     sep_size: PropertyFloat32,
     sep_color: PropertyColor,
-    active_color: PropertyColor,
-    alert_color: PropertyColor,
+    role1_color: PropertyColor,
+    role1_group: PropertyPtr,
+    role2_color: PropertyColor,
+    role2_group: PropertyPtr,
     fade_zone: PropertyFloat32,
     window_scale: PropertyFloat32,
 
@@ -158,8 +154,6 @@ pub struct Menu {
     is_edit_mode: AtomicBool,
 
     parent_rect: SyncMutex<Option<Rectangle>>,
-    item_states: SyncMutex<HashMap<String, ItemStatus>>,
-
     saved_items: SyncMutex<Option<Vec<String>>>,
 }
 
@@ -184,8 +178,10 @@ impl Menu {
         let bg_color = PropertyColor::wrap(node_ref, Role::Internal, "bg_color").unwrap();
         let sep_size = PropertyFloat32::wrap(node_ref, Role::Internal, "sep_size", 0).unwrap();
         let sep_color = PropertyColor::wrap(node_ref, Role::Internal, "sep_color").unwrap();
-        let active_color = PropertyColor::wrap(node_ref, Role::Internal, "active_color").unwrap();
-        let alert_color = PropertyColor::wrap(node_ref, Role::Internal, "alert_color").unwrap();
+        let role1_color = PropertyColor::wrap(node_ref, Role::Internal, "role1_color").unwrap();
+        let role1_group = node_ref.get_property("role1_group").unwrap();
+        let role2_color = PropertyColor::wrap(node_ref, Role::Internal, "role2_color").unwrap();
+        let role2_group = node_ref.get_property("role2_group").unwrap();
 
         let fade_zone = PropertyFloat32::wrap(node_ref, Role::Internal, "fade_zone", 0).unwrap();
 
@@ -215,8 +211,10 @@ impl Menu {
             bg_color,
             sep_size,
             sep_color,
-            active_color,
-            alert_color,
+            role1_color,
+            role1_group,
+            role2_color,
+            role2_group,
             fade_zone,
             window_scale,
             mouse_pos: SyncMutex::new(Point::new(0., 0.)),
@@ -232,7 +230,6 @@ impl Menu {
             speed: AtomicF32::new(0.),
             is_edit_mode: AtomicBool::new(false),
             parent_rect: SyncMutex::new(None),
-            item_states: SyncMutex::new(HashMap::new()),
             saved_items: SyncMutex::new(None),
         });
 
@@ -270,11 +267,8 @@ impl Menu {
 
     async fn handle_selection(&self, item_idx: usize) {
         if item_idx < self.items.get_len() {
-            let item_name = self.items.get_str(item_idx).unwrap();
-
-            self.item_states.lock().remove(&item_name);
-
             let node = self.node.upgrade().unwrap();
+            let item_name = self.items.get_str(item_idx).unwrap();
             let data = serialize(&item_name);
             node.trigger("select", data).await.unwrap();
         }
@@ -342,13 +336,18 @@ impl Menu {
         let padding_y = self.padding.get_f32(1).unwrap();
         let handle_padding = self.handle_padding.get();
         let text_color = self.text_color.get();
-        let active_color = self.active_color.get();
-        let alert_color = self.alert_color.get();
+        let role1_color = self.role1_color.get();
+        let role2_color = self.role2_color.get();
         let bg_color = self.bg_color.get();
         let sep_size = self.sep_size.get();
         let sep_color = self.sep_color.get();
         let fade_distance = self.fade_zone.get();
         let window_scale = self.window_scale.get();
+
+        let role1_set: HashSet<String> =
+            self.role1_group.get_str_vec().unwrap_or_default().into_iter().collect();
+        let role2_set: HashSet<String> =
+            self.role2_group.get_str_vec().unwrap_or_default().into_iter().collect();
 
         let num_items = self.items.get_len();
 
@@ -382,7 +381,6 @@ impl Menu {
         sep_mesh.draw_filled_box(&Rectangle::new(0., 0., rect.w, sep_size), sep_color);
         let sep_mesh = sep_mesh.alloc(&self.renderer).draw_untextured();
 
-        let item_states = self.item_states.lock();
         let is_edit_mode = self.is_edit_mode.load(Ordering::Relaxed);
         let edit_offset = if is_edit_mode { handle_padding } else { 0.0 };
 
@@ -408,10 +406,12 @@ impl Menu {
         for idx in 0..num_items {
             let item_text = items_list[idx].clone();
 
-            let base_color = match item_states.get(&item_text) {
-                Some(ItemStatus::Active) => active_color,
-                Some(ItemStatus::Alert) => alert_color,
-                _ => text_color,
+            let base_color = if role2_set.contains(&item_text) {
+                role2_color
+            } else if role1_set.contains(&item_text) {
+                role1_color
+            } else {
+                text_color
             };
 
             // Apply fade effect in the configured fade zone
@@ -567,72 +567,6 @@ impl Menu {
         }
     }
 
-    async fn process_mark_active_method(me: &Weak<Self>, sub: &MethodCallSub) -> bool {
-        let Ok(method_call) = sub.receive().await else {
-            d!("Event relayer closed");
-            return false
-        };
-
-        d!("method called: mark_active({method_call:?})");
-        assert!(method_call.send_res.is_none());
-
-        fn decode_data(data: &[u8]) -> std::io::Result<String> {
-            use std::io::Cursor;
-            let mut cur = Cursor::new(&data);
-            let item_name = String::decode(&mut cur)?;
-            Ok(item_name)
-        }
-
-        let Ok(item_name) = decode_data(&method_call.data) else {
-            d!("mark_active() method invalid arg data");
-            return true
-        };
-
-        let Some(self_) = me.upgrade() else {
-            d!("Self destroyed");
-            return true
-        };
-
-        self_.item_states.lock().insert(item_name, ItemStatus::Active);
-        let atom = &mut self_.renderer.make_guard(gfxtag!("Menu::mark_active"));
-        self_.redraw(atom);
-
-        true
-    }
-
-    async fn process_mark_alert_method(me: &Weak<Self>, sub: &MethodCallSub) -> bool {
-        let Ok(method_call) = sub.receive().await else {
-            d!("Event relayer closed");
-            return false
-        };
-
-        d!("method called: mark_alert({method_call:?})");
-        assert!(method_call.send_res.is_none());
-
-        fn decode_data(data: &[u8]) -> std::io::Result<String> {
-            use std::io::Cursor;
-            let mut cur = Cursor::new(&data);
-            let item_name = String::decode(&mut cur)?;
-            Ok(item_name)
-        }
-
-        let Ok(item_name) = decode_data(&method_call.data) else {
-            d!("mark_alert() method invalid arg data");
-            return true
-        };
-
-        let Some(self_) = me.upgrade() else {
-            d!("Self destroyed");
-            return true
-        };
-
-        self_.item_states.lock().insert(item_name, ItemStatus::Alert);
-        let atom = &mut self_.renderer.make_guard(gfxtag!("Menu::mark_alert"));
-        self_.redraw(atom);
-
-        true
-    }
-
     /// Cancels edit mode changes, reverting any modifications made during edit mode
     async fn process_cancel_method(me: &Weak<Self>, sub: &MethodCallSub) -> bool {
         let Ok(method_call) = sub.receive().await else {
@@ -723,20 +657,6 @@ impl UIObject for Menu {
             }
         });
 
-        let method_sub = node_ref.subscribe_method_call("mark_active").unwrap();
-        let me2 = me.clone();
-        let mark_active_task =
-            ex.spawn(
-                async move { while Self::process_mark_active_method(&me2, &method_sub).await {} },
-            );
-
-        let method_sub = node_ref.subscribe_method_call("mark_alert").unwrap();
-        let me2 = me.clone();
-        let mark_alert_task =
-            ex.spawn(
-                async move { while Self::process_mark_alert_method(&me2, &method_sub).await {} },
-            );
-
         let method_sub = node_ref.subscribe_method_call("cancel_edit").unwrap();
         let me2 = me.clone();
         let cancel_task =
@@ -762,9 +682,12 @@ impl UIObject for Menu {
         on_modify.when_change(self.bg_color.prop(), redraw);
         on_modify.when_change(self.sep_size.prop(), redraw);
         on_modify.when_change(self.sep_color.prop(), redraw);
+        on_modify.when_change(self.role1_color.prop(), redraw);
+        on_modify.when_change(self.role1_group.clone(), redraw);
+        on_modify.when_change(self.role2_color.prop(), redraw);
+        on_modify.when_change(self.role2_group.clone(), redraw);
 
-        let mut tasks =
-            vec![motion_task, mark_active_task, mark_alert_task, cancel_task, done_task];
+        let mut tasks = vec![motion_task, cancel_task, done_task];
         tasks.append(&mut on_modify.tasks);
         *self.tasks.lock() = tasks;
     }

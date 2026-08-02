@@ -329,26 +329,12 @@ async fn load_plugins(
                 continue
             }
 
-            /*
-            // TODO: add coloring to menu items
-
-            let node_path = format!("/window/content/menu_layer/{channel}_channel_label");
-            let menu_label = sg_root2.lookup_node(&node_path).unwrap();
-            let prop = menu_label.get_property("text_color").unwrap();
-            if msg.contains(&darkirc_nick.get()) {
-                // Nick highlight
-                prop.set_f32(atom, Role::App, 0, 0.56).unwrap();
-                prop.set_f32(atom, Role::App, 1, 0.61).unwrap();
-                prop.set_f32(atom, Role::App, 2, 1.).unwrap();
-                prop.set_f32(atom, Role::App, 3, 1.).unwrap();
-            } else {
-                // Normal channel activity
-                prop.set_f32(atom, Role::App, 0, 0.36).unwrap();
-                prop.set_f32(atom, Role::App, 1, 1.).unwrap();
-                prop.set_f32(atom, Role::App, 2, 0.51).unwrap();
-                prop.set_f32(atom, Role::App, 3, 1.).unwrap();
+            let menu_node = sg_root2.lookup_node("/window/content/menu_layer/main_menu").unwrap();
+            let group_name = if msg.contains(&darkirc_nick.get()) { "role2_group" } else { "role1_group" };
+            let group = menu_node.get_property(group_name).unwrap();
+            if !group.get_str_vec().unwrap().contains(&channel) {
+                group.push_str(atom, Role::App, &channel).unwrap();
             }
-            */
         }
     });
 

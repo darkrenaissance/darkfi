@@ -1280,18 +1280,6 @@ pub async fn make(
     prop.set_f32(atom, Role::App, 2, 1.).unwrap();
     prop.set_f32(atom, Role::App, 3, 1.).unwrap();
 
-    let prop = node.get_property("active_color").unwrap();
-    prop.set_f32(atom, Role::App, 0, 0.36).unwrap();
-    prop.set_f32(atom, Role::App, 1, 1.).unwrap();
-    prop.set_f32(atom, Role::App, 2, 0.51).unwrap();
-    prop.set_f32(atom, Role::App, 3, 1.).unwrap();
-
-    let prop = node.get_property("alert_color").unwrap();
-    prop.set_f32(atom, Role::App, 0, 0.56).unwrap();
-    prop.set_f32(atom, Role::App, 1, 0.61).unwrap();
-    prop.set_f32(atom, Role::App, 2, 1.).unwrap();
-    prop.set_f32(atom, Role::App, 3, 1.).unwrap();
-
     let prop = node.get_property("sep_color").unwrap();
     prop.set_f32(atom, Role::App, 0, 0.4).unwrap();
     prop.set_f32(atom, Role::App, 1, 0.4).unwrap();
