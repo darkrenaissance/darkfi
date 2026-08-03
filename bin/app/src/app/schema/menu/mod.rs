@@ -39,6 +39,7 @@ use crate::{
     util::i18n::I18nBabelFish,
 };
 use channel::Channel;
+use contact::Contact;
 
 #[cfg(any(target_os = "android", feature = "emulate-android"))]
 mod android_ui_consts {
@@ -101,7 +102,7 @@ mod ui_consts {
 }
 
 pub mod channel;
-mod contact;
+pub mod contact;
 mod edit_buttons;
 mod edit_switch;
 
@@ -110,6 +111,7 @@ pub async fn make(
     content: SceneNodePtr,
     i18n_fish: &I18nBabelFish,
     channels_tree: sled::Tree,
+    contacts_tree: sled::Tree,
     db: &sled::Db,
     emoji_meshes: EmojiMeshesPtr,
     is_first_time: bool,
@@ -186,6 +188,10 @@ pub async fn make(
         window_scale.clone(),
         contact_is_visible.clone(),
         channel_is_visible.clone(),
+        contacts_tree.clone(),
+        db,
+        emoji_meshes.clone(),
+        is_first_time,
     )
     .await;
 
@@ -437,6 +443,12 @@ pub async fn make(
         let channel = deserialize::<Channel>(&val).unwrap();
         let channel_name = format!("#{}", channel.name);
         prop.push_str(atom, Role::App, &channel_name).unwrap();
+    }
+    for item in contacts_tree.iter() {
+        let (_key, val) = item.unwrap();
+        let contact = deserialize::<Contact>(&val).unwrap();
+        let contact_name = format!("@{}", contact.name);
+        prop.push_str(atom, Role::App, &contact_name).unwrap();
     }
 
     let (slot, recvr) = Slot::new("menu_clicked");

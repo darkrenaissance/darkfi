@@ -735,6 +735,12 @@ pub fn create_darkirc(name: &str) -> SceneNode {
     prop.set_defaults_str(vec!["anon".to_string()]).unwrap();
     node.add_property(prop).unwrap();
 
+    let mut prop = Property::new("dm_public", PropertyType::Str, PropertySubType::Null);
+    prop.set_ui_text("DM Public Key", "Your DM public key (share with contacts)");
+    prop.allow_null_values();
+    prop.set_defaults_null().unwrap();
+    node.add_property(prop).unwrap();
+
     node.add_signal(
         "recv",
         "Message received",
@@ -766,7 +772,6 @@ pub fn create_darkirc(name: &str) -> SceneNode {
     .unwrap();
 
     node.add_method("reconnect", vec![], None).unwrap();
-
     node.add_method("rescan", vec![("channel", "Channel", CallArgType::Str)], None).unwrap();
 
     node

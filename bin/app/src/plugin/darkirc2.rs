@@ -24,7 +24,7 @@ use std::{
 };
 
 use async_lock::RwLock;
-use crypto_box::{ChaChaBox, SecretKey};
+use crypto_box::{ChaChaBox, PublicKey, SecretKey};
 use darkfi::{
     event_graph::{
         self,
@@ -51,7 +51,7 @@ use parking_lot::Mutex as SyncMutex;
 use sled_overlay::sled;
 
 use crate::{
-    app::schema::menu::channel::Channel,
+    app::schema::menu::{channel::Channel, contact::Contact},
     error::{Error, Result},
     prop::{BatchGuardPtr, PropertyAtomicGuard, PropertyStr, Role},
     scene::{MethodCallSub, Pimpl, SceneNode, SceneNodePtr, SceneNodeType, SceneNodeWeak, Slot},
@@ -176,6 +176,8 @@ pub struct DarkIrc2 {
     pub channels: RwLock<HashMap<String, IrcChannel>>,
     pub contacts: RwLock<HashMap<String, IrcContact>>,
     channels_tree: sled::Tree,
+    contacts_tree: sled::Tree,
+    dm_secret: SecretKey,
     settings: PluginSettings,
     ex: ExecutorPtr,
 }
@@ -208,6 +210,22 @@ impl DarkIrc2 {
         // Use the unified db for reading channels (UI stores channels there)
         let channels_tree = db.open_tree("channels")?;
         i!("Opened channels tree from unified db");
+
+        let contacts_tree = db.open_tree("contacts")?;
+        i!("Opened contacts tree from unified db");
+
+        let dm_secret = Self::load_or_create_dm_identity(&db);
+        let dm_public_b58 = bs58::encode(dm_secret.public_key().to_bytes()).into_string();
+        // Expose our DM public key on the plugin node so it can be displayed/shared.
+        node_ref
+            .set_property_str(
+                &mut PropertyAtomicGuard::none(),
+                Role::Internal,
+                "dm_public",
+                &dm_public_b58,
+            )
+            .unwrap();
+        i!("DM identity public key (share with contacts): {dm_public_b58}");
 
         let settings = PluginSettings { setting_root, sled_tree: setting_tree };
 
@@ -306,12 +324,15 @@ impl DarkIrc2 {
             channels: RwLock::new(HashMap::new()),
             contacts: RwLock::new(HashMap::new()),
             channels_tree,
+            contacts_tree,
+            dm_secret,
 
             settings,
             ex: ex.clone(),
         });
 
         self_.load_channels_from_db().await;
+        self_.load_contacts_from_db().await;
         self_.clone().start(sg_root, ex).await;
         Ok(Pimpl::DarkIrc2(self_))
     }
@@ -580,15 +601,7 @@ impl DarkIrc2 {
         for item in self.channels_tree.iter() {
             let (key, val) = item.unwrap();
             let channel_name = String::from_utf8_lossy(&key).to_string();
-
-            // Deserialize UI channel struct
-            let ui_channel = match deserialize_async::<Channel>(&val).await {
-                Ok(ch) => ch,
-                Err(e) => {
-                    w!("Failed to deserialize channel {channel_name}: {e}");
-                    continue
-                }
-            };
+            let ui_channel = deserialize_async::<Channel>(&val).await.unwrap();
 
             // Convert to IrcChannel with encryption
             let full_name = format!("#{}", channel_name);
@@ -609,6 +622,42 @@ impl DarkIrc2 {
             let is_encrypted = irc_channel.saltbox.is_some();
             channels.insert(full_name, irc_channel);
             i!("Loaded channel: #{} (encrypted: {})", channel_name, is_encrypted);
+        }
+    }
+
+    /// Load (or generate on first run) the single global DM identity key.
+    fn load_or_create_dm_identity(db: &sled::Db) -> SecretKey {
+        let tree = db.open_tree("dm_identity").expect("cannot open dm_identity tree");
+        if let Ok(Some(stored)) = tree.get(b"secret") {
+            if stored.len() == 32 {
+                let arr: [u8; 32] = stored.as_ref().try_into().unwrap();
+                return SecretKey::from_bytes(arr);
+            }
+        }
+        let bytes: [u8; 32] = rand::random();
+        let _ = tree.insert(b"secret", bytes.to_vec());
+        let _ = tree.flush();
+        SecretKey::from_bytes(bytes)
+    }
+
+    /// Load contacts from the UI database and build their encryption boxes.
+    pub async fn load_contacts_from_db(&self) {
+        let mut contacts = self.contacts.write().await;
+        contacts.clear();
+
+        for item in self.contacts_tree.iter() {
+            let (key, val) = item.unwrap();
+            let name = String::from_utf8_lossy(&key).to_string();
+            let contact = deserialize_async::<Contact>(&val).await.unwrap();
+
+            let their_public = PublicKey::from(contact.public);
+            let saltbox = Arc::new(ChaChaBox::new(&their_public, &self.dm_secret));
+            let self_saltbox =
+                Arc::new(ChaChaBox::new(&self.dm_secret.public_key(), &self.dm_secret));
+
+            let full_name = format!("@{}", name);
+            contacts.insert(full_name, IrcContact { saltbox, self_saltbox });
+            i!("Loaded contact: @{name}");
         }
     }
 
@@ -682,6 +731,7 @@ impl DarkIrc2 {
         };
 
         self_.load_channels_from_db().await;
+        self_.load_contacts_from_db().await;
 
         let task = self_.ex.clone().spawn(self_.clone().rescan_channel_history(channel));
         self_.tasks.lock().push(task);

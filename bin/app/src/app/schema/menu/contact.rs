@@ -16,12 +16,26 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use darkfi_serial::deserialize;
+use bs58;
+use darkfi_serial::{async_trait, deserialize, Encodable, SerialDecodable, SerialEncodable};
+use sled_overlay::sled;
 use ui_consts::*;
 
+macro_rules! d { ($($arg:tt)*) => { debug!(target: "app::contact", $($arg)*); } }
+macro_rules! i { ($($arg:tt)*) => { info!(target: "app::contact", $($arg)*); } }
+macro_rules! w { ($($arg:tt)*) => { warn!(target: "app::contact", $($arg)*); } }
+macro_rules! e { ($($arg:tt)*) => { error!(target: "app::contact", $($arg)*); } }
+
+#[derive(Clone, Debug, SerialEncodable, SerialDecodable)]
+pub struct Contact {
+    pub name: String,
+    /// Contact's dm_chacha_public key (base58-decoded)
+    pub public: [u8; 32],
+}
+
 use super::{
-    edit_buttons, edit_switch::edit_switch, ColorScheme, BTN_TEXT_Y, CHANNEL_ITEM_HEIGHT,
-    COLOR_SCHEME, MENU_BTN_W_L,
+    super::chat, edit_buttons, edit_switch::edit_switch, ColorScheme, BTN_TEXT_Y,
+    CHANNEL_ITEM_HEIGHT, COLOR_SCHEME, MENU_BTN_W_L,
 };
 use crate::{
     app::{
@@ -35,11 +49,11 @@ use crate::{
     gfx::gfxtag,
     mesh::{COLOR_CYAN, COLOR_INACTIVE, COLOR_MINT, COLOR_MINT_OP, MINT_BTN_GRADIENT},
     prop::{PropertyBool, PropertyFloat32, Role},
-    scene::{SceneNodePtr, Slot},
+    scene::{Pimpl, SceneNodePtr, Slot},
     shape,
     ui::{
-        BaseEdit, BaseEditType, Button, Layer, Menu, ShapeVertex, Shortcut, Text, VectorArt,
-        VectorShape,
+        emoji_picker::EmojiMeshesPtr, BaseEdit, BaseEditType, Button, Layer, Menu, ShapeVertex,
+        Shortcut, Text, UIObject, VectorArt, VectorShape,
     },
     util::i18n::I18nBabelFish,
 };
@@ -129,6 +143,10 @@ pub async fn make(
     window_scale: PropertyFloat32,
     contact_is_visible: PropertyBool,
     channel_is_visible: PropertyBool,
+    contacts_tree: sled::Tree,
+    db: &sled::Db,
+    emoji_meshes: EmojiMeshesPtr,
+    is_first_time: bool,
 ) -> SceneNodePtr {
     let mut cc = expr::Compiler::new();
     cc.add_const_f32("CHATEDIT_PAD", CHATEDIT_PAD);
@@ -1222,6 +1240,10 @@ pub async fn make(
     let code = cc.compile("MENU_BTN_W_L + 45").unwrap();
     prop.set_expr(atom, Role::App, 2, code).unwrap();
     prop.set_f32(atom, Role::App, 3, CHATEDIT_HEIGHT).unwrap();
+
+    let (slot, addcontact_recvr) = Slot::new("add_contact_clicked_handler");
+    node.register("click", slot).unwrap();
+
     let node = node.setup(|me| Button::new(me, app.renderer.clone())).await;
     editlayer_node.link(node);
 
@@ -1293,20 +1315,15 @@ pub async fn make(
     node.set_property_f32(atom, Role::App, "fade_zone", MENU_FADE).unwrap();
 
     let prop = node.get_property("items").unwrap();
-    for channel in [
-        "@alice",
-        "@einstein",
-        "@fidel",
-        "@theking",
-        "@JStark",
-        "@Mom",
-        "@Dad",
-        "@Joe",
-        "@Friend1",
-        "@Friend2",
-        "@Ga",
-    ] {
-        prop.push_str(atom, Role::App, channel).unwrap();
+    let mut contact_names: Vec<String> = vec![];
+    for item in contacts_tree.iter() {
+        let (_key, val) = item.unwrap();
+        let contact = deserialize::<Contact>(&val).unwrap();
+        contact_names.push(format!("@{}", contact.name));
+    }
+    contact_names.sort();
+    for contact_name in contact_names {
+        prop.push_str(atom, Role::App, &contact_name).unwrap();
     }
 
     let menu_node =
@@ -1315,6 +1332,125 @@ pub async fn make(
 
     // Connect cancel/done buttons and edit_active signal
     btns.connect_edit_handlers(app, &menu_node, None);
+
+    // "add contact" button handler: persist the contact and notify the plugin
+    let contacts_tree2 = contacts_tree.clone();
+    let nickedit2 = nickedit_node.clone();
+    let secedit2 = secedit_node.clone();
+    let menu_prop2 = menu_node.get_property("items").unwrap();
+    let renderer2 = app.renderer.clone();
+    let sg_root2 = app.sg_root.clone();
+
+    let save_contact = app.ex.spawn(async move {
+        while let Ok(_) = addcontact_recvr.recv().await {
+            let name_prop = nickedit2.get_property("text").unwrap();
+            let name = name_prop.get_str(0).unwrap();
+            let public_prop = secedit2.get_property("text").unwrap();
+            let public_str = public_prop.get_str(0).unwrap();
+
+            if name.is_empty() {
+                w!("Attempted to add contact with empty name");
+                continue;
+            }
+            let name = name.trim_start_matches('@').to_string();
+            if name.contains('#') || name.chars().any(char::is_whitespace) {
+                w!("Invalid contact name: {name}");
+                continue;
+            }
+
+            let Ok(public_bytes) = bs58::decode(&public_str).into_vec() else {
+                w!("Failed to decode contact public key base58");
+                continue;
+            };
+            if public_bytes.len() != 32 {
+                w!("Invalid public key length: {} (expected 32)", public_bytes.len());
+                continue;
+            }
+            let mut public = [0u8; 32];
+            public.copy_from_slice(&public_bytes);
+
+            let contact = Contact { name: name.clone(), public };
+            let mut val = vec![];
+            contact.encode(&mut val).unwrap();
+            contacts_tree2.insert(name.as_str(), val).unwrap();
+            let _ = contacts_tree2.flush_async().await;
+
+            let contact_name = format!("@{}", name);
+            let atom = &mut renderer2.make_guard(gfxtag!("add_contact"));
+            menu_prop2.push_str(atom, Role::App, &contact_name).unwrap();
+            i!("Successfully saved contact: {}", contact_name);
+
+            if let Some(darkirc) = sg_root2.lookup_node("/plugin/darkirc") {
+                let _ = darkirc.call_method("reload_contacts", vec![]).await;
+            }
+
+            let atom = &mut renderer2.make_guard(gfxtag!("clear_contact_fields"));
+            name_prop.set_str(atom, Role::App, 0, "").unwrap();
+            public_prop.set_str(atom, Role::App, 0, "").unwrap();
+        }
+    });
+    app.tasks.lock().unwrap().push(save_contact);
+
+    // Selecting a contact opens (creating if needed) its DM chat layer
+    let (slot, recvr) = Slot::new("contact_selected");
+    menu_node.register("select", slot).unwrap();
+
+    let sg_root = app.sg_root.clone();
+    let renderer = app.renderer.clone();
+    let ex = app.ex.clone();
+    let db2 = db.clone();
+    let i18n_fish2 = i18n_fish.clone();
+    let emoji_meshes2 = emoji_meshes.clone();
+    let contact_vis = contact_is_visible.clone();
+
+    let listen_select = app.ex.spawn(async move {
+        while let Ok(data) = recvr.recv().await {
+            let contact: String = deserialize(&data).unwrap();
+            i!("Selected contact: {contact}");
+            let path = format!("/window/content/{}_chat_layer", &contact);
+            let atom = &mut renderer.make_guard(gfxtag!("contact_selected"));
+
+            if let Some(node) = sg_root.lookup_node(&path) {
+                node.set_property_bool(atom, Role::App, "is_visible", true).unwrap();
+                contact_vis.set(atom, false);
+                continue;
+            }
+
+            let content = sg_root.lookup_node("/window/content").unwrap();
+            let node = chat::make(
+                &sg_root,
+                &renderer,
+                &ex,
+                content,
+                &contact,
+                &db2,
+                &i18n_fish2,
+                emoji_meshes2.clone(),
+                is_first_time,
+            )
+            .await;
+            match node.pimpl() {
+                Pimpl::Layer(layer) => layer.clone().start(ex.clone()).await,
+                _ => panic!("wrong pimpl"),
+            }
+            node.set_property_bool(atom, Role::App, "is_visible", true).unwrap();
+
+            let main_menu = sg_root.lookup_node("/window/content/menu_layer/main_menu").unwrap();
+            let items_prop = main_menu.get_property("items").unwrap();
+            if !items_prop.contains_str(&contact) {
+                items_prop.push_str(atom, Role::App, &contact).unwrap();
+            }
+
+            contact_vis.set(atom, false);
+
+            let win = sg_root.lookup_node("/window").unwrap();
+            match win.pimpl() {
+                Pimpl::Window(win) => win.draw(atom).await,
+                _ => panic!("wrong pimpl"),
+            }
+        }
+    });
+    app.tasks.lock().unwrap().push(listen_select);
 
     // Only one input field may be focused (caret visible)
     edit_switch(

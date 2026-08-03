@@ -38,7 +38,7 @@ use crate::{
 
 mod chat;
 pub mod menu;
-use menu::channel::Channel;
+use menu::{channel::Channel, contact::Contact};
 //mod settings;
 pub mod test;
 pub mod test_scroll_layer;
@@ -599,6 +599,7 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish, db
     }
 
     let channels_tree = db.open_tree("channels").expect("cannot open channels tree");
+    let contacts_tree = db.open_tree("contacts").expect("cannot open contacts tree");
 
     // Initialize default channels if tree is empty
     if channels_tree.is_empty() {
@@ -630,11 +631,31 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish, db
         )
         .await;
     }
+    // Initialize chat layers from contacts in database
+    for item in contacts_tree.iter() {
+        let (_key, val) = item.unwrap();
+        let contact = deserialize::<Contact>(&val).unwrap();
+        let contact_name = format!("@{}", contact.name);
+
+        chat::make(
+            &app.sg_root,
+            &app.renderer,
+            &app.ex,
+            content.clone(),
+            &contact_name,
+            &db,
+            i18n_fish,
+            emoji_meshes.clone(),
+            is_first_time,
+        )
+        .await;
+    }
     menu::make(
         app,
         content.clone(),
         i18n_fish,
         channels_tree,
+        contacts_tree,
         &db,
         emoji_meshes.clone(),
         is_first_time,
