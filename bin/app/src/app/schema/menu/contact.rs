@@ -1380,10 +1380,6 @@ pub async fn make(
             menu_prop2.push_str(atom, Role::App, &contact_name).unwrap();
             i!("Successfully saved contact: {}", contact_name);
 
-            if let Some(darkirc) = sg_root2.lookup_node("/plugin/darkirc") {
-                let _ = darkirc.call_method("reload_contacts", vec![]).await;
-            }
-
             let atom = &mut renderer2.make_guard(gfxtag!("clear_contact_fields"));
             name_prop.set_str(atom, Role::App, 0, "").unwrap();
             public_prop.set_str(atom, Role::App, 0, "").unwrap();
@@ -1447,6 +1443,15 @@ pub async fn make(
             match win.pimpl() {
                 Pimpl::Window(win) => win.draw(atom).await,
                 _ => panic!("wrong pimpl"),
+            }
+
+            // Trigger rescan to fetch this contact's DM history from the DAG.
+            // The rescan reloads contacts first, so a freshly added contact's
+            // crypto box is available, then replays DMs as "@name".
+            if let Some(darkirc) = sg_root.lookup_node("/plugin/darkirc") {
+                let mut data = vec![];
+                contact.encode(&mut data).unwrap();
+                darkirc.call_method("rescan", data).await.unwrap();
             }
         }
     });

@@ -684,7 +684,6 @@ impl DarkIrc2 {
         };
 
         let mut found_count = 0;
-
         for event in dag_events.iter() {
             // Deserialize Privmsg
             let mut privmsg = match deserialize_async::<Privmsg>(event.content()).await {
@@ -702,7 +701,6 @@ impl DarkIrc2 {
             if privmsg.channel != channel {
                 continue;
             }
-
             found_count += 1;
 
             // Calculate message ID
