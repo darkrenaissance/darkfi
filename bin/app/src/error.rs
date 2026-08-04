@@ -139,6 +139,9 @@ pub enum Error {
 
     #[error("Unknown anim ID")]
     GfxUnknownAnimID = 46,
+
+    #[error("Contact not found")]
+    ContactNotFound = 47,
 }
 
 impl From<sled::Error> for Error {

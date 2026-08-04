@@ -451,9 +451,17 @@ impl DarkIrc2 {
                 }
             };
 
-            // Try to decrypt messages (will decrypt encrypted channels/contacts in place)
+            // Route the message. An already-decrypted (plaintext) message names a
+            // channel we hold directly: encrypted channels arrive as base58
+            // ciphertext, so a channel key we recognise is plaintext by definition
+            // and is accepted as-is. Anything else must decrypt as a channel or DM;
+            // undecryptable traffic (base58 garbage in neither map) is silently dropped.
             let mut privmsg = privmsg;
-            self.try_decrypt(&mut privmsg, &self.nick.get()).await;
+            // Is this a plaintext channel?
+            let is_plaintext = self.channels.read().await.contains_key(&privmsg.channel);
+            if !is_plaintext && !self.try_decrypt(&mut privmsg, &self.nick.get()).await {
+                continue;
+            }
 
             let mut timest = ev.header.timestamp;
             let msg_id = msg_id(&privmsg, timest);
@@ -488,24 +496,13 @@ impl DarkIrc2 {
                 timest = now_timest;
             }
 
-            // Strip off starting #
-            let mut channel = privmsg.channel;
-            if channel.is_empty() {
-                w!("Received privmsg with empty channel!");
-                continue
-            }
-            if channel.chars().next().unwrap() != '#' {
-                w!("Skipping encrypted channel: {channel}");
-                continue
-            }
-
             // Workaround for the chatview hack. This nick is off limits!
             let mut nick = privmsg.nick;
             if nick == "NOTICE" {
                 nick = "noticer".to_string();
             }
 
-            self.notify_recv(channel, timest, msg_id, nick, privmsg.msg).await;
+            self.notify_recv(privmsg.channel, timest, msg_id, nick, privmsg.msg).await;
         }
     }
 
@@ -518,6 +515,11 @@ impl DarkIrc2 {
         nick: String,
         msg: String,
     ) {
+        assert!(
+            channel.starts_with('#') || channel.starts_with('@'),
+            "notify_recv channel must be a \"#name\" channel or \"@name\" DM, got: {channel}"
+        );
+
         let mut arg_data = vec![];
         channel.encode(&mut arg_data).unwrap();
         timestamp.encode(&mut arg_data).unwrap();
@@ -568,7 +570,19 @@ impl DarkIrc2 {
         // Send text to channel
         d!("Sending privmsg: {timest} {channel}: <{nick}> {msg}");
         let mut msg = Privmsg { version: 0, msg_type: 0, channel, nick, msg };
-        self.try_encrypt(&mut msg).await;
+
+        // DM layers use the "@name" UI id; strip it to the bare contact key and
+        // require the contact to exist, else refuse to broadcast.
+        if let Some(bare) = msg.channel.strip_prefix('@').map(str::to_string) {
+            msg.channel = bare;
+            if self.try_encrypt_dm(&mut msg).await.is_err() {
+                e!("Refusing to send DM to unknown contact");
+                return;
+            }
+        } else {
+            assert!(msg.channel.starts_with('#'), "channel name must start with #");
+            self.try_encrypt_channel(&mut msg).await;
+        }
         let evgr = self.event_graph.clone();
         let event = event_graph::Event::with_timestamp(timest, serialize_async(&msg).await, &evgr)
             .await
@@ -655,9 +669,8 @@ impl DarkIrc2 {
             let self_saltbox =
                 Arc::new(ChaChaBox::new(&self.dm_secret.public_key(), &self.dm_secret));
 
-            let full_name = format!("@{}", name);
-            contacts.insert(full_name, IrcContact { saltbox, self_saltbox });
-            i!("Loaded contact: @{name}");
+            contacts.insert(name.clone(), IrcContact { saltbox, self_saltbox });
+            i!("Loaded contact: {name}");
         }
     }
 
@@ -870,31 +883,47 @@ impl DarkIrc2 {
         *self.tasks.lock() = tasks;
     }
 
-    /// Try encrypting a given `Privmsg` if there is such a channel/contact.
-    pub async fn try_encrypt(&self, privmsg: &mut Privmsg) {
-        if let Some((name, channel)) = self.channels.read().await.get_key_value(&privmsg.channel) {
-            if let Some(saltbox) = &channel.saltbox {
-                privmsg.channel = saltbox::encrypt(saltbox, &[0x00; MAX_NICK_LEN]);
-                privmsg.nick = saltbox::encrypt(saltbox, &pad(&privmsg.nick));
-                privmsg.msg = saltbox::encrypt(saltbox, privmsg.msg.as_bytes());
-                d!("Successfully encrypted message for {name}");
-                return
-            }
+    /// Encrypt a channel `Privmsg` in place if the channel has a shared key.
+    /// Open channels with no key are left plaintext.
+    pub async fn try_encrypt_channel(&self, privmsg: &mut Privmsg) {
+        let guard = self.channels.read().await;
+        let Some((name, channel)) = guard.get_key_value(&privmsg.channel) else {
+            return;
         };
-
-        if let Some((name, contact)) = self.contacts.read().await.get_key_value(&privmsg.channel) {
-            privmsg.channel = saltbox::encrypt(&contact.saltbox, &[0x00; MAX_NICK_LEN]);
-            privmsg.nick = saltbox::encrypt(&contact.self_saltbox, &[0x00; MAX_NICK_LEN]);
-            privmsg.msg = saltbox::encrypt(&contact.saltbox, privmsg.msg.as_bytes());
-            d!("Successfully encrypted message for {name}");
+        let Some(saltbox) = &channel.saltbox else {
+            return;
         };
+        privmsg.channel = saltbox::encrypt(saltbox, &[0x00; MAX_NICK_LEN]);
+        privmsg.nick = saltbox::encrypt(saltbox, &pad(&privmsg.nick));
+        privmsg.msg = saltbox::encrypt(saltbox, privmsg.msg.as_bytes());
+        d!("Successfully encrypted message for {name}");
     }
 
-    /// Try decrypting a given potentially encrypted `Privmsg` object.
-    pub async fn try_decrypt(&self, privmsg: &mut Privmsg, self_nickname: &str) {
-        let Ok(channel_ciphertext) = bs58::decode(&privmsg.channel).into_vec() else { return };
-        let Ok(nick_ciphertext) = bs58::decode(&privmsg.nick).into_vec() else { return };
-        let Ok(msg_ciphertext) = bs58::decode(&privmsg.msg).into_vec() else { return };
+    /// Encrypt a DM `Privmsg` in place for the contact named by `privmsg.channel`
+    /// (the bare key, with no leading "@"). Fails if the contact is unknown so
+    /// the caller can refuse to broadcast a message no one could decrypt.
+    pub async fn try_encrypt_dm(&self, privmsg: &mut Privmsg) -> Result<()> {
+        let guard = self.contacts.read().await;
+        let Some((name, contact)) = guard.get_key_value(&privmsg.channel) else {
+            return Err(Error::ContactNotFound);
+        };
+        privmsg.channel = saltbox::encrypt(&contact.saltbox, &[0x00; MAX_NICK_LEN]);
+        privmsg.nick = saltbox::encrypt(&contact.self_saltbox, &[0x00; MAX_NICK_LEN]);
+        privmsg.msg = saltbox::encrypt(&contact.saltbox, privmsg.msg.as_bytes());
+        d!("Successfully encrypted DM for {name}");
+        Ok(())
+    }
+
+    /// Try decrypting a `Privmsg` as a channel message in place. Returns true on
+    /// success. Plaintext messages for a known keyless channel are accepted
+    /// as-is; everything else returns false.
+    pub async fn try_decrypt_channel(&self, privmsg: &mut Privmsg) -> bool {
+        let Ok(channel_ciphertext) = bs58::decode(&privmsg.channel).into_vec() else {
+            // Not encrypted: accept only if it names a channel we hold.
+            return self.channels.read().await.contains_key(&privmsg.channel);
+        };
+        let Ok(nick_ciphertext) = bs58::decode(&privmsg.nick).into_vec() else { return false };
+        let Ok(msg_ciphertext) = bs58::decode(&privmsg.msg).into_vec() else { return false };
 
         for (name, channel) in self.channels.read().await.iter() {
             let Some(saltbox) = &channel.saltbox else { continue };
@@ -919,8 +948,19 @@ impl DarkIrc2 {
             privmsg.nick = String::from_utf8_lossy(&nick_dec).into();
             privmsg.msg = String::from_utf8_lossy(&msg_dec).into();
             d!("Successfully decrypted message for {name}");
-            return
+            return true
         }
+
+        false
+    }
+
+    /// Try decrypting a `Privmsg` as a DM in place. Returns true on success.
+    pub async fn try_decrypt_contact(&self, privmsg: &mut Privmsg, self_nickname: &str) -> bool {
+        let Ok(channel_ciphertext) = bs58::decode(&privmsg.channel).into_vec() else {
+            return false
+        };
+        let Ok(nick_ciphertext) = bs58::decode(&privmsg.nick).into_vec() else { return false };
+        let Ok(msg_ciphertext) = bs58::decode(&privmsg.msg).into_vec() else { return false };
 
         for (name, contact) in self.contacts.read().await.iter() {
             if saltbox::try_decrypt(&contact.saltbox, &channel_ciphertext).is_none() {
@@ -938,11 +978,20 @@ impl DarkIrc2 {
                 continue
             };
 
-            privmsg.channel = name.to_string();
+            privmsg.channel = format!("@{}", name);
             privmsg.nick = nick;
             privmsg.msg = String::from_utf8_lossy(&msg_dec).into();
-            return
+            return true
         }
+
+        false
+    }
+
+    /// Try decrypting a given potentially encrypted `Privmsg` object as a channel
+    /// and then as a DM. Returns true if either succeeded.
+    pub async fn try_decrypt(&self, privmsg: &mut Privmsg, self_nickname: &str) -> bool {
+        self.try_decrypt_channel(privmsg).await ||
+            self.try_decrypt_contact(privmsg, self_nickname).await
     }
 }
 
