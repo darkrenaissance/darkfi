@@ -84,6 +84,20 @@ const SELECT_SCROLL_TRAVEL_SPEED: f32 = 1.;
 macro_rules! d { ($($arg:tt)*) => { debug!(target: "ui::edit", $($arg)*); } }
 macro_rules! t { ($($arg:tt)*) => { trace!(target: "ui::edit", $($arg)*); } }
 
+/// Master switch for verbose edit/IME debugging.
+/// When true, detailed diagnostics about text content, selection range,
+/// compose region, focus state, and touch/keyboard events are emitted to
+/// the `ui::edit` log target. Set to false to silence them.
+const ENABLE_DEBUG: bool = true;
+
+macro_rules! ed {
+    ($($arg:tt)*) => {
+        if ENABLE_DEBUG {
+            debug!(target: "ui::edit", $($arg)*);
+        }
+    };
+}
+
 #[derive(Debug, Clone)]
 enum TouchStateAction {
     Inactive,
@@ -413,6 +427,41 @@ impl BaseEdit {
         self.node.upgrade().unwrap()
     }
 
+    /// Snapshot of the editor state useful for debugging editing bugs.
+    fn dbg_state(&self) -> String {
+        let focused = self.is_focused.get();
+        let active = self.is_active.get();
+        let phone_select = self.is_phone_select.load(Ordering::Relaxed);
+        let editor = self.editor.lock();
+        let selected = editor.selected_text();
+
+        #[cfg(target_os = "android")]
+        {
+            format!(
+                "text={:?} select={:?} compose={:?} selected={:?} focused={} active={} phone_select={}",
+                editor.state.text,
+                editor.state.select,
+                editor.state.compose,
+                selected,
+                focused,
+                active,
+                phone_select,
+            )
+        }
+
+        #[cfg(not(target_os = "android"))]
+        {
+            format!(
+                "text={:?} selected={:?} focused={} active={} phone_select={}",
+                self.text.get(),
+                selected,
+                focused,
+                active,
+                phone_select,
+            )
+        }
+    }
+
     /// Reset the horizontal scroll to 0.
     /// Useful when the input width is dynamically changed and scrolling is not desired.
     pub fn reset_scroll(&self) {
@@ -500,8 +549,10 @@ impl BaseEdit {
 
     async fn change_focus(self: Arc<Self>, batch: BatchGuardPtr) {
         if !self.is_active.get() {
+            ed!("change_focus: not active, skipping");
             return
         }
+        ed!("change_focus: focused={} -> [{}]", self.is_focused.get(), self.dbg_state());
         t!("Focus changed");
 
         let atom = &mut batch.spawn();
@@ -510,6 +561,7 @@ impl BaseEdit {
     }
 
     fn handle_shortcut(&self, key: char, mods: &KeyMods, atom: &mut PropertyAtomicGuard) -> bool {
+        ed!("handle_shortcut({key:?}, {mods:?}) before=[{}]", self.dbg_state());
         t!("handle_shortcut({:?}, {:?})", key, mods);
 
         #[cfg(not(target_os = "macos"))]
@@ -550,6 +602,7 @@ impl BaseEdit {
 
         self.eval_rect();
         self.redraw(atom);
+        ed!("handle_shortcut: handled key={key:?} after=[{}]", self.dbg_state());
         true
     }
 
@@ -672,11 +725,13 @@ impl BaseEdit {
         self.pause_blinking();
         self.redraw(atom);
 
+        ed!("handle_key: handled {key:?} after=[{}]", self.dbg_state());
         true
     }
 
     /// This will select the entire word rather than move the cursor to that location
     fn start_touch_select(&self, touch_pos: Point, atom: &mut PropertyAtomicGuard) {
+        ed!("start_touch_select({touch_pos:?}) before=[{}]", self.dbg_state());
         t!("start_touch_select({touch_pos:?})");
 
         let mut editor = self.editor.lock();
@@ -684,7 +739,7 @@ impl BaseEdit {
         editor.refresh();
 
         let seltext = editor.selected_text().unwrap();
-        d!("Selected {seltext:?} from {touch_pos:?}");
+        ed!("start_touch_select: word selected text={seltext:?} after=[{}]", self.dbg_state());
         self.select_text.clone().set_str(atom, Role::Internal, 0, seltext).unwrap();
 
         drop(editor);
@@ -697,7 +752,7 @@ impl BaseEdit {
     }
 
     fn handle_touch_start(&self, touch_pos: Point) -> bool {
-        t!("handle_touch_start({touch_pos:?})");
+        ed!("handle_touch_start({touch_pos:?}) before=[{}]", self.dbg_state());
 
         let rect = self.rect.get();
         let local_pos = touch_pos - rect.pos();
@@ -735,16 +790,19 @@ impl BaseEdit {
         }
 
         if !rect.contains(touch_pos) {
+            ed!("handle_touch_start: outside rect={rect:?}, ignoring");
             t!("rect!cont rect={rect:?}, touch_pos={touch_pos:?}");
             return false
         }
 
         if self.try_handle_drag(touch_pos) {
+            ed!("handle_touch_start: handled by drag handle");
             return true
         }
 
         let mut touch_info = self.touch_info.lock();
         touch_info.start(touch_pos);
+        ed!("handle_touch_start: touch started, waiting for move/end");
         true
     }
 
@@ -806,9 +864,11 @@ impl BaseEdit {
             // Set touch_state status to enable begin dragging them
             let mut touch_info = self.touch_info.lock();
             touch_info.state = TouchStateAction::DragSelectHandle { side };
+            ed!("try_handle_drag: grabbing select handle side={side}");
             return true
         }
 
+        ed!("try_handle_drag: no handle grabbed");
         false
     }
 
@@ -826,6 +886,7 @@ impl BaseEdit {
             touch_info.update(&touch_pos);
             touch_info.state.clone()
         };
+        ed!("handle_touch_move({touch_pos:?}) touch_state={touch_state:?}");
         //t!("handle_touch_move({touch_pos:?})  touch_state={touch_state:?}");
         match &touch_state {
             TouchStateAction::Inactive => return false,
@@ -876,6 +937,7 @@ impl BaseEdit {
                 }
                 self.action_mode.set(menu);
                 self.action_mode.redraw(atom.batch_id);
+                ed!("handle_touch_move: StartSelect handled");
             }
             TouchStateAction::DragSelectHandle { side } => {
                 let rect = self.rect.get();
@@ -920,6 +982,7 @@ impl BaseEdit {
         self.abs_to_local(&mut touch_pos);
 
         let state = self.touch_info.lock().stop();
+        ed!("handle_touch_end({touch_pos:?}) final_state={state:?}");
         match state {
             TouchStateAction::Inactive => return false,
             TouchStateAction::Started { pos: _, instant: _ } | TouchStateAction::SetCursorPos => {
@@ -941,18 +1004,20 @@ impl BaseEdit {
     }
 
     fn touch_set_cursor_pos(&self, atom: &mut PropertyAtomicGuard, touch_pos: Point) {
-        t!("touch_set_cursor_pos({touch_pos:?})");
+        ed!("touch_set_cursor_pos({touch_pos:?}) before=[{}]", self.dbg_state());
 
         let mut editor = self.editor.lock();
         editor.move_to_pos(touch_pos);
         editor.refresh();
         drop(editor);
+        ed!("touch_set_cursor_pos: moved cursor after=[{}]", self.dbg_state());
 
         self.pause_blinking();
         self.finish_select(atom);
     }
 
     fn finish_select(&self, atom: &mut PropertyAtomicGuard) {
+        ed!("finish_select: phone_select={} -> false", self.is_phone_select.load(Ordering::Relaxed));
         self.is_phone_select.store(false, Ordering::Release);
         self.hide_cursor.store(false, Ordering::Release);
         self.select_text.clone().set_null(atom, Role::Internal, 0).unwrap();
@@ -1035,10 +1100,11 @@ impl BaseEdit {
             assert!(start < end);
 
             //t!("handle_select(): set_selection({start}, {end})");
+            ed!("handle_select: set_selection({start}, {end}) side={side:?} prev=({prev_start}, {prev_end})");
             editor.set_selection(start, end);
             editor.selected_text()
         };
-        //d!("Select {seltext:?} from {clip_mouse_pos:?} (unclipped: {mouse_pos:?})");
+        ed!("handle_select: seltext={seltext:?} clip_pos={clip_mouse_pos:?}");
 
         // Android editor impl detail: selection disappears when anchor == index
         // But we disallow this so it should never happen. Just making a note of it here.
@@ -1379,6 +1445,7 @@ impl BaseEdit {
         self_.editor.lock().insert(&text, atom);
         self_.eval_rect();
         self_.redraw(atom);
+        ed!("insert_text method: inserted {text:?} after=[{}]", self_.dbg_state());
         true
     }
 
@@ -1401,6 +1468,7 @@ impl BaseEdit {
         #[cfg(target_os = "android")]
         {
             let input_type = self_.android_input_type.get();
+            ed!("focus method: setting android input_type={input_type}");
             self_.editor.lock().set_input_type(input_type);
         }
 
@@ -1408,6 +1476,7 @@ impl BaseEdit {
         let atom = &mut self_.renderer.make_guard(gfxtag!("BaseEdit::process_focus_method"));
         self_.is_focused.set(atom, true);
         self_.redraw(atom);
+        ed!("focus method: done after=[{}]", self_.dbg_state());
         true
     }
     async fn process_unfocus_method(me: &Weak<Self>, sub: &MethodCallSub) -> bool {
@@ -1429,26 +1498,37 @@ impl BaseEdit {
         let atom = &mut self_.renderer.make_guard(gfxtag!("BaseEdit::process_unfocus_method"));
         self_.is_focused.set(atom, false);
         self_.redraw(atom);
+        ed!("unfocus method: done after=[{}]", self_.dbg_state());
         true
     }
 
     #[cfg(target_os = "android")]
     fn handle_android_event(&self, state: AndroidTextInputState) {
         if !self.is_active.get() {
+            ed!("handle_android_event: DROP inactive state={state:?}");
             return
         }
 
-        t!("handle_android_event({state:?})");
+        ed!("handle_android_event: ENTER incoming={state:?} before=[{}]", self.dbg_state());
         let atom = &mut self.renderer.make_guard(gfxtag!("BaseEdit::handle_android_event"));
 
         let is_new_select_collapsed = state.select.0 == state.select.1;
         let (is_text_changed, is_select_changed, is_compose_changed) = {
             let mut editor = self.editor.lock();
             // Diff old and new state so we know what changed
+            let old_text = editor.state.text.clone();
+            let old_select = editor.state.select;
+            let old_compose = editor.state.compose;
             let diff = (
                 editor.state.text != state.text,
                 editor.state.select != state.select,
                 editor.state.compose != state.compose,
+            );
+            ed!(
+                "handle_android_event: diff text_changed={} (old={:?} new={:?}) select_changed={} (old={:?} new={:?}) compose_changed={} (old={:?} new={:?})",
+                diff.0, old_text, state.text,
+                diff.1, old_select, state.select,
+                diff.2, old_compose, state.compose,
             );
             editor.state = state;
             editor.on_buffer_changed(atom);
@@ -1457,14 +1537,19 @@ impl BaseEdit {
 
         // Nothing changed. Just return.
         if !is_text_changed && !is_select_changed && !is_compose_changed {
-            //t!("Skipping update since nothing changed");
+            ed!("handle_android_event: no-op (nothing changed), after=[{}]", self.dbg_state());
             return
         }
 
-        //t!("is_text_changed={is_text_changed}, is_select_changed={is_select_changed}, is_compose_changed={is_compose_changed}");
+        ed!(
+            "handle_android_event: applying text_changed={} select_changed={} compose_changed={} collapsed={}",
+            is_text_changed, is_select_changed, is_compose_changed, is_new_select_collapsed
+        );
+
         // Only redraw once we have the parent_rect
         // Can happen when we receive an Android event before the canvas is ready
         if self.parent_rect.lock().is_none() {
+            ed!("handle_android_event: parent_rect not ready yet, bailing before redraw");
             return
         }
 
@@ -1482,6 +1567,7 @@ impl BaseEdit {
             //assert!(state.text != self.text.get());
             self.finish_select(atom);
             self.redraw(atom);
+            ed!("handle_android_event: handled text change, after=[{}]", self.dbg_state());
         } else if is_select_changed {
             // The IME can collapse a phone-style word selection out from under
             // us (e.g. it repositions the cursor when the keyboard is shown).
@@ -1489,6 +1575,7 @@ impl BaseEdit {
             // A handle drag always maintains a range, so its IME echoes are
             // unaffected.
             if is_new_select_collapsed && self.is_phone_select.load(Ordering::Relaxed) {
+                ed!("handle_android_event: IME collapsed the phone selection, finishing select");
                 d!("IME has collapsed selection!");
                 self.finish_select(atom);
             }
@@ -1496,6 +1583,9 @@ impl BaseEdit {
             self.redraw_cursor(&self.renderer);
             //t!("handle_android_event calling redraw_select");
             self.redraw_select(&self.renderer, atom.batch_id);
+            ed!("handle_android_event: handled select change, after=[{}]", self.dbg_state());
+        } else if is_compose_changed {
+            ed!("handle_android_event: compose-only change ignored, after=[{}]", self.dbg_state());
         }
     }
 }
@@ -1700,13 +1790,16 @@ impl UIObject for BaseEdit {
     }
 
     async fn handle_char(&self, key: char, mods: KeyMods, repeat: bool) -> bool {
+        ed!("handle_char({key}, {mods:?}, repeat={repeat}) before=[{}]", self.dbg_state());
         t!("handle_char({key}, {mods:?}, {repeat})");
         // First filter for only single digit keys
         if DISALLOWED_CHARS.contains(&key) {
+            ed!("handle_char: {key:?} disallowed, ignoring");
             return false
         }
 
         if !self.is_focused.get() {
+            ed!("handle_char: not focused, ignoring");
             return false
         }
 
@@ -1739,18 +1832,22 @@ impl UIObject for BaseEdit {
         self.behave.apply_cursor_scroll();
         self.pause_blinking();
         self.redraw(atom);
+        ed!("handle_char: inserted {key_str:?} after=[{}]", self.dbg_state());
         true
     }
 
     async fn handle_key_down(&self, key: KeyCode, mods: KeyMods, repeat: bool) -> bool {
+        ed!("handle_key_down({key:?}, {mods:?}, repeat={repeat}) before=[{}]", self.dbg_state());
         t!("handle_key_down({key:?}, {mods:?}, {repeat})");
         // First filter for only single digit keys
         // Avoid processing events handled by handle_char()
         if !ALLOWED_KEYCODES.contains(&key) {
+            ed!("handle_key_down: {key:?} not in ALLOWED_KEYCODES, ignoring");
             return false
         }
 
         if !self.is_focused.get() {
+            ed!("handle_key_down: not focused, ignoring");
             return false
         }
 
@@ -1770,6 +1867,7 @@ impl UIObject for BaseEdit {
         for _ in 0..actions {
             is_handled = self.handle_key(&key, &mods, atom);
         }
+        ed!("handle_key_down: {key:?} handled={is_handled} after=[{}]", self.dbg_state());
         is_handled
     }
 
@@ -1822,8 +1920,10 @@ impl UIObject for BaseEdit {
         // 1. make it active
         // 2. begin selection
         if self.is_focused.get() {
+            ed!("handle_mouse_btn_down({btn:?}, {mouse_pos:?}): already focused click");
             d!("BaseEdit clicked");
         } else {
+            ed!("handle_mouse_btn_down({btn:?}, {mouse_pos:?}): focusing widget");
             d!("BaseEdit focused");
             self.is_focused.set(atom, true);
 
