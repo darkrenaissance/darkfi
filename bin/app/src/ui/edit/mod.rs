@@ -93,7 +93,7 @@ const ENABLE_DEBUG: bool = true;
 macro_rules! ed {
     ($($arg:tt)*) => {
         if ENABLE_DEBUG {
-            debug!(target: "ui::edit", $($arg)*);
+            d!($($arg)*);
         }
     };
 }

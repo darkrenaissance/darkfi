@@ -41,6 +41,7 @@ pub mod menu;
 use menu::{channel::Channel, contact::Contact};
 //mod settings;
 pub mod test;
+pub mod test_edit;
 pub mod test_scroll_layer;
 mod wallet;
 

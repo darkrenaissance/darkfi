@@ -84,6 +84,7 @@ enable-plugins = ["enable-plugin-darkirc", "enable-plugin-fud", "enable-plugin-d
 schema-app = []
 # Dev schema for testing
 schema-test = []
+schema-test-edit = []
 schema-test-scroll-layer = []
 
 [patch.crates-io]
