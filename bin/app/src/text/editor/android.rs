@@ -73,7 +73,8 @@ impl Editor {
     pub fn on_text_prop_changed(&mut self) {
         // Update GameTextInput state
         self.state.text = self.text.get();
-        self.state.select = (0, 0);
+        let text_len = self.state.text.len();
+        self.state.select = (text_len, text_len);
         self.state.compose = None;
         self.input.set_state(self.state.clone());
         // Refresh our layout

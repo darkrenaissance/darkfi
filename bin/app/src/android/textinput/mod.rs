@@ -116,17 +116,18 @@ impl AndroidTextInput {
         //t!("set_select({select_start}, {select_end})");
         // Always update our own state.
         let mut ours = self.state.lock();
-        let state = &mut ours.state;
-        assert!(select_start <= state.text.len());
-        assert!(select_end <= state.text.len());
-        state.select = (select_start, select_end);
         let is_active = ours.is_active;
+        let text = ours.state.text.clone();
+        let state = &mut ours.state;
+        assert!(select_start <= text.len());
+        assert!(select_end <= text.len());
+        state.select = (select_start, select_end);
         drop(ours);
 
         // Only update java state when this input is active
         if is_active {
             let gti = GAME_TEXT_INPUT.get().unwrap();
-            gti.set_select(select_start as i32, select_end as i32).unwrap();
+            gti.set_select(&text, select_start, select_end).unwrap();
         }
     }
 }

@@ -34,6 +34,24 @@ Users who prefer to build locally can follow the commands in the `Dockerfile`.
 Note that the `build.rs` hardcodes the SDK/NDK paths so either you follow it
 exactly (recommended) or modify `build.rs`.
 
+# ADB Over Wifi
+
+Useful for reading the logs without having to be plugged in.
+First get your local IP addr using `adb shell ip -f inet a show wlan0`.
+Make sure "Wireless debugging" is enabled in Developer options.
+Then run:
+
+```
+adb tcpip 5555
+adb connect IPADDR
+```
+
+Copying the APK takes a long time over wifi so best to install
+APK via USB, then use this just for debugging the app.
+
+In the Makefile, make sure to put the USB device for `ADB_DEVICES`
+so the ADB commands work over USB.
+
 # Useful Dev Commands
 
 This is just for devs. Users ignore this.

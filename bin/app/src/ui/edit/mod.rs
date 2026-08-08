@@ -1441,6 +1441,7 @@ impl BaseEdit {
         t!("handle_android_event({state:?})");
         let atom = &mut self.renderer.make_guard(gfxtag!("BaseEdit::handle_android_event"));
 
+        let is_new_select_collapsed = state.select.0 == state.select.1;
         let (is_text_changed, is_select_changed, is_compose_changed) = {
             let mut editor = self.editor.lock();
             // Diff old and new state so we know what changed
@@ -1482,6 +1483,15 @@ impl BaseEdit {
             self.finish_select(atom);
             self.redraw(atom);
         } else if is_select_changed {
+            // The IME can collapse a phone-style word selection out from under
+            // us (e.g. it repositions the cursor when the keyboard is shown).
+            // The selection handles are then stale, so finish phone-select mode.
+            // A handle drag always maintains a range, so its IME echoes are
+            // unaffected.
+            if is_new_select_collapsed && self.is_phone_select.load(Ordering::Relaxed) {
+                d!("IME has collapsed selection!");
+                self.finish_select(atom);
+            }
             // Redrawing the entire text just for select changes is expensive
             self.redraw_cursor(&self.renderer);
             //t!("handle_android_event calling redraw_select");
