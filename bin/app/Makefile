@@ -13,8 +13,8 @@ ZKAS = ../../zkas
 PROOFS_SRC = $(shell find ../../src/event_graph -type f -name '*.zk')
 PROOFS_BIN = $(PROOFS_SRC:=.bin)
 
-#ADB_DEVICE = -s DEVICE_ID
-ADB_DEVICE =
+ADB_DEVICE_INST =
+ADB_DEVICE_LOG  =
 
 SRC = \
 	build.rs \
@@ -29,7 +29,7 @@ DEBUG_FEATURES = --features=enable-filelog,enable-plugins
 
 #DEV_FEATURES = --features=enable-filelog,enable-netdebug,emulate-android
 #DEV_FEATURES = --features=enable-filelog,enable-netdebug,enable-plugins
-DEV_FEATURES = --features=schema-test-edit,enable-netdebug
+DEV_FEATURES = --features=schema-app,enable-netdebug,enable-plugin-drk
 
 default: build-release
 	./darkfi-app
@@ -104,21 +104,24 @@ dev: $(SRC) fonts assets/forest_1920x1080.ivf
 	./darkfi-app
 
 # Users should use the android-release and android-debug targets instead.
-apk: $(SRC) fonts assets/forest_720x1280.mp4
-	cargo quad-apk build --no-default-features $(DEV_FEATURES)
+apk:
+	$(MAKE) compile-apk
 	$(MAKE) install-apk
+	$(MAKE) log-apk
+
+compile-apk: $(SRC) fonts assets/forest_720x1280.mp4
+	cargo quad-apk build --no-default-features $(DEV_FEATURES)
 
 install-apk:
 	-mv $(DEBUG_APK) .
-	-adb $(ADB_DEVICE) uninstall darkfi.darkfi_app
-	adb $(ADB_DEVICE) install -r darkfi-app.apk
-	$(MAKE) log-apk
+	-adb $(ADB_DEVICE_INST) uninstall darkfi.darkfi_app
+	adb $(ADB_DEVICE_INST) install -r darkfi-app.apk
 
 log-apk:
 	reset
-	adb $(ADB_DEVICE) logcat -c
-	adb $(ADB_DEVICE) shell monkey -p darkfi.darkfi_app -c android.intent.category.LAUNCHER 1
-	adb $(ADB_DEVICE) logcat -v color -s darkfi -s SAPP -s libc -s DEBUG -s ActivityManager -s ActivityTaskManager -s WindowManager -s AndroidRuntime -s rkfi.darkfi_app | tee output.log
+	adb $(ADB_DEVICE_LOG) logcat -c
+	adb $(ADB_DEVICE_LOG) shell monkey -p darkfi.darkfi_app -c android.intent.category.LAUNCHER 1
+	adb $(ADB_DEVICE_LOG) logcat -v color -s darkfi -s SAPP -s libc -s DEBUG -s ActivityManager -s ActivityTaskManager -s WindowManager -s AndroidRuntime -s rkfi.darkfi_app | tee output.log
 
 # Useful for dev
 podman-cli:

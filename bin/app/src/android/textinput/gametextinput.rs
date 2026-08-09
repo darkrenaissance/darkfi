@@ -124,13 +124,15 @@ impl GameTextInput {
                 set_input_type_sig.as_ptr() as _,
             );
 
-            /*let restart_input_sig = b"()V\0";
+            /*
+            let restart_input_sig = b"()V\0";
             let restart_input_method = get_method_id(
                 env,
                 input_connection_class,
                 b"restartInput\0".as_ptr() as _,
                 restart_input_sig.as_ptr() as _,
-            );*/
+            );
+            */
 
             let state_class = new_global_ref!(env, state_java_class) as ndk_sys::jclass;
 
@@ -234,7 +236,7 @@ impl GameTextInput {
 
     pub fn set_select(&self, text: &str, start: usize, end: usize) -> Result<(), ()> {
         let Some(input_connection) = *self.input_connection.read() else {
-            w!("push_update() - no input_connection set");
+            w!("set_select() - no input_connection set");
             return Err(())
         };
         let start = byte_to_utf16(text, start) as i32;
@@ -328,7 +330,8 @@ impl GameTextInput {
         }
     }
 
-    /*pub fn restart_input(&self) {
+    /*
+    pub fn restart_input(&self) {
         let Some(input_connection) = *self.input_connection.read() else {
             w!("restart_input() - no input_connection set");
             return
@@ -338,7 +341,8 @@ impl GameTextInput {
             let call_void_method = (**env).CallVoidMethod.unwrap();
             call_void_method(env, input_connection, self.restart_input_method);
         }
-    }*/
+    }
+    */
 
     fn state_to_java(&self, state: &AndroidTextInputState) -> ndk_sys::jobject {
         unsafe {

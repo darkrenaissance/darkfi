@@ -133,7 +133,6 @@ impl Editor {
         assert!(cursor_idx <= self.state.text.len());
         assert_eq!(self.state.text, self.text.get());
         self.state.select = (cursor_idx, cursor_idx);
-        self.state.compose = None;
         self.input.set_select(cursor_idx, cursor_idx);
     }
 
@@ -217,14 +216,12 @@ impl Editor {
         assert!(select_end <= self.state.text.len());
         assert_eq!(self.state.text, self.text.get());
         self.state.select = (select_start, select_end);
-        self.state.compose = None;
         self.input.set_select(select_start, select_end);
     }
 
     pub fn select_all(&mut self) {
         let text_len = self.state.text.len();
         self.state.select = (0, text_len);
-        self.state.compose = None;
         self.input.set_select(0, text_len);
     }
 

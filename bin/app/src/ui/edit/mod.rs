@@ -35,7 +35,7 @@ use std::{
 use tracing::instrument;
 
 #[cfg(target_os = "android")]
-use crate::android::textinput::AndroidTextInputState;
+use crate::android::{textinput::AndroidTextInputState, is_ime_visible};
 use crate::{
     clipboard,
     gfx::{
@@ -732,23 +732,17 @@ impl BaseEdit {
     /// This will select the entire word rather than move the cursor to that location
     fn start_touch_select(&self, touch_pos: Point, atom: &mut PropertyAtomicGuard) {
         ed!("start_touch_select({touch_pos:?}) before=[{}]", self.dbg_state());
-        t!("start_touch_select({touch_pos:?})");
 
         let mut editor = self.editor.lock();
         editor.select_word_at_point(touch_pos);
         editor.refresh();
 
         let seltext = editor.selected_text().unwrap();
-        ed!("start_touch_select: word selected text={seltext:?} after=[{}]", self.dbg_state());
+        drop(editor);
         self.select_text.clone().set_str(atom, Role::Internal, 0, seltext).unwrap();
 
-        drop(editor);
-
-        // if start != end {
-        t!("is_phone_select = true");
         self.is_phone_select.store(true, Ordering::Relaxed);
         self.hide_cursor.store(true, Ordering::Relaxed);
-        // }
     }
 
     fn handle_touch_start(&self, touch_pos: Point) -> bool {
@@ -997,8 +991,16 @@ impl BaseEdit {
         let scroll_sender = self.sel_sender.lock().clone().unwrap();
         scroll_sender.try_send(None).unwrap();
 
-        let node = self.node();
-        node.trigger("focus_request", vec![]).await.unwrap();
+        let mut need_focus = !self.is_focused.get();
+        #[cfg(target_os = "android")]
+        if !is_ime_visible() {
+            need_focus = true;
+        }
+
+        if need_focus {
+            let node = self.node();
+            node.trigger("focus_request", vec![]).await.unwrap();
+        }
 
         true
     }
@@ -1017,7 +1019,10 @@ impl BaseEdit {
     }
 
     fn finish_select(&self, atom: &mut PropertyAtomicGuard) {
-        ed!("finish_select: phone_select={} -> false", self.is_phone_select.load(Ordering::Relaxed));
+        ed!(
+            "finish_select: phone_select={} -> false",
+            self.is_phone_select.load(Ordering::Relaxed)
+        );
         self.is_phone_select.store(false, Ordering::Release);
         self.hide_cursor.store(false, Ordering::Release);
         self.select_text.clone().set_null(atom, Role::Internal, 0).unwrap();
@@ -1473,6 +1478,7 @@ impl BaseEdit {
         }
 
         self_.editor.lock().focus();
+
         let atom = &mut self_.renderer.make_guard(gfxtag!("BaseEdit::process_focus_method"));
         self_.is_focused.set(atom, true);
         self_.redraw(atom);
@@ -1585,7 +1591,9 @@ impl BaseEdit {
             self.redraw_select(&self.renderer, atom.batch_id);
             ed!("handle_android_event: handled select change, after=[{}]", self.dbg_state());
         } else if is_compose_changed {
-            ed!("handle_android_event: compose-only change ignored, after=[{}]", self.dbg_state());
+            self.editor.lock().refresh();
+            self.redraw(atom);
+            ed!("handle_android_event: handled compose change, after=[{}]", self.dbg_state());
         }
     }
 }

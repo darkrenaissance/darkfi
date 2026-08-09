@@ -21,15 +21,15 @@
 use crate::{
     app::{
         node::{
-            create_chatview, create_layer, create_multiline_edit, create_text,
-            create_vector_art, create_video,
+            create_chatview, create_layer, create_multiline_edit, create_text, create_vector_art,
+            create_video,
         },
         App,
     },
     expr::{self, Compiler},
     mesh::COLOR_PURPLE,
     prop::{PropertyAtomicGuard, PropertyFloat32, PropertyStr, Role},
-    scene::SceneNodePtr,
+    scene::{SceneNodePtr, Slot},
     ui::{BaseEdit, BaseEditType, ChatView, Layer, Text, VectorArt, VectorShape, Video},
     util::i18n::I18nBabelFish,
 };
@@ -105,7 +105,6 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish) {
 
     node.set_property_f32(atom, Role::App, "baseline", 40.).unwrap();
     node.set_property_f32(atom, Role::App, "font_size", 50.).unwrap();
-    //node.set_property_str(atom, Role::App, "text", "hello king!😁🍆jelly 🍆1234").unwrap();
     let prop = node.get_property("text_color").unwrap();
     prop.set_f32(atom, Role::App, 0, 1.).unwrap();
     prop.set_f32(atom, Role::App, 1, 1.).unwrap();
@@ -162,4 +161,75 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish) {
         .await;
     let chatedit_node = node.clone();
     layer_node.link(node);
+
+    let (slot, recvr) = Slot::new("focus_request");
+    chatedit_node.register("focus_request", slot).unwrap();
+    let focus_task = ex.spawn(async move {
+        while let Ok(_) = recvr.recv().await {
+            chatedit_node.call_method("focus", vec![]).await.unwrap();
+        }
+    });
+    app.tasks.lock().unwrap().push(focus_task);
+
+    /*
+    #[cfg(target_os = "android")]
+    {
+        use crate::android::textinput::{AndroidTextInput, AndroidTextInputState};
+        use darkfi::system::msleep;
+
+        let (sender, recvr) = async_channel::unbounded::<AndroidTextInputState>();
+        let input = AndroidTextInput::new(sender);
+
+        let event_task = ex.spawn(async move {
+            loop {
+                match recvr.recv().await {
+                    Ok(state) => info!(target: "test_edit", "IME event: {state:?}"),
+                    Err(_) => break,
+                }
+            }
+        });
+        app.tasks.lock().unwrap().push(event_task);
+
+        let test_task = ex.spawn(async move {
+            msleep(3000).await;
+
+            info!(target: "test_edit", "=== STEP 1: show() ===");
+            input.show();
+            msleep(5000).await;
+
+            info!(target: "test_edit", "=== STEP 2: set_state(hello world) ===");
+            input.set_state(AndroidTextInputState {
+                text: "hello world".to_string(),
+                select: (11, 11),
+                compose: None,
+            });
+            msleep(5000).await;
+
+            info!(target: "test_edit", "=== STEP 3: set_select(1, 1) — cursor to start ===");
+            input.set_select(1, 1);
+            msleep(5000).await;
+
+            /*
+            info!(target: "test_edit", "=== STEP 4: set_select(6, 6) — cursor into 'world' ===");
+            input.set_select(6, 6);
+            msleep(5000).await;
+
+            info!(target: "test_edit", "=== STEP 5: set_select(0, 5) — select 'hello' ===");
+            input.set_select(0, 5);
+            msleep(5000).await;
+
+            info!(target: "test_edit", "=== STEP 6: hide() ===");
+            input.hide();
+            msleep(3000).await;
+
+            info!(target: "test_edit", "=== STEP 7: show() again ===");
+            input.show();
+            msleep(5000).await;
+            */
+
+            info!(target: "test_edit", "=== DONE ===");
+        });
+        app.tasks.lock().unwrap().push(test_task);
+    }
+    */
 }

@@ -81,13 +81,21 @@ impl AndroidTextInput {
     pub fn show(&self) {
         t!("show IME");
         let gti = GAME_TEXT_INPUT.get().unwrap();
-        gti.focus(self.state.clone());
+        // Only call focus() (which pushes state via setState + restartInput)
+        // when this input was not already active. Re-focusing an already
+        // active editor (e.g. cursor moved by touch) must not restart the IME.
+        let is_active = self.state.lock().is_active;
+        if !is_active {
+            gti.focus(self.state.clone());
+        }
         gti.show_ime(0);
     }
 
     pub fn hide(&self) {
         t!("hide IME");
         let gti = GAME_TEXT_INPUT.get().unwrap();
+        // Mark as inactive so the next show() will re-push state.
+        self.state.lock().is_active = false;
         gti.hide_ime(0);
     }
 
@@ -112,9 +120,12 @@ impl AndroidTextInput {
         }
     }
 
+    /// Lightweight selection-only update. Uses Java setSelection() directly
+    /// instead of setState() to avoid the expensive clear/clearSpans/insert/
+    /// restartInput cycle that corrupts SpannableStringBuilder when called
+    /// from a non-main thread. Matches the pattern in the official Java
+    /// processKeyEvent handler which also calls setSelection() directly.
     pub fn set_select(&self, select_start: usize, select_end: usize) {
-        //t!("set_select({select_start}, {select_end})");
-        // Always update our own state.
         let mut ours = self.state.lock();
         let is_active = ours.is_active;
         let text = ours.state.text.clone();
@@ -124,7 +135,6 @@ impl AndroidTextInput {
         state.select = (select_start, select_end);
         drop(ours);
 
-        // Only update java state when this input is active
         if is_active {
             let gti = GAME_TEXT_INPUT.get().unwrap();
             gti.set_select(&text, select_start, select_end).unwrap();
