@@ -35,7 +35,7 @@ use std::{
 use tracing::instrument;
 
 #[cfg(target_os = "android")]
-use crate::android::{textinput::AndroidTextInputState, is_ime_visible};
+use crate::android::{is_ime_visible, textinput::AndroidTextInputState};
 use crate::{
     clipboard,
     gfx::{

@@ -77,7 +77,7 @@ pub struct GameTextInput {
     state_class: ndk_sys::jclass,
     set_soft_keyboard_active_method: ndk_sys::jmethodID,
     set_input_type_method: ndk_sys::jmethodID,
-    //restart_input_method: ndk_sys::jmethodID,
+    restart_input_method: ndk_sys::jmethodID,
     state_constructor: ndk_sys::jmethodID,
     state_class_info: StateClassInfo,
 }
@@ -124,7 +124,6 @@ impl GameTextInput {
                 set_input_type_sig.as_ptr() as _,
             );
 
-            /*
             let restart_input_sig = b"()V\0";
             let restart_input_method = get_method_id(
                 env,
@@ -132,7 +131,6 @@ impl GameTextInput {
                 b"restartInput\0".as_ptr() as _,
                 restart_input_sig.as_ptr() as _,
             );
-            */
 
             let state_class = new_global_ref!(env, state_java_class) as ndk_sys::jclass;
 
@@ -192,7 +190,7 @@ impl GameTextInput {
                 state_class,
                 set_soft_keyboard_active_method,
                 set_input_type_method,
-                //restart_input_method,
+                restart_input_method,
                 state_constructor,
                 state_class_info,
             }
@@ -248,6 +246,7 @@ impl GameTextInput {
         if is_success == 0u8 {
             return Err(())
         }
+        self.restart_input();
         Ok(())
     }
 
@@ -330,7 +329,6 @@ impl GameTextInput {
         }
     }
 
-    /*
     pub fn restart_input(&self) {
         let Some(input_connection) = *self.input_connection.read() else {
             w!("restart_input() - no input_connection set");
@@ -342,7 +340,6 @@ impl GameTextInput {
             call_void_method(env, input_connection, self.restart_input_method);
         }
     }
-    */
 
     fn state_to_java(&self, state: &AndroidTextInputState) -> ndk_sys::jobject {
         unsafe {
