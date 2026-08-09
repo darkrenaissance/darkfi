@@ -75,7 +75,7 @@ mod test;
 pub mod util;
 pub use util::Poseidon;
 
-#[cfg(feature = "wasm")]
+#[cfg(all(feature = "wasm", target_arch = "wasm32"))]
 pub mod wasmdb;
 
 // Bit size for Fp (and Fq)

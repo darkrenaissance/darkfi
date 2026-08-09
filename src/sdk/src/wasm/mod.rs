@@ -17,13 +17,16 @@
  */
 
 /// Database functions
+#[cfg(target_arch = "wasm32")]
 pub mod db;
 
 /// Entrypoint used for the wasm binaries
 pub mod entrypoint;
 
 /// Merkle
+#[cfg(target_arch = "wasm32")]
 pub mod merkle;
 
 /// Utility functions
+#[cfg(target_arch = "wasm32")]
 pub mod util;

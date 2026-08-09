@@ -40,7 +40,7 @@ impl TryFrom<u8> for DeployFunction {
     }
 }
 
-#[cfg(not(feature = "no-entrypoint"))]
+#[cfg(all(not(feature = "no-entrypoint"), target_arch = "wasm32"))]
 /// WASM entrypoint functions
 pub mod entrypoint;
 
