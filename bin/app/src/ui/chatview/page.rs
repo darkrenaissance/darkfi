@@ -360,24 +360,29 @@ impl PrivMessage {
         rects
     }
 
+    fn url_at_local(&self, pos: Point) -> Option<&str> {
+        for (url, rect) in &self.url_click_rects {
+            if rect.contains(pos) {
+                return Some(url.as_str())
+            }
+        }
+        None
+    }
+
     async fn handle_mouse_btn_up(&self, btn: MouseButton, mouse_pos: Point) -> bool {
         if btn != MouseButton::Left {
             return false
         }
-        for (url, rect) in &self.url_click_rects {
-            if rect.contains(mouse_pos) {
-                info!(target: "ui::chatview", "URL clicked: {url}");
+        let Some(url) = self.url_at_local(mouse_pos) else { return false };
+        info!(target: "ui::chatview", "URL clicked: {url}");
 
-                #[cfg(target_os = "android")]
-                crate::android::open_url(url);
+        #[cfg(target_os = "android")]
+        crate::android::open_url(url);
 
-                #[cfg(not(target_os = "android"))]
-                let _ = open::that(url);
+        #[cfg(not(target_os = "android"))]
+        let _ = open::that(url);
 
-                return true
-            }
-        }
-        false
+        true
     }
 }
 
@@ -871,6 +876,14 @@ impl Message {
             Self::Priv(m) => m.clear_mesh(),
             Self::Date(m) => m.clear_mesh(),
             Self::File(m) => m.clear_mesh(),
+        }
+    }
+
+    /// If `local_pos` (message-local coords) is on a URL, return it.
+    fn url_hit(&self, local_pos: Point) -> Option<String> {
+        match self {
+            Self::Priv(m) => m.url_at_local(local_pos).map(|s| s.to_string()),
+            _ => None,
         }
     }
 
@@ -1477,6 +1490,11 @@ impl MessageBuffer {
         }
 
         None
+    }
+
+    pub async fn url_at(&mut self, x: f32, y: f32) -> Option<String> {
+        let (msg, msg_top) = self.get_line(y).await?;
+        msg.url_hit(Point::new(x, msg_top - y))
     }
 
     pub async fn select_line(&mut self, y: f32) {

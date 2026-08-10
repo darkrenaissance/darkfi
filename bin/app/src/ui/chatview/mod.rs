@@ -30,7 +30,7 @@ use std::{
     collections::VecDeque,
     io::Cursor,
     sync::{
-        atomic::{AtomicBool, Ordering},
+        atomic::{AtomicBool, AtomicU32, Ordering},
         Arc, Weak,
     },
 };
@@ -43,12 +43,13 @@ use page::MessageBuffer;
 
 use crate::{
     gfx::{gfxtag, DrawCall, DrawInstruction, Point, Rectangle, RenderApi, Renderer},
+    mesh::{Color, MeshBuilder},
     prop::{
         BatchGuardId, BatchGuardPtr, PropertyAtomicGuard, PropertyColor, PropertyFloat32,
-        PropertyRect, PropertyUint32, Role,
+        PropertyRect, PropertyStr, PropertyUint32, Role,
     },
     scene::{MethodCallSub, Pimpl, SceneNodePtr, SceneNodeWeak},
-    ExecutorPtr,
+    text, ExecutorPtr,
 };
 
 use super::{DrawUpdate, OnModify, UIObject};
@@ -152,6 +153,53 @@ impl TouchInfo {
 
 pub type ChatViewPtr = Arc<ChatView>;
 
+/// Transient "Copied link" overlay state. Rendered as a `DrawInstruction::Overlay`
+/// in its own draw call so it floats above the link and escapes the message clip rect.
+struct LinkToast {
+    text_layout: parley::Layout<Color>,
+    anchor: Point,
+    offset: f32,
+    fg_color: Color,
+    bg_color: Color,
+    font_size: f32,
+    padding: f32,
+}
+
+impl LinkToast {
+    /// Build the overlay draw-instructions (mirroring the edit action menu): a
+    /// filled background box with an fg-colored outline and the label centered
+    /// inside, drawn above the anchor point (shifted up by `offset`).
+    fn build_instrs(&self, renderer: &Renderer) -> Vec<DrawInstruction> {
+        let text_w = self.text_layout.width();
+        let text_h = self.text_layout.height();
+        let pad = self.padding;
+        let box_w = text_w + 2. * pad;
+        let box_h = self.font_size + 2. * pad;
+
+        // Box bottom sits `offset` above the anchor (negative y is up).
+        let pos = Point::new(self.anchor.x, self.anchor.y - self.offset);
+
+        let mut instrs = vec![DrawInstruction::Move(pos)];
+
+        // Box: top at -box_h, bottom at 0 (like an edit action item).
+        instrs.push(DrawInstruction::Move(Point::new(0., -box_h)));
+        let bg_rect = Rectangle::new(0., 0., box_w, box_h);
+        let mut mesh = MeshBuilder::new(gfxtag!("chatview_urltoast_bg"));
+        mesh.draw_filled_box(&bg_rect, self.bg_color);
+        mesh.draw_outline(&bg_rect, self.fg_color, 1.);
+        instrs.push(DrawInstruction::Draw(mesh.alloc(renderer).draw_untextured()));
+
+        // Label: inset horizontally by padding, centered vertically.
+        let text_y = (box_h - text_h) / 2.;
+        instrs.push(DrawInstruction::Move(Point::new(pad, text_y)));
+        let mut txt_instrs =
+            text::render_layout(&self.text_layout, renderer, gfxtag!("chatview_urltoast_txt"));
+        instrs.append(&mut txt_instrs);
+
+        instrs
+    }
+}
+
 pub struct ChatView {
     node: SceneNodeWeak,
     tasks: SyncMutex<Vec<smol::Task<()>>>,
@@ -190,6 +238,28 @@ pub struct ChatView {
 
     /// We use it when we re-eval rect when its changed via property.
     parent_rect: SyncMutex<Option<Rectangle>>,
+
+    /// window scale (for building the toast text layout)
+    window_scale: PropertyFloat32,
+
+    /// "Copied link" overlay styling/content
+    url_copy_text: PropertyStr,
+    url_copy_fg_color: PropertyColor,
+    url_copy_bg_color: PropertyColor,
+    url_copy_font_size: PropertyFloat32,
+    url_copy_padding: PropertyFloat32,
+    url_copy_offset: PropertyFloat32,
+    url_copy_duration: PropertyFloat32,
+
+    /// Active copy-link overlay (None when hidden).
+    link_toast: SyncMutex<Option<LinkToast>>,
+    /// Re-arm counter so a stale dismiss task won't clear a newer toast.
+    toast_version: AtomicU32,
+
+    /// Weak self-reference + executor, set in `start()`, so mouse/touch handlers
+    /// can spawn the overlay dismiss task.
+    weak: SyncMutex<Weak<Self>>,
+    ex: SyncMutex<Option<ExecutorPtr>>,
 }
 
 impl ChatView {
@@ -223,6 +293,20 @@ impl ChatView {
             PropertyFloat32::wrap(node_ref, Role::Internal, "url_bg_border_size", 0).unwrap();
         let url_bg_border_color =
             PropertyColor::wrap(node_ref, Role::Internal, "url_bg_border_color").unwrap();
+        let url_copy_text =
+            PropertyStr::wrap(node_ref, Role::Internal, "url_copy_text", 0).unwrap();
+        let url_copy_fg_color =
+            PropertyColor::wrap(node_ref, Role::Internal, "url_copy_fg_color").unwrap();
+        let url_copy_bg_color =
+            PropertyColor::wrap(node_ref, Role::Internal, "url_copy_bg_color").unwrap();
+        let url_copy_font_size =
+            PropertyFloat32::wrap(node_ref, Role::Internal, "url_copy_font_size", 0).unwrap();
+        let url_copy_padding =
+            PropertyFloat32::wrap(node_ref, Role::Internal, "url_copy_padding", 0).unwrap();
+        let url_copy_offset =
+            PropertyFloat32::wrap(node_ref, Role::Internal, "url_copy_offset", 0).unwrap();
+        let url_copy_duration =
+            PropertyFloat32::wrap(node_ref, Role::Internal, "url_copy_duration", 0).unwrap();
         let nick_colors = node_ref.get_property("nick_colors").expect("ChatView::nick_colors");
         let hi_bg_color = PropertyColor::wrap(node_ref, Role::Internal, "hi_bg_color").unwrap();
         let z_index = PropertyUint32::wrap(node_ref, Role::Internal, "z_index", 0).unwrap();
@@ -264,7 +348,7 @@ impl ChatView {
                 url_bg_border_color,
                 nick_colors,
                 hi_bg_color,
-                window_scale,
+                window_scale.clone(),
                 renderer,
             )),
             dc_key: OsRng.gen(),
@@ -291,6 +375,19 @@ impl ChatView {
             bgload_cv,
 
             parent_rect: SyncMutex::new(None),
+
+            window_scale,
+            url_copy_text,
+            url_copy_fg_color,
+            url_copy_bg_color,
+            url_copy_font_size,
+            url_copy_padding,
+            url_copy_offset,
+            url_copy_duration,
+            link_toast: SyncMutex::new(None),
+            toast_version: AtomicU32::new(0),
+            weak: SyncMutex::new(Weak::new()),
+            ex: SyncMutex::new(None),
         });
         Pimpl::ChatView(self_)
     }
@@ -787,6 +884,60 @@ impl ChatView {
         instrs
     }
 
+    /// Build the copy-link overlay instruction if a toast is currently shown.
+    fn toast_instr(&self) -> Option<DrawInstruction> {
+        let toast = self.link_toast.lock();
+        let toast = toast.as_ref()?;
+        Some(DrawInstruction::Overlay(toast.build_instrs(&self.renderer)))
+    }
+
+    /// Copy `url` to the clipboard and show the "Copied link" overlay above `anchor`
+    /// (chatview-local coords) for `url_copy_duration` seconds. Re-arms on repeat.
+    /// The overlay is emitted inline from `redraw_cached` (so it inherits the
+    /// chatview's position), hence we trigger a full redraw on show/hide.
+    async fn show_toast(&self, url: &str, anchor: Point) {
+        crate::clipboard::set(url);
+
+        let text = self.url_copy_text.get();
+        let fg = self.url_copy_fg_color.get();
+        let bg = self.url_copy_bg_color.get();
+        let font_size = self.url_copy_font_size.get();
+        let pad = self.url_copy_padding.get();
+        let offset = self.url_copy_offset.get();
+        let window_scale = self.window_scale.get();
+
+        let text_layout = text::make_layout(&text, fg, font_size, 0., window_scale, None, &[]);
+        let toast = LinkToast {
+            text_layout,
+            anchor,
+            offset,
+            fg_color: fg,
+            bg_color: bg,
+            font_size,
+            padding: pad,
+        };
+        *self.link_toast.lock() = Some(toast);
+
+        let atom = &mut self.renderer.make_guard(gfxtag!("ChatView::urltoast_show"));
+        self.redraw_all(atom).await;
+
+        // (Re)arm the dismiss task. A stale task won't clear a newer toast (version check).
+        let version = self.toast_version.fetch_add(1, Ordering::SeqCst) + 1;
+        let duration = self.url_copy_duration.get();
+        let weak = self.weak.lock().clone();
+        let Some(ex) = self.ex.lock().clone() else { return };
+        ex.spawn(async move {
+            msleep((duration * 1000.) as u64).await;
+            let Some(this) = weak.upgrade() else { return };
+            if this.toast_version.load(Ordering::SeqCst) == version {
+                *this.link_toast.lock() = None;
+                let atom = &mut this.renderer.make_guard(gfxtag!("ChatView::urltoast_hide"));
+                this.redraw_all(atom).await;
+            }
+        })
+        .detach();
+    }
+
     #[instrument(skip(msgbuf), target = "ui::chatview")]
     async fn redraw_cached(&self, batch_id: BatchGuardId, msgbuf: &mut MessageBuffer) {
         let rect = self.rect.get();
@@ -795,6 +946,9 @@ impl ChatView {
 
         let mut instrs = vec![DrawInstruction::ApplyView(rect)];
         instrs.append(&mut mesh_instrs);
+        if let Some(t) = self.toast_instr() {
+            instrs.push(t);
+        }
 
         let draw_calls =
             vec![(self.dc_key, DrawCall::new(instrs, vec![], self.z_index.get(), "chatview"))];
@@ -823,6 +977,10 @@ impl UIObject for ChatView {
 
     async fn start(self: Arc<Self>, ex: ExecutorPtr) {
         let me = Arc::downgrade(&self);
+
+        // Let mouse/touch handlers spawn the copy-overlay dismiss task.
+        *self.weak.lock() = Arc::downgrade(&self);
+        *self.ex.lock() = Some(ex.clone());
 
         let node_ref = &self.node.upgrade().unwrap();
 
@@ -949,6 +1107,9 @@ impl UIObject for ChatView {
 
         let mut instrs = vec![DrawInstruction::ApplyView(rect)];
         instrs.append(&mut mesh_instrs);
+        if let Some(t) = self.toast_instr() {
+            instrs.push(t);
+        }
 
         Some(DrawUpdate {
             key: self.dc_key,
@@ -992,6 +1153,17 @@ impl UIObject for ChatView {
                 {
                     return true
                 }
+            }
+        }
+
+        // Right-click on a URL: copy it and show the "Copied link" overlay.
+        if btn == MouseButton::Right && rect.contains(mouse_pos) {
+            let msgbuf_pos = self.to_msgbuf_pos(mouse_pos);
+            let mut msgbuf = self.msgbuf.lock().await;
+            if let Some(url) = msgbuf.url_at(msgbuf_pos.x, msgbuf_pos.y).await {
+                drop(msgbuf);
+                self.show_toast(&url, mouse_pos - rect.pos()).await;
+                return true
             }
         }
 
@@ -1111,7 +1283,7 @@ impl UIObject for ChatView {
                 *touch_info = Some(TouchInfo::new(self.scroll.get(), touch_y));
             }
             TouchPhase::Moved => {
-                let (start_scroll, start_y, start_elapsed, do_update, is_select_mode) = {
+                let (start_scroll, start_y, start_elapsed, do_update, is_select_mode, copy_pending) = {
                     let mut touch_info = self.touch_info.lock();
                     let Some(touch_info) = &mut *touch_info else { return false };
 
@@ -1122,10 +1294,13 @@ impl UIObject for ChatView {
 
                     let start_elapsed =
                         touch_info.start_instant.elapsed().as_micros() as f32 / 1000.;
+                    let mut copy_pending = false;
                     if start_elapsed > select_hold_time && touch_info.is_select_mode.is_none() {
                         // Did we move?
                         if (touch_y - start_y).abs() < BIG_EPSILON {
                             touch_info.is_select_mode = Some(true);
+                            // Stationary long-hold just latched this gesture.
+                            copy_pending = true;
                         } else {
                             touch_info.is_select_mode = Some(false);
                         }
@@ -1141,10 +1316,20 @@ impl UIObject for ChatView {
                         touch_info.last_instant = std::time::Instant::now();
                     }
 
-                    (start_scroll, start_y, start_elapsed, do_update, is_select_mode)
+                    (start_scroll, start_y, start_elapsed, do_update, is_select_mode, copy_pending)
                 };
 
                 t!("touch phase moved, is_select_mode={is_select_mode:?}");
+
+                // Stationary long-hold: if the touch is on a URL, copy it + toast.
+                if copy_pending {
+                    let msgbuf_pos = self.to_msgbuf_pos(touch_pos);
+                    let mut msgbuf = self.msgbuf.lock().await;
+                    if let Some(url) = msgbuf.url_at(msgbuf_pos.x, msgbuf_pos.y).await {
+                        drop(msgbuf);
+                        self.show_toast(&url, touch_pos - rect.pos()).await;
+                    }
+                }
 
                 // When scrolling if we suddenly grab the screen for more than a brief period
                 // of time then stop the scrolling completely.

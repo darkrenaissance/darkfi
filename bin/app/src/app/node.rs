@@ -548,6 +548,38 @@ pub fn create_chatview(name: &str) -> SceneNode {
     prop.set_range_f32(0., 1.);
     node.add_property(prop).unwrap();
 
+    // "Copied link" overlay (right-click / long-hold on a URL)
+    let mut prop = Property::new("url_copy_text", PropertyType::Str, PropertySubType::Null);
+    prop.set_defaults_str(vec!["Copied link".to_string()]).unwrap();
+    node.add_property(prop).unwrap();
+
+    let mut prop =
+        Property::new("url_copy_fg_color", PropertyType::Float32, PropertySubType::Color);
+    prop.set_array_len(4);
+    prop.set_range_f32(0., 1.);
+    prop.set_defaults_f32(vec![0., 0.94, 1., 1.]).unwrap();
+    node.add_property(prop).unwrap();
+
+    let mut prop =
+        Property::new("url_copy_bg_color", PropertyType::Float32, PropertySubType::Color);
+    prop.set_array_len(4);
+    prop.set_range_f32(0., 1.);
+    prop.set_defaults_f32(vec![0.1, 0.1, 0.1, 0.9]).unwrap();
+    node.add_property(prop).unwrap();
+
+    let prop = Property::new("url_copy_font_size", PropertyType::Float32, PropertySubType::Pixel);
+    node.add_property(prop).unwrap();
+
+    let prop = Property::new("url_copy_padding", PropertyType::Float32, PropertySubType::Pixel);
+    node.add_property(prop).unwrap();
+
+    let prop = Property::new("url_copy_offset", PropertyType::Float32, PropertySubType::Pixel);
+    node.add_property(prop).unwrap();
+
+    let mut prop = Property::new("url_copy_duration", PropertyType::Float32, PropertySubType::Null);
+    prop.set_defaults_f32(vec![2.]).unwrap();
+    node.add_property(prop).unwrap();
+
     let mut prop = Property::new("nick_colors", PropertyType::Float32, PropertySubType::Pixel);
     prop.set_unbounded();
     prop.set_range_f32(0., 1.);
