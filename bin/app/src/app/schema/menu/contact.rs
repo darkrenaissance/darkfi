@@ -136,6 +136,13 @@ mod ui_consts {
     pub const CONTENT_OUTLINE_SIZE: f32 = 0.3;
 }
 
+async fn unfocus_editors(content: &SceneNodePtr) {
+    for name in ["contact_search", "nick_edit", "secret_edit"] {
+        let node = content.lookup_node(format!("/content_area/{name}")).unwrap();
+        node.call_method("unfocus", vec![]).await.unwrap();
+    }
+}
+
 pub async fn make(
     app: &App,
     content: SceneNodePtr,
@@ -252,9 +259,12 @@ pub async fn make(
     let renderer = app.renderer.clone();
     let menu_node = sg_root.lookup_node("/window/content/menu_layer").unwrap();
     let netstatus_layer = sg_root.lookup_node("/window/content/netstatus_layer").unwrap();
+    let content_go = content.clone();
     let goback = async move || {
         info!(target: "app::chat", "clicked back");
         let atom = &mut renderer.make_guard(gfxtag!("go back action"));
+
+        unfocus_editors(&content_go).await;
 
         menu_node.set_property_bool(atom, Role::App, "is_visible", true).unwrap();
         netstatus_layer.set_property_bool(atom, Role::App, "is_visible", true).unwrap();
@@ -567,9 +577,13 @@ pub async fn make(
     let contact_vis = contact_is_visible.clone();
     let channel_vis = channel_is_visible.clone();
     let renderer = app.renderer.clone();
+    let content_tab = content.clone();
     let listen_click = app.ex.spawn(async move {
         while let Ok(_) = recvr.recv().await {
             let atom = &mut renderer.make_guard(gfxtag!("contacts_click"));
+
+            unfocus_editors(&content_tab).await;
+
             channel_vis.set(atom, false);
             contact_vis.set(atom, true);
 
@@ -632,9 +646,13 @@ pub async fn make(
     let contact_vis = contact_is_visible.clone();
     let channel_vis = channel_is_visible.clone();
     let renderer = app.renderer.clone();
+    let content_tab = content.clone();
     let listen_click = app.ex.spawn(async move {
         while let Ok(_) = recvr.recv().await {
             let atom = &mut renderer.make_guard(gfxtag!("channels_click"));
+
+            unfocus_editors(&content_tab).await;
+
             contact_vis.set(atom, false);
             channel_vis.set(atom, true);
 
