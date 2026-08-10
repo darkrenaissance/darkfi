@@ -24,14 +24,16 @@ use futures::stream::{Stream, StreamExt};
 use image::{ImageBuffer, ImageReader, Rgba};
 use miniquad::{MouseButton, TextureFormat, TouchPhase};
 use parking_lot::Mutex as SyncMutex;
+use regex::Regex;
 use std::{
     collections::HashMap,
     hash::{DefaultHasher, Hash, Hasher},
     io::Cursor,
+    ops::Range,
     pin::pin,
     sync::{
         atomic::{AtomicBool, Ordering},
-        Arc,
+        Arc, LazyLock,
     },
 };
 use url::Url;
@@ -53,6 +55,13 @@ macro_rules! t { ($($arg:tt)*) => { trace!(target: "ui::chatview::message_buffer
 //const PRELOAD_PAGES: usize = 10;
 
 const UNCONF_COLOR: [f32; 4] = [0.4, 0.4, 0.4, 1.];
+
+static URL_REGEX: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"https?://[^\s]+|fud://[^\s]+|www\.[^\s]+").unwrap());
+
+fn url_color_ranges(text: &str, offset: usize, color: Color) -> Vec<(Range<usize>, Color)> {
+    URL_REGEX.find_iter(text).map(|m| (m.start() + offset..m.end() + offset, color)).collect()
+}
 
 #[derive(Clone)]
 pub struct PrivMessage {
@@ -119,6 +128,7 @@ impl PrivMessage {
         timestamp_width: f32,
         nick_colors: &[Color],
         text_color: Color,
+        url_text_color: Color,
     ) {
         if self.txt_layout.is_some() {
             return
@@ -133,8 +143,14 @@ impl PrivMessage {
 
         let nick_color = select_nick_color(&self.nick, nick_colors);
 
-        let txt_layout = if self.nick == "NOTICE" {
-            text::make_layout(
+        let is_notice = self.nick == "NOTICE";
+        // Byte offset of the body within linetext. NOTICE has no nick prefix;
+        // normal messages are "<nick> <body>" so the body starts after nick + space.
+        let body_offset = if is_notice { 0 } else { self.nick.len() + 1 };
+        let url_ranges = url_color_ranges(&self.text, body_offset, url_text_color);
+
+        let txt_layout = if is_notice {
+            text::make_layout2(
                 &linetext,
                 text_color,
                 self.font_size,
@@ -142,10 +158,15 @@ impl PrivMessage {
                 self.window_scale,
                 Some(clip.w - timestamp_width),
                 &[],
+                &url_ranges,
+                "start",
+                "normal",
             )
         } else {
             let body_color = if self.confirmed { text_color } else { UNCONF_COLOR };
             let nick_end = self.nick.len() + 1;
+            let mut foreground_colors = vec![(0..nick_end, nick_color)];
+            foreground_colors.extend(url_ranges);
             text::make_layout2(
                 &linetext,
                 body_color,
@@ -154,7 +175,7 @@ impl PrivMessage {
                 self.window_scale,
                 Some(clip.w - timestamp_width),
                 &[],
-                &[(0..nick_end, nick_color)],
+                &foreground_colors,
                 "start",
                 "normal",
             )
@@ -171,6 +192,10 @@ impl PrivMessage {
         nick_colors: &[Color],
         timestamp_color: Color,
         text_color: Color,
+        url_text_color: Color,
+        url_bg_color: Color,
+        url_bg_border_size: f32,
+        url_bg_border_color: Color,
         hi_bg_color: Color,
         renderer: &Renderer,
     ) -> Vec<DrawInstruction> {
@@ -191,7 +216,14 @@ impl PrivMessage {
             &[],
         );
 
-        self.cache_txt_layout(clip, line_height, timestamp_width, nick_colors, text_color);
+        self.cache_txt_layout(
+            clip,
+            line_height,
+            timestamp_width,
+            nick_colors,
+            text_color,
+            url_text_color,
+        );
 
         let mut all_instrs = vec![];
 
@@ -213,6 +245,24 @@ impl PrivMessage {
 
         // Render message text offset by timestamp_width
         all_instrs.push(DrawInstruction::Move(Point::new(timestamp_width, 0.)));
+
+        // Draw URL background (and optional border) behind the URL runs, under the
+        // glyphs. render_backgrounds matches glyph runs by their style brush, so
+        // only the URL-colored runs (brush == url_text_color) get a box — never the
+        // nick or surrounding body text.
+        if URL_REGEX.is_match(&self.text) {
+            let bg_instrs = text::render_backgrounds(
+                self.txt_layout.as_ref().unwrap(),
+                url_text_color,
+                url_bg_color,
+                url_bg_border_color,
+                url_bg_border_size,
+                renderer,
+                gfxtag!("chatview_privmsg_urlbg"),
+            );
+            all_instrs.extend(bg_instrs);
+        }
+
         let text_instrs = text::render_layout(
             self.txt_layout.as_ref().unwrap(),
             renderer,
@@ -742,10 +792,18 @@ impl Message {
         timestamp_width: f32,
         nick_colors: &[Color],
         text_color: Color,
+        url_text_color: Color,
     ) {
         match self {
             Self::Priv(m) => {
-                m.cache_txt_layout(clip, line_height, timestamp_width, nick_colors, text_color);
+                m.cache_txt_layout(
+                    clip,
+                    line_height,
+                    timestamp_width,
+                    nick_colors,
+                    text_color,
+                    url_text_color,
+                );
             }
             Self::Date(_) => {}
             Self::File(_) => {}
@@ -761,6 +819,10 @@ impl Message {
         nick_colors: &[Color],
         timestamp_color: Color,
         text_color: Color,
+        url_text_color: Color,
+        url_bg_color: Color,
+        url_bg_border_size: f32,
+        url_bg_border_color: Color,
         hi_bg_color: Color,
         renderer: &Renderer,
     ) -> Vec<DrawInstruction> {
@@ -774,6 +836,10 @@ impl Message {
                     nick_colors,
                     timestamp_color,
                     text_color,
+                    url_text_color,
+                    url_bg_color,
+                    url_bg_border_size,
+                    url_bg_border_color,
                     hi_bg_color,
                     renderer,
                 )
@@ -866,6 +932,10 @@ pub struct MessageBuffer {
     baseline: PropertyFloat32,
     timestamp_color: PropertyColor,
     text_color: PropertyColor,
+    url_text_color: PropertyColor,
+    url_bg_color: PropertyColor,
+    url_bg_border_size: PropertyFloat32,
+    url_bg_border_color: PropertyColor,
     nick_colors: PropertyPtr,
     hi_bg_color: PropertyColor,
 
@@ -887,6 +957,10 @@ impl MessageBuffer {
         baseline: PropertyFloat32,
         timestamp_color: PropertyColor,
         text_color: PropertyColor,
+        url_text_color: PropertyColor,
+        url_bg_color: PropertyColor,
+        url_bg_border_size: PropertyFloat32,
+        url_bg_border_color: PropertyColor,
         nick_colors: PropertyPtr,
         hi_bg_color: PropertyColor,
         window_scale: PropertyFloat32,
@@ -905,6 +979,10 @@ impl MessageBuffer {
             baseline,
             timestamp_color,
             text_color,
+            url_text_color,
+            url_bg_color,
+            url_bg_border_size,
+            url_bg_border_color,
             nick_colors,
             hi_bg_color,
 
@@ -953,6 +1031,7 @@ impl MessageBuffer {
         let timestamp_width = self.timestamp_width.get();
         let msg_spacing = self.msg_spacing.get();
         let text_color = self.text_color.get();
+        let url_text_color = self.url_text_color.get();
         let nick_colors = self.read_nick_colors();
         let mut height = 0.;
 
@@ -968,7 +1047,14 @@ impl MessageBuffer {
                 height += msg_spacing;
             }
 
-            msg.cache_txt_layout(&rect, line_height, timestamp_width, &nick_colors, text_color);
+            msg.cache_txt_layout(
+                &rect,
+                line_height,
+                timestamp_width,
+                &nick_colors,
+                text_color,
+                url_text_color,
+            );
 
             height += msg.height(line_height);
         }
@@ -1015,6 +1101,7 @@ impl MessageBuffer {
         let timestamp_width = self.timestamp_width.get();
         let window_scale = self.window_scale.get();
         let text_color = self.text_color.get();
+        let url_text_color = self.url_text_color.get();
         let nick_colors = self.read_nick_colors();
 
         let mut msg = PrivMessage::new(
@@ -1027,7 +1114,14 @@ impl MessageBuffer {
             text,
         );
 
-        msg.cache_txt_layout(&rect, line_height, timestamp_width, &nick_colors, text_color);
+        msg.cache_txt_layout(
+            &rect,
+            line_height,
+            timestamp_width,
+            &nick_colors,
+            text_color,
+            url_text_color,
+        );
 
         if self.msgs.is_empty() {
             self.msgs.push(msg);
@@ -1079,6 +1173,7 @@ impl MessageBuffer {
         let timestamp_width = self.timestamp_width.get();
         let window_scale = self.window_scale.get();
         let text_color = self.text_color.get();
+        let url_text_color = self.url_text_color.get();
         let nick_colors = self.read_nick_colors();
 
         let mut msg = PrivMessage::new(
@@ -1091,7 +1186,14 @@ impl MessageBuffer {
             text,
         );
 
-        msg.cache_txt_layout(rect, line_height, timestamp_width, &nick_colors, text_color);
+        msg.cache_txt_layout(
+            rect,
+            line_height,
+            timestamp_width,
+            &nick_colors,
+            text_color,
+            url_text_color,
+        );
 
         let msg_height = msg.height(self.line_height.get());
         self.msgs.push(msg);
@@ -1110,6 +1212,10 @@ impl MessageBuffer {
 
         let timest_color = self.timestamp_color.get();
         let text_color = self.text_color.get();
+        let url_text_color = self.url_text_color.get();
+        let url_bg_color = self.url_bg_color.get();
+        let url_bg_border_size = self.url_bg_border_size.get();
+        let url_bg_border_color = self.url_bg_border_color.get();
         let nick_colors = self.read_nick_colors();
         let hi_bg_color = self.hi_bg_color.get();
 
@@ -1130,6 +1236,10 @@ impl MessageBuffer {
                     &nick_colors,
                     timest_color,
                     text_color,
+                    url_text_color,
+                    url_bg_color,
+                    url_bg_border_size,
+                    url_bg_border_color,
                     hi_bg_color,
                     &renderer,
                 )

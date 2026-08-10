@@ -521,6 +521,23 @@ pub async fn make(
         prop.set_f32(atom, Role::App, 3, 1.).unwrap();
     }
 
+    let prop = node.get_property("url_text_color").unwrap();
+    prop.set_f32(atom, Role::App, 0, 0.).unwrap();
+    prop.set_f32(atom, Role::App, 1, 0.94).unwrap();
+    prop.set_f32(atom, Role::App, 2, 1.).unwrap();
+    prop.set_f32(atom, Role::App, 3, 1.).unwrap();
+    let prop = node.get_property("url_bg_color").unwrap();
+    prop.set_f32(atom, Role::App, 0, 0.).unwrap();
+    prop.set_f32(atom, Role::App, 1, 0.13).unwrap();
+    prop.set_f32(atom, Role::App, 2, 0.08).unwrap();
+    prop.set_f32(atom, Role::App, 3, 1.).unwrap();
+    node.set_property_f32(atom, Role::App, "url_bg_border_size", 1.).unwrap();
+    let prop = node.get_property("url_bg_border_color").unwrap();
+    prop.set_f32(atom, Role::App, 0, 0.11).unwrap();
+    prop.set_f32(atom, Role::App, 1, 0.6).unwrap();
+    prop.set_f32(atom, Role::App, 2, 0.63).unwrap();
+    prop.set_f32(atom, Role::App, 3, 1.).unwrap();
+
     let prop = node.get_property("nick_colors").unwrap();
     #[rustfmt::skip]
     let nick_colors = [

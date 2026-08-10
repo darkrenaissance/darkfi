@@ -57,6 +57,62 @@ pub fn render_layout(
     render_layout_with_opts(layout, DebugRenderOptions::OFF, renderer, tag)
 }
 
+/// Draw a filled (and optionally outlined) background box behind every glyph run
+/// whose style brush equals `match_brush`. The box tracks the run's horizontal
+/// advance and the font-metric ascent/descent vertically, so a run that wraps
+/// across lines gets one box per wrapped line.
+///
+/// Matching by brush (rather than by byte range) is required because a parley
+/// `GlyphRun` does not expose its own byte range — only its parent font run does,
+/// and a font run is coarser than the per-color segment (e.g. the nick, body, and
+/// URL of one line all share a font run). Matching `style().brush` pins the box to
+/// exactly the color segment, so only the intended runs (here: the URL runs) are
+/// highlighted. The fill is skipped when `bg_color` alpha is ~0; the outline is
+/// skipped when `border_size` is ~0 or `border_color` alpha is ~0.
+pub fn render_backgrounds(
+    layout: &parley::Layout<Color>,
+    match_brush: Color,
+    bg_color: Color,
+    border_color: Color,
+    border_size: f32,
+    renderer: &Renderer,
+    tag: DebugTag,
+) -> Vec<DrawInstruction> {
+    let mut instrs = vec![];
+    let has_fill = bg_color[3] > 0.;
+    let has_border = border_size > 0. && border_color[3] > 0.;
+    if !has_fill && !has_border {
+        return instrs
+    }
+
+    for line in layout.lines() {
+        for item in line.items() {
+            let parley::PositionedLayoutItem::GlyphRun(glyph_run) = item else { continue };
+            if glyph_run.style().brush != match_brush {
+                continue
+            }
+
+            let metrics = glyph_run.run().metrics();
+            let x = glyph_run.offset();
+            let y = glyph_run.baseline() - metrics.ascent;
+            let w = glyph_run.advance();
+            let h = metrics.ascent + metrics.descent;
+            let rect = Rectangle::new(x, y, w, h);
+
+            let mut mesh = MeshBuilder::new(tag);
+            if has_fill {
+                mesh.draw_filled_box(&rect, bg_color);
+            }
+            if has_border {
+                mesh.draw_outline(&rect, border_color, border_size);
+            }
+            instrs.push(DrawInstruction::Draw(mesh.alloc(renderer).draw_untextured()));
+        }
+    }
+
+    instrs
+}
+
 pub fn render_layout_with_opts(
     layout: &parley::Layout<Color>,
     opts: DebugRenderOptions,

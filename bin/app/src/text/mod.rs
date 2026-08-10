@@ -29,7 +29,7 @@ pub mod atlas;
 mod editor;
 pub use editor::Editor;
 mod render;
-pub use render::{render_layout, render_layout_with_opts, DebugRenderOptions};
+pub use render::{render_backgrounds, render_layout, render_layout_with_opts, DebugRenderOptions};
 
 pub static GLOBAL_FONT_CTX: LazyLock<parley::FontContext> = LazyLock::new(|| {
     let mut font_ctx = parley::FontContext {

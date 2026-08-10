@@ -216,6 +216,13 @@ impl ChatView {
         let timestamp_color =
             PropertyColor::wrap(node_ref, Role::Internal, "timestamp_color").unwrap();
         let text_color = PropertyColor::wrap(node_ref, Role::Internal, "text_color").unwrap();
+        let url_text_color =
+            PropertyColor::wrap(node_ref, Role::Internal, "url_text_color").unwrap();
+        let url_bg_color = PropertyColor::wrap(node_ref, Role::Internal, "url_bg_color").unwrap();
+        let url_bg_border_size =
+            PropertyFloat32::wrap(node_ref, Role::Internal, "url_bg_border_size", 0).unwrap();
+        let url_bg_border_color =
+            PropertyColor::wrap(node_ref, Role::Internal, "url_bg_border_color").unwrap();
         let nick_colors = node_ref.get_property("nick_colors").expect("ChatView::nick_colors");
         let hi_bg_color = PropertyColor::wrap(node_ref, Role::Internal, "hi_bg_color").unwrap();
         let z_index = PropertyUint32::wrap(node_ref, Role::Internal, "z_index", 0).unwrap();
@@ -251,6 +258,10 @@ impl ChatView {
                 baseline,
                 timestamp_color,
                 text_color,
+                url_text_color,
+                url_bg_color,
+                url_bg_border_size,
+                url_bg_border_color,
                 nick_colors,
                 hi_bg_color,
                 window_scale,
