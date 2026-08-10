@@ -1476,7 +1476,6 @@ impl BaseEdit {
             ed!("focus method: setting android input_type={input_type}");
             self_.editor.lock().set_input_type(input_type);
         }
-
         self_.editor.lock().focus();
 
         let atom = &mut self_.renderer.make_guard(gfxtag!("BaseEdit::process_focus_method"));

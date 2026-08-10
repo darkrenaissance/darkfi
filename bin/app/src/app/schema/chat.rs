@@ -589,19 +589,6 @@ pub async fn make(
     });
     layer_node.push_task(listen_file_download);
 
-    if is_first_time {
-        let chatview = match chatview_node.pimpl() {
-            Pimpl::ChatView(obj) => obj.as_ref(),
-            _ => panic!("wrong pimpl for chatview"),
-        };
-        chatview.handle_insert_line(
-            unixtime(),
-            chatview::MessageId(rand::random()),
-            "NOTICE".to_string(),
-            "This is your first time connecting. Please be patient while the network syncs. We will fix this in future releases".to_string()
-        ).await;
-    }
-
     // Create the editbox bg
     let node = create_vector_art("editbox_bg");
     let prop = node.get_property("rect").unwrap();
