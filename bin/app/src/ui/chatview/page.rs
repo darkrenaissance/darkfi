@@ -79,6 +79,11 @@ pub struct PrivMessage {
 
     mesh_cache: Option<Vec<DrawInstruction>>,
     txt_layout: Option<parley::Layout<Color>>,
+
+    /// Bounding rects of this message's URL runs in message-local coordinates,
+    /// each tagged with its URL string. Populated in `gen_mesh`, used by
+    /// `handle_mouse_btn_up` for click hit-testing. Cleared in `clear_mesh`.
+    url_click_rects: Vec<(String, Rectangle)>,
 }
 
 impl PrivMessage {
@@ -108,6 +113,7 @@ impl PrivMessage {
             is_selected: false,
             mesh_cache: None,
             txt_layout: None,
+            url_click_rects: vec![],
         })
     }
 
@@ -263,6 +269,9 @@ impl PrivMessage {
             all_instrs.extend(bg_instrs);
         }
 
+        // Record this message's URL hit-rectangles for click detection.
+        self.url_click_rects = self.compute_url_click_rects(timestamp_width, url_text_color);
+
         let text_instrs = text::render_layout(
             self.txt_layout.as_ref().unwrap(),
             renderer,
@@ -285,10 +294,90 @@ impl PrivMessage {
         // Auto-deletes when refs are dropped
         self.mesh_cache = None;
         self.txt_layout = None;
+        self.url_click_rects.clear();
     }
 
     fn select(&mut self) {
         self.is_selected = true;
+    }
+
+    /// Build the URL hit-rectangles for this message, in message-local coordinates.
+    /// Each URL-colored glyph run (`style().brush == url_text_color`) becomes a rect
+    /// `(timestamp_width + run.offset, run.baseline - ascent, run.advance,
+    /// ascent + descent)`. The run is tagged with its URL string by intersecting its
+    /// (coarse) font-run `text_range()` with the message's URL byte ranges in
+    /// `linetext`, so wrapped URLs and multiple URLs are handled correctly.
+    fn compute_url_click_rects(
+        &self,
+        timestamp_width: f32,
+        url_text_color: Color,
+    ) -> Vec<(String, Rectangle)> {
+        let mut rects = vec![];
+        let Some(layout) = self.txt_layout.as_ref() else { return rects };
+
+        let is_notice = self.nick == "NOTICE";
+        let linetext =
+            if is_notice { self.text.clone() } else { format!("{} {}", self.nick, self.text) };
+        let body_offset = if is_notice { 0 } else { self.nick.len() + 1 };
+
+        // URL byte ranges within linetext (the color value is unused here).
+        let url_ranges: Vec<Range<usize>> =
+            url_color_ranges(&self.text, body_offset, url_text_color)
+                .into_iter()
+                .map(|(r, _)| r)
+                .collect();
+        if url_ranges.is_empty() {
+            return rects
+        }
+
+        for line in layout.lines() {
+            for item in line.items() {
+                let parley::PositionedLayoutItem::GlyphRun(glyph_run) = item else { continue };
+                if glyph_run.style().brush != url_text_color {
+                    continue
+                }
+
+                // Map this run to its URL via the (coarse) font-run range intersected
+                // with the URL byte ranges.
+                let font_range = glyph_run.run().text_range();
+                let Some(url_range) = url_ranges
+                    .iter()
+                    .find(|r| r.start < font_range.end && r.end > font_range.start)
+                else {
+                    continue
+                };
+                let url_str = linetext[url_range.clone()].to_string();
+
+                let metrics = glyph_run.run().metrics();
+                let x = timestamp_width + glyph_run.offset();
+                let y = glyph_run.baseline() - metrics.ascent;
+                let w = glyph_run.advance();
+                let h = metrics.ascent + metrics.descent;
+                rects.push((url_str, Rectangle::new(x, y, w, h)));
+            }
+        }
+
+        rects
+    }
+
+    async fn handle_mouse_btn_up(&self, btn: MouseButton, mouse_pos: Point) -> bool {
+        if btn != MouseButton::Left {
+            return false
+        }
+        for (url, rect) in &self.url_click_rects {
+            if rect.contains(mouse_pos) {
+                info!(target: "ui::chatview", "URL clicked: {url}");
+
+                #[cfg(target_os = "android")]
+                crate::android::open_url(url);
+
+                #[cfg(not(target_os = "android"))]
+                let _ = open::that(url);
+
+                return true
+            }
+        }
+        false
     }
 }
 
@@ -897,7 +986,7 @@ impl UIObject for Message {
     }
     async fn handle_mouse_btn_up(&self, btn: MouseButton, mouse_pos: Point) -> bool {
         match self {
-            Self::Priv(_) => false,
+            Self::Priv(m) => m.handle_mouse_btn_up(btn, mouse_pos).await,
             Self::Date(_) => false,
             Self::File(m) => m.handle_mouse_btn_up(btn, mouse_pos).await,
         }

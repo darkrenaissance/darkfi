@@ -95,6 +95,8 @@ halo2_gadgets = { git="https://github.com/parazyd/halo2", branch="v050" }
 
 [target.'cfg(not(target_os = "android"))'.dependencies]
 dirs = "5.0.1"
+# Open URLs in the system's default handler on click (Android uses a JNI intent instead).
+open = "5"
 # AV1 video decoding - rav1d with Rust API from leo030303 fork
 # Enable ASM routines for non-Android platforms.
 rav1d = { git = "https://github.com/leo030303/rav1d", branch = "add-rust-api", features = ["bitdepth_8"] }

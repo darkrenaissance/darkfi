@@ -84,3 +84,24 @@ pub fn get_screen_density() -> f32 {
 pub fn is_ime_visible() -> bool {
     call_mainactivity_bool_method!("isImeVisible")
 }
+
+/// Open `url` in the platform's default handler (e.g. the browser) by calling the
+/// `openUrl` method on MainActivity, which fires an `ACTION_VIEW` intent. Android
+/// only. The URL string is converted to a Java `String` via `NewStringUTF` and the
+/// local reference is released after the call.
+pub fn open_url(url: &str) {
+    unsafe {
+        let env = get_jni_env();
+        let curl = std::ffi::CString::new(url).unwrap();
+        let jurl = (**env).NewStringUTF.unwrap()(env, curl.as_ptr());
+        ndk_utils::call_void_method!(
+            env,
+            android::ACTIVITY,
+            "openUrl",
+            "(Ljava/lang/String;)V",
+            jurl
+        );
+        let delete_local_ref = (**env).DeleteLocalRef.unwrap();
+        delete_local_ref(env, jurl);
+    }
+}

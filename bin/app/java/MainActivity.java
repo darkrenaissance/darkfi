@@ -4,6 +4,8 @@ import android.view.ViewGroup;
 import android.view.WindowInsets.Type;
 import android.view.inputmethod.EditorInfo;
 import android.text.InputType;
+import android.content.Intent;
+import android.net.Uri;
 import android.util.Log;
 import java.util.HashMap;
 
@@ -151,6 +153,15 @@ public VideoDecoder createVideoDecoder() {
     VideoDecoder decoder = new VideoDecoder();
     decoder.setContext(this);
     return decoder;
+}
+
+public void openUrl(String url) {
+    try {
+        Intent intent = new Intent(Intent.ACTION_VIEW, Uri.parse(url));
+        startActivity(intent);
+    } catch (Exception e) {
+        Log.e("darkfi", "Failed to open URL " + url + ": " + e.getMessage());
+    }
 }
 
 //% END
