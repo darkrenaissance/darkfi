@@ -600,8 +600,6 @@ pub enum Pimpl {
     TokenTable(ui::TokenTablePtr),
     #[cfg(feature = "enable-plugin-darkirc")]
     DarkIrc(plugin::DarkIrcPtr),
-    #[cfg(feature = "enable-plugin-darkirc")]
-    DarkIrc2(plugin::DarkIrc2Ptr),
     #[cfg(feature = "enable-plugin-fud")]
     Fud(plugin::FudPtr),
     #[cfg(feature = "enable-plugin-drk")]

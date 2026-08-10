@@ -280,7 +280,7 @@ async fn load_plugins(
         let darkirc = create_darkirc("darkirc");
         let darkirc = darkirc
             .setup(|me| async {
-                plugin::DarkIrc2::new(me, sg_root.clone(), ex.clone(), db)
+                plugin::DarkIrc::new(me, sg_root.clone(), ex.clone(), db)
                     .await
                     .expect("DarkIrc pimpl setup")
             })

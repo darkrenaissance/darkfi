@@ -17,14 +17,14 @@
  */
 
 use std::{
-    collections::HashMap,
+    collections::{HashMap, HashSet},
     io::Cursor,
-    sync::{Arc, Mutex as SyncMutex, OnceLock, Weak},
+    sync::{Arc, OnceLock, Weak},
     time::UNIX_EPOCH,
 };
 
 use async_lock::RwLock;
-use async_trait::async_trait;
+use crypto_box::{ChaChaBox, PublicKey, SecretKey};
 use darkfi::{
     event_graph::{
         self,
@@ -41,16 +41,17 @@ use darkfi::{
 };
 use darkfi_serial::{
     deserialize_async, serialize, serialize_async, AsyncEncodable, Decodable, Encodable,
-    SerialDecodable, SerialEncodable,
 };
 use irc2::{
     crypto::saltbox,
     irc::{server::MAX_NICK_LEN, IrcChannel, IrcContact},
     pad, unpad, Privmsg,
 };
+use parking_lot::Mutex as SyncMutex;
 use sled_overlay::sled;
 
 use crate::{
+    app::schema::menu::{channel::Channel, contact::Contact},
     error::{Error, Result},
     prop::{BatchGuardPtr, PropertyAtomicGuard, PropertyStr, Role},
     scene::{MethodCallSub, Pimpl, SceneNode, SceneNodePtr, SceneNodeType, SceneNodeWeak, Slot},
@@ -75,27 +76,33 @@ const P2P_OUTBOUND_SLEEP: usize = 1;
 /// then we will just correct it to the current time so messages appear sequential in the UI.
 const RECENT_TIME_DIST: u64 = 25_000;
 
+// NOTE: if `paths` already lives in a shared module (e.g. `super::paths` from
+// darkirc.rs's parent module), delete this block and add `use super::paths::*;`
+// instead. Duplicated here so this file compiles standalone.
 #[cfg(target_os = "android")]
 mod paths {
     use crate::android::{get_appdata_path, get_external_storage_path};
     use std::path::PathBuf;
 
     pub fn get_evgrdb_path() -> PathBuf {
-        get_external_storage_path().join("evgr")
+        get_external_storage_path().join("evgr2")
+    }
+    pub fn get_chatdb_path() -> PathBuf {
+        get_external_storage_path().join("chatdb")
     }
     pub fn get_use_tor_filename() -> PathBuf {
         get_external_storage_path().join("use_tor.txt")
     }
 
     pub fn nick_filename() -> PathBuf {
-        get_appdata_path().join("/nick.txt")
+        get_appdata_path().join("/nick2.txt")
     }
 
     pub fn p2p_datastore_path() -> PathBuf {
-        get_appdata_path().join("darkirc_p2p")
+        get_appdata_path().join("darkirc2_p2p")
     }
     pub fn hostlist_path() -> PathBuf {
-        get_appdata_path().join("hostlist.tsv")
+        get_appdata_path().join("hostlist2.tsv")
     }
 }
 
@@ -104,31 +111,34 @@ mod paths {
     use std::path::PathBuf;
 
     pub fn get_evgrdb_path() -> PathBuf {
-        dirs::data_local_dir().unwrap().join("darkfi/app/evgr")
+        dirs::data_local_dir().unwrap().join("darkfi/app/evgr2")
+    }
+    pub fn get_chatdb_path() -> PathBuf {
+        dirs::data_local_dir().unwrap().join("darkfi/app/chatdb")
     }
     pub fn get_use_tor_filename() -> PathBuf {
         dirs::data_local_dir().unwrap().join("darkfi/app/use_tor.txt")
     }
 
     pub fn nick_filename() -> PathBuf {
-        dirs::cache_dir().unwrap().join("darkfi/app/nick.txt")
+        dirs::cache_dir().unwrap().join("darkfi/app/nick2.txt")
     }
 
     pub fn p2p_datastore_path() -> PathBuf {
-        dirs::cache_dir().unwrap().join("darkfi/app/darkirc_p2p")
+        dirs::cache_dir().unwrap().join("darkfi/app/darkirc2_p2p")
     }
     pub fn hostlist_path() -> PathBuf {
-        dirs::cache_dir().unwrap().join("darkfi/app/hostlist.tsv")
+        dirs::cache_dir().unwrap().join("darkfi/app/hostlist2.tsv")
     }
 }
 
 use paths::*;
 
-macro_rules! t { ($($arg:tt)*) => { trace!(target: "plugin::darkirc", $($arg)*); } }
-macro_rules! d { ($($arg:tt)*) => { debug!(target: "plugin::darkirc", $($arg)*); } }
-macro_rules! i { ($($arg:tt)*) => { info!(target: "plugin::darkirc", $($arg)*); } }
-macro_rules! e { ($($arg:tt)*) => { error!(target: "plugin::darkirc", $($arg)*); } }
-macro_rules! w { ($($arg:tt)*) => { warn!(target: "plugin::darkirc", $($arg)*); } }
+macro_rules! t { ($($arg:tt)*) => { trace!(target: "plugin::darkirc2", $($arg)*); } }
+macro_rules! d { ($($arg:tt)*) => { debug!(target: "plugin::darkirc2", $($arg)*); } }
+macro_rules! i { ($($arg:tt)*) => { info!(target: "plugin::darkirc2", $($arg)*); } }
+macro_rules! e { ($($arg:tt)*) => { error!(target: "plugin::darkirc2", $($arg)*); } }
+macro_rules! w { ($($arg:tt)*) => { warn!(target: "plugin::darkirc2", $($arg)*); } }
 
 struct SeenMsg {
     id: MessageId,
@@ -158,24 +168,27 @@ pub type DarkIrcPtr = Arc<DarkIrc>;
 
 pub struct DarkIrc {
     node: SceneNodeWeak,
-    tasks: OnceLock<Vec<smol::Task<()>>>,
-
+    tasks: SyncMutex<Vec<smol::Task<()>>>,
     p2p: P2pPtr,
     event_graph: EventGraphPtr,
-
     seen_msgs: SyncMutex<SeenMessages>,
     nick: PropertyStr,
-
-    /// Configured channels
     pub channels: RwLock<HashMap<String, IrcChannel>>,
-    /// Configured contacts
     pub contacts: RwLock<HashMap<String, IrcContact>>,
-
+    channels_tree: sled::Tree,
+    contacts_tree: sled::Tree,
+    dm_secret: SecretKey,
     settings: PluginSettings,
+    ex: ExecutorPtr,
 }
 
 impl DarkIrc {
-    pub async fn new(node: SceneNodeWeak, sg_root: SceneNodePtr, ex: ExecutorPtr) -> Result<Pimpl> {
+    pub async fn new(
+        node: SceneNodeWeak,
+        sg_root: SceneNodePtr,
+        ex: ExecutorPtr,
+        db: sled::Db,
+    ) -> Result<Pimpl> {
         let node_ref = &node.upgrade().unwrap();
         let nick = PropertyStr::wrap(node_ref, Role::Internal, "nick", 0).unwrap();
 
@@ -184,7 +197,7 @@ impl DarkIrc {
 
         i!("Starting DarkIRC backend");
         let evgr_path = get_evgrdb_path();
-        let db = match sled::open(&evgr_path) {
+        let evgr_db = match sled::open(&evgr_path) {
             Ok(db) => db,
             Err(err) => {
                 e!("Sled database '{}' failed to open: {err}!", evgr_path.display());
@@ -192,7 +205,28 @@ impl DarkIrc {
             }
         };
 
-        let setting_tree = db.open_tree("settings")?;
+        let setting_tree = evgr_db.open_tree("settings")?;
+
+        // Use the unified db for reading channels (UI stores channels there)
+        let channels_tree = db.open_tree("channels")?;
+        i!("Opened channels tree from unified db");
+
+        let contacts_tree = db.open_tree("contacts")?;
+        i!("Opened contacts tree from unified db");
+
+        let dm_secret = Self::load_or_create_dm_identity(&db);
+        let dm_public_b58 = bs58::encode(dm_secret.public_key().to_bytes()).into_string();
+        // Expose our DM public key on the plugin node so it can be displayed/shared.
+        node_ref
+            .set_property_str(
+                &mut PropertyAtomicGuard::none(),
+                Role::Internal,
+                "dm_public",
+                &dm_public_b58,
+            )
+            .unwrap();
+        i!("DM identity public key (share with contacts): {dm_public_b58}");
+
         let settings = PluginSettings { setting_root, sled_tree: setting_tree };
 
         let mut p2p_settings: NetSettings = Default::default();
@@ -229,8 +263,8 @@ impl DarkIrc {
             p2p_settings.outbound_connections = 5;
             p2p_settings.inbound_connections = 2;
 
-            p2p_settings.seeds.push(url::Url::parse("tcp+tls://lilith0.dark.fi:25551").unwrap());
-            p2p_settings.seeds.push(url::Url::parse("tcp+tls://lilith1.dark.fi:25551").unwrap());
+            p2p_settings.seeds.push(url::Url::parse("tcp+tls://lilith0.dark.fi:9600").unwrap());
+            p2p_settings.seeds.push(url::Url::parse("tcp+tls://lilith1.dark.fi:9600").unwrap());
             p2p_settings.active_profiles = vec!["tcp+tls".to_string()];
         }
         p2p_settings.p2p_datastore = p2p_datastore_path().into_os_string().into_string().ok();
@@ -257,7 +291,7 @@ impl DarkIrc {
             EventGraphConfig {
                 initial_genesis: 1_704_067_200_000,
                 hours_rotation: 1,
-                genesis_contents: b"darkirc".to_vec(),
+                genesis_contents: b"darkirc-v1".to_vec(),
                 rln_enabled: false,
                 pregenerated_identity_commitments: vec![],
                 max_dags: Some(24),
@@ -279,7 +313,7 @@ impl DarkIrc {
 
         let self_ = Arc::new(Self {
             node: node.clone(),
-            tasks: OnceLock::new(),
+            tasks: SyncMutex::new(vec![]),
 
             p2p,
             event_graph,
@@ -289,12 +323,18 @@ impl DarkIrc {
 
             channels: RwLock::new(HashMap::new()),
             contacts: RwLock::new(HashMap::new()),
+            channels_tree,
+            contacts_tree,
+            dm_secret,
 
             settings,
+            ex: ex.clone(),
         });
+
+        self_.load_channels_from_db().await;
+        self_.load_contacts_from_db().await;
         self_.clone().start(sg_root, ex).await;
-        //Ok(Pimpl::DarkIrc(self_))
-        Ok(Pimpl::Null)
+        Ok(Pimpl::DarkIrc(self_))
     }
 
     async fn dag_sync(self: Arc<Self>, channel_sub: Subscription<DarkFiResult<ChannelPtr>>) {
@@ -310,45 +350,74 @@ impl DarkIrc {
         i!("Waiting for some P2P connections...");
 
         let mut sync_attempt = 0;
+        // TODO: these should be configurable
+        let fast_mode = false;
+        let dags_count = 24;
         loop {
-            // Wait for a channel
-            if let Err(err) = channel_sub.receive().await {
-                w!("There was an error listening for channels. The service closed unexpectedly with error: {err}");
-                continue
-            }
+            if self.p2p.is_connected() {
+                let peers_count = self.p2p.peers_count();
+                self.notify_connect(peers_count, self.event_graph.is_synced()).await;
 
-            let peers_count = self.p2p.peers_count();
-            self.notify_connect(peers_count, false).await;
-
-            // Wait until we have enough connections
-            if peers_count < SYNC_MIN_PEERS {
-                i!("Connected to {peers_count} peers. Waiting for more connections.");
-                continue
-            }
-
-            sync_attempt += 1;
-
-            // Cool off periodically
-            if sync_attempt > COOLOFF_SYNC_ATTEMPTS {
-                i!("Wasn't able to sync yet. Cooling off for {COOLOFF_SLEEP_TIME} then will try again.");
-                sleep(COOLOFF_SLEEP_TIME).await;
-                sync_attempt = 0;
-            }
-
-            i!("Syncing event DAG (attempt #{sync_attempt})");
-            // TODO: sync_selected args should be configurable
-            match self.event_graph.sync_selected(24).await {
-                Ok(()) => break,
-                Err(e) => {
-                    // TODO: Maybe at this point we should prune or something?
-                    // TODO: Or maybe just tell the user to delete the DAG from FS.
-                    w!("Failed DAG sync: ({e}). Waiting for more connections before retry.");
+                // Wait until we have enough connections
+                if peers_count < SYNC_MIN_PEERS {
+                    i!("Connected to {peers_count} peers. Waiting for more connections.");
+                    continue
                 }
+
+                i!("Got peer connection");
+                sync_attempt += 1;
+                // Cool off periodically
+                if sync_attempt > COOLOFF_SYNC_ATTEMPTS {
+                    i!("Wasn't able to sync yet. Cooling off for {COOLOFF_SLEEP_TIME} then will try again.");
+                    sleep(COOLOFF_SLEEP_TIME).await;
+                    sync_attempt = 0;
+                }
+
+                i!("Syncing static DAG");
+                match self.event_graph.static_sync().await {
+                    Ok(()) => {
+                        i!("Static synced successfully");
+                        // log_memory("after static sync");
+                    }
+                    Err(e) => {
+                        e!("Failed syncing static graph: {e}");
+                        self.p2p.stop().await;
+                        break
+                    }
+                }
+                i!("Syncing event DAG (attempt #{sync_attempt})");
+                // Sync mode is now per-call: full sync replays
+                // every event (heavy, used by archival nodes), fast
+                // sync only fetches headers (light, used by clients
+                // that don't need to re-verify history).
+                let sync_result = if fast_mode {
+                    self.event_graph.sync_selected_headers(dags_count).await
+                } else {
+                    self.event_graph.sync_selected(dags_count).await
+                };
+                match sync_result {
+                    Ok(()) => {
+                        i!(
+                            "Event DAG synced successfully ({} mode, {} dag(s))",
+                            if fast_mode { "fast" } else { "full" },
+                            dags_count,
+                        );
+                        break
+                    }
+                    Err(e) => {
+                        // TODO: Maybe at this point we should prune or something?
+                        // TODO: Or maybe just tell the user to delete the DAG from FS.
+                        e!("Failed syncing DAG ({e}), retrying...");
+                    }
+                }
+            } else {
+                i!("Waiting for some P2P connections...");
+                sleep(COOLOFF_SLEEP_TIME).await;
             }
         }
 
         let peers_count = self.p2p.peers_count();
-        self.notify_connect(peers_count, true).await;
+        self.notify_connect(peers_count, self.event_graph.is_synced()).await;
 
         // Initial sync finished. Now just notify of connection changes
         loop {
@@ -359,11 +428,12 @@ impl DarkIrc {
             }
 
             let peers_count = self.p2p.peers_count();
-            self.notify_connect(peers_count, true).await;
+            self.notify_connect(peers_count, self.event_graph.is_synced()).await;
         }
     }
 
-    async fn notify_connect(&self, peers_count: usize, is_dag_synced: bool) {
+    /// Send a notification when there's a change in number of peers or the DAG sync status
+    pub async fn notify_connect(&self, peers_count: usize, is_dag_synced: bool) {
         let node = self.node.upgrade().unwrap();
         node.trigger("connect", serialize(&(peers_count as u32, is_dag_synced))).await.unwrap();
     }
@@ -381,8 +451,17 @@ impl DarkIrc {
                 }
             };
 
-            // TODO: decrypt messages here:
-            // self.try_decrypt(&mut privmsg, &self.nick.get()).await;
+            // Route the message. An already-decrypted (plaintext) message names a
+            // channel we hold directly: encrypted channels arrive as base58
+            // ciphertext, so a channel key we recognise is plaintext by definition
+            // and is accepted as-is. Anything else must decrypt as a channel or DM;
+            // undecryptable traffic (base58 garbage in neither map) is silently dropped.
+            let mut privmsg = privmsg;
+            // Is this a plaintext channel?
+            let is_plaintext = self.channels.read().await.contains_key(&privmsg.channel);
+            if !is_plaintext && !self.try_decrypt(&mut privmsg, &self.nick.get()).await {
+                continue;
+            }
 
             let mut timest = ev.header.timestamp;
             let msg_id = msg_id(&privmsg, timest);
@@ -393,7 +472,7 @@ impl DarkIrc {
 
             let is_self = {
                 let mut is_self = false;
-                let mut seen = self.seen_msgs.lock().unwrap();
+                let mut seen = self.seen_msgs.lock();
                 match seen.get_status(&msg_id) {
                     Some(msg) => {
                         is_self = msg.is_self;
@@ -417,34 +496,39 @@ impl DarkIrc {
                 timest = now_timest;
             }
 
-            // Strip off starting #
-            let mut channel = privmsg.channel;
-            if channel.is_empty() {
-                w!("Received privmsg with empty channel!");
-                continue
-            }
-            if channel.chars().next().unwrap() != '#' {
-                w!("Skipping encrypted channel: {channel}");
-                continue
-            }
-            channel.remove(0);
-
             // Workaround for the chatview hack. This nick is off limits!
             let mut nick = privmsg.nick;
             if nick == "NOTICE" {
                 nick = "noticer".to_string();
             }
 
-            let mut arg_data = vec![];
-            channel.encode(&mut arg_data).unwrap();
-            timest.encode(&mut arg_data).unwrap();
-            msg_id.encode(&mut arg_data).unwrap();
-            nick.encode(&mut arg_data).unwrap();
-            privmsg.msg.encode(&mut arg_data).unwrap();
-
-            let node = self.node.upgrade().unwrap();
-            node.trigger("recv", arg_data).await.unwrap();
+            self.notify_recv(privmsg.channel, timest, msg_id, nick, privmsg.msg).await;
         }
+    }
+
+    /// Send a notification about a new received message
+    pub async fn notify_recv(
+        &self,
+        channel: String,
+        timestamp: Timestamp,
+        id: MessageId,
+        nick: String,
+        msg: String,
+    ) {
+        assert!(
+            channel.starts_with('#') || channel.starts_with('@'),
+            "notify_recv channel must be a \"#name\" channel or \"@name\" DM, got: {channel}"
+        );
+
+        let mut arg_data = vec![];
+        channel.encode(&mut arg_data).unwrap();
+        timestamp.encode(&mut arg_data).unwrap();
+        id.encode(&mut arg_data).unwrap();
+        nick.encode(&mut arg_data).unwrap();
+        msg.encode(&mut arg_data).unwrap();
+
+        let node = self.node.upgrade().unwrap();
+        node.trigger("recv", arg_data).await.unwrap();
     }
 
     async fn process_send(me: &Weak<Self>, sub: &MethodCallSub) -> bool {
@@ -479,42 +563,191 @@ impl DarkIrc {
         true
     }
 
+    /// User wants to send a msg
     async fn handle_send(&self, timest: Timestamp, channel: String, msg: String) {
         let nick = self.nick.get();
 
         // Send text to channel
         d!("Sending privmsg: {timest} {channel}: <{nick}> {msg}");
-        let msg = Privmsg { version: 0, msg_type: 0, channel, nick, msg };
-        // TODO: messages should be encrypted here with:
-        // self.try_encrypt(&mut msg).await;
+        let mut msg = Privmsg { version: 0, msg_type: 0, channel, nick, msg };
+
+        // DM layers use the "@name" UI id; strip it to the bare contact key and
+        // require the contact to exist, else refuse to broadcast.
+        if let Some(bare) = msg.channel.strip_prefix('@').map(str::to_string) {
+            msg.channel = bare;
+            if self.try_encrypt_dm(&mut msg).await.is_err() {
+                e!("Refusing to send DM to unknown contact");
+                return;
+            }
+        } else {
+            assert!(msg.channel.starts_with('#'), "channel name must start with #");
+            self.try_encrypt_channel(&mut msg).await;
+        }
         let evgr = self.event_graph.clone();
-        let mut event = event_graph::Event::new(serialize_async(&msg).await, &evgr).await.unwrap();
-        event.header.timestamp = timest;
+        let event = event_graph::Event::with_timestamp(timest, serialize_async(&msg).await, &evgr)
+            .await
+            .unwrap();
         let msg_id = msg_id(&msg, timest);
 
         // Keep track of our own messages so we don't apply timestamp correction to them
         // which messes up the msg id.
         {
-            let mut seen = self.seen_msgs.lock().unwrap();
+            let mut seen = self.seen_msgs.lock();
             seen.push(msg_id.clone(), true);
         }
-
-        let mut arg_data = vec![];
-        timest.encode_async(&mut arg_data).await.unwrap();
-        msg_id.encode_async(&mut arg_data).await.unwrap();
-        msg.nick.encode_async(&mut arg_data).await.unwrap();
-        msg.msg.encode_async(&mut arg_data).await.unwrap();
 
         // Broadcast the msg
         let current_genesis = self.event_graph.current_genesis.read().await;
         let dag_name = current_genesis.header.timestamp.to_string();
         if let Err(e) = evgr.insert_signal_with_blob(&event, &[], &dag_name).await {
-            error!(target: "darkirc", "Failed inserting new event to DAG: {}", e);
+            e!("Failed inserting new event to DAG: {}", e);
         }
 
         if let Err(e) = self.p2p.broadcast(&EventPut(event, vec![])).await {
-            error!(target: "darkirc", "Event broadcast was not admitted: {e}");
+            e!("Event broadcast was not admitted: {e}");
         }
+    }
+
+    /// Load channels from UI database and populate encryption keys
+    pub async fn load_channels_from_db(&self) {
+        let mut channels = self.channels.write().await;
+
+        for item in self.channels_tree.iter() {
+            let (key, val) = item.unwrap();
+            let channel_name = String::from_utf8_lossy(&key).to_string();
+            let ui_channel = deserialize_async::<Channel>(&val).await.unwrap();
+
+            // Convert to IrcChannel with encryption
+            let full_name = format!("#{}", channel_name);
+            let mut irc_channel =
+                IrcChannel { topic: String::new(), nicks: HashSet::new(), saltbox: None };
+
+            if let Some(secret) = ui_channel.secret {
+                // Convert secret array to SecretKey first, then derive PublicKey
+                let secret_key = SecretKey::from_bytes(secret);
+                let public = secret_key.public_key();
+                let saltbox = ChaChaBox::new(&public, &secret_key);
+
+                // Log the secret in base58 for debugging
+                let secret_b58 = bs58::encode(secret).into_string();
+                irc_channel.saltbox = Some(Arc::new(saltbox));
+            }
+
+            let is_encrypted = irc_channel.saltbox.is_some();
+            channels.insert(full_name, irc_channel);
+            i!("Loaded channel: #{} (encrypted: {})", channel_name, is_encrypted);
+        }
+    }
+
+    /// Load (or generate on first run) the single global DM identity key.
+    fn load_or_create_dm_identity(db: &sled::Db) -> SecretKey {
+        let tree = db.open_tree("dm_identity").expect("cannot open dm_identity tree");
+        if let Ok(Some(stored)) = tree.get(b"secret") {
+            if stored.len() == 32 {
+                let arr: [u8; 32] = stored.as_ref().try_into().unwrap();
+                return SecretKey::from_bytes(arr);
+            }
+        }
+        let bytes: [u8; 32] = rand::random();
+        let _ = tree.insert(b"secret", bytes.to_vec());
+        let _ = tree.flush();
+        SecretKey::from_bytes(bytes)
+    }
+
+    /// Load contacts from the UI database and build their encryption boxes.
+    pub async fn load_contacts_from_db(&self) {
+        let mut contacts = self.contacts.write().await;
+        contacts.clear();
+
+        for item in self.contacts_tree.iter() {
+            let (key, val) = item.unwrap();
+            let name = String::from_utf8_lossy(&key).to_string();
+            let contact = deserialize_async::<Contact>(&val).await.unwrap();
+
+            let their_public = PublicKey::from(contact.public);
+            let saltbox = Arc::new(ChaChaBox::new(&their_public, &self.dm_secret));
+            let self_saltbox =
+                Arc::new(ChaChaBox::new(&self.dm_secret.public_key(), &self.dm_secret));
+
+            contacts.insert(name.clone(), IrcContact { saltbox, self_saltbox });
+            i!("Loaded contact: {name}");
+        }
+    }
+
+    async fn rescan_channel_history(self: Arc<Self>, channel: String) {
+        i!("Starting background rescan for channel: {channel}");
+
+        // Fetch and order all events from the DAG (like darkirc does)
+        let Ok(dag_events) = self.event_graph.order_events().await else {
+            e!("Failed to fetch events from DAG");
+            return;
+        };
+
+        let mut found_count = 0;
+        for event in dag_events.iter() {
+            // Deserialize Privmsg
+            let mut privmsg = match deserialize_async::<Privmsg>(event.content()).await {
+                Ok(pm) => pm,
+                Err(e) => {
+                    t!("Not a Privmsg event, skipping");
+                    continue;
+                }
+            };
+
+            // Try to decrypt (handles encrypted channels)
+            self.try_decrypt(&mut privmsg, &self.nick.get()).await;
+
+            // Check if message belongs to target channel
+            if privmsg.channel != channel {
+                continue;
+            }
+            found_count += 1;
+
+            // Calculate message ID
+            let timest = event.header.timestamp;
+            let msg_id = msg_id(&privmsg, timest);
+
+            // Send to ChatView via notify_recv (handles DB storage and duplicates)
+            self.notify_recv(
+                channel.clone(),
+                timest,
+                msg_id,
+                privmsg.nick.clone(),
+                privmsg.msg.clone(),
+            )
+            .await;
+        }
+
+        i!("Rescan complete for {channel}: found {found_count} messages");
+    }
+
+    async fn process_rescan(me: &Weak<Self>, sub: &MethodCallSub) -> bool {
+        let Ok(method_call) = sub.receive().await else {
+            d!("Rescan method closed");
+            return false
+        };
+
+        t!("method called: rescan({method_call:?})");
+
+        let Some(self_) = me.upgrade() else {
+            e!("DarkIrc destroyed before rescan completed");
+            return false
+        };
+
+        // Decode channel name from method data
+        let mut cur = std::io::Cursor::new(&method_call.data);
+        let Ok(channel) = String::decode(&mut cur) else {
+            e!("Rescan method called with invalid channel data");
+            return false
+        };
+
+        self_.load_channels_from_db().await;
+        self_.load_contacts_from_db().await;
+
+        let task = self_.ex.clone().spawn(self_.clone().rescan_channel_history(channel));
+        self_.tasks.lock().push(task);
+
+        true
     }
 
     async fn apply_settings(self_: Arc<Self>, _: BatchGuardPtr) {
@@ -538,18 +771,23 @@ impl DarkIrc {
             return false
         };
 
-        i!("Manual P2P reconnection triggered");
-        self_.p2p.clone().stop().await;
+        self_.handle_reconnect().await;
 
-        while let Err(err) = self_.p2p.clone().start().await {
+        true
+    }
+
+    /// User requested to reconnect
+    async fn handle_reconnect(&self) {
+        i!("Manual P2P reconnection triggered");
+        self.p2p.clone().stop().await;
+
+        while let Err(err) = self.p2p.clone().start().await {
             e!("Failed to start P2P network: {err}!");
             e!("Retrying in {P2P_RETRY_TIME} secs");
             sleep(P2P_RETRY_TIME).await;
         }
 
         i!("P2P reconnection completed");
-
-        true
     }
 
     async fn start(self: Arc<Self>, sg_root: SceneNodePtr, ex: ExecutorPtr) {
@@ -579,6 +817,11 @@ impl DarkIrc {
                 async move { while Self::process_reconnect(&me2, &reconnect_method_sub).await {} },
             );
 
+        let rescan_method_sub = node.subscribe_method_call("rescan").unwrap();
+        let me2 = me.clone();
+        let rescan_method_task =
+            ex.spawn(async move { while Self::process_rescan(&me2, &rescan_method_sub).await {} });
+
         let mut on_modify = OnModify::new(ex.clone(), self.node.clone(), me.clone());
         async fn save_nick(self_: Arc<DarkIrc>, _batch: BatchGuardPtr) {
             let _ = std::fs::write(nick_filename(), self_.nick.get());
@@ -593,10 +836,10 @@ impl DarkIrc {
             );
         }
 
-        let ev_sub = self.event_graph.event_pub.clone().subscribe().await;
+        let ev_sub = self.event_graph.event_subscribe().await;
         let ev_task = ex.spawn(self.clone().relay_events(ev_sub));
 
-        // Sync the DAG
+        // Sync the DAG / check sync status
         let channel_sub = self.p2p.hosts().subscribe_channel().await;
         let dag_task = ex.spawn(self.clone().dag_sync(channel_sub));
 
@@ -625,60 +868,61 @@ impl DarkIrc {
             }
         });
 
-        let mut tasks =
-            vec![send_method_task, reconnect_method_task, ev_task, dag_task, start_task, stop_task];
+        let mut tasks = vec![
+            send_method_task,
+            reconnect_method_task,
+            rescan_method_task,
+            ev_task,
+            dag_task,
+            start_task,
+            stop_task,
+        ];
         tasks.append(&mut on_modify.tasks);
-        self.tasks.set(tasks).unwrap();
+        *self.tasks.lock() = tasks;
     }
 
-    /// Try encrypting a given `Privmsg` if there is such a channel/contact.
-    pub async fn try_encrypt(&self, privmsg: &mut Privmsg) {
-        if let Some((name, channel)) = self.channels.read().await.get_key_value(&privmsg.channel) {
-            if let Some(saltbox) = &channel.saltbox {
-                // We will use a dummy channel value of MAX_NICK_LEN,
-                // since its not used, so all encrypted messages look the same.
-                privmsg.channel = saltbox::encrypt(saltbox, &[0x00; MAX_NICK_LEN]);
-                // We will pad the name to MAX_NICK_LEN so they all look the same
-                privmsg.nick = saltbox::encrypt(saltbox, &pad(&privmsg.nick));
-                privmsg.msg = saltbox::encrypt(saltbox, privmsg.msg.as_bytes());
-                d!("Successfully encrypted message for {name}");
-                return
-            }
+    /// Encrypt a channel `Privmsg` in place if the channel has a shared key.
+    /// Open channels with no key are left plaintext.
+    pub async fn try_encrypt_channel(&self, privmsg: &mut Privmsg) {
+        let guard = self.channels.read().await;
+        let Some((name, channel)) = guard.get_key_value(&privmsg.channel) else {
+            return;
         };
-
-        if let Some((name, contact)) = self.contacts.read().await.get_key_value(&privmsg.channel) {
-            // We will use dummy channel and nick values of MAX_NICK_LEN,
-            // since they are not used, so all encrypted messages look the same.
-            privmsg.channel = saltbox::encrypt(&contact.saltbox, &[0x00; MAX_NICK_LEN]);
-            // We will encrypt the dummy nick value using our own self saltbox,
-            // so we can identify our messages.
-            privmsg.nick = saltbox::encrypt(&contact.self_saltbox, &[0x00; MAX_NICK_LEN]);
-            privmsg.msg = saltbox::encrypt(&contact.saltbox, privmsg.msg.as_bytes());
-            d!("Successfully encrypted message for {name}");
+        let Some(saltbox) = &channel.saltbox else {
+            return;
         };
+        privmsg.channel = saltbox::encrypt(saltbox, &[0x00; MAX_NICK_LEN]);
+        privmsg.nick = saltbox::encrypt(saltbox, &pad(&privmsg.nick));
+        privmsg.msg = saltbox::encrypt(saltbox, privmsg.msg.as_bytes());
+        d!("Successfully encrypted message for {name}");
     }
 
-    /// Try decrypting a given potentially encrypted `Privmsg` object.
-    pub async fn try_decrypt(&self, privmsg: &mut Privmsg, self_nickname: &str) {
-        // If all fields have base58, then we can consider decrypting.
-        let channel_ciphertext = match bs58::decode(&privmsg.channel).into_vec() {
-            Ok(v) => v,
-            Err(_) => return,
+    /// Encrypt a DM `Privmsg` in place for the contact named by `privmsg.channel`
+    /// (the bare key, with no leading "@"). Fails if the contact is unknown so
+    /// the caller can refuse to broadcast a message no one could decrypt.
+    pub async fn try_encrypt_dm(&self, privmsg: &mut Privmsg) -> Result<()> {
+        let guard = self.contacts.read().await;
+        let Some((name, contact)) = guard.get_key_value(&privmsg.channel) else {
+            return Err(Error::ContactNotFound);
         };
+        privmsg.channel = saltbox::encrypt(&contact.saltbox, &[0x00; MAX_NICK_LEN]);
+        privmsg.nick = saltbox::encrypt(&contact.self_saltbox, &[0x00; MAX_NICK_LEN]);
+        privmsg.msg = saltbox::encrypt(&contact.saltbox, privmsg.msg.as_bytes());
+        d!("Successfully encrypted DM for {name}");
+        Ok(())
+    }
 
-        let nick_ciphertext = match bs58::decode(&privmsg.nick).into_vec() {
-            Ok(v) => v,
-            Err(_) => return,
+    /// Try decrypting a `Privmsg` as a channel message in place. Returns true on
+    /// success. Plaintext messages for a known keyless channel are accepted
+    /// as-is; everything else returns false.
+    pub async fn try_decrypt_channel(&self, privmsg: &mut Privmsg) -> bool {
+        let Ok(channel_ciphertext) = bs58::decode(&privmsg.channel).into_vec() else {
+            // Not encrypted: accept only if it names a channel we hold.
+            return self.channels.read().await.contains_key(&privmsg.channel);
         };
+        let Ok(nick_ciphertext) = bs58::decode(&privmsg.nick).into_vec() else { return false };
+        let Ok(msg_ciphertext) = bs58::decode(&privmsg.msg).into_vec() else { return false };
 
-        let msg_ciphertext = match bs58::decode(&privmsg.msg).into_vec() {
-            Ok(v) => v,
-            Err(_) => return,
-        };
-
-        // Now go through all 3 ciphertexts. We'll use intermediate buffers
-        // for decryption, if all passes, we will return a modified
-        // (i.e. decrypted) privmsg, otherwise we return the original.
         for (name, channel) in self.channels.read().await.iter() {
             let Some(saltbox) = &channel.saltbox else { continue };
 
@@ -702,16 +946,25 @@ impl DarkIrc {
             privmsg.nick = String::from_utf8_lossy(&nick_dec).into();
             privmsg.msg = String::from_utf8_lossy(&msg_dec).into();
             d!("Successfully decrypted message for {name}");
-            return
+            return true
         }
+
+        false
+    }
+
+    /// Try decrypting a `Privmsg` as a DM in place. Returns true on success.
+    pub async fn try_decrypt_contact(&self, privmsg: &mut Privmsg, self_nickname: &str) -> bool {
+        let Ok(channel_ciphertext) = bs58::decode(&privmsg.channel).into_vec() else {
+            return false
+        };
+        let Ok(nick_ciphertext) = bs58::decode(&privmsg.nick).into_vec() else { return false };
+        let Ok(msg_ciphertext) = bs58::decode(&privmsg.msg).into_vec() else { return false };
 
         for (name, contact) in self.contacts.read().await.iter() {
             if saltbox::try_decrypt(&contact.saltbox, &channel_ciphertext).is_none() {
                 continue
             };
 
-            // Since everyone encrypts the dummy nick value with their self saltbox,
-            // we try to decrypt using our, to identify our messages.
             let nick = if saltbox::try_decrypt(&contact.self_saltbox, &nick_ciphertext).is_some() {
                 String::from(self_nickname)
             } else {
@@ -723,12 +976,20 @@ impl DarkIrc {
                 continue
             };
 
-            privmsg.channel = name.to_string();
+            privmsg.channel = format!("@{}", name);
             privmsg.nick = nick;
             privmsg.msg = String::from_utf8_lossy(&msg_dec).into();
-            d!("Successfully decrypted message from {name}");
-            return
+            return true
         }
+
+        false
+    }
+
+    /// Try decrypting a given potentially encrypted `Privmsg` object as a channel
+    /// and then as a DM. Returns true if either succeeded.
+    pub async fn try_decrypt(&self, privmsg: &mut Privmsg, self_nickname: &str) -> bool {
+        self.try_decrypt_channel(privmsg).await ||
+            self.try_decrypt_contact(privmsg, self_nickname).await
     }
 }
 

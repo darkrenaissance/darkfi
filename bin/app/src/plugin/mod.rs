@@ -24,11 +24,6 @@ pub mod darkirc;
 #[cfg(feature = "enable-plugin-darkirc")]
 pub use darkirc::DarkIrcPtr;
 
-#[cfg(feature = "enable-plugin-darkirc")]
-pub mod darkirc2;
-#[cfg(feature = "enable-plugin-darkirc")]
-pub use darkirc2::DarkIrc2Ptr;
-
 #[cfg(feature = "enable-plugin-fud")]
 pub mod fud;
 #[cfg(feature = "enable-plugin-fud")]
@@ -41,8 +36,6 @@ pub use drk::DrkPluginPtr as DrkPtr;
 
 #[cfg(feature = "enable-plugin-darkirc")]
 pub use darkirc::DarkIrc;
-#[cfg(feature = "enable-plugin-darkirc")]
-pub use darkirc2::DarkIrc2;
 #[cfg(feature = "enable-plugin-drk")]
 pub use drk::DrkPlugin;
 #[cfg(feature = "enable-plugin-fud")]
