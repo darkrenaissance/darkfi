@@ -16,7 +16,7 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use darkfi_serial::Encodable;
+use darkfi_serial::{Decodable, Encodable};
 #[cfg(feature = "enable-plugin-darkirc")]
 use irc2::Privmsg;
 use sled_overlay::sled;
@@ -211,6 +211,7 @@ pub async fn make(
     cc.add_const_f32("SENDBTN_BOX_1", SENDBTN_BOX[1]);
     cc.add_const_f32("CMD_HELP_HEIGHT", CMD_HELP_HEIGHT);
     cc.add_const_f32("CMD_HELP_GAP", CMD_HELP_GAP);
+    cc.add_const_f32("NETSTATUS_ICON_SIZE", super::NETSTATUS_ICON_SIZE);
 
     // Main view
     let layer_node = create_layer(&(channel.to_string() + "_chat_layer"));
@@ -304,8 +305,8 @@ pub async fn make(
     node.set_property_u32(atom, Role::App, "z_index", 3).unwrap();
 
     let shape = shape::create_back_arrow().scaled(BACKARROW_SCALE);
-    let node = node.setup(|me| VectorArt::new(me, shape, renderer.clone())).await;
-    layer_node.link(node);
+    let back_btn_bg_node = node.setup(|me| VectorArt::new(me, shape, renderer.clone())).await;
+    layer_node.link(back_btn_bg_node.clone());
 
     // Create the back button
     let node = create_button("back_btn");
@@ -620,6 +621,116 @@ pub async fn make(
         }
     });
     layer_node.push_task(listen_file_download);
+
+    // Selection overlay: shown only while the chatview has selected lines. It's
+    // a child of `content` (not the chat layer) with z_index and priority above
+    // the netstatus layer, so its single background box draws over the netstatus
+    // icons and its buttons win click hit-testing. It carries `unselect_btn`
+    // (over `back_btn`) and `copy_btn` (over the reconnect button).
+    let select_layer = create_layer("select_layer");
+    let prop = select_layer.get_property("rect").unwrap();
+    prop.set_f32(atom, Role::App, 0, 0.).unwrap();
+    prop.set_f32(atom, Role::App, 1, 0.).unwrap();
+    prop.set_expr(atom, Role::App, 2, expr::load_var("w")).unwrap();
+    prop.set_f32(atom, Role::App, 3, CHATEDIT_HEIGHT).unwrap();
+    select_layer.set_property_bool(atom, Role::App, "is_visible", false).unwrap();
+    select_layer.set_property_u32(atom, Role::App, "z_index", 100).unwrap();
+    select_layer.set_property_u32(atom, Role::App, "priority", 100).unwrap();
+    let select_layer = select_layer.setup(|me| Layer::new(me, renderer.clone())).await;
+    content.link(select_layer.clone());
+
+    // Single background box covering both buttons (the whole top strip).
+    let node = create_vector_art("select_bg");
+    let prop = node.get_property("rect").unwrap();
+    prop.set_f32(atom, Role::App, 0, 0.).unwrap();
+    prop.set_f32(atom, Role::App, 1, 0.).unwrap();
+    prop.set_expr(atom, Role::App, 2, expr::load_var("w")).unwrap();
+    prop.set_f32(atom, Role::App, 3, CHATEDIT_HEIGHT).unwrap();
+    node.set_property_u32(atom, Role::App, "z_index", 0).unwrap();
+    let bg_color = match COLOR_SCHEME {
+        ColorScheme::DarkMode => [0., 0.11, 0.11, 1.],
+        ColorScheme::PaperLight => [1., 1., 1., 1.],
+    };
+    let mut shape = VectorShape::new();
+    /*
+    shape.add_filled_box(
+        expr::const_f32(0.),
+        expr::const_f32(0.),
+        expr::load_var("w"),
+        expr::load_var("h"),
+        bg_color,
+    );
+    */
+    let node = node.setup(|me| VectorArt::new(me, shape, renderer.clone())).await;
+    select_layer.link(node);
+
+    // unselect_btn sits over the back button and calls the chatview's unselect.
+    let node = create_button("unselect_btn");
+    node.set_property_bool(atom, Role::App, "is_active", true).unwrap();
+    let prop = node.get_property("rect").unwrap();
+    prop.set_f32(atom, Role::App, 0, 0.).unwrap();
+    prop.set_f32(atom, Role::App, 1, 0.).unwrap();
+    prop.set_f32(atom, Role::App, 2, EMOJI_BG_W).unwrap();
+    prop.set_f32(atom, Role::App, 3, CHATEDIT_HEIGHT).unwrap();
+    {
+        let chatview_node2 = chatview_node.clone();
+        let (slot, recvr) = Slot::new("unselect_clicked");
+        node.register("click", slot).unwrap();
+        let listen_click = ex.spawn(async move {
+            while let Ok(_) = recvr.recv().await {
+                let _ = chatview_node2.call_method("unselect", vec![]).await;
+            }
+        });
+        select_layer.push_task(listen_click);
+    }
+    let node = node.setup(|me| Button::new(me, renderer.clone())).await;
+    select_layer.link(node);
+
+    // copy_btn sits over the reconnect button and calls the chatview's
+    // copy_select (which also deselects, hiding this overlay again).
+    let node = create_button("copy_btn");
+    node.set_property_bool(atom, Role::App, "is_active", true).unwrap();
+    let prop = node.get_property("rect").unwrap();
+    let code = cc.compile("w - NETSTATUS_ICON_SIZE").unwrap();
+    prop.set_expr(atom, Role::App, 0, code).unwrap();
+    prop.set_f32(atom, Role::App, 1, 0.).unwrap();
+    prop.set_f32(atom, Role::App, 2, super::NETSTATUS_ICON_SIZE).unwrap();
+    prop.set_f32(atom, Role::App, 3, super::NETSTATUS_ICON_SIZE).unwrap();
+    {
+        let chatview_node2 = chatview_node.clone();
+        let (slot, recvr) = Slot::new("copy_clicked");
+        node.register("click", slot).unwrap();
+        let listen_click = ex.spawn(async move {
+            while let Ok(_) = recvr.recv().await {
+                chatview_node2.call_method("copy_select", vec![]).await.unwrap();
+            }
+        });
+        select_layer.push_task(listen_click);
+    }
+    let node = node.setup(|me| Button::new(me, renderer.clone())).await;
+    select_layer.link(node);
+
+    // Show/hide the overlay from the chatview's select_changed signal.
+    let select_is_visible = PropertyBool::wrap(&select_layer, Role::App, "is_visible", 0).unwrap();
+    let back_btn_bg_node2 = back_btn_bg_node.clone();
+    let sg_root2 = sg_root.clone();
+    let renderer2 = renderer.clone();
+    let (slot, recvr) = Slot::new("select_changed_slot");
+    chatview_node.register("select_changed", slot).unwrap();
+    let listen_select = ex.spawn(async move {
+        while let Ok(data) = recvr.recv().await {
+            let Ok(selected) = bool::decode(&mut std::io::Cursor::new(&data)) else { continue };
+            let atom = &mut renderer2.make_guard(gfxtag!("select_changed"));
+            select_is_visible.set(atom, selected);
+            back_btn_bg_node2.set_property_bool(atom, Role::App, "is_visible", !selected).unwrap();
+            if let Some(netstatus_layer) = sg_root2.lookup_node("/window/content/netstatus_layer") {
+                netstatus_layer
+                    .set_property_bool(atom, Role::App, "is_visible", !selected)
+                    .unwrap();
+            }
+        }
+    });
+    select_layer.push_task(listen_select);
 
     // Create the editbox bg
     let node = create_vector_art("editbox_bg");

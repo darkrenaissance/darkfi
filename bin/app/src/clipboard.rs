@@ -24,6 +24,8 @@ use std::time::Duration;
 #[cfg(target_os = "linux")]
 static X11_CLIPBOARD: Mutex<Option<Arc<x11_clipboard::Clipboard>>> = Mutex::new(None);
 
+macro_rules! t { ($($arg:tt)*) => { trace!(target: "clipboard", $($arg)*); } }
+
 #[cfg(target_os = "linux")]
 fn get_clipboard() -> Option<Arc<x11_clipboard::Clipboard>> {
     let mut clipboard = X11_CLIPBOARD.lock().unwrap();
@@ -54,10 +56,12 @@ pub fn get() -> Option<String> {
 pub fn set(text: &str) {
     #[cfg(target_os = "linux")]
     if let Some(clipboard) = get_clipboard() {
+        //t!("setting X11 clipboard");
         if clipboard
             .store(clipboard.setter.atoms.clipboard, clipboard.setter.atoms.utf8_string, text)
             .is_ok()
         {
+            //t!("set X11 clipboard!");
             return
         }
     }

@@ -237,11 +237,8 @@ impl PrivMessage {
         if self.is_selected {
             let height = self.height(line_height) + msg_spacing;
             let mut mesh = MeshBuilder::new(gfxtag!("chatview_privmsg_sel"));
-            mesh.draw_filled_box(
-                &Rectangle { x: 0., y: -height, w: clip.w, h: height },
-                hi_bg_color,
-            );
-            all_instrs.push(DrawInstruction::Draw(mesh.alloc(renderer).draw_with_textures(vec![])));
+            mesh.draw_filled_box(&Rectangle { x: 0., y: 0., w: clip.w, h: height }, hi_bg_color);
+            all_instrs.push(DrawInstruction::Draw(mesh.alloc(renderer).draw_untextured()));
         }
 
         // Render timestamp
@@ -299,6 +296,14 @@ impl PrivMessage {
 
     fn select(&mut self) {
         self.is_selected = true;
+    }
+
+    fn deselect(&mut self) {
+        self.is_selected = false;
+    }
+
+    fn is_selected(&self) -> bool {
+        self.is_selected
     }
 
     /// Build the URL hit-rectangles for this message, in message-local coordinates.
@@ -970,6 +975,21 @@ impl Message {
         }
     }
 
+    fn deselect(&mut self) {
+        match self {
+            Self::Priv(m) => m.deselect(),
+            Self::Date(_) => {}
+            Self::File(_) => {}
+        }
+    }
+
+    fn is_selected(&self) -> bool {
+        match self {
+            Self::Priv(m) => m.is_selected(),
+            _ => false,
+        }
+    }
+
     fn get_privmsg_mut(&mut self) -> Option<&mut PrivMessage> {
         match self {
             Message::Priv(msg) => Some(msg),
@@ -1508,6 +1528,62 @@ impl MessageBuffer {
 
             msg.clear_mesh();
         }
+    }
+
+    pub async fn deselect_line(&mut self, y: f32) {
+        if let Some((msg, _)) = self.get_line(y).await {
+            if msg.is_date() {
+                return
+            }
+
+            msg.deselect();
+
+            msg.clear_mesh();
+        }
+    }
+
+    pub async fn is_line_selected(&mut self, y: f32) -> bool {
+        if let Some((msg, _)) = self.get_line(y).await {
+            if msg.is_date() {
+                return false
+            }
+            return msg.is_selected()
+        }
+        false
+    }
+
+    /// Whether any message is currently selected.
+    pub fn has_selection(&self) -> bool {
+        self.msgs.iter().any(|msg| msg.is_selected())
+    }
+
+    /// Deselect every selected message.
+    pub fn unselect_all(&mut self) {
+        for msg in &mut self.msgs {
+            if msg.is_selected() {
+                msg.deselect();
+                msg.clear_mesh();
+            }
+        }
+    }
+
+    /// Concatenated text of all selected messages, joined by newlines, in
+    /// display order. NOTICE messages contribute their body; privmsgs
+    /// contribute "<nick> <text>".
+    pub fn selected_text(&self) -> String {
+        let mut lines = vec![];
+        for msg in &self.msgs {
+            if let Message::Priv(p) = msg {
+                if p.is_selected {
+                    if p.nick == "NOTICE" {
+                        lines.push(p.text.clone());
+                    } else {
+                        lines.push(format!("{} {}", p.nick, p.text));
+                    }
+                }
+            }
+        }
+        lines.join("\n")
     }
 
     pub fn update_file_status(&mut self, url: &Url, status: &FileMessageStatus) {

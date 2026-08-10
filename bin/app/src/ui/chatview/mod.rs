@@ -42,6 +42,7 @@ pub use page::FileMessageStatus;
 use page::MessageBuffer;
 
 use crate::{
+    clipboard,
     gfx::{gfxtag, DrawCall, DrawInstruction, Point, Rectangle, RenderApi, Renderer},
     mesh::{Color, MeshBuilder},
     prop::{
@@ -60,8 +61,17 @@ macro_rules! t { ($($arg:tt)*) => { trace!(target: "ui::chatview", $($arg)*); } 
 const EPSILON: f32 = 0.001;
 const BIG_EPSILON: f32 = 0.05;
 
-// Disable selecting lines for this release.
-const ENABLE_SELECT: bool = false;
+/// Mouse must move more than this many pixels while held to count as a drag
+/// (which only selects) rather than a click (which toggles).
+const SELECT_DRAG_THRESHOLD: f32 = 2.;
+
+/// Tracks an in-progress mouse selection gesture so we can distinguish a
+/// stationary click (toggles the line) from a drag (only ever selects).
+struct SelectDrag {
+    down_y: f32,
+    was_selected: bool,
+    dragged: bool,
+}
 
 fn is_zero(x: f32) -> bool {
     x.abs() < EPSILON
@@ -232,6 +242,13 @@ pub struct ChatView {
 
     mouse_btn_held: AtomicBool,
 
+    /// In-progress mouse selection gesture (set on left button down).
+    select_drag: SyncMutex<Option<SelectDrag>>,
+
+    /// Last reported selection state, used to emit `select_changed` only on
+    /// transitions between having and not having a selection.
+    select_active: AtomicBool,
+
     /// Triggers the background loading task to wake up.
     /// We use this since there should only ever be a single bg task loading.
     bgload_cv: Arc<CondVar>,
@@ -372,6 +389,10 @@ impl ChatView {
 
             mouse_btn_held: AtomicBool::new(false),
 
+            select_drag: SyncMutex::new(None),
+
+            select_active: AtomicBool::new(false),
+
             bgload_cv,
 
             parent_rect: SyncMutex::new(None),
@@ -489,6 +510,42 @@ impl ChatView {
         true
     }
 
+    async fn process_copy_select_method(me: &Weak<Self>, sub: &MethodCallSub) -> bool {
+        let Ok(method_call) = sub.receive().await else {
+            d!("Event relayer closed");
+            return false
+        };
+
+        t!("method called: copy_select({method_call:?})");
+        assert!(method_call.send_res.is_none());
+        assert!(method_call.data.is_empty());
+
+        let Some(self_) = me.upgrade() else {
+            panic!("self destroyed before copy_select_method_task was stopped!");
+        };
+
+        self_.handle_copy_select().await;
+        true
+    }
+
+    async fn process_unselect_method(me: &Weak<Self>, sub: &MethodCallSub) -> bool {
+        let Ok(method_call) = sub.receive().await else {
+            d!("Event relayer closed");
+            return false
+        };
+
+        t!("method called: unselect({method_call:?})");
+        assert!(method_call.send_res.is_none());
+        assert!(method_call.data.is_empty());
+
+        let Some(self_) = me.upgrade() else {
+            panic!("self destroyed before unselect_method_task was stopped!");
+        };
+
+        self_.handle_unselect().await;
+        true
+    }
+
     fn to_msgbuf_pos(&self, pos: Point) -> Point {
         let mut x = pos.x;
         let mut y = pos.y;
@@ -517,9 +574,79 @@ impl ChatView {
         y = rect.h - y + scroll;
 
         let mut msgbuf = self.msgbuf.lock().await;
+        let had = msgbuf.has_selection();
         msgbuf.select_line(y).await;
 
         self.redraw_cached(batch_id, &mut msgbuf).await;
+        let has = msgbuf.has_selection();
+        drop(msgbuf);
+
+        self.notify_select_changed(has, had).await;
+    }
+
+    /// Mark line as deselected
+    #[instrument(target = "ui::chatview")]
+    async fn deselect_line(&self, batch_id: BatchGuardId, mut y: f32) {
+        let rect = self.rect.get();
+        y -= rect.y;
+        let scroll = self.scroll.get();
+        y = rect.h - y + scroll;
+
+        let mut msgbuf = self.msgbuf.lock().await;
+        let had = msgbuf.has_selection();
+        msgbuf.deselect_line(y).await;
+
+        self.redraw_cached(batch_id, &mut msgbuf).await;
+        let has = msgbuf.has_selection();
+        drop(msgbuf);
+
+        self.notify_select_changed(has, had).await;
+    }
+
+    /// Query whether the line under screen y is currently selected.
+    async fn is_line_selected(&self, screen_y: f32) -> bool {
+        let y = self.to_msgbuf_pos(Point::new(0., screen_y)).y;
+        let mut msgbuf = self.msgbuf.lock().await;
+        msgbuf.is_line_selected(y).await
+    }
+
+    /// Emit `select_changed(true/false)` whenever the presence of any selected
+    /// line transitions. `has` is the current state, `had` the previous one.
+    async fn notify_select_changed(&self, has: bool, had: bool) {
+        if has == had {
+            return
+        }
+        self.select_active.store(has, Ordering::Relaxed);
+        let Some(node_ref) = self.node.upgrade() else { return };
+        let mut data = vec![];
+        has.encode(&mut data).unwrap();
+        let _ = node_ref.trigger("select_changed", data).await;
+    }
+
+    /// Copy the currently selected messages' text to the clipboard.
+    async fn handle_copy_select(&self) {
+        let msgbuf = self.msgbuf.lock().await;
+        let text = msgbuf.selected_text();
+        drop(msgbuf);
+        if !text.is_empty() {
+            t!("handle_copy_select() [text={text}]");
+            clipboard::set(&text);
+        }
+        // Also unselect the existing selected text
+        self.handle_unselect().await
+    }
+
+    /// Deselect every selected message and redraw.
+    async fn handle_unselect(&self) {
+        let atom = self.renderer.make_guard(gfxtag!("ChatView::unselect"));
+        let mut msgbuf = self.msgbuf.lock().await;
+        let had = msgbuf.has_selection();
+        msgbuf.unselect_all();
+        self.redraw_cached(atom.batch_id, &mut msgbuf).await;
+        let has = msgbuf.has_selection();
+        drop(msgbuf);
+
+        self.notify_select_changed(has, had).await;
     }
 
     fn end_touch_phase(&self, touch_y: f32) {
@@ -896,7 +1023,7 @@ impl ChatView {
     /// The overlay is emitted inline from `redraw_cached` (so it inherits the
     /// chatview's position), hence we trigger a full redraw on show/hide.
     async fn show_toast(&self, url: &str, anchor: Point) {
-        crate::clipboard::set(url);
+        clipboard::set(url);
 
         let text = self.url_copy_text.get();
         let fg = self.url_copy_fg_color.get();
@@ -1031,6 +1158,18 @@ impl UIObject for ChatView {
             while Self::process_set_file_status_method(&me2, &method_sub).await {}
         });
 
+        let method_sub = node_ref.subscribe_method_call("copy_select").unwrap();
+        let me2 = me.clone();
+        let copy_select_method_task =
+            ex.spawn(
+                async move { while Self::process_copy_select_method(&me2, &method_sub).await {} },
+            );
+
+        let method_sub = node_ref.subscribe_method_call("unselect").unwrap();
+        let me2 = me.clone();
+        let unselect_method_task = ex
+            .spawn(async move { while Self::process_unselect_method(&me2, &method_sub).await {} });
+
         let mut on_modify = OnModify::new(ex, self.node.clone(), me.clone());
 
         async fn reload_view(self_: Arc<ChatView>, batch: BatchGuardPtr) {
@@ -1066,6 +1205,8 @@ impl UIObject for ChatView {
             motion_task,
             bgload_task,
             set_file_status_method_task,
+            copy_select_method_task,
+            unselect_method_task,
         ];
         tasks.append(&mut on_modify.tasks);
 
@@ -1177,9 +1318,16 @@ impl UIObject for ChatView {
 
         let atom = self.renderer.make_guard(gfxtag!("ChatView::handle_mouse_btn_down"));
 
-        if ENABLE_SELECT {
+        // Query whether the clicked line is already selected. We select
+        // immediately only if it wasn't (for instant feedback). If it was
+        // already selected we leave it and let handle_mouse_btn_up decide:
+        // a stationary click toggles it off, but a drag keeps it selected.
+        let was_selected = self.is_line_selected(mouse_pos.y).await;
+        if !was_selected {
             self.select_line(atom.batch_id, mouse_pos.y).await;
         }
+        *self.select_drag.lock() =
+            Some(SelectDrag { down_y: mouse_pos.y, was_selected, dragged: false });
         self.mouse_btn_held.store(true, Ordering::Relaxed);
         true
     }
@@ -1206,6 +1354,17 @@ impl UIObject for ChatView {
         }
 
         self.mouse_btn_held.store(false, Ordering::Relaxed);
+
+        // A stationary click on an already-selected line deselects it. A drag
+        // (or a click on an unselected line) leaves selection as-is.
+        let drag = self.select_drag.lock().take();
+        if let Some(d) = drag {
+            if !d.dragged && d.was_selected {
+                let atom = self.renderer.make_guard(gfxtag!("ChatView::handle_mouse_btn_up"));
+                self.deselect_line(atom.batch_id, mouse_pos.y).await;
+            }
+        }
+
         false
     }
 
@@ -1224,7 +1383,21 @@ impl UIObject for ChatView {
             return false
         }
 
-        if ENABLE_SELECT {
+        // Dragging only ever selects. Once the mouse moves past the
+        // threshold we latch `dragged` so the upcoming mouse-up won't
+        // treat this as a toggling click.
+        let dragged = {
+            let mut drag = self.select_drag.lock();
+            if let Some(d) = drag.as_mut() {
+                if (mouse_pos.y - d.down_y).abs() > SELECT_DRAG_THRESHOLD {
+                    d.dragged = true;
+                }
+                d.dragged
+            } else {
+                false
+            }
+        };
+        if dragged {
             let atom = &mut self.renderer.make_guard(gfxtag!("ChatView::handle_mouse_move"));
             self.select_line(atom.batch_id, mouse_pos.y).await;
         }
@@ -1345,9 +1518,7 @@ impl UIObject for ChatView {
 
                 // We are in selection mode so don't scroll the screen until touch phase ends.
                 if is_select_mode == Some(true) {
-                    if ENABLE_SELECT {
-                        self.select_line(atom.batch_id, touch_y).await;
-                    }
+                    self.select_line(atom.batch_id, touch_y).await;
                     return true
                 }
 

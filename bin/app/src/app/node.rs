@@ -638,6 +638,13 @@ pub fn create_chatview(name: &str) -> SceneNode {
     )
     .unwrap();
 
+    node.add_signal(
+        "select_changed",
+        "Selection presence changed",
+        vec![("selected", "Whether any line is selected", CallArgType::Bool)],
+    )
+    .unwrap();
+
     node.add_method(
         "insert_line",
         vec![
@@ -668,6 +675,10 @@ pub fn create_chatview(name: &str) -> SceneNode {
         None,
     )
     .unwrap();
+
+    node.add_method("copy_select", vec![], None).unwrap();
+
+    node.add_method("unselect", vec![], None).unwrap();
 
     node
 }
