@@ -54,6 +54,39 @@ public class InputConnection extends BaseInputConnection implements View.OnKeyLi
     //Log.d("darkfi", text);
   }
 
+  private void logEditable(String context) {
+    try {
+      int len = mEditable.length();
+      int selStart = Selection.getSelectionStart(mEditable);
+      int selEnd = Selection.getSelectionEnd(mEditable);
+      int cmpStart = getComposingSpanStart(mEditable);
+      int cmpEnd = getComposingSpanEnd(mEditable);
+
+      StringBuilder sb = new StringBuilder(160);
+      sb.append("EDITABLE [").append(context).append("] ");
+      sb.append("len=").append(len);
+      sb.append(" text='").append(mEditable).append("'");
+      sb.append(" sel=(").append(selStart).append(",").append(selEnd).append(")");
+      sb.append(" compose=(").append(cmpStart).append(",").append(cmpEnd).append(")");
+
+      Object[] spans = mEditable.getSpans(0, len, Object.class);
+      sb.append(" nspans=").append(spans.length).append(" [");
+      for (int i = 0; i < spans.length; i++) {
+        if (i > 0) sb.append(",");
+        Object s = spans[i];
+        sb.append(s.getClass().getSimpleName());
+        sb.append("@[").append(mEditable.getSpanStart(s));
+        sb.append(",").append(mEditable.getSpanEnd(s)).append("]");
+        sb.append(":").append(mEditable.getSpanFlags(s));
+      }
+      sb.append("]");
+      Log.i("darkfi", sb.toString());
+    } catch (Throwable t) {
+      Log.e("darkfi", "EDITABLE [" + context + "] CORRUPT: "
+          + t.getClass().getSimpleName() + ": " + t.getMessage());
+    }
+  }
+
   /*
    * This class filters EOL characters from the input. For details of how InputFilter.filter
    * function works, refer to its documentation. If the suggested change is accepted without
@@ -123,6 +156,7 @@ public class InputConnection extends BaseInputConnection implements View.OnKeyLi
    * after calling setEditorInfo.
    */
   public void restartInput() {
+    logEditable("restartInput.enter");
     imm.restartInput(targetView);
   }
 
@@ -144,6 +178,7 @@ public class InputConnection extends BaseInputConnection implements View.OnKeyLi
    */
   public final void setSoftKeyboardActive(boolean active, int flags) {
     log("setSoftKeyboardActive, active: " + active);
+    logEditable("setSoftKeyboardActive.enter");
 
     this.mSoftKeyboardActive = active;
     if (active) {
@@ -153,7 +188,9 @@ public class InputConnection extends BaseInputConnection implements View.OnKeyLi
     } else {
       this.imm.hideSoftInputFromWindow(this.targetView.getWindowToken(), flags);
     }
+    logEditable("setSoftKeyboardActive.before_restart");
     restartInput();
+    logEditable("setSoftKeyboardActive.exit");
   }
 
   /**
@@ -193,8 +230,11 @@ public class InputConnection extends BaseInputConnection implements View.OnKeyLi
    */
   public final void setInputType(int inputType) {
     log("setInputType: " + inputType);
+    logEditable("setInputType.enter");
     settings.mEditorInfo.inputType = inputType;
+    logEditable("setInputType.before_restart");
     restartInput();
+    logEditable("setInputType.exit");
   }
 
   /**
@@ -210,14 +250,21 @@ public class InputConnection extends BaseInputConnection implements View.OnKeyLi
         "setState: '" + state.text + "', selection=(" + state.selectionStart + ","
             + state.selectionEnd + "), composing region=(" + state.composingRegionStart + ","
             + state.composingRegionEnd + ")");
+    logEditable("setState.enter");
     mEditable.clear();
+    logEditable("setState.after_clear");
     mEditable.clearSpans();
+    logEditable("setState.after_clearSpans");
     mEditable.insert(0, (CharSequence) state.text);
+    logEditable("setState.after_insert");
     setSelection(state.selectionStart, state.selectionEnd);
+    logEditable("setState.after_setSelection");
     if (state.composingRegionStart != state.composingRegionEnd) {
       setComposingRegion(state.composingRegionStart, state.composingRegionEnd);
+      logEditable("setState.after_setComposingRegion");
     }
     restartInput();
+    logEditable("setState.exit");
   }
 
   /**
@@ -251,9 +298,13 @@ public class InputConnection extends BaseInputConnection implements View.OnKeyLi
     if (processKeyEvent(keyEvent)) {
       // IMM seems to cache the content of Editable, so we update it with restartInput
       // Also it caches selection and composing region, so let's notify it about updates.
+      logEditable("onKey.after_processKeyEvent");
       stateUpdated();
+      logEditable("onKey.after_stateUpdated");
       immUpdateSelection();
+      logEditable("onKey.after_immUpdateSelection");
       restartInput();
+      logEditable("onKey.after_restart");
       return true;
     }
     return false;
@@ -270,7 +321,10 @@ public class InputConnection extends BaseInputConnection implements View.OnKeyLi
   @Override
   public boolean setSelection(int start, int end) {
     log("setSelection: " + start + ":" + end);
-    return super.setSelection(start, end);
+    logEditable("setSelection.enter");
+    boolean r = super.setSelection(start, end);
+    logEditable("setSelection.exit");
+    return r;
   }
 
   // From BaseInputConnection
@@ -281,27 +335,37 @@ public class InputConnection extends BaseInputConnection implements View.OnKeyLi
     if (text == null) {
       return false;
     }
-    return super.setComposingText(text, newCursorPosition);
+    logEditable("setComposingText.enter");
+    boolean r = super.setComposingText(text, newCursorPosition);
+    logEditable("setComposingText.exit");
+    return r;
   }
 
   @Override
   public boolean setComposingRegion(int start, int end) {
     log("setComposingRegion: " + start + ":" + end);
-    return super.setComposingRegion(start, end);
+    logEditable("setComposingRegion.enter");
+    boolean r = super.setComposingRegion(start, end);
+    logEditable("setComposingRegion.exit");
+    return r;
   }
 
   // From BaseInputConnection
   @Override
   public boolean finishComposingText() {
     log("finishComposingText");
+    logEditable("finishComposingText.enter");
     return super.finishComposingText();
   }
 
   @Override
   public boolean endBatchEdit() {
     log("endBatchEdit");
+    logEditable("endBatchEdit.enter");
     stateUpdated();
-    return super.endBatchEdit();
+    boolean r = super.endBatchEdit();
+    logEditable("endBatchEdit.exit");
+    return r;
   }
 
   @Override
@@ -326,28 +390,40 @@ public class InputConnection extends BaseInputConnection implements View.OnKeyLi
             .append(", new pos = ")
             .append(newCursorPosition)
             .toString());
-    return super.commitText(text, newCursorPosition);
+    logEditable("commitText.enter");
+    boolean r = super.commitText(text, newCursorPosition);
+    logEditable("commitText.exit");
+    return r;
   }
 
   // From BaseInputConnection
   @Override
   public boolean deleteSurroundingText(int beforeLength, int afterLength) {
     log("deleteSurroundingText: " + beforeLength + ":" + afterLength);
-    return super.deleteSurroundingText(beforeLength, afterLength);
+    logEditable("deleteSurroundingText.enter");
+    boolean r = super.deleteSurroundingText(beforeLength, afterLength);
+    logEditable("deleteSurroundingText.exit");
+    return r;
   }
 
   // From BaseInputConnection
   @Override
   public boolean deleteSurroundingTextInCodePoints(int beforeLength, int afterLength) {
     log("deleteSurroundingTextInCodePoints: " + beforeLength + ":" + afterLength);
-    return super.deleteSurroundingTextInCodePoints(beforeLength, afterLength);
+    logEditable("deleteSurroundingTextInCodePoints.enter");
+    boolean r = super.deleteSurroundingTextInCodePoints(beforeLength, afterLength);
+    logEditable("deleteSurroundingTextInCodePoints.exit");
+    return r;
   }
 
   // From BaseInputConnection
   @Override
   public boolean sendKeyEvent(KeyEvent event) {
     log("sendKeyEvent: " + event);
-    return super.sendKeyEvent(event);
+    logEditable("sendKeyEvent.enter");
+    boolean r = super.sendKeyEvent(event);
+    logEditable("sendKeyEvent.exit");
+    return r;
   }
 
   // From BaseInputConnection
@@ -394,6 +470,7 @@ public class InputConnection extends BaseInputConnection implements View.OnKeyLi
   @Override
   public void closeConnection() {
     log("closeConnection");
+    logEditable("closeConnection.enter");
     super.closeConnection();
   }
 
