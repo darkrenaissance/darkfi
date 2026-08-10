@@ -33,8 +33,10 @@ pub struct Channel {
 }
 
 use super::{
-    super::chat, edit_buttons, edit_switch::edit_switch, ColorScheme, BTN_TEXT_Y,
-    CHANNEL_ITEM_HEIGHT, COLOR_SCHEME, MENU_BTN_W_L,
+    super::{append_joined_channel, chat},
+    edit_buttons,
+    edit_switch::edit_switch,
+    ColorScheme, BTN_TEXT_Y, CHANNEL_ITEM_HEIGHT, COLOR_SCHEME, MENU_BTN_W_L,
 };
 use crate::{
     app::{
@@ -1463,6 +1465,8 @@ pub async fn make(
             if !items_prop.contains_str(&channel) {
                 items_prop.push_str(atom, Role::App, &channel).unwrap();
             }
+
+            append_joined_channel(&channel);
 
             // Hide channel screen
             channel_vis.set(atom, false);

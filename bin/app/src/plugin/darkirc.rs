@@ -52,7 +52,11 @@ use parking_lot::Mutex as SyncMutex;
 use sled_overlay::sled;
 
 use crate::{
-    app::schema::menu::{channel::Channel, contact::Contact},
+    app::schema::{
+        ensure_joined_channels_seeded,
+        menu::{channel::Channel, contact::Contact},
+        read_joined_channels,
+    },
     error::{Error, Result},
     prop::{BatchGuardPtr, PropertyAtomicGuard, PropertyPtr, PropertyStr, Role},
     scene::{MethodCallSub, Pimpl, SceneNode, SceneNodePtr, SceneNodeType, SceneNodeWeak, Slot},
@@ -340,6 +344,7 @@ impl DarkIrc {
             ex: ex.clone(),
         });
 
+        ensure_joined_channels_seeded();
         self_.load_channels_from_db().await;
         self_.load_contacts_from_db().await;
         self_.clone().start(sg_root, ex).await;
@@ -645,14 +650,22 @@ impl DarkIrc {
     /// Load channels from UI database and populate encryption keys
     pub async fn load_channels_from_db(&self) {
         let mut channels = self.channels.write().await;
+        channels.clear();
+
+        let joined: HashSet<String> = read_joined_channels().into_iter().collect();
 
         for item in self.channels_tree.iter() {
             let (key, val) = item.unwrap();
             let channel_name = String::from_utf8_lossy(&key).to_string();
+            let full_name = format!("#{}", channel_name);
+
+            if !joined.contains(&full_name) {
+                continue
+            }
+
             let ui_channel = deserialize_async::<Channel>(&val).await.unwrap();
 
             // Convert to IrcChannel with encryption
-            let full_name = format!("#{}", channel_name);
             let mut irc_channel =
                 IrcChannel { topic: String::new(), nicks: HashSet::new(), saltbox: None };
 
@@ -693,9 +706,16 @@ impl DarkIrc {
         let mut contacts = self.contacts.write().await;
         contacts.clear();
 
+        let joined: HashSet<String> = read_joined_channels().into_iter().collect();
+
         for item in self.contacts_tree.iter() {
             let (key, val) = item.unwrap();
             let name = String::from_utf8_lossy(&key).to_string();
+
+            if !joined.contains(&format!("@{}", name)) {
+                continue
+            }
+
             let contact = deserialize_async::<Contact>(&val).await.unwrap();
 
             let their_public = PublicKey::from(contact.public);

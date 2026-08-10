@@ -20,7 +20,7 @@ use darkfi::system::msleep;
 use darkfi_serial::{deserialize, Encodable};
 use indoc::indoc;
 use sled_overlay::sled;
-use std::fs::File;
+use std::{fs::File, io::Write};
 
 use crate::{
     app::{
@@ -38,7 +38,7 @@ use crate::{
 
 mod chat;
 pub mod menu;
-use menu::{channel::Channel, contact::Contact};
+use menu::channel::Channel;
 //mod settings;
 pub mod test;
 pub mod test_edit;
@@ -83,6 +83,10 @@ mod ui_consts {
     pub fn get_main_db_path() -> PathBuf {
         get_appdata_path().join("db")
     }
+
+    pub fn get_joined_channels_filename() -> PathBuf {
+        get_appdata_path().join("joined.txt")
+    }
 }
 
 #[cfg(not(target_os = "android"))]
@@ -106,6 +110,10 @@ mod desktop_paths {
 
     pub fn get_main_db_path() -> PathBuf {
         dirs::data_local_dir().unwrap().join("darkfi/app/db")
+    }
+
+    pub fn get_joined_channels_filename() -> PathBuf {
+        dirs::cache_dir().unwrap().join("darkfi/app/joined.txt")
     }
 }
 
@@ -135,6 +143,62 @@ pub static DEFAULT_CHANNELS: &'static [&str] =
 enum ColorScheme {
     DarkMode,
     PaperLight,
+}
+
+/// Read the ordered list of joined channels/contacts (prefixed names like "#dev", "@alice").
+pub fn read_joined_channels() -> Vec<String> {
+    let Ok(contents) = std::fs::read_to_string(get_joined_channels_filename()) else {
+        return vec![]
+    };
+
+    let mut joined = vec![];
+    for line in contents.lines() {
+        let line = line.trim();
+        assert!(!line.is_empty());
+        joined.push(line.to_string());
+    }
+    joined
+}
+
+/// First-run seed: write DEFAULT_CHANNELS (as "#name") if no joined file exists.
+/// Idempotent and deterministic, so it is safe to call from both schema startup and the plugin.
+pub fn ensure_joined_channels_seeded() {
+    let path = get_joined_channels_filename();
+    if path.exists() {
+        return
+    }
+    if let Some(parent) = path.parent() {
+        let _ = std::fs::create_dir_all(parent);
+    }
+    let defaults: Vec<String> = DEFAULT_CHANNELS.iter().map(|c| format!("#{}", c)).collect();
+    let _ = std::fs::write(&path, defaults.join("\n"));
+}
+
+/// Append a single channel line to the joined file (no dedup). Ensures newline separation
+/// when appending to a non-empty file that lacks a trailing newline.
+pub fn write_joined_channel(name: &str) {
+    let path = get_joined_channels_filename();
+    let needs_newline = std::fs::read(&path)
+        .map(|bytes| !bytes.is_empty() && !bytes.ends_with(b"\n"))
+        .unwrap_or(false);
+    let mut f = std::fs::OpenOptions::new().create(true).append(true).open(&path).unwrap();
+    if needs_newline {
+        writeln!(f).unwrap();
+    }
+    writeln!(f, "{}", name).unwrap();
+}
+
+/// Join a channel: skip if already joined, otherwise append one line.
+pub fn append_joined_channel(name: &str) {
+    if read_joined_channels().iter().any(|x| x == name) {
+        return
+    }
+    write_joined_channel(name);
+}
+
+/// Rewrite the whole joined list (used for first-run seed and main-menu edit_done sync).
+pub fn write_joined_channels(items: &[String]) {
+    let _ = std::fs::write(get_joined_channels_filename(), items.join("\n"));
 }
 
 pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish, db: sled::Db) {
@@ -613,37 +677,28 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish, db
         let _ = channels_tree.flush_async().await;
     }
 
-    // Initialize chat layers from channels in database
-    for item in channels_tree.iter() {
-        let (key, val) = item.unwrap();
-        let channel = deserialize::<Channel>(&val).unwrap();
-        let channel_name = format!("#{}", channel.name);
+    // Seed the joined-channels file with defaults on first run.
+    ensure_joined_channels_seeded();
+
+    // Create chat layers only for joined channels/contacts, in joined order.
+    for name in read_joined_channels() {
+        let bare = if name.starts_with('#') || name.starts_with('@') { &name[1..] } else { &name };
+        let in_tree = match name.chars().next() {
+            Some('#') => channels_tree.contains_key(bare).unwrap_or(false),
+            Some('@') => contacts_tree.contains_key(bare).unwrap_or(false),
+            _ => false,
+        };
+        if !in_tree {
+            warn!(target: "app::schema", "Joined entry '{name}' not found in tree; skipping");
+            continue
+        }
 
         chat::make(
             &app.sg_root,
             &app.renderer,
             &app.ex,
             content.clone(),
-            &channel_name,
-            &db,
-            i18n_fish,
-            emoji_meshes.clone(),
-            is_first_time,
-        )
-        .await;
-    }
-    // Initialize chat layers from contacts in database
-    for item in contacts_tree.iter() {
-        let (_key, val) = item.unwrap();
-        let contact = deserialize::<Contact>(&val).unwrap();
-        let contact_name = format!("@{}", contact.name);
-
-        chat::make(
-            &app.sg_root,
-            &app.renderer,
-            &app.ex,
-            content.clone(),
-            &contact_name,
+            &name,
             &db,
             i18n_fish,
             emoji_meshes.clone(),

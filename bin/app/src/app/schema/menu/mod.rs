@@ -18,9 +18,10 @@
 
 use darkfi_serial::deserialize;
 use sled_overlay::sled;
+use std::io::Write;
 use ui_consts::*;
 
-use super::{ColorScheme, COLOR_SCHEME};
+use super::{read_joined_channels, write_joined_channels, ColorScheme, COLOR_SCHEME};
 use crate::{
     app::{
         node::{create_button, create_layer, create_menu, create_text, create_vector_art},
@@ -38,8 +39,6 @@ use crate::{
     },
     util::i18n::I18nBabelFish,
 };
-use channel::Channel;
-use contact::Contact;
 
 #[cfg(any(target_os = "android", feature = "emulate-android"))]
 mod android_ui_consts {
@@ -438,17 +437,8 @@ pub async fn make(
     node.set_property_f32(atom, Role::App, "fade_zone", MENU_FADE).unwrap();
 
     let prop = node.get_property("items").unwrap();
-    for item in channels_tree.iter() {
-        let (key, val) = item.unwrap();
-        let channel = deserialize::<Channel>(&val).unwrap();
-        let channel_name = format!("#{}", channel.name);
-        prop.push_str(atom, Role::App, &channel_name).unwrap();
-    }
-    for item in contacts_tree.iter() {
-        let (_key, val) = item.unwrap();
-        let contact = deserialize::<Contact>(&val).unwrap();
-        let contact_name = format!("@{}", contact.name);
-        prop.push_str(atom, Role::App, &contact_name).unwrap();
+    for name in read_joined_channels() {
+        prop.push_str(atom, Role::App, &name).unwrap();
     }
 
     let (slot, recvr) = Slot::new("menu_clicked");
@@ -478,20 +468,36 @@ pub async fn make(
         node.setup(|me| Menu::new(me, window_scale.clone(), app.renderer.clone())).await;
     layer_node.link(menu_node.clone());
 
-    // Subscribe to edit_done signal to log deleted items
+    // Subscribe to edit_done signal to persist the joined list and unlink removed layers
     let (edit_done_slot, edit_done_recvr) = Slot::new("edit_done");
     menu_node.register("edit_done", edit_done_slot).unwrap();
     let sg_root = app.sg_root.clone();
+    let menu_node2 = menu_node.clone();
     let edit_done_listen = app.ex.spawn(async move {
         while let Ok(data) = edit_done_recvr.recv().await {
             let deleted_items: Vec<String> = deserialize(&data).unwrap();
-            for item in deleted_items {
+
+            // Persist the post-edit joined list (captures removals + reorders)
+            let current: Vec<String> =
+                menu_node2.get_property("items").unwrap().get_str_vec().unwrap();
+            write_joined_channels(&current);
+
+            for item in &deleted_items {
                 let path = format!("/window/content/{}_chat_layer", item);
-                let node = sg_root.lookup_node(path).unwrap();
-                node.clear_tasks();
-                debug!(target: "app::menu", "deleted item: {item}");
-                node.unlink();
+                if let Some(node) = sg_root.lookup_node(&path) {
+                    node.clear_tasks();
+                    debug!(target: "app::menu", "deleted item: {item}");
+                    node.unlink();
+                }
             }
+
+            // TODO: reload plugin so it drops un-joined channels/contacts from its maps.
+            // if let Some(darkirc) = sg_root.lookup_node("/plugin/darkirc") {
+            //     for item in &deleted_items {
+            //         let data = serialize(item);
+            //         let _ = darkirc.call_method("rescan", data).await;
+            //     }
+            // }
         }
     });
     app.tasks.lock().unwrap().push(edit_done_listen);

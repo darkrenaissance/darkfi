@@ -34,8 +34,10 @@ pub struct Contact {
 }
 
 use super::{
-    super::chat, edit_buttons, edit_switch::edit_switch, ColorScheme, BTN_TEXT_Y,
-    CHANNEL_ITEM_HEIGHT, COLOR_SCHEME, MENU_BTN_W_L,
+    super::{append_joined_channel, chat},
+    edit_buttons,
+    edit_switch::edit_switch,
+    ColorScheme, BTN_TEXT_Y, CHANNEL_ITEM_HEIGHT, COLOR_SCHEME, MENU_BTN_W_L,
 };
 use crate::{
     app::{
@@ -1454,6 +1456,8 @@ pub async fn make(
             if !items_prop.contains_str(&contact) {
                 items_prop.push_str(atom, Role::App, &contact).unwrap();
             }
+
+            append_joined_channel(&contact);
 
             contact_vis.set(atom, false);
 
