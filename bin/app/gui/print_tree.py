@@ -67,7 +67,7 @@ def print_node_info(parent_path, depth, indent):
             prop_val = api.get_property_value(parent_path, prop.name)
 
             if prop.type == PropertyType.STR:
-                prop_val = [f"\"{pv}\"" for pv in prop_val]
+                prop_val = "[" + ", ".join(f"\"{pv}\"" for pv in prop_val) + "]"
             elif prop.type == PropertyType.FLOAT32:
                 prop_val = "[" + ", ".join(f"{pv:.2f}" for pv in prop_val) + "]"
 

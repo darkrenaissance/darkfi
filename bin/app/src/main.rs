@@ -741,6 +741,14 @@ pub fn create_darkirc(name: &str) -> SceneNode {
     prop.set_defaults_null().unwrap();
     node.add_property(prop).unwrap();
 
+    let mut prop = Property::new("outbound_peers", PropertyType::Str, PropertySubType::Null);
+    prop.set_ui_text("Outbound Peers", "Connected outbound peers");
+    #[cfg(feature = "enable-plugin-darkirc")]
+    prop.set_array_len(plugin::darkirc::P2P_OUTBOUND_ACTIVE);
+    prop.allow_null_values();
+    prop.set_defaults_null().unwrap();
+    node.add_property(prop).unwrap();
+
     node.add_signal(
         "recv",
         "Message received",

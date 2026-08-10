@@ -32,6 +32,7 @@ use darkfi::{
         EventGraph, EventGraphConfig, EventGraphPtr,
     },
     net::{
+        dnet::DnetEvent,
         session::SESSION_DEFAULT,
         settings::{MagicBytes, NetworkProfile, Settings as NetSettings},
         ChannelPtr, P2p, P2pPtr,
@@ -53,7 +54,7 @@ use sled_overlay::sled;
 use crate::{
     app::schema::menu::{channel::Channel, contact::Contact},
     error::{Error, Result},
-    prop::{BatchGuardPtr, PropertyAtomicGuard, PropertyStr, Role},
+    prop::{BatchGuardPtr, PropertyAtomicGuard, PropertyPtr, PropertyStr, Role},
     scene::{MethodCallSub, Pimpl, SceneNode, SceneNodePtr, SceneNodeType, SceneNodeWeak, Slot},
     ui::{
         chatview::{MessageId, Timestamp},
@@ -69,8 +70,11 @@ const COOLOFF_SLEEP_TIME: u64 = 20;
 const COOLOFF_SYNC_ATTEMPTS: usize = 6;
 const SYNC_MIN_PEERS: usize = 2;
 
-const P2P_OUTBOUND_ACTIVE: usize = 6;
+pub(crate) const P2P_OUTBOUND_ACTIVE: usize = 6;
 const P2P_OUTBOUND_SLEEP: usize = 1;
+
+/// Update `outbound_peers` property useful for diagnostics
+const DNET_ENABLED: bool = true;
 
 /// Due to drift between different machine's clocks, if the message timestamp is recent
 /// then we will just correct it to the current time so messages appear sequential in the UI.
@@ -283,6 +287,11 @@ impl DarkIrc {
             }
         };
 
+        if DNET_ENABLED {
+            i!("Enabling dnet outbound-slot event stream for outbound_peers property");
+            p2p.dnet_enable();
+        }
+
         let event_graph = match EventGraph::new(
             p2p.clone(),
             db.clone(),
@@ -436,6 +445,31 @@ impl DarkIrc {
     pub async fn notify_connect(&self, peers_count: usize, is_dag_synced: bool) {
         let node = self.node.upgrade().unwrap();
         node.trigger("connect", serialize(&(peers_count as u32, is_dag_synced))).await.unwrap();
+    }
+
+    /// Update the `outbound_peers` property with the outgoing connection slots addrs.
+    /// Allows us to monitor the network state of our p2p node.
+    async fn relay_outbound_slots(dnet_sub: Subscription<DnetEvent>, prop: PropertyPtr) {
+        loop {
+            let event = dnet_sub.receive().await;
+            let (slot, kind, addr) = match event {
+                DnetEvent::OutboundSlotConnected(info) => {
+                    (info.slot, "connected", Some(info.addr.to_string()))
+                }
+                DnetEvent::OutboundSlotConnecting(info) => (info.slot, "connecting", None),
+                DnetEvent::OutboundSlotDisconnected(info) => (info.slot, "disconnected", None),
+                DnetEvent::OutboundSlotSleeping(info) => (info.slot, "sleeping", None),
+                _ => continue,
+            };
+
+            let mut atom = PropertyAtomicGuard::none();
+            let idx = slot as usize;
+            assert!(idx < prop.get_len());
+            match addr {
+                Some(addr) => prop.set_str(&mut atom, Role::Internal, idx, addr).unwrap(),
+                None => prop.set_null(&mut atom, Role::Internal, idx).unwrap(),
+            }
+        }
     }
 
     async fn relay_events(self: Arc<Self>, ev_sub: Subscription<event_graph::Event>) {
@@ -877,6 +911,15 @@ impl DarkIrc {
             start_task,
             stop_task,
         ];
+
+        if DNET_ENABLED {
+            let dnet_sub = self.p2p.dnet_subscribe().await;
+            let node = self.node.upgrade().unwrap();
+            let prop = node.get_property("outbound_peers").unwrap();
+            let dnet_task = ex.spawn(Self::relay_outbound_slots(dnet_sub, prop));
+            tasks.push(dnet_task);
+        }
+
         tasks.append(&mut on_modify.tasks);
         *self.tasks.lock() = tasks;
     }
