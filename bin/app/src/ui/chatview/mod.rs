@@ -1596,20 +1596,27 @@ impl UIObject for ChatView {
 
                 // If the timer never fired and movement was minimal, it is a tap.
                 if is_select_mode.is_none() && (touch_y - start_y).abs() < BIG_EPSILON {
-                    if self.select_active.load(Ordering::Relaxed) {
-                        // Selection mode is active: a tap adds the line under the finger.
-                        self.select_line(atom.batch_id, touch_y).await;
-                    } else {
-                        // Forward the tap to the message (e.g. open a URL).
-                        let mut msgbuf = self.msgbuf.lock().await;
-                        let msgbuf_pos = self.to_msgbuf_pos(touch_pos);
-                        if let Some((msg, msg_top)) = msgbuf.get_line(msgbuf_pos.y).await {
-                            msg.handle_touch(
+                    // A tap forwards to the message first (opens a URL / downloads a file).
+                    let mut msgbuf = self.msgbuf.lock().await;
+                    let msgbuf_pos = self.to_msgbuf_pos(touch_pos);
+                    let mut is_handled = false;
+                    if let Some((msg, msg_top)) = msgbuf.get_line(msgbuf_pos.y).await {
+                        is_handled = msg
+                            .handle_touch(
                                 TouchPhase::Ended,
                                 0,
                                 Point::new(msgbuf_pos.x, msg_top - msgbuf_pos.y),
                             )
-                            .await;
+                            .await
+                    }
+                    drop(msgbuf);
+
+                    // Not a URL/file tap and selection mode is active: toggle the line.
+                    if !is_handled && self.select_active.load(Ordering::Relaxed) {
+                        if self.is_line_selected(touch_y).await {
+                            self.deselect_line(atom.batch_id, touch_y).await;
+                        } else {
+                            self.select_line(atom.batch_id, touch_y).await;
                         }
                     }
                 }

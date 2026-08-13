@@ -389,6 +389,22 @@ impl PrivMessage {
 
         true
     }
+
+    async fn handle_touch(&self, phase: TouchPhase, touch_pos: Point) -> bool {
+        if phase != TouchPhase::Ended {
+            return false
+        }
+        let Some(url) = self.url_at_local(touch_pos) else { return false };
+        info!(target: "ui::chatview", "URL tapped: {url}");
+
+        #[cfg(target_os = "android")]
+        crate::android::open_url(url);
+
+        #[cfg(not(target_os = "android"))]
+        let _ = open::that(url);
+
+        true
+    }
 }
 
 impl std::fmt::Debug for PrivMessage {
@@ -1026,7 +1042,7 @@ impl UIObject for Message {
     }
     async fn handle_touch(&self, phase: TouchPhase, id: u64, touch_pos: Point) -> bool {
         match self {
-            Self::Priv(_) => false,
+            Self::Priv(m) => m.handle_touch(phase, touch_pos).await,
             Self::Date(_) => false,
             Self::File(m) => m.handle_touch(phase, id, touch_pos).await,
         }

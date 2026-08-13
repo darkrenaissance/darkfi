@@ -34,6 +34,14 @@ Users who prefer to build locally can follow the commands in the `Dockerfile`.
 Note that the `build.rs` hardcodes the SDK/NDK paths so either you follow it
 exactly (recommended) or modify `build.rs`.
 
+## GrapheneOS
+
+```
+$ adb shell pm list users
+    UserInfo{10:Work:30}
+$ adb install --user 10 darkfi-app.apk
+```
+
 # ADB Over Wifi
 
 Useful for reading the logs without having to be plugged in.
