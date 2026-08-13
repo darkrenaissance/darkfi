@@ -223,11 +223,11 @@ public class VideoDecoder {
         if (outputBufferId >= 0) {
             // New frame to read
             ByteBuffer outputBuffer = decoder.getOutputBuffer(outputBufferId);
-            if (outputBuffer != null) {
+            if (outputBuffer != null && bufferInfo.size > 0) {
                 processOutputBuffer(outputBuffer, bufferInfo.offset, bufferInfo.size);
             }
             decoder.releaseOutputBuffer(outputBufferId, false);
-            return 1;
+            return bufferInfo.size > 0 ? 1 : 0;
         } else if (outputBufferId == MediaCodec.INFO_OUTPUT_FORMAT_CHANGED) {
             // Ready to read the output format
             MediaFormat newFormat = decoder.getOutputFormat();
