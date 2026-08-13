@@ -332,13 +332,19 @@ impl Client {
                     }
 
                     // Try to deserialize the `Event`'s content into a `Privmsg`
-                    let mut privmsg = match deserialize_async_partial(r.content()).await {
+                    let mut privmsg: Privmsg = match deserialize_async_partial(r.content()).await {
                         Ok((v, _)) => v,
                         Err(e) => {
                             error!(target: "irc::client", "[IRC CLIENT] Failed deserializing event: {e}");
                             continue
                         }
                     };
+
+                    // Record any public (`#`-prefixed) channel observed on the
+                    // wire. Done before decryption so that only truly public
+                    // channels (plaintext channel field) are recorded; encrypted
+                    // channels carry base58 ciphertext in this field.
+                    self.server.record_seen_channel(&privmsg.channel).await?;
 
                     // If successful, potentially decrypt it:
                     self.server.try_decrypt(&mut privmsg, self.nickname.read().await.as_ref()).await;
@@ -674,6 +680,10 @@ impl Client {
 
     // Internal helper function that creates an Event from PRIVMSG arguments
     async fn privmsg_to_event(&self, mut privmsg: Privmsg) -> Result<Event> {
+        // Record the outbound channel before encryption so that any public
+        // (`#`-prefixed) channel we send to is reflected in `/LIST`.
+        self.server.record_seen_channel(&privmsg.channel).await?;
+
         // Encrypt the Privmsg if an encryption method is available.
         self.server.try_encrypt(&mut privmsg).await;
 

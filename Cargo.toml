@@ -79,7 +79,6 @@ oxy-upnp-igd = {version = "0.1", optional = true}
 
 # Encoding
 bs58 = {version = "0.5.1", optional = true}
-crypto-box = {version = "0.2.1", optional = true}
 hex = {version = "0.4.3", optional = true}
 serde = {version = "1.0.228", features = ["derive"], optional = true}
 tinyjson = {version = "2.5.1", optional = true}

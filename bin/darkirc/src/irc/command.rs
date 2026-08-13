@@ -58,10 +58,10 @@ use tracing::{error, info, warn};
 use super::{
     client::{Client, ReplyType},
     rpl::*,
-    server::{MAX_MSG_LEN, MAX_NICK_LEN},
+    server::{MAX_MSG_LEN, MAX_NICK_LEN, SEEN_CHANNELS_TREE},
     IrcChannel, SERVER_NAME,
 };
-use crate::crypto::bcrypt::bcrypt_hash_password;
+use crate::{crypto::bcrypt::bcrypt_hash_password, Privmsg};
 
 const MAX_TOPIC_LEN: usize = MAX_MSG_LEN;
 
@@ -368,9 +368,9 @@ impl Client {
 
     /// `LIST [<channels> [<server>]]`
     ///
-    /// List all channels on the server. If the list `<channels>` is given, it
-    /// will return the channel topics. If `<server>` is given, the command will
-    /// be sent to `<server>` for evaluation.
+    /// List all public (`#`-prefixed) channels observed on the p2p network.
+    /// Channels are recorded into the `SEEN_CHANNELS_TREE` as their traffic
+    /// is seen, and persist across restarts.
     pub async fn handle_cmd_list(&self, _args: &str) -> Result<Vec<ReplyType>> {
         if !self.registered.load(SeqCst) {
             self.penalty.fetch_add(1, SeqCst);
@@ -379,15 +379,14 @@ impl Client {
 
         let nick = self.nickname.read().await.to_string();
 
-        let mut list = vec![];
-        for (name, channel) in self.server.channels.read().await.iter() {
-            list.push(format!("{nick} {name} {} :{}", channel.nicks.len(), channel.topic));
-        }
+        let tree = self.server.darkirc.sled.open_tree(SEEN_CHANNELS_TREE)?;
 
-        let mut replies = vec![];
-        replies.push(ReplyType::Server((RPL_LISTSTART, format!("{nick} Channel :Users  Name"))));
-        for chan in list {
-            replies.push(ReplyType::Server((RPL_LIST, chan)));
+        let mut replies =
+            vec![ReplyType::Server((RPL_LISTSTART, format!("{nick} Channel :Users  Name")))];
+        for item in tree.iter() {
+            let (key, _) = item?;
+            let name = String::from_utf8_lossy(&key);
+            replies.push(ReplyType::Server((RPL_LIST, format!("{nick} {name} 0 :"))));
         }
         replies.push(ReplyType::Server((RPL_LISTEND, format!("{nick} :End of /LIST"))));
 
@@ -1017,10 +1016,14 @@ impl Client {
             }
 
             // Try to deserialize it. (Here we skip errors)
-            let mut privmsg = match deserialize_async_partial(event.content()).await {
+            let mut privmsg: Privmsg = match deserialize_async_partial(event.content()).await {
                 Ok((v, _)) => v,
                 Err(_) => continue,
             };
+
+            // Record any public (`#`-prefixed) channel observed on the wire,
+            // before decryption (see note in client::multiplex_connection).
+            self.server.record_seen_channel(&privmsg.channel).await?;
 
             // Potentially decrypt the privmsg
             self.server.try_decrypt(&mut privmsg, self.nickname.read().await.as_ref()).await;

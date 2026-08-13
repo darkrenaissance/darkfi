@@ -819,6 +819,17 @@ pub const DARKIRC_GENESIS_COMMITMENTS_REPR: &[[u8; 32]] = &[
                             error!("Failed to drain pending broadcasts: {e}");
                         }
                     }
+
+                    // Populate the seen-channels index from the freshly-synced
+                    // DAG so `/LIST` can report every known public channel.
+                    match irc_server_for_drain.populate_seen_channels().await {
+                        Ok(n) => {
+                            info!("Recorded {n} public channel sightings from DAG history");
+                        }
+                        Err(e) => {
+                            error!("Failed populating seen channels from DAG: {e}");
+                        }
+                    }
                 }
                 last_state = now_state;
             }

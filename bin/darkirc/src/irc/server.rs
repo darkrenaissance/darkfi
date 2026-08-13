@@ -30,7 +30,7 @@ use darkfi::{
     util::path::expand_path,
     Error, Result,
 };
-use darkfi_serial::{deserialize_async, serialize_async};
+use darkfi_serial::{deserialize_async, deserialize_async_partial, serialize_async};
 use futures_rustls::{
     rustls::{
         self,
@@ -66,6 +66,10 @@ pub const MAX_NICK_LEN: usize = 24;
 
 /// Max message length
 pub const MAX_MSG_LEN: usize = 512;
+
+/// Sled tree storing every public (`#`-prefixed) IRC channel we have
+/// observed on the p2p network. Keys are channel names; values are empty.
+pub const SEEN_CHANNELS_TREE: &str = "darkirc_seen_channels";
 
 /// Result of attempting to reserve the next RLN message slot.
 pub enum RlnMessageReservation {
@@ -356,6 +360,13 @@ impl IrcServer {
         *self.channels.write().await = channels;
         *self.contacts.write().await = contacts;
 
+        // Record configured public channels so `/LIST` can report them even
+        // before any traffic is observed for them on the network.
+        let names: Vec<String> = self.channels.read().await.keys().cloned().collect();
+        for name in &names {
+            self.record_seen_channel(name).await?;
+        }
+
         Ok(())
     }
 
@@ -457,6 +468,61 @@ impl IrcServer {
         );
 
         Ok(())
+    }
+
+    /// Record a public (`#`-prefixed) IRC channel in the `SEEN_CHANNELS_TREE`
+    /// so that `/LIST` can report channels observed on the p2p network.
+    /// Private (encrypted) channels — those with a configured saltbox — are
+    /// skipped. Idempotent. Emits a debug log the first time a given channel
+    /// is seen.
+    pub async fn record_seen_channel(&self, channel: &str) -> Result<()> {
+        if !channel.starts_with('#') {
+            return Ok(())
+        }
+
+        // Skip private channels that have a configured saltbox.
+        if let Some(chan) = self.channels.read().await.get(channel) {
+            if chan.saltbox.is_some() {
+                return Ok(())
+            }
+        }
+
+        let tree = self.darkirc.sled.open_tree(SEEN_CHANNELS_TREE)?;
+        if tree.insert(channel.as_bytes(), &[])?.is_none() {
+            debug!(
+                target: "darkirc::irc::server",
+                "Recorded new public channel: {channel}"
+            );
+        }
+
+        Ok(())
+    }
+
+    /// Walk every stored event in the DAG and record all public (`#`-prefixed)
+    /// channels into the `SEEN_CHANNELS_TREE`. Intended to be called once the
+    /// event graph finishes syncing, so that `/LIST` reflects the full set of
+    /// known public channels even before any new live traffic arrives.
+    /// Only the raw wire channel field is inspected: encrypted (private)
+    /// channels carry base58 ciphertext and are skipped.
+    pub async fn populate_seen_channels(&self) -> Result<usize> {
+        let events = self.darkirc.event_graph.order_events().await?;
+        let tree = self.darkirc.sled.open_tree(SEEN_CHANNELS_TREE)?;
+        let mut batch = sled::Batch::default();
+        let mut count = 0usize;
+        for event in events.iter() {
+            let Ok((privmsg, _)) = deserialize_async_partial::<Privmsg>(event.content()).await
+            else {
+                continue
+            };
+            if privmsg.channel.starts_with('#') {
+                batch.insert(privmsg.channel.as_bytes(), &[]);
+                count += 1;
+            }
+        }
+        if count > 0 {
+            tree.apply_batch(batch)?;
+        }
+        Ok(count)
     }
 
     /// Try encrypting a given `Privmsg` if there is such a channel/contact.
