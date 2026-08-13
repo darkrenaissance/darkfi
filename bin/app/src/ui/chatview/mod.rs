@@ -65,6 +65,10 @@ const BIG_EPSILON: f32 = 0.05;
 /// (which only selects) rather than a click (which toggles).
 const SELECT_DRAG_THRESHOLD: f32 = 2.;
 
+/// Finger must stay within this many pixels of the touch-start position to
+/// count as "stationary" for long-hold selection on touch screens.
+const TOUCH_STATIONARY_THRESHOLD: f32 = 10.;
+
 /// Tracks an in-progress mouse selection gesture so we can distinguish a
 /// stationary click (toggles the line) from a drag (only ever selects).
 struct SelectDrag {
@@ -273,10 +277,12 @@ pub struct ChatView {
     /// Re-arm counter so a stale dismiss task won't clear a newer toast.
     toast_version: AtomicU32,
 
-    /// Weak self-reference + executor, set in `start()`, so mouse/touch handlers
-    /// can spawn the overlay dismiss task.
-    weak: SyncMutex<Weak<Self>>,
-    ex: SyncMutex<Option<ExecutorPtr>>,
+    /// Re-arm counter so a stale long-press timer won't fire for a newer touch.
+    touch_hold_version: AtomicU32,
+
+    /// Weak self-reference so handlers can spawn detached tasks.
+    me: Weak<Self>,
+    ex: ExecutorPtr,
 }
 
 impl ChatView {
@@ -286,6 +292,7 @@ impl ChatView {
         window_scale: PropertyFloat32,
         renderer: Renderer,
         sg_root: SceneNodePtr,
+        ex: ExecutorPtr,
     ) -> Pimpl {
         let node_ref = &node.upgrade().unwrap();
         let rect = PropertyRect::wrap(node_ref, Role::Internal, "rect").unwrap();
@@ -343,7 +350,7 @@ impl ChatView {
         let motion_cv = Arc::new(CondVar::new());
         let bgload_cv = Arc::new(CondVar::new());
 
-        let self_ = Arc::new(Self {
+        let self_ = Arc::new_cyclic(|me| Self {
             node: node.clone(),
             tasks: SyncMutex::new(vec![]),
             renderer: renderer.clone(),
@@ -407,8 +414,9 @@ impl ChatView {
             url_copy_duration,
             link_toast: SyncMutex::new(None),
             toast_version: AtomicU32::new(0),
-            weak: SyncMutex::new(Weak::new()),
-            ex: SyncMutex::new(None),
+            touch_hold_version: AtomicU32::new(0),
+            me: me.clone(),
+            ex,
         });
         Pimpl::ChatView(self_)
     }
@@ -650,14 +658,17 @@ impl ChatView {
     }
 
     fn end_touch_phase(&self, touch_y: f32) {
+        // Cancel any pending long-press timer.
+        self.touch_hold_version.fetch_add(1, Ordering::SeqCst);
+
         // Now calculate scroll acceleration
         let touch_info = std::mem::replace(&mut *self.touch_info.lock(), None);
         let Some(touch_info) = &touch_info else { return };
 
         self.touch_is_active.store(false, Ordering::Relaxed);
 
-        // No scroll accel with selection mode
-        if touch_info.is_select_mode.is_some() {
+        // No scroll accel when selection was active.
+        if touch_info.is_select_mode == Some(true) {
             return
         }
 
@@ -1051,15 +1062,15 @@ impl ChatView {
         // (Re)arm the dismiss task. A stale task won't clear a newer toast (version check).
         let version = self.toast_version.fetch_add(1, Ordering::SeqCst) + 1;
         let duration = self.url_copy_duration.get();
-        let weak = self.weak.lock().clone();
-        let Some(ex) = self.ex.lock().clone() else { return };
+        let me = self.me.clone();
+        let ex = self.ex.clone();
         ex.spawn(async move {
             msleep((duration * 1000.) as u64).await;
-            let Some(this) = weak.upgrade() else { return };
-            if this.toast_version.load(Ordering::SeqCst) == version {
-                *this.link_toast.lock() = None;
-                let atom = &mut this.renderer.make_guard(gfxtag!("ChatView::urltoast_hide"));
-                this.redraw_all(atom).await;
+            let Some(self_) = me.upgrade() else { return };
+            if self_.toast_version.load(Ordering::SeqCst) == version {
+                *self_.link_toast.lock() = None;
+                let atom = &mut self_.renderer.make_guard(gfxtag!("ChatView::urltoast_hide"));
+                self_.redraw_all(atom).await;
             }
         })
         .detach();
@@ -1094,6 +1105,54 @@ impl ChatView {
         msgbuf.clear_meshes();
         self.redraw_cached(atom.batch_id, &mut msgbuf).await;
     }
+
+    /// Called by the long-press timer after `select_hold_time` elapses.
+    /// If the finger is still down and within the stationary threshold, starts
+    /// text selection (or copies the URL if the finger is on one).
+    async fn long_hold_fire(&self, version: u32, start_pos: Point) {
+        // Cancelled by Ended/Cancelled or a newer touch.
+        if self.touch_hold_version.load(Ordering::SeqCst) != version {
+            return
+        }
+
+        // Touch ended or still undecided?
+        let (start_y, last_y) = {
+            let touch_info = self.touch_info.lock();
+            let Some(ti) = &*touch_info else { return };
+            (ti.start_y, ti.last_y)
+        };
+
+        // Finger moved beyond the stationary threshold — it's a scroll.
+        if (last_y - start_y).abs() > TOUCH_STATIONARY_THRESHOLD {
+            if let Some(ti) = &mut *self.touch_info.lock() {
+                ti.is_select_mode = Some(false);
+            }
+            return
+        }
+
+        let rect = self.rect.get();
+
+        // URL under the finger takes priority: copy it, don't select.
+        let msgbuf_pos = self.to_msgbuf_pos(start_pos);
+        let mut msgbuf = self.msgbuf.lock().await;
+        let on_url = msgbuf.url_at(msgbuf_pos.x, msgbuf_pos.y).await;
+        drop(msgbuf);
+
+        if let Some(url) = on_url {
+            self.show_toast(&url, start_pos - rect.pos()).await;
+            if let Some(ti) = &mut *self.touch_info.lock() {
+                ti.is_select_mode = Some(false);
+            }
+            return
+        }
+
+        // Not on a URL: start text selection.
+        if let Some(ti) = &mut *self.touch_info.lock() {
+            ti.is_select_mode = Some(true);
+        }
+        let atom = &mut self.renderer.make_guard(gfxtag!("ChatView::long_hold_fire"));
+        self.select_line(atom.batch_id, start_pos.y).await;
+    }
 }
 
 #[async_trait]
@@ -1103,11 +1162,7 @@ impl UIObject for ChatView {
     }
 
     async fn start(self: Arc<Self>, ex: ExecutorPtr) {
-        let me = Arc::downgrade(&self);
-
-        // Let mouse/touch handlers spawn the copy-overlay dismiss task.
-        *self.weak.lock() = Arc::downgrade(&self);
-        *self.ex.lock() = Some(ex.clone());
+        let me = self.me.clone();
 
         let node_ref = &self.node.upgrade().unwrap();
 
@@ -1308,6 +1363,16 @@ impl UIObject for ChatView {
             }
         }
 
+        // Left-click on a URL: consume the press so no selection starts.
+        // The URL itself is opened on button-up via the message dispatch.
+        if btn == MouseButton::Left && rect.contains(mouse_pos) {
+            let msgbuf_pos = self.to_msgbuf_pos(mouse_pos);
+            let mut msgbuf = self.msgbuf.lock().await;
+            if msgbuf.url_at(msgbuf_pos.x, msgbuf_pos.y).await.is_some() {
+                return true
+            }
+        }
+
         if btn != MouseButton::Left {
             return false
         }
@@ -1452,11 +1517,23 @@ impl UIObject for ChatView {
             TouchPhase::Started => {
                 self.touch_is_active.store(true, Ordering::Relaxed);
 
-                let mut touch_info = self.touch_info.lock();
-                *touch_info = Some(TouchInfo::new(self.scroll.get(), touch_y));
+                *self.touch_info.lock() = Some(TouchInfo::new(self.scroll.get(), touch_y));
+
+                // Arm the long-press timer for text selection.
+                let version = self.touch_hold_version.fetch_add(1, Ordering::SeqCst) + 1;
+                let hold_ms = select_hold_time as u64;
+                let me = self.me.clone();
+                let ex = self.ex.clone();
+                let start_pos = touch_pos;
+                ex.spawn(async move {
+                    msleep(hold_ms).await;
+                    let Some(self_) = me.upgrade() else { return };
+                    self_.long_hold_fire(version, start_pos).await;
+                })
+                .detach();
             }
             TouchPhase::Moved => {
-                let (start_scroll, start_y, start_elapsed, do_update, is_select_mode, copy_pending) = {
+                let (start_scroll, start_y, start_elapsed, do_update, is_select_mode) = {
                     let mut touch_info = self.touch_info.lock();
                     let Some(touch_info) = &mut *touch_info else { return false };
 
@@ -1467,17 +1544,6 @@ impl UIObject for ChatView {
 
                     let start_elapsed =
                         touch_info.start_instant.elapsed().as_micros() as f32 / 1000.;
-                    let mut copy_pending = false;
-                    if start_elapsed > select_hold_time && touch_info.is_select_mode.is_none() {
-                        // Did we move?
-                        if (touch_y - start_y).abs() < BIG_EPSILON {
-                            touch_info.is_select_mode = Some(true);
-                            // Stationary long-hold just latched this gesture.
-                            copy_pending = true;
-                        } else {
-                            touch_info.is_select_mode = Some(false);
-                        }
-                    }
                     let is_select_mode = touch_info.is_select_mode.clone();
 
                     touch_info.push_sample(touch_y);
@@ -1489,20 +1555,10 @@ impl UIObject for ChatView {
                         touch_info.last_instant = std::time::Instant::now();
                     }
 
-                    (start_scroll, start_y, start_elapsed, do_update, is_select_mode, copy_pending)
+                    (start_scroll, start_y, start_elapsed, do_update, is_select_mode)
                 };
 
                 t!("touch phase moved, is_select_mode={is_select_mode:?}");
-
-                // Stationary long-hold: if the touch is on a URL, copy it + toast.
-                if copy_pending {
-                    let msgbuf_pos = self.to_msgbuf_pos(touch_pos);
-                    let mut msgbuf = self.msgbuf.lock().await;
-                    if let Some(url) = msgbuf.url_at(msgbuf_pos.x, msgbuf_pos.y).await {
-                        drop(msgbuf);
-                        self.show_toast(&url, touch_pos - rect.pos()).await;
-                    }
-                }
 
                 // When scrolling if we suddenly grab the screen for more than a brief period
                 // of time then stop the scrolling completely.
@@ -1538,18 +1594,23 @@ impl UIObject for ChatView {
                     (touch_info.start_y, touch_info.is_select_mode)
                 };
 
-                // If this selection mode is off and movement was minimal,
-                // it is a tap so we forward the touch event to the message
-                if is_select_mode != Some(true) && (touch_y - start_y).abs() < BIG_EPSILON {
-                    let mut msgbuf = self.msgbuf.lock().await;
-                    let msgbuf_pos = self.to_msgbuf_pos(touch_pos);
-                    if let Some((msg, msg_top)) = msgbuf.get_line(msgbuf_pos.y).await {
-                        msg.handle_touch(
-                            TouchPhase::Ended,
-                            0,
-                            Point::new(msgbuf_pos.x, msg_top - msgbuf_pos.y),
-                        )
-                        .await;
+                // If the timer never fired and movement was minimal, it is a tap.
+                if is_select_mode.is_none() && (touch_y - start_y).abs() < BIG_EPSILON {
+                    if self.select_active.load(Ordering::Relaxed) {
+                        // Selection mode is active: a tap adds the line under the finger.
+                        self.select_line(atom.batch_id, touch_y).await;
+                    } else {
+                        // Forward the tap to the message (e.g. open a URL).
+                        let mut msgbuf = self.msgbuf.lock().await;
+                        let msgbuf_pos = self.to_msgbuf_pos(touch_pos);
+                        if let Some((msg, msg_top)) = msgbuf.get_line(msgbuf_pos.y).await {
+                            msg.handle_touch(
+                                TouchPhase::Ended,
+                                0,
+                                Point::new(msgbuf_pos.x, msg_top - msgbuf_pos.y),
+                            )
+                            .await;
+                        }
                     }
                 }
 

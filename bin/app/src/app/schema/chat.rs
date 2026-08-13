@@ -593,7 +593,14 @@ pub async fn make(
     debug!(target: "app", "Loaded {channel} history: {} lines", chat_tree.len());
     let chatview_node = node
         .setup(|me| {
-            ChatView::new(me, chat_tree, window_scale.clone(), renderer.clone(), sg_root.clone())
+            ChatView::new(
+                me,
+                chat_tree,
+                window_scale.clone(),
+                renderer.clone(),
+                sg_root.clone(),
+                ex.clone(),
+            )
         })
         .await;
     layer_node.link(chatview_node.clone());
