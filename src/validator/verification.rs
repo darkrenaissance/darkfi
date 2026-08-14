@@ -183,7 +183,7 @@ pub fn validate_block(
 
     // Check timestamp validity (4)
     if !module.verify_timestamp_by_median(block.header.timestamp, timestamp_bound)? {
-        return Err(Error::BlockIsInvalid(block.hash().as_string()))
+        return Err(Error::PoWInvalidTimestamp)
     }
 
     // Check PoW data validty (5)

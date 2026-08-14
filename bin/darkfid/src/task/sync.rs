@@ -562,6 +562,10 @@ async fn retrieve_blocks(
                         .await
                     {
                         Ok(()) | Err(Error::ProposalAlreadyExists) => continue,
+                        Err(Error::PoWInvalidTimestamp) => {
+                            debug!(target: "darkfid::task::sync::retrieve_blocks", "Block {} timestamp is invalid, likely caused by a stale timestamp bound", block.hash());
+                            break 'blocks_loop
+                        }
                         Err(e) => {
                             debug!(target: "darkfid::task::sync::retrieve_blocks", "Error while appending proposal: {e}");
                             continue 'peers_loop
