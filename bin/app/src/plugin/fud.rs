@@ -171,13 +171,13 @@ impl FudPlugin {
 
             p2p_settings.seeds.push(
                 url::Url::parse(
-                    "tor://g7fxelebievvpr27w7gt24lflptpw3jeeuvafovgliq5utdst6xyruyd.onion:24442",
+                    "tor://wgxxaifz5gv4iggcflyl67lgmsihffs6bbwobqah4np52t3y3olrnpid.onion:9701",
                 )
                 .unwrap(),
             );
             p2p_settings.seeds.push(
                 url::Url::parse(
-                    "tor://yvklzjnfmwxhyodhrkpomawjcdvcaushsj6torjz2gyd7e25f3gfunyd.onion:24442",
+                    "tor://inx5s3pdzddvgb5ii3oydutmbvw6fvor3oqu65wtxl3pyevtvrdn4had.onion:9701",
                 )
                 .unwrap(),
             );
@@ -215,8 +215,8 @@ impl FudPlugin {
             p2p_settings.profiles.insert("tcp+tls".to_string(), profile);
             p2p_settings.active_profiles = vec!["tcp+tls".to_string()];
 
-            p2p_settings.seeds.push(url::Url::parse("tcp+tls://lilith0.dark.fi:24441").unwrap());
-            p2p_settings.seeds.push(url::Url::parse("tcp+tls://lilith1.dark.fi:24441").unwrap());
+            p2p_settings.seeds.push(url::Url::parse("tcp+tls://lilith0.dark.fi:9700").unwrap());
+            p2p_settings.seeds.push(url::Url::parse("tcp+tls://lilith1.dark.fi:9700").unwrap());
 
             fud_settings
                 .pow
