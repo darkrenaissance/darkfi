@@ -7,6 +7,9 @@ import android.text.InputType;
 import android.content.Intent;
 import android.net.Uri;
 import android.util.Log;
+import java.io.File;
+import java.io.FileWriter;
+import java.io.PrintWriter;
 import java.util.HashMap;
 
 import videodecode.VideoDecoder;
@@ -171,6 +174,24 @@ public void openUrl(String url) {
 // Start a foreground service so the app stays awake
 Intent serviceIntent = new Intent(this, ForegroundService.class);
 startForegroundService(serviceIntent);
+
+final Thread.UncaughtExceptionHandler defaultHandler = Thread.getDefaultUncaughtExceptionHandler();
+Thread.setDefaultUncaughtExceptionHandler(new Thread.UncaughtExceptionHandler() {
+    @Override
+    public void uncaughtException(Thread thread, Throwable throwable) {
+        try {
+            File logFile = new File(getExternalFilesDir(null), "darkfi-app.log");
+            PrintWriter writer = new PrintWriter(new FileWriter(logFile, true));
+            writer.println("Uncaught exception on thread " + thread.getName() + ":");
+            writer.println(Log.getStackTraceString(throwable));
+            writer.close();
+        } catch (Exception ignored) {
+        }
+        if (defaultHandler != null) {
+            defaultHandler.uncaughtException(thread, throwable);
+        }
+    }
+});
 
 //% END
 

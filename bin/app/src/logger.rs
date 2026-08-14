@@ -17,20 +17,19 @@
  */
 use tracing_appender::non_blocking::WorkerGuard;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt, Layer, Registry};
+
 #[cfg(feature = "enable-filelog")]
 use {
     file_rotate::{compression::Compression, suffix::AppendCount, ContentLimit, FileRotate},
     std::path::PathBuf,
+    std::sync::OnceLock,
 };
 
 #[cfg(target_os = "android")]
 use tracing_subscriber::filter::{LevelFilter, Targets};
 
 #[cfg(any(not(target_os = "android"), feature = "enable-filelog"))]
-use {
-    darkfi::util::logger::{EventFormatter, Level, TargetFilter},
-    //tracing_subscriber::fmt::format::FmtSpan,
-};
+use darkfi::util::logger::{EventFormatter, Level, TargetFilter};
 
 // Measured in bytes
 #[cfg(feature = "enable-filelog")]
@@ -69,13 +68,35 @@ fn logfile_path() -> PathBuf {
     dirs::cache_dir().unwrap().join("darkfi/darkfi-app.log")
 }
 
+// On Android, resolving the log path is a JNI call into the JVM, which can
+// deadlock if invoked from the panic hook. We therefore resolve it once at
+// startup (before the panic hook is installed) and cache it here, so the
+// hook only performs an atomic load plus a synchronous file write.
+#[cfg(feature = "enable-filelog")]
+static LOGFILE_PATH: OnceLock<PathBuf> = OnceLock::new();
+
+#[cfg(feature = "enable-filelog")]
+pub fn init_logfile_path() {
+    let _ = LOGFILE_PATH.set(logfile_path());
+}
+
+#[cfg(feature = "enable-filelog")]
+pub fn cached_logfile_path() -> Option<&'static std::path::Path> {
+    LOGFILE_PATH.get().map(|path| path.as_path())
+}
+
+#[cfg(not(feature = "enable-filelog"))]
+pub fn cached_logfile_path() -> Option<&'static std::path::Path> {
+    None
+}
+
 pub fn setup_logging() -> Option<WorkerGuard> {
     let mut layers: Vec<(Box<dyn Layer<Registry> + Send + Sync>, Option<WorkerGuard>)> = vec![];
 
     #[cfg(feature = "enable-filelog")]
     {
         let (non_blocking_file_rotate, guard) = tracing_appender::non_blocking(FileRotate::new(
-            logfile_path(),
+            LOGFILE_PATH.get_or_init(logfile_path).clone(),
             AppendCount::new(0),
             ContentLimit::BytesSurpassed(LOGFILE_MAXSIZE),
             Compression::None,

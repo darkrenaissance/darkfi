@@ -84,7 +84,19 @@ macro_rules! i { ($($arg:tt)*) => { trace!(target: "main", $($arg)*); } }
 
 fn panic_hook(panic_info: &std::panic::PanicHookInfo) {
     error!("panic occurred: {panic_info}");
-    error!("{}", std::backtrace::Backtrace::force_capture().to_string());
+    let backtrace = std::backtrace::Backtrace::force_capture().to_string();
+    error!("{backtrace}");
+
+    if let Some(logfile_path) = logger::cached_logfile_path() {
+        let timestamp = chrono::Utc::now().to_rfc3339();
+        let report = format!("[{timestamp}] PANIC: {panic_info}\n{backtrace}\n");
+        let _ = std::fs::OpenOptions::new()
+            .append(true)
+            .create(true)
+            .open(logfile_path)
+            .and_then(|mut file| std::io::Write::write_all(&mut file, report.as_bytes()));
+    }
+
     std::process::abort()
 }
 
@@ -117,6 +129,9 @@ struct God {
 
 impl God {
     fn new() -> Self {
+        #[cfg(feature = "enable-filelog")]
+        logger::init_logfile_path();
+
         // Abort the application on panic right away
         std::panic::set_hook(Box::new(panic_hook));
 
