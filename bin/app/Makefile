@@ -98,8 +98,11 @@ assets/forest_720x1280.mp4:
 
 # Developer targets
 
-dev: $(SRC) fonts assets/forest_1920x1080.ivf
+compile-dev: $(SRC) fonts assets/forest_1920x1080.ivf
 	$(CARGO) lbuild --no-default-features $(DEV_FEATURES)
+
+dev:
+	$(MAKE) compile-dev
 	-mv target/debug/darkfi-app .
 	./darkfi-app
 

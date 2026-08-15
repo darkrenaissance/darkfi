@@ -1346,8 +1346,9 @@ pub async fn make(
         prop.push_str(atom, Role::App, &contact_name).unwrap();
     }
 
-    let menu_node =
-        node.setup(|me| Menu::new(me, window_scale.clone(), app.renderer.clone())).await;
+    let menu_node = node
+        .setup(|me| Menu::new(me, window_scale.clone(), app.renderer.clone(), app.ex.clone()))
+        .await;
     content_area.link(menu_node.clone());
 
     // Connect cancel/done buttons and edit_active signal

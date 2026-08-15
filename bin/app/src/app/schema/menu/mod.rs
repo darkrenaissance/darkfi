@@ -464,8 +464,9 @@ pub async fn make(
     });
     app.tasks.lock().unwrap().push(listen_click);
 
-    let menu_node =
-        node.setup(|me| Menu::new(me, window_scale.clone(), app.renderer.clone())).await;
+    let menu_node = node
+        .setup(|me| Menu::new(me, window_scale.clone(), app.renderer.clone(), app.ex.clone()))
+        .await;
     layer_node.link(menu_node.clone());
 
     // Subscribe to edit_done signal to persist the joined list and unlink removed layers

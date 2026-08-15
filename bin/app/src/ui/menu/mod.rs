@@ -67,7 +67,7 @@ struct TouchInfo {
     start_instant: std::time::Instant,
     samples: VecDeque<(std::time::Instant, f32)>,
     last_instant: std::time::Instant,
-    last_y: f32,
+    last_pos: Point,
 }
 
 #[derive(Clone)]
@@ -90,7 +90,7 @@ impl TouchInfo {
             start_instant: std::time::Instant::now(),
             samples: VecDeque::from([(std::time::Instant::now(), pos.y)]),
             last_instant: std::time::Instant::now(),
-            last_y: pos.y,
+            last_pos: pos,
         }
     }
 
@@ -114,6 +114,9 @@ pub type MenuPtr = Arc<Menu>;
 
 pub struct Menu {
     node: SceneNodeWeak,
+    /// Weak self-reference so handlers can spawn detached tasks.
+    me: Weak<Self>,
+    ex: ExecutorPtr,
     renderer: Renderer,
     tasks: SyncMutex<Vec<smol::Task<()>>>,
     root_dc_key: u64,
@@ -145,8 +148,6 @@ pub struct Menu {
     mouse_click_info: SyncMutex<Option<MouseClickInfo>>,
     drag_info: SyncMutex<Option<DragInfo>>,
     long_press_task: SyncMutex<Option<smol::Task<()>>>,
-    weak_self: SyncMutex<Option<Weak<Self>>>,
-    ex: SyncMutex<Option<ExecutorPtr>>,
     scroll_start_accel: PropertyFloat32,
     scroll_resist: PropertyFloat32,
     motion_cv: Arc<CondVar>,
@@ -162,6 +163,7 @@ impl Menu {
         node: SceneNodeWeak,
         window_scale: PropertyFloat32,
         renderer: Renderer,
+        ex: ExecutorPtr,
     ) -> Pimpl {
         let node_ref = &node.upgrade().unwrap();
         let is_visible = PropertyBool::wrap(node_ref, Role::Internal, "is_visible", 0).unwrap();
@@ -192,8 +194,10 @@ impl Menu {
 
         let motion_cv = Arc::new(CondVar::new());
 
-        let self_ = Arc::new(Self {
+        let self_ = Arc::new_cyclic(|me| Self {
             node: node.clone(),
+            me: me.clone(),
+            ex,
             renderer: renderer.clone(),
             tasks: SyncMutex::new(vec![]),
             root_dc_key: OsRng.gen(),
@@ -222,8 +226,6 @@ impl Menu {
             mouse_click_info: SyncMutex::new(None),
             drag_info: SyncMutex::new(None),
             long_press_task: SyncMutex::new(None),
-            weak_self: SyncMutex::new(None),
-            ex: SyncMutex::new(None),
             scroll_start_accel,
             scroll_resist,
             motion_cv,
@@ -284,12 +286,14 @@ impl Menu {
         let is_long_press = is_long_press_tap && elapsed_ms >= 500;
 
         if is_long_press {
-            self.save_items_layout();
-            self.is_edit_mode.store(true, Ordering::Release);
-            let node = self.node.upgrade().unwrap();
-            node.trigger("edit_active", vec![]).await.unwrap();
-            let atom = &mut self.renderer.make_guard(gfxtag!("Menu::long_press"));
-            self.redraw(atom);
+            if !self.is_edit_mode.load(Ordering::Relaxed) {
+                self.save_items_layout();
+                self.is_edit_mode.store(true, Ordering::Release);
+                let node = self.node.upgrade().unwrap();
+                node.trigger("edit_active", vec![]).await.unwrap();
+                let atom = &mut self.renderer.make_guard(gfxtag!("Menu::long_press"));
+                self.redraw(atom);
+            }
         } else if is_tap {
             let is_edit_mode = self.is_edit_mode.load(Ordering::Relaxed);
 
@@ -518,10 +522,7 @@ impl Menu {
 
         let rect = self.rect.get();
         let max_scroll = (content_height - rect.h).max(0.);
-
-        // Allow 50% overscroll past the end of the content
-        let overscroll = rect.h * 0.5;
-        let scroll = scroll.clamp(0., max_scroll + overscroll);
+        let scroll = scroll.clamp(0., max_scroll);
         self.scroll.store(scroll, Ordering::Relaxed);
     }
 
@@ -638,9 +639,7 @@ impl UIObject for Menu {
     }
 
     async fn start(self: Arc<Self>, ex: ExecutorPtr) {
-        *self.weak_self.lock() = Some(Arc::downgrade(&self));
-        *self.ex.lock() = Some(ex.clone());
-        let me = Arc::downgrade(&self);
+        let me = self.me.clone();
         let node_ref = &self.node.upgrade().unwrap();
 
         let me2 = me.clone();
@@ -736,14 +735,14 @@ impl UIObject for Menu {
             Some(MouseClickInfo { start_pos: mouse_pos, start_instant: std::time::Instant::now() });
 
         // Spawn a task to detect long press
-        let weak_self = self.weak_self.lock().clone().unwrap();
+        let me = self.me.clone();
         let start_pos = mouse_pos;
 
-        let ex = self.ex.lock().clone().unwrap();
+        let ex = self.ex.clone();
         let long_press_task = ex.spawn(async move {
             darkfi::system::msleep(500).await;
 
-            let Some(arc_self) = weak_self.upgrade() else { return };
+            let Some(arc_self) = me.upgrade() else { return };
             let current_mouse_pos = arc_self.mouse_pos.lock().clone();
             let click_info = arc_self.mouse_click_info.lock().clone();
 
@@ -915,7 +914,7 @@ impl UIObject for Menu {
                     let mut touch_info = self.touch_info.lock();
                     let Some(info) = &mut *touch_info else { return false };
 
-                    info.last_y = touch_pos.y;
+                    info.last_pos = touch_pos;
                     info.push_sample(touch_pos.y);
 
                     let last_elapsed = info.last_instant.elapsed().as_millis();
