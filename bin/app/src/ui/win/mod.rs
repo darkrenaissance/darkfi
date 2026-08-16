@@ -40,7 +40,7 @@ use crate::{
 #[cfg(target_os = "android")]
 use crate::{android, prop::PropertyRect};
 
-use super::{get_children_ordered, get_ui_object3, get_ui_object_ptr, OnModify};
+use super::{get_children_ordered, get_ui_object3, get_ui_object_ptr, OnModify, RedrawTrigger};
 
 mod gesture;
 pub use gesture::{GestureAction, GestureProcessor};
@@ -70,6 +70,10 @@ pub struct Window {
     insets: PropertyRect,
     /// Gesture processor for recognizing gestures
     gesture_proc: SyncMutex<GestureProcessor>,
+    /// Sender side used by window-internal triggers to request a draw pass.
+    redraw_tx: RedrawTrigger,
+    /// Receiver consumed by the single draw-pass listener task in `start()`.
+    redraw_rx: async_channel::Receiver<()>,
 }
 
 impl Window {
@@ -78,6 +82,8 @@ impl Window {
         renderer: Renderer,
         i18n_fish: I18nBabelFish,
         _setting_root: SceneNodePtr,
+        redraw_tx: RedrawTrigger,
+        redraw_rx: async_channel::Receiver<()>,
     ) -> Pimpl {
         let node_ref = &node.upgrade().unwrap();
         let locale = PropertyStr::wrap(node_ref, Role::Internal, "locale", 0).unwrap();
@@ -96,6 +102,8 @@ impl Window {
             #[cfg(target_os = "android")]
             insets: PropertyRect::wrap(node_ref, Role::Internal, "insets").unwrap(),
             gesture_proc: SyncMutex::new(GestureProcessor::new()),
+            redraw_tx,
+            redraw_rx,
         });
 
         Pimpl::Window(self_)
@@ -133,7 +141,26 @@ impl Window {
                 let atom = &mut self_.renderer.make_guard(gfxtag!("Window::resize_task"));
                 // Now update the properties
                 screen_size2.set(atom, size);
+                drop(atom);
 
+                self_.redraw_tx.trigger();
+            }
+        });
+
+        // The serialized draw pass. Single consumer: one pass runs at a
+        // time. Triggers arriving during (or pending at the end of) a pass
+        // are coalesced by the bounded(1) queue into one trailing pass.
+        let me2 = me.clone();
+        let redraw_rx = self.redraw_rx.clone();
+        let redraw_task = ex.spawn(async move {
+            loop {
+                if redraw_rx.recv().await.is_err() {
+                    t!("Redraw trigger queue closed");
+                    break
+                }
+
+                let Some(self_) = me2.upgrade() else { break };
+                let atom = &mut self_.renderer.make_guard(gfxtag!("Window::draw_pass"));
                 self_.draw(atom).await;
             }
         });
@@ -199,17 +226,16 @@ impl Window {
             let atom = &mut batch.spawn();
             self_.reload_locale(atom).await;
         }
-        async fn redraw(self_: Arc<Window>, batch: BatchGuardPtr) {
-            let atom = &mut batch.spawn();
-            self_.draw(atom).await;
-        }
 
         let mut on_modify = OnModify::new(ex.clone(), self.node.clone(), me.clone());
         on_modify.when_change(self.locale.prop(), reload_locale);
-        on_modify.when_change(self.scale.prop(), redraw);
+        on_modify.when_change(self.scale.prop(), |self_, _| async move {
+            self_.redraw_tx.trigger();
+        });
 
         let mut tasks = vec![
             resize_task,
+            redraw_task,
             char_task,
             key_down_task,
             key_up_task,

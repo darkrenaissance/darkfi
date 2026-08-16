@@ -27,10 +27,10 @@ use crate::android;
 use crate::plugin::PluginSettings;
 use crate::{
     error::Error,
-    gfx::{gfxtag, EpochIndex, GraphicsEventPublisherPtr, Renderer},
+    gfx::{EpochIndex, GraphicsEventPublisherPtr, Renderer},
     prop::{PropertyAtomicGuard, PropertyValue, Role},
     scene::{Pimpl, SceneNode, SceneNodePtr, SceneNodeType},
-    ui::Window,
+    ui::{RedrawTrigger, Window},
     util::i18n::I18nBabelFish,
     ExecutorPtr,
 };
@@ -59,11 +59,25 @@ pub struct App {
     pub renderer: Renderer,
     pub tasks: SyncMutex<Vec<Task<()>>>,
     pub ex: ExecutorPtr,
+    /// Handle for requesting a serialized draw pass from the window's
+    /// draw loop. Passed to `Window::new` (with the receiver) and to
+    /// widget constructors during migration to the draw-pass model.
+    pub redraw_trigger: RedrawTrigger,
+    /// Receiver side of the redraw queue, handed to the window in `setup()`.
+    redraw_rx: async_channel::Receiver<()>,
 }
 
 impl App {
     pub fn new(sg_root: SceneNodePtr, renderer: Renderer, ex: ExecutorPtr) -> Arc<Self> {
-        Arc::new(Self { sg_root, ex, renderer, tasks: SyncMutex::new(vec![]) })
+        let (redraw_trigger, redraw_rx) = RedrawTrigger::new();
+        Arc::new(Self {
+            sg_root,
+            ex,
+            renderer,
+            tasks: SyncMutex::new(vec![]),
+            redraw_trigger,
+            redraw_rx,
+        })
     }
 
     /// Does not require miniquad to be init. Created the scene graph tree / schema and all
@@ -110,7 +124,14 @@ impl App {
         }
         let window = window
             .setup(|me| {
-                Window::new(me, self.renderer.clone(), i18n_fish.clone(), setting_root.clone())
+                Window::new(
+                    me,
+                    self.renderer.clone(),
+                    i18n_fish.clone(),
+                    setting_root.clone(),
+                    self.redraw_trigger.clone(),
+                    self.redraw_rx.clone(),
+                )
             })
             .await;
 
@@ -188,9 +209,10 @@ impl App {
 
         // Access drawable in window node and call draw()
         self.init();
-        //if epoch == 1 {
-        self.trigger_draw().await;
-        //}
+        // Enqueue a draw pass on the window's serialized draw loop.
+        // The bounded(1) queue buffers this until the listener task in
+        // Window::start() is running, so calling before start is safe.
+        self.redraw_trigger.trigger();
 
         self.start_procs(event_pub).await;
         i!("App started");
@@ -212,14 +234,6 @@ impl App {
         }
     }
 
-    async fn trigger_draw(&self) {
-        let atom = &mut self.renderer.make_guard(gfxtag!("App::trigger_draw"));
-        let window_node = self.sg_root.lookup_node("/window").expect("no window attached!");
-        match window_node.pimpl() {
-            Pimpl::Window(win) => win.draw(atom).await,
-            _ => panic!("wrong pimpl"),
-        }
-    }
     async fn start_procs(&self, event_pub: GraphicsEventPublisherPtr) {
         let window_node = self.sg_root.lookup_node("/window").unwrap();
         match window_node.pimpl() {

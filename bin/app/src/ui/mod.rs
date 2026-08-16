@@ -68,6 +68,37 @@ pub use win::{GestureAction, Window, WindowPtr};
 macro_rules! e { ($($arg:tt)*) => { error!(target: "scene::on_modify", $($arg)*); } }
 macro_rules! t { ($($arg:tt)*) => { trace!(target: "scene::on_modify", $($arg)*); } }
 
+/// Handle for requesting a redraw pass from the root window's draw loop.
+/// Cheap to clone. The underlying queue is bounded(1), so triggers sent
+/// while a pass is running or pending are coalesced into a single
+/// additional pass. State mutations must happen before calling `trigger()`
+/// so the resulting pass observes them.
+#[derive(Clone)]
+pub struct RedrawTrigger(async_channel::Sender<()>);
+
+impl RedrawTrigger {
+    /// Create the trigger handle and the receiver consumed by the draw loop.
+    pub fn new() -> (Self, async_channel::Receiver<()>) {
+        let (tx, rx) = async_channel::bounded(1);
+        (Self(tx), rx)
+    }
+
+    /// Request a draw pass. Never blocks. A trigger is only dropped when
+    /// another is already queued, which is equivalent: the queued token
+    /// guarantees a pass that starts after this call, and since callers
+    /// mutate state before triggering, that pass observes the mutation.
+    ///
+    /// Correctness relies on the draw loop draining exactly one token per
+    /// iteration *before* drawing. Do not change the loop to recv after
+    /// the draw or to drain multiple tokens per pass: a full channel means
+    /// a pass is guaranteed, and that guarantee is what makes dropped
+    /// triggers safe. Blocking here would also self-deadlock, since draws
+    /// can trigger further passes.
+    pub fn trigger(&self) {
+        let _ = self.0.try_send(());
+    }
+}
+
 #[async_trait]
 pub trait UIObject: Sync {
     fn priority(&self) -> u32;
