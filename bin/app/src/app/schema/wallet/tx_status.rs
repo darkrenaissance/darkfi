@@ -103,7 +103,9 @@ pub async fn make(
     prop.set_expr(atom, Role::App, 3, expr::load_var("h")).unwrap();
     tx_status_layer.set_property_bool(atom, Role::App, "is_visible", false).unwrap();
     tx_status_layer.set_property_u32(atom, Role::App, "z_index", 3).unwrap();
-    let tx_status_layer = tx_status_layer.setup(|me| Layer::new(me, app.renderer.clone())).await;
+    let tx_status_layer = tx_status_layer
+        .setup(|me| Layer::new(me, app.renderer.clone(), app.redraw_trigger.clone()))
+        .await;
     wallet_layer.link(tx_status_layer.clone());
     let tx_status_is_visible =
         PropertyBool::wrap(&tx_status_layer, Role::App, "is_visible", 0).unwrap();

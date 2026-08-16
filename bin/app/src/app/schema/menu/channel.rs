@@ -324,7 +324,9 @@ pub async fn make(
     .unwrap();
     content_area_node.set_property_bool(atom, Role::App, "is_visible", true).unwrap();
     content_area_node.set_property_u32(atom, Role::App, "z_index", 0).unwrap();
-    let content_area = content_area_node.setup(|me| Layer::new(me, app.renderer.clone())).await;
+    let content_area = content_area_node
+        .setup(|me| Layer::new(me, app.renderer.clone(), app.redraw_trigger.clone()))
+        .await;
     content.link(content_area.clone());
 
     // Red bottom glow below outline
@@ -1206,7 +1208,8 @@ pub async fn make(
     node.set_property_bool(atom, Role::App, "is_visible", true).unwrap();
     node.set_property_u32(atom, Role::App, "z_index", 2).unwrap();
     node.set_property_u32(atom, Role::App, "priority", 1).unwrap();
-    let editlayer_node = node.setup(|me| Layer::new(me, app.renderer.clone())).await;
+    let editlayer_node =
+        node.setup(|me| Layer::new(me, app.renderer.clone(), app.redraw_trigger.clone())).await;
     content_area.link(editlayer_node.clone());
 
     let node = create_vector_art("btns_bg");
@@ -1420,6 +1423,7 @@ pub async fn make(
     let db2 = db.clone();
     let i18n_fish2 = i18n_fish.clone();
     let emoji_meshes2 = emoji_meshes.clone();
+    let redraw2 = app.redraw_trigger.clone();
 
     let listen_select = app.ex.spawn(async move {
         while let Ok(data) = recvr.recv().await {
@@ -1448,6 +1452,7 @@ pub async fn make(
                 &i18n_fish2,
                 emoji_meshes2.clone(),
                 is_first_time,
+                redraw2.clone(),
             )
             .await;
             match node.pimpl() {
@@ -1472,14 +1477,10 @@ pub async fn make(
             // Hide channel screen
             channel_vis.set(atom, false);
 
-            // Force redraw so newly added node parent_rect gets set.
-            // There are other ways to do this but this is easiest for now.
-            // We can think later about doing this better.
-            let win = sg_root.lookup_node("/window").unwrap();
-            match win.pimpl() {
-                Pimpl::Window(win) => win.draw(atom).await,
-                _ => panic!("wrong pimpl"),
-            }
+            // Trigger a draw pass so the newly added node's parent_rect
+            // gets set. The pass walks the whole tree so the new layer is
+            // drawn with correct geometry.
+            redraw2.trigger();
 
             // Trigger rescan for this channel
             if let Some(darkirc) = sg_root.lookup_node("/plugin/darkirc") {

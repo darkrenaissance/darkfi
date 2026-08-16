@@ -32,7 +32,8 @@ use crate::{
 };
 
 use super::{
-    get_children_ordered, get_ui_object3, get_ui_object_ptr, DrawUpdate, OnModify, UIObject,
+    get_children_ordered, get_ui_object3, get_ui_object_ptr, DrawUpdate, OnModify, RedrawTrigger,
+    UIObject,
 };
 
 macro_rules! t { ($($arg:tt)*) => { trace!(target: "ui:layer", $($arg)*); } }
@@ -41,7 +42,7 @@ pub type LayerPtr = Arc<Layer>;
 
 pub struct Layer {
     node: SceneNodeWeak,
-    renderer: Renderer,
+    redraw: RedrawTrigger,
     tasks: SyncMutex<Vec<smol::Task<()>>>,
     dc_key: u64,
 
@@ -49,21 +50,21 @@ pub struct Layer {
     rect: PropertyRect,
     z_index: PropertyUint32,
     priority: PropertyUint32,
-
-    parent_rect: SyncMutex<Option<Rectangle>>,
 }
 
 impl Layer {
-    pub async fn new(node: SceneNodeWeak, renderer: Renderer) -> Pimpl {
-        let node_ref = &node.upgrade().unwrap();
+    pub async fn new(_node: SceneNodeWeak, renderer: Renderer, redraw: RedrawTrigger) -> Pimpl {
+        let node_ref = &_node.upgrade().unwrap();
         let is_visible = PropertyBool::wrap(node_ref, Role::Internal, "is_visible", 0).unwrap();
         let rect = PropertyRect::wrap(node_ref, Role::Internal, "rect").unwrap();
         let z_index = PropertyUint32::wrap(node_ref, Role::Internal, "z_index", 0).unwrap();
         let priority = PropertyUint32::wrap(node_ref, Role::Internal, "priority", 0).unwrap();
 
+        let _ = renderer;
+
         let self_ = Arc::new(Self {
-            node,
-            renderer,
+            node: _node,
+            redraw,
             tasks: SyncMutex::new(vec![]),
             dc_key: OsRng.gen(),
 
@@ -71,8 +72,6 @@ impl Layer {
             rect,
             z_index,
             priority,
-
-            parent_rect: SyncMutex::new(None),
         });
 
         Pimpl::Layer(self_)
@@ -81,21 +80,6 @@ impl Layer {
     fn get_children(&self) -> Vec<SceneNodePtr> {
         let node = self.node.upgrade().unwrap();
         get_children_ordered(&node)
-    }
-
-    #[instrument(target = "ui::layer")]
-    async fn redraw(self: Arc<Self>, batch: BatchGuardPtr) {
-        let Some(parent_rect) = self.parent_rect.lock().clone() else {
-            warn!(target: "ui:layer", "Skip draw since parent rect is empty");
-            return
-        };
-
-        let atom = &mut batch.spawn();
-        let Some(draw_update) = self.get_draw_calls(parent_rect, atom).await else {
-            error!(target: "ui:layer", "Layer failed to draw");
-            return
-        };
-        self.renderer.replace_draw_calls(Some(batch.id), draw_update.draw_calls);
     }
 
     async fn get_draw_calls(
@@ -154,9 +138,19 @@ impl UIObject for Layer {
         let me = Arc::downgrade(&self);
 
         let mut on_modify = OnModify::new(ex.clone(), self.node.clone(), me.clone());
-        on_modify.when_change(self.is_visible.prop(), Self::redraw);
-        on_modify.when_change(self.rect.prop(), Self::redraw);
-        on_modify.when_change(self.z_index.prop(), Self::redraw);
+        // Stateless in the pass: property changes only request a draw pass.
+        // All layer output is recomputed by the pass itself. Internal-role
+        // sets are eval echoes of the pass, so only external (App) changes
+        // trigger — otherwise every pass would queue another, forever.
+        on_modify.when_change_external(self.is_visible.prop(), |self_, _| async move {
+            self_.redraw.trigger();
+        });
+        on_modify.when_change_external(self.rect.prop(), |self_, _| async move {
+            self_.redraw.trigger();
+        });
+        on_modify.when_change_external(self.z_index.prop(), |self_, _| async move {
+            self_.redraw.trigger();
+        });
 
         *self.tasks.lock() = on_modify.tasks;
 
@@ -168,7 +162,6 @@ impl UIObject for Layer {
 
     fn stop(&self) {
         self.tasks.lock().clear();
-        *self.parent_rect.lock() = None;
         for child in self.get_children() {
             let obj = get_ui_object3(&child);
             obj.stop();
@@ -181,19 +174,6 @@ impl UIObject for Layer {
         parent_rect: Rectangle,
         atom: &mut PropertyAtomicGuard,
     ) -> Option<DrawUpdate> {
-        *self.parent_rect.lock() = Some(parent_rect);
-
-        /*
-        if !parent_rect.dim().contains(&offset_rect) {
-            error!(
-                target: "ui::layer",
-                "layer rect {:?} is not inside parent {:?}",
-                offset_rect, parent_rect
-            );
-            return None
-        }
-        */
-
         self.get_draw_calls(parent_rect, atom).await
     }
 

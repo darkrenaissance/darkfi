@@ -559,7 +559,9 @@ pub async fn create_tooltip(
 
     tooltip_layer.add_method("show", vec![], None).unwrap();
 
-    let tooltip_layer = tooltip_layer.setup(|me| Layer::new(me, app.renderer.clone())).await;
+    let tooltip_layer = tooltip_layer
+        .setup(|me| Layer::new(me, app.renderer.clone(), app.redraw_trigger.clone()))
+        .await;
     parent_layer.link(tooltip_layer.clone());
 
     // Create box

@@ -218,6 +218,12 @@ impl Window {
                     let insets_val = Rectangle::from(insets_val) / scale;
                     t!("Insets changed: {insets_val:?}");
                     insets.set(atom, &insets_val);
+                    drop(atom);
+
+                    // Insets are set with an internal role, so draw-pass
+                    // widgets skip the echo notifications. Trigger the pass
+                    // explicitly so the new insets get laid out.
+                    self_.redraw.trigger();
                 }
             })
         };

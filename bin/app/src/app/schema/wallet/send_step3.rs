@@ -75,7 +75,9 @@ pub async fn make(
     prop.set_expr(atom, Role::App, 3, expr::load_var("h")).unwrap();
     send_step3_layer.set_property_bool(atom, Role::App, "is_visible", false).unwrap();
     send_step3_layer.set_property_u32(atom, Role::App, "z_index", 2).unwrap();
-    let send_step3_layer = send_step3_layer.setup(|me| Layer::new(me, app.renderer.clone())).await;
+    let send_step3_layer = send_step3_layer
+        .setup(|me| Layer::new(me, app.renderer.clone(), app.redraw_trigger.clone()))
+        .await;
     wallet_layer.link(send_step3_layer.clone());
     let step3_is_visible =
         PropertyBool::wrap(&send_step3_layer, Role::App, "is_visible", 0).unwrap();
@@ -323,7 +325,9 @@ pub async fn make(
     prop.set_f32(atom, Role::App, 3, AMOUNT_FONTSIZE).unwrap();
     prop.add_depend(&addr_h_prop, 0, "addr_height");
     amount_wrapper.set_property_u32(atom, Role::App, "z_index", 2).unwrap();
-    let amount_wrapper = amount_wrapper.setup(|me| Layer::new(me, app.renderer.clone())).await;
+    let amount_wrapper = amount_wrapper
+        .setup(|me| Layer::new(me, app.renderer.clone(), app.redraw_trigger.clone()))
+        .await;
     send_step3_layer.link(amount_wrapper.clone());
 
     // Error message text

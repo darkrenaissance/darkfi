@@ -58,7 +58,9 @@ pub async fn make(app: &App, content: SceneNodePtr, i18n_fish: &I18nBabelFish) {
     prop.set_expr(atom, Role::App, 3, expr::load_var("h")).unwrap();
     wallet_layer.set_property_bool(atom, Role::App, "is_visible", true).unwrap();
     wallet_layer.set_property_u32(atom, Role::App, "z_index", 3).unwrap();
-    let wallet_layer = wallet_layer.setup(|me| Layer::new(me, app.renderer.clone())).await;
+    let wallet_layer = wallet_layer
+        .setup(|me| Layer::new(me, app.renderer.clone(), app.redraw_trigger.clone()))
+        .await;
     content.link(wallet_layer.clone());
 
     // Create main wallet layer

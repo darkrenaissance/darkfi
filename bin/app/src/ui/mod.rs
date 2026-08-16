@@ -186,6 +186,32 @@ impl<T: Send + Sync + 'static> OnModify<T> {
     ) where
         F: std::future::Future<Output = ()> + Send + 'static,
     {
+        self.when_change_impl(prop, false, f)
+    }
+
+    /// Like `when_change`, but also skips `Role::Internal` modifications of
+    /// dependencies. Draw-pass-migrated widgets want this: internal sets are
+    /// eval echoes (typically produced by the draw pass itself), so reacting
+    /// to them would queue a pass for every pass, forever. External mutation
+    /// sites (handlers, resize/insets tasks) trigger passes explicitly.
+    pub fn when_change_external<F>(
+        &mut self,
+        prop: PropertyPtr,
+        f: impl Fn(Arc<T>, BatchGuardPtr) -> F + Send + 'static,
+    ) where
+        F: std::future::Future<Output = ()> + Send + 'static,
+    {
+        self.when_change_impl(prop, true, f)
+    }
+
+    fn when_change_impl<F>(
+        &mut self,
+        prop: PropertyPtr,
+        skip_internal: bool,
+        f: impl Fn(Arc<T>, BatchGuardPtr) -> F + Send + 'static,
+    ) where
+        F: std::future::Future<Output = ()> + Send + 'static,
+    {
         let mut on_modify_subs = vec![(Arc::downgrade(&prop), None, prop.subscribe_modify())];
         for dep in prop.get_depends() {
             let Some(dep_prop) = dep.prop.upgrade() else { continue };
@@ -209,8 +235,12 @@ impl<T: Send + Sync + 'static> OnModify<T> {
                     return
                 };
 
-                // Skip internal messages from ourselves or explicitly marked ignored
-                if (idx == 0 && role == Role::Internal) || role == Role::Ignored {
+                // Skip internal messages from ourselves or explicitly marked ignored.
+                // Draw-pass widgets also skip internal dependency echoes.
+                if (idx == 0 && role == Role::Internal) ||
+                    (skip_internal && role == Role::Internal) ||
+                    role == Role::Ignored
+                {
                     continue
                 }
                 if let Some(prop_i) = prop_i {

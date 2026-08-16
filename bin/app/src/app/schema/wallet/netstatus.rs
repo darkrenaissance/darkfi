@@ -52,7 +52,9 @@ pub async fn make(
     prop.set_f32(atom, Role::App, 3, 1000.).unwrap();
     netlayer_node.set_property_bool(atom, Role::App, "is_visible", true).unwrap();
     netlayer_node.set_property_u32(atom, Role::App, "z_index", 3).unwrap();
-    let netlayer_node = netlayer_node.setup(|me| Layer::new(me, app.renderer.clone())).await;
+    let netlayer_node = netlayer_node
+        .setup(|me| Layer::new(me, app.renderer.clone(), app.redraw_trigger.clone()))
+        .await;
     wallet_layer.link(netlayer_node.clone());
 
     let node = create_vector_art("net0");

@@ -28,7 +28,7 @@ use crate::{
     ExecutorPtr,
 };
 
-use super::{DrawUpdate, Layer, LayerPtr, UIObject};
+use super::{DrawUpdate, Layer, LayerPtr, RedrawTrigger, UIObject};
 
 pub type ScrollLayerPtr = Arc<ScrollLayer>;
 
@@ -37,8 +37,12 @@ pub struct ScrollLayer {
 }
 
 impl ScrollLayer {
-    pub async fn new(node: SceneNodeWeak, renderer: crate::gfx::Renderer) -> Pimpl {
-        let layer = Layer::new(node.clone(), renderer).await;
+    pub async fn new(
+        node: SceneNodeWeak,
+        renderer: crate::gfx::Renderer,
+        redraw: RedrawTrigger,
+    ) -> Pimpl {
+        let layer = Layer::new(node.clone(), renderer, redraw).await;
         let inner = match layer {
             Pimpl::Layer(l) => l,
             _ => unreachable!(),

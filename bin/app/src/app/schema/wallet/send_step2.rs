@@ -100,7 +100,9 @@ pub async fn make(
     prop.set_expr(atom, Role::App, 3, expr::load_var("h")).unwrap();
     send_step2_layer.set_property_bool(atom, Role::App, "is_visible", false).unwrap();
     send_step2_layer.set_property_u32(atom, Role::App, "z_index", 2).unwrap();
-    let send_step2_layer = send_step2_layer.setup(|me| Layer::new(me, app.renderer.clone())).await;
+    let send_step2_layer = send_step2_layer
+        .setup(|me| Layer::new(me, app.renderer.clone(), app.redraw_trigger.clone()))
+        .await;
     wallet_layer.link(send_step2_layer.clone());
     let step2_is_visible =
         PropertyBool::wrap(&send_step2_layer, Role::App, "is_visible", 0).unwrap();

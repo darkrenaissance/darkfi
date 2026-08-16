@@ -57,7 +57,9 @@ pub async fn make(
     prop.set_expr(atom, Role::App, 3, expr::load_var("h")).unwrap();
     receive_layer.set_property_bool(atom, Role::App, "is_visible", false).unwrap();
     receive_layer.set_property_u32(atom, Role::App, "z_index", 2).unwrap();
-    let receive_layer = receive_layer.setup(|me| Layer::new(me, app.renderer.clone())).await;
+    let receive_layer = receive_layer
+        .setup(|me| Layer::new(me, app.renderer.clone(), app.redraw_trigger.clone()))
+        .await;
     wallet_layer.link(receive_layer.clone());
 
     create_bg_mesh(app, atom, &receive_layer, "receive_bg").await;

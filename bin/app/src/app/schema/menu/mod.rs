@@ -135,7 +135,9 @@ pub async fn make(
     prop.set_expr(atom, Role::App, 3, expr::load_var("h")).unwrap();
     contact_layer.set_property_bool(atom, Role::App, "is_visible", false).unwrap();
     contact_layer.set_property_u32(atom, Role::App, "z_index", 2).unwrap();
-    let contact_layer = contact_layer.setup(|me| Layer::new(me, app.renderer.clone())).await;
+    let contact_layer = contact_layer
+        .setup(|me| Layer::new(me, app.renderer.clone(), app.redraw_trigger.clone()))
+        .await;
     content.link(contact_layer.clone());
     let contact_is_visible =
         PropertyBool::wrap(&contact_layer, Role::App, "is_visible", 0).unwrap();
@@ -149,7 +151,9 @@ pub async fn make(
     prop.set_expr(atom, Role::App, 3, expr::load_var("h")).unwrap();
     channel_layer.set_property_bool(atom, Role::App, "is_visible", false).unwrap();
     channel_layer.set_property_u32(atom, Role::App, "z_index", 2).unwrap();
-    let channel_layer = channel_layer.setup(|me| Layer::new(me, app.renderer.clone())).await;
+    let channel_layer = channel_layer
+        .setup(|me| Layer::new(me, app.renderer.clone(), app.redraw_trigger.clone()))
+        .await;
     content.link(channel_layer.clone());
     let channel_is_visible =
         PropertyBool::wrap(&channel_layer, Role::App, "is_visible", 0).unwrap();
@@ -174,7 +178,9 @@ pub async fn make(
     prop.set_expr(atom, Role::App, 3, expr::load_var("h")).unwrap();
     layer_node.set_property_bool(atom, Role::App, "is_visible", false).unwrap();
     layer_node.set_property_u32(atom, Role::App, "z_index", 1).unwrap();
-    let layer_node = layer_node.setup(|me| Layer::new(me, app.renderer.clone())).await;
+    let layer_node = layer_node
+        .setup(|me| Layer::new(me, app.renderer.clone(), app.redraw_trigger.clone()))
+        .await;
     content.link(layer_node.clone());
 
     let menulayer_is_visible = PropertyBool::wrap(&layer_node, Role::App, "is_visible", 0).unwrap();
@@ -291,7 +297,8 @@ pub async fn make(
     node.set_property_bool(atom, Role::App, "is_visible", true).unwrap();
     node.set_property_u32(atom, Role::App, "z_index", 2).unwrap();
     node.set_property_u32(atom, Role::App, "priority", 1).unwrap();
-    let mainlayer_node = node.setup(|me| Layer::new(me, app.renderer.clone())).await;
+    let mainlayer_node =
+        node.setup(|me| Layer::new(me, app.renderer.clone(), app.redraw_trigger.clone())).await;
     let mainlayer_is_visible =
         PropertyBool::wrap(&mainlayer_node, Role::App, "is_visible", 0).unwrap();
     layer_node.link(mainlayer_node.clone());
@@ -474,6 +481,7 @@ pub async fn make(
     menu_node.register("edit_done", edit_done_slot).unwrap();
     let sg_root = app.sg_root.clone();
     let menu_node2 = menu_node.clone();
+    let redraw = app.redraw_trigger.clone();
     let edit_done_listen = app.ex.spawn(async move {
         while let Ok(data) = edit_done_recvr.recv().await {
             let deleted_items: Vec<String> = deserialize(&data).unwrap();
@@ -491,6 +499,11 @@ pub async fn make(
                     node.unlink();
                 }
             }
+
+            // Unlinking changes no property, so request a pass explicitly:
+            // the parent layer re-collects child references next pass and
+            // the removed layer's subtree is dropped from the output.
+            redraw.trigger();
 
             // TODO: reload plugin so it drops un-joined channels/contacts from its maps.
             // if let Some(darkirc) = sg_root.lookup_node("/plugin/darkirc") {

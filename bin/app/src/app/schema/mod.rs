@@ -312,7 +312,8 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish, db
     prop.add_depend(&window_insets, 3, "insets_bottom");
     content.set_property_bool(atom, Role::App, "is_visible", true).unwrap();
     content.set_property_u32(atom, Role::App, "z_index", 1).unwrap();
-    let content = content.setup(|me| Layer::new(me, app.renderer.clone())).await;
+    let content =
+        content.setup(|me| Layer::new(me, app.renderer.clone(), app.redraw_trigger.clone())).await;
     window.link(content.clone());
 
     if COLOR_SCHEME == ColorScheme::DarkMode {
@@ -409,7 +410,9 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish, db
     prop.set_f32(atom, Role::App, 3, 1000.).unwrap();
     netlayer_node.set_property_bool(atom, Role::App, "is_visible", true).unwrap();
     netlayer_node.set_property_u32(atom, Role::App, "z_index", 2).unwrap();
-    let netlayer_node = netlayer_node.setup(|me| Layer::new(me, app.renderer.clone())).await;
+    let netlayer_node = netlayer_node
+        .setup(|me| Layer::new(me, app.renderer.clone(), app.redraw_trigger.clone()))
+        .await;
     content.link(netlayer_node.clone());
 
     let node = create_vector_art("net0");
@@ -566,7 +569,7 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish, db
     settingslayer_node.set_property_bool(atom, Role::App, "is_visible", true).unwrap();
     settingslayer_node.set_property_u32(atom, Role::App, "z_index", 2).unwrap();
     let settingslayer_node =
-        settingslayer_node.setup(|me| Layer::new(me, app.renderer.clone())).await;
+        settingslayer_node.setup(|me| Layer::new(me, app.renderer.clone(), app.redraw_trigger.clone())).await;
     content.link(settingslayer_node.clone());
 
     // Background
@@ -703,6 +706,7 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish, db
             i18n_fish,
             emoji_meshes.clone(),
             is_first_time,
+            app.redraw_trigger.clone(),
         )
         .await;
     }

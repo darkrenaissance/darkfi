@@ -107,7 +107,8 @@ pub async fn create_edit_buttons(
     node.set_property_bool(atom, Role::App, "is_visible", false).unwrap();
     node.set_property_u32(atom, Role::App, "z_index", 2).unwrap();
     node.set_property_u32(atom, Role::App, "priority", 1).unwrap();
-    let editlayer_node = node.setup(|me| Layer::new(me, app.renderer.clone())).await;
+    let editlayer_node =
+        node.setup(|me| Layer::new(me, app.renderer.clone(), app.redraw_trigger.clone())).await;
     parent.link(editlayer_node.clone());
 
     let editlayer_is_visible =

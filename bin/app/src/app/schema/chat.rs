@@ -42,7 +42,7 @@ use crate::{
     shape,
     ui::{
         chatview, emoji_picker, BaseEdit, BaseEditType, Button, ChatView, EmojiPicker, Layer,
-        Shortcut, Text, VectorArt, VectorShape,
+        RedrawTrigger, Shortcut, Text, VectorArt, VectorShape,
     },
     util::{i18n::I18nBabelFish, unixtime},
     ExecutorPtr,
@@ -191,6 +191,7 @@ pub async fn make(
     i18n_fish: &I18nBabelFish,
     emoji_meshes: emoji_picker::EmojiMeshesPtr,
     is_first_time: bool,
+    redraw: RedrawTrigger,
 ) -> SceneNodePtr {
     let window_scale =
         PropertyFloat32::wrap(&sg_root.lookup_node("/window").unwrap(), Role::Internal, "scale", 0)
@@ -222,7 +223,7 @@ pub async fn make(
     prop.set_expr(atom, Role::App, 3, expr::load_var("h")).unwrap();
     layer_node.set_property_bool(atom, Role::App, "is_visible", false).unwrap();
     layer_node.set_property_u32(atom, Role::App, "z_index", 1).unwrap();
-    let layer_node = layer_node.setup(|me| Layer::new(me, renderer.clone())).await;
+    let layer_node = layer_node.setup(|me| Layer::new(me, renderer.clone(), redraw.clone())).await;
     content.link(layer_node.clone());
 
     // Create a bg mesh on top to fade the bg image
@@ -475,7 +476,7 @@ pub async fn make(
     layer_node.set_property_bool(atom, Role::App, "is_visible", true).unwrap();
     layer_node.set_property_u32(atom, Role::App, "z_index", 1).unwrap();
     layer_node.set_property_u32(atom, Role::App, "priority", 1).unwrap();
-    let layer_node = layer_node.setup(|me| Layer::new(me, renderer.clone())).await;
+    let layer_node = layer_node.setup(|me| Layer::new(me, renderer.clone(), redraw.clone())).await;
     chat_layer_node.link(layer_node.clone());
 
     // ChatView
@@ -643,7 +644,8 @@ pub async fn make(
     select_layer.set_property_bool(atom, Role::App, "is_visible", false).unwrap();
     select_layer.set_property_u32(atom, Role::App, "z_index", 100).unwrap();
     select_layer.set_property_u32(atom, Role::App, "priority", 100).unwrap();
-    let select_layer = select_layer.setup(|me| Layer::new(me, renderer.clone())).await;
+    let select_layer =
+        select_layer.setup(|me| Layer::new(me, renderer.clone(), redraw.clone())).await;
     content.link(select_layer.clone());
 
     // Single background box covering both buttons (the whole top strip).
@@ -1231,7 +1233,8 @@ pub async fn make(
     prop.add_depend(&editbox_bg_rect_prop, 1, "editz_bg_top_y");
     cmd_layer_node.set_property_bool(atom, Role::App, "is_visible", false).unwrap();
     cmd_layer_node.set_property_u32(atom, Role::App, "z_index", 3).unwrap();
-    let cmd_layer_node = cmd_layer_node.setup(|me| Layer::new(me, renderer.clone())).await;
+    let cmd_layer_node =
+        cmd_layer_node.setup(|me| Layer::new(me, renderer.clone(), redraw.clone())).await;
     layer_node.link(cmd_layer_node.clone());
 
     let cmd_hint_is_visible =
