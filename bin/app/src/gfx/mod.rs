@@ -28,7 +28,7 @@ use miniquad::{
     TextureWrap, TouchPhase, UniformType,
 };
 use std::{
-    collections::{HashMap, HashSet},
+    collections::HashMap,
     fs::File,
     io::Write,
     path::PathBuf,
@@ -43,7 +43,7 @@ use anim::{Frame as AnimFrame, GfxSeqAnim};
 mod api;
 pub use api::{
     EpochIndex, GraphicsMethod, ManagedBuffer, ManagedBufferPtr, ManagedSeqAnim, ManagedSeqAnimPtr,
-    ManagedTexture, ManagedTexturePtr, RenderApi, Renderer, RendererSync,
+    ManagedTexture, ManagedTexturePtr, RenderApi, Renderer,
 };
 mod ev;
 pub use ev::{
@@ -60,9 +60,8 @@ pub use linalg::{Dimension, Point, Rectangle, Segment, Vector};
 mod shader;
 
 use crate::{
-    prop::{BatchGuardId, PropertyAtomicGuard},
+    prop::PropertyAtomicGuard,
     scene::{Pimpl, SceneNodePtr},
-    util::unixtime,
     GOD,
 };
 
@@ -286,7 +285,6 @@ impl DrawCall {
         self,
         textures: &HashMap<TextureId, miniquad::TextureId>,
         buffers: &HashMap<BufferId, miniquad::BufferId>,
-        timest: Timestamp,
     ) -> GfxDrawCall {
         GfxDrawCall {
             instrs: self
@@ -296,7 +294,6 @@ impl DrawCall {
                 .collect(),
             dcs: self.dcs,
             z_index: self.z_index,
-            timest,
         }
     }
 }
@@ -329,7 +326,6 @@ struct GfxDrawCall {
     instrs: Vec<GfxDrawInstruction>,
     dcs: Vec<DcId>,
     z_index: u32,
-    timest: Timestamp,
 }
 
 struct OverlayDefer {
@@ -588,7 +584,6 @@ impl<'a> RenderContext<'a> {
     }
 }
 
-type Timestamp = u64;
 type DcId = u64;
 
 struct Stage {
@@ -598,10 +593,6 @@ struct Stage {
     loaded_pipelines: [Pipeline; 2],
     white_texture: miniquad::TextureId,
     draw_calls: HashMap<DcId, GfxDrawCall>,
-    pending_batches: HashMap<BatchGuardId, Vec<GraphicsMethod>>,
-    /// When dropping batches, we add to this set so that we keep track
-    /// of the internal state's correctness.
-    dropped_batches: Box<HashSet<BatchGuardId>>,
 
     textures: Box<HashMap<TextureId, miniquad::TextureId>>,
     buffers: Box<HashMap<BufferId, miniquad::BufferId>>,
@@ -651,10 +642,8 @@ impl Stage {
             white_texture,
             draw_calls: HashMap::from([(
                 0,
-                GfxDrawCall { instrs: vec![], dcs: vec![], z_index: 0, timest: 0 },
+                GfxDrawCall { instrs: vec![], dcs: vec![], z_index: 0 },
             )]),
-            pending_batches: HashMap::new(),
-            dropped_batches: Box::new(HashSet::new()),
 
             textures: Box::new(HashMap::new()),
             buffers: Box::new(HashMap::new()),
@@ -673,7 +662,6 @@ impl Stage {
         self_.pruner.textures = &*self_.textures as *const _;
         self_.pruner.buffers = &*self_.buffers as *const _;
         self_.pruner.anims = &*self_.anims as *const _;
-        self_.pruner.dropped_batches = &mut *self_.dropped_batches as *mut _;
         self_
     }
 
@@ -697,60 +685,13 @@ impl Stage {
             GraphicsMethod::UpdateSeqAnim { id, frame_idx, frame, tag: _ } => {
                 self.method_update_anim(*id, *frame_idx, frame.clone())
             }
+            GraphicsMethod::PauseSeqAnim { id, frame_idx, duration_ms, tag: _ } => {
+                self.method_pause_anim(*id, *frame_idx, *duration_ms)
+            }
             GraphicsMethod::DeleteSeqAnim((ganim_id, _)) => self.method_delete_anim(*ganim_id),
-            GraphicsMethod::ReplaceGfxDrawCalls { batch_id, ref mut dcs } => {
-                match batch_id {
-                    Some(bid) => {
-                        //let debug_strs: Vec<_> = dcs.iter().map(|(_, dc)| dc.debug_str).collect();
-                        //t!("Commit dc to {bid}: {debug_strs:?}");
-                        if self.dropped_batches.contains(&bid) {
-                            t!("Discarding ReplaceGfxDrawCalls from dropped {bid}");
-                            return
-                        }
-                        let Some(batch) = self.pending_batches.get_mut(&bid) else {
-                            panic!("unknown batch {bid}")
-                        };
-                        let method = std::mem::take(&mut method);
-                        batch.push(method);
-                    }
-                    None => {
-                        // Process immediately without batching
-                        let timest = unixtime();
-                        let dcs = std::mem::take(dcs);
-                        self.method_replace_draw_calls(timest, dcs);
-                    }
-                }
-            }
-            GraphicsMethod::StartBatch { batch_id, tag } => {
-                if DEBUG_GFXAPI {
-                    t!("Start batch {batch_id}: {tag:?}");
-                }
-                if !self.pending_batches.insert(*batch_id, vec![]).is_none() {
-                    panic!("batch {batch_id} already open!")
-                }
-            }
-            GraphicsMethod::EndBatch { batch_id, timest } => {
-                if self.dropped_batches.remove(batch_id) {
-                    if DEBUG_GFXAPI {
-                        t!("End batch {batch_id} was dropped");
-                    }
-                    return
-                }
-                if DEBUG_GFXAPI {
-                    t!("End batch {batch_id}");
-                }
-                let Some(batch) = self.pending_batches.remove(batch_id) else {
-                    panic!("unknown batch {batch_id}")
-                };
-                for mut method in batch {
-                    match &mut method {
-                        GraphicsMethod::ReplaceGfxDrawCalls { batch_id: _, dcs } => {
-                            let dcs = std::mem::take(dcs);
-                            self.method_replace_draw_calls(*timest, dcs)
-                        }
-                        _ => panic!("unexpected method in batch!"),
-                    }
-                }
+            GraphicsMethod::ReplaceGfxDrawCalls { ref mut dcs } => {
+                let dcs = std::mem::take(dcs);
+                self.method_replace_draw_calls(dcs);
             }
             GraphicsMethod::Noop => panic!("noop"),
         }
@@ -876,30 +817,27 @@ impl Stage {
             d!("Invoked method: delete_anim({} => {:?})", gfx_anim_id, anim);
         }
     }
-    fn method_replace_draw_calls(&mut self, batch_timest: Timestamp, dcs: Vec<(DcId, DrawCall)>) {
+    pub(self) fn method_pause_anim(
+        &mut self,
+        gfx_anim_id: AnimId,
+        frame_idx: usize,
+        duration_ms: u64,
+    ) {
+        let Some(anim) = self.anims.get_mut(&gfx_anim_id) else {
+            panic!("couldn't find anim {gfx_anim_id}");
+        };
+        if DEBUG_GFXAPI {
+            d!("Invoked method: pause_anim({gfx_anim_id}[{frame_idx}] for {duration_ms}ms)");
+        }
+        anim.hold(frame_idx, duration_ms);
+    }
+    fn method_replace_draw_calls(&mut self, dcs: Vec<(DcId, DrawCall)>) {
         if DEBUG_GFXAPI {
             d!("Invoked method: replace_draw_calls({:?})", dcs);
         }
 
-        // Phase 1: Check for conflicts with newer batches
-        // If any draw call in this batch belongs to an older batch than the existing one,
-        // reject the entire batch to maintain atomicity
-        for (key, _) in &dcs {
-            if let Some(old_val) = self.draw_calls.get(key) {
-                if old_val.timest > batch_timest {
-                    // Entire batch is stale, reject all
-                    t!("Rejected stale batch {batch_timest}: conflict with newer batch {} on {key}", old_val.timest);
-                    return;
-                }
-            }
-        }
-
-        // Phase 2: Apply entire batch atomically
-        self.apply_draw_calls(batch_timest, dcs)
-    }
-    pub(self) fn apply_draw_calls(&mut self, batch_timest: Timestamp, dcs: Vec<(DcId, DrawCall)>) {
         for (key, val) in dcs {
-            let val = val.compile(&self.textures, &self.buffers, batch_timest);
+            let val = val.compile(&self.textures, &self.buffers);
 
             // Insert/replace draw call
             self.draw_calls.insert(key, val);
@@ -936,10 +874,9 @@ impl Stage {
     #[instrument(skip_all, target = "gfx::pruner")]
     fn prime_screen(&mut self) {
         let methods = self.pruner.recv_all();
-        assert!(self.pending_batches.is_empty());
         // Process all cached methods by the pruner from while the screen was off.
         for method in methods {
-            // We discard batches here but process_method uses them so implement this
+            // We discard draw calls here but process_method uses them so implement this
             // workaround.
             match method {
                 GraphicsMethod::NewTexture(_) |
@@ -949,11 +886,10 @@ impl Stage {
                 GraphicsMethod::DeleteBuffer(_) |
                 GraphicsMethod::NewSeqAnim { .. } |
                 GraphicsMethod::UpdateSeqAnim { .. } |
+                GraphicsMethod::PauseSeqAnim { .. } |
                 GraphicsMethod::DeleteSeqAnim(_) => self.process_method(method),
 
-                GraphicsMethod::ReplaceGfxDrawCalls { .. } |
-                GraphicsMethod::StartBatch { .. } |
-                GraphicsMethod::EndBatch { .. } => {
+                GraphicsMethod::ReplaceGfxDrawCalls { .. } => {
                     panic!("unsupported pruned methods should be dropped!")
                 }
 
@@ -964,22 +900,6 @@ impl Stage {
         // Trigger a full screen redraw by sending a resize event
         let (width, height) = miniquad::window::screen_size();
         self.event_pub.notify_resize(Dimension::from([width, height]));
-    }
-
-    fn close_pending_batches(&mut self) {
-        // Immediately apply any pending batches when the screen is switched off
-        let batch_ids: Vec<_> = self.pending_batches.keys().cloned().collect();
-        if !batch_ids.is_empty() {
-            t!("Force closing pending batches: {batch_ids:?}");
-        }
-
-        for batch_id in batch_ids {
-            self.process_method(GraphicsMethod::EndBatch { batch_id, timest: unixtime() });
-            if !self.dropped_batches.insert(batch_id) {
-                panic!("dropped batch {batch_id} already exits!");
-            }
-        }
-        assert!(self.pending_batches.is_empty());
     }
 }
 
@@ -1032,14 +952,10 @@ impl EventHandler for Stage {
 
         match self.screen_state {
             ScreenState::SwitchOff => {
-                self.close_pending_batches();
-
                 // Screen is off so collect all methods into the pruner
                 self.pruner.drain(&self.method_recv);
             }
             ScreenState::Off => {
-                assert!(self.pending_batches.is_empty());
-
                 // Screen is off so collect all methods into the pruner
                 self.pruner.drain(&self.method_recv);
             }
@@ -1159,25 +1075,17 @@ impl EventHandler for Stage {
             self.window_node = god.app.sg_root.lookup_node("/window");
         }
 
-        // Clone window_node to avoid borrow conflict with RenderApiSync
-        let window_node = self.window_node.clone();
-
-        // Create RenderApiSync for direct graphics operations
-        let renderer_sync = RendererSync::new(self);
-
-        // Direct call to Window's handle_touch_event_sync
-        if let Some(window_node) = &window_node {
+        // Direct call to Window's handle_touch_sync
+        if let Some(window_node) = &self.window_node {
             match window_node.pimpl() {
                 Pimpl::Window(win) => {
-                    if win.handle_touch_sync(&renderer_sync, phase, id, pos) {
+                    if win.handle_touch_sync(phase, id, pos) {
                         return
                     }
                 }
                 _ => panic!(),
             }
         }
-
-        drop(renderer_sync);
 
         self.event_pub.notify_touch(phase, id, pos);
     }

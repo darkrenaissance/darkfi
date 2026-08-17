@@ -40,6 +40,11 @@ pub(super) struct GfxSeqAnim {
     /// Timer between frames
     timer: std::time::Instant,
     current_idx: usize,
+    /// While `Some` and unexpired, the anim holds `current_idx` instead of
+    /// advancing. Used for e.g. pausing cursor blink while typing: the app
+    /// holds the visible frame for an idle duration and the anim resumes
+    /// ticking on its own afterwards, with no app-side timed commits.
+    paused_until: Option<std::time::Instant>,
     pub(super) is_visible: bool,
 }
 
@@ -51,6 +56,7 @@ impl GfxSeqAnim {
             frames,
             timer: std::time::Instant::now(),
             current_idx: 0,
+            paused_until: None,
             is_visible: false,
         }
     }
@@ -64,7 +70,7 @@ impl GfxSeqAnim {
     ) {
         assert!(frame_idx < self.frames.len());
         let duration = std::time::Duration::from_millis(frame.duration as u64);
-        let dc = frame.dc.compile(textures, buffers, 0);
+        let dc = frame.dc.compile(textures, buffers);
         self.frames[frame_idx] = Some(GfxFrame { duration, dc });
         //t!("got frame {frame_idx}");
     }
@@ -86,7 +92,25 @@ impl GfxSeqAnim {
         Some(curr_frame.dc)
     }
 
+    /// Hold `frame_idx` for `duration_ms`, then resume ticking from there.
+    /// The timer restarts when the pause expires, so the held frame gets a
+    /// full frame duration before advancing.
+    pub fn hold(&mut self, frame_idx: usize, duration_ms: u64) {
+        assert!(frame_idx < self.frames.len());
+        self.current_idx = frame_idx;
+        self.timer = std::time::Instant::now();
+        let until = std::time::Instant::now() + std::time::Duration::from_millis(duration_ms);
+        self.paused_until = Some(until);
+    }
+
     fn increment(&mut self) {
+        if let Some(until) = self.paused_until {
+            if std::time::Instant::now() < until {
+                return
+            }
+            self.paused_until = None;
+        }
+
         // One shot anims dont loop
         if self.oneshot && self.current_idx + 1 == self.frames.len() {
             return

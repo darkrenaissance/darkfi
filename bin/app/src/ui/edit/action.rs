@@ -20,9 +20,8 @@ use parking_lot::Mutex as SyncMutex;
 use rand::{rngs::OsRng, Rng};
 
 use crate::{
-    gfx::{gfxtag, DrawCall, DrawInstruction, Point, Rectangle, RenderApi, Renderer},
+    gfx::{gfxtag, DrawInstruction, Point, Rectangle, Renderer},
     mesh::{Color, MeshBuilder},
-    prop::BatchGuardId,
     text,
 };
 
@@ -115,6 +114,12 @@ impl ActionMode {
         *self.menu.lock() = Some(menu);
     }
 
+    /// Dismiss the overlay. Call whenever the text/selection it refers to
+    /// is invalidated (text edit, cursor tap) so a stale menu can't linger.
+    pub fn clear(&self) {
+        *self.menu.lock() = None;
+    }
+
     /// Returns `Some(n)` if item n is selected.
     pub fn interact(&self, pos: Point) -> Option<u32> {
         let menu = std::mem::take(&mut *self.menu.lock())?;
@@ -169,12 +174,5 @@ impl ActionMode {
         }
 
         vec![DrawInstruction::Overlay(instrs)]
-    }
-
-    /// When theres a state change, call this to update the draw cmds.
-    pub fn redraw(&self, batch_id: BatchGuardId) {
-        let dcs =
-            vec![(self.dc_key, DrawCall::new(self.get_instrs(), vec![], 1, "chatedit_action"))];
-        self.renderer.replace_draw_calls(Some(batch_id), dcs);
     }
 }

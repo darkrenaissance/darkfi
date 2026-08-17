@@ -35,7 +35,7 @@ use crate::{
     prop::{PropertyAtomicGuard, PropertyFloat32, Role},
     scene::{Pimpl, SceneNodePtr},
     text,
-    ui::{Button, Layer, Text, VectorArt, VectorShape},
+    ui::{Button, Layer, RedrawTrigger, Text, VectorArt, VectorShape},
     util::i18n::I18nBabelFish,
 };
 
@@ -150,13 +150,29 @@ pub async fn create_title(
     }
     node.set_property_u32(atom, Role::App, "z_index", 2).unwrap();
     let node = node
-        .setup(|me| Text::new(me, window_scale.clone(), app.renderer.clone(), i18n_fish.clone()))
+        .setup(|me| {
+            Text::new(
+                me,
+                window_scale.clone(),
+                app.renderer.clone(),
+                i18n_fish.clone(),
+                app.redraw_trigger.clone(),
+            )
+        })
         .await;
     layer.link(node.clone());
 
     *y += TITLE_PADDING * 2. + TITLE_FONTSIZE + 1.;
 
-    create_separator(&app.renderer, atom, layer, &format!("{}_separator", name), y).await;
+    create_separator(
+        &app.renderer,
+        &app.redraw_trigger,
+        atom,
+        layer,
+        &format!("{}_separator", name),
+        y,
+    )
+    .await;
     node
 }
 
@@ -194,13 +210,29 @@ pub async fn create_subtitle(
     }
     node.set_property_u32(atom, Role::App, "z_index", 2).unwrap();
     let node = node
-        .setup(|me| Text::new(me, window_scale.clone(), app.renderer.clone(), i18n_fish.clone()))
+        .setup(|me| {
+            Text::new(
+                me,
+                window_scale.clone(),
+                app.renderer.clone(),
+                i18n_fish.clone(),
+                app.redraw_trigger.clone(),
+            )
+        })
         .await;
     layer.link(node.clone());
 
     *y += PADDING_Y * 2. + TITLE_FONTSIZE + 1.;
 
-    create_separator(&app.renderer, atom, layer, &format!("{}_separator", text), y).await;
+    create_separator(
+        &app.renderer,
+        &app.redraw_trigger,
+        atom,
+        layer,
+        &format!("{}_separator", text),
+        y,
+    )
+    .await;
 
     node
 }
@@ -227,7 +259,9 @@ pub async fn create_bg_mesh(
         expr::load_var("h"),
         [[0., 0., 0., 0.5], [0., 0., 0., 0.5], [0., 0., 0., 0.5], [0., 0., 0., 0.8]],
     );
-    let node = node.setup(|me| VectorArt::new(me, shape, app.renderer.clone())).await;
+    let node = node
+        .setup(|me| VectorArt::new(me, shape, app.renderer.clone(), app.redraw_trigger.clone()))
+        .await;
     layer.link(node);
 }
 
@@ -266,7 +300,9 @@ pub async fn create_header_bg(
         expr::const_f32(HEADER_HEIGHT),
         sep_color,
     );
-    let node = node.setup(|me| VectorArt::new(me, shape, app.renderer.clone())).await;
+    let node = node
+        .setup(|me| VectorArt::new(me, shape, app.renderer.clone(), app.redraw_trigger.clone()))
+        .await;
     layer.link(node);
 }
 
@@ -296,7 +332,9 @@ pub async fn create_separator_expr(
         expr::const_f32(1.),
         [0.2, 0.2745, 0.2784, 1.],
     );
-    let sep_node = sep_node.setup(|me| VectorArt::new(me, shape, app.renderer.clone())).await;
+    let sep_node = sep_node
+        .setup(|me| VectorArt::new(me, shape, app.renderer.clone(), app.redraw_trigger.clone()))
+        .await;
     layer.link(sep_node.clone());
     sep_node
 }
@@ -305,6 +343,7 @@ pub async fn create_separator_expr(
 /// Returns the separator node after setup, linked to the layer
 pub async fn create_separator(
     renderer: &Renderer,
+    redraw: &RedrawTrigger,
     atom: &mut PropertyAtomicGuard,
     layer: &SceneNodePtr,
     name: &str,
@@ -325,7 +364,8 @@ pub async fn create_separator(
         expr::const_f32(1.),
         [0.2, 0.2745, 0.2784, 1.],
     );
-    let sep_node = sep_node.setup(|me| VectorArt::new(me, shape, renderer.clone())).await;
+    let sep_node =
+        sep_node.setup(|me| VectorArt::new(me, shape, renderer.clone(), redraw.clone())).await;
     layer.link(sep_node.clone());
 
     *y += 1.;
@@ -364,7 +404,9 @@ pub async fn create_bottom_button(
         1.,
         COLOR_TEAL,
     );
-    let node = node.setup(|me| VectorArt::new(me, shape, app.renderer.clone())).await;
+    let node = node
+        .setup(|me| VectorArt::new(me, shape, app.renderer.clone(), app.redraw_trigger.clone()))
+        .await;
     layer.link(node.clone());
 
     // Button label text (if provided)
@@ -391,7 +433,13 @@ pub async fn create_bottom_button(
         label_node.set_property_u32(atom, Role::App, "z_index", 3).unwrap();
         let label_node = label_node
             .setup(|me| {
-                Text::new(me, window_scale.clone(), app.renderer.clone(), i18n_fish.clone())
+                Text::new(
+                    me,
+                    window_scale.clone(),
+                    app.renderer.clone(),
+                    i18n_fish.clone(),
+                    app.redraw_trigger.clone(),
+                )
             })
             .await;
         layer.link(label_node);
@@ -408,7 +456,8 @@ pub async fn create_bottom_button(
     prop.set_expr(atom, Role::App, 2, code).unwrap();
     prop.set_f32(atom, Role::App, 3, BUTTON_HEIGHT).unwrap();
 
-    let node = node.setup(|me| Button::new(me, app.renderer.clone())).await;
+    let node =
+        node.setup(|me| Button::new(me, app.renderer.clone(), app.redraw_trigger.clone())).await;
     layer.link(node.clone());
     node
 }
@@ -446,7 +495,9 @@ pub async fn create_bottom_button_with_states(
         1.,
         COLOR_TEAL,
     );
-    let bg_valid = bg_valid.setup(|me| VectorArt::new(me, shape, app.renderer.clone())).await;
+    let bg_valid = bg_valid
+        .setup(|me| VectorArt::new(me, shape, app.renderer.clone(), app.redraw_trigger.clone()))
+        .await;
     layer.link(bg_valid.clone());
 
     // Button bg (grey outline - invalid state)
@@ -469,7 +520,9 @@ pub async fn create_bottom_button_with_states(
         1.,
         [0.5, 0.5, 0.5, 1.],
     );
-    let bg_invalid = bg_invalid.setup(|me| VectorArt::new(me, shape, app.renderer.clone())).await;
+    let bg_invalid = bg_invalid
+        .setup(|me| VectorArt::new(me, shape, app.renderer.clone(), app.redraw_trigger.clone()))
+        .await;
     layer.link(bg_invalid.clone());
 
     // Button label text
@@ -501,7 +554,15 @@ pub async fn create_bottom_button_with_states(
     }
     label_node.set_property_u32(atom, Role::App, "z_index", 3).unwrap();
     let label_node = label_node
-        .setup(|me| Text::new(me, window_scale.clone(), app.renderer.clone(), i18n_fish.clone()))
+        .setup(|me| {
+            Text::new(
+                me,
+                window_scale.clone(),
+                app.renderer.clone(),
+                i18n_fish.clone(),
+                app.redraw_trigger.clone(),
+            )
+        })
         .await;
     layer.link(label_node.clone());
 
@@ -516,7 +577,8 @@ pub async fn create_bottom_button_with_states(
     prop.set_expr(atom, Role::App, 2, code).unwrap();
     prop.set_f32(atom, Role::App, 3, BUTTON_HEIGHT).unwrap();
 
-    let btn = btn.setup(|me| Button::new(me, app.renderer.clone())).await;
+    let btn =
+        btn.setup(|me| Button::new(me, app.renderer.clone(), app.redraw_trigger.clone())).await;
     layer.link(btn.clone());
 
     (btn, bg_valid, bg_invalid, label_node)
@@ -583,7 +645,9 @@ pub async fn create_tooltip(
         1.,
         text_color,
     );
-    let node = node.setup(|me| VectorArt::new(me, shape, app.renderer.clone())).await;
+    let node = node
+        .setup(|me| VectorArt::new(me, shape, app.renderer.clone(), app.redraw_trigger.clone()))
+        .await;
     tooltip_layer.link(node);
 
     // Create text
@@ -603,7 +667,15 @@ pub async fn create_tooltip(
     prop.set_f32(atom, Role::App, 3, text_color[3]).unwrap();
     node.set_property_u32(atom, Role::App, "z_index", 3).unwrap();
     let node = node
-        .setup(|me| Text::new(me, window_scale.clone(), app.renderer.clone(), i18n_fish.clone()))
+        .setup(|me| {
+            Text::new(
+                me,
+                window_scale.clone(),
+                app.renderer.clone(),
+                i18n_fish.clone(),
+                app.redraw_trigger.clone(),
+            )
+        })
         .await;
     tooltip_layer.link(node);
 

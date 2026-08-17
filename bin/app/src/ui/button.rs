@@ -27,14 +27,14 @@ use std::sync::{
 use tracing::instrument;
 
 use crate::{
-    gfx::{gfxtag, DrawCall, DrawInstruction, Point, Rectangle, Renderer, RendererSync},
+    gfx::{gfxtag, DrawCall, DrawInstruction, Point, Rectangle, Renderer},
     mesh::MeshBuilder,
-    prop::{BatchGuardPtr, PropertyAtomicGuard, PropertyBool, PropertyRect, PropertyUint32, Role},
+    prop::{PropertyAtomicGuard, PropertyBool, PropertyRect, PropertyUint32, Role},
     scene::{Pimpl, SceneNodeWeak},
     ExecutorPtr,
 };
 
-use super::{DrawUpdate, OnModify, UIObject};
+use super::{DrawUpdate, OnModify, RedrawTrigger, UIObject};
 
 macro_rules! d { ($($arg:tt)*) => { debug!(target: "ui::button", $($arg)*); } }
 macro_rules! t { ($($arg:tt)*) => { trace!(target: "ui::button", $($arg)*); } }
@@ -46,6 +46,7 @@ pub struct Button {
     node: SceneNodeWeak,
     tasks: SyncMutex<Vec<smol::Task<()>>>,
     renderer: Renderer,
+    redraw: RedrawTrigger,
 
     is_active: PropertyBool,
     rect: PropertyRect,
@@ -55,11 +56,10 @@ pub struct Button {
     dc_key: u64,
 
     mouse_btn_held: AtomicBool,
-    parent_rect: SyncMutex<Option<Rectangle>>,
 }
 
 impl Button {
-    pub async fn new(node: SceneNodeWeak, renderer: Renderer) -> Pimpl {
+    pub async fn new(node: SceneNodeWeak, renderer: Renderer, redraw: RedrawTrigger) -> Pimpl {
         let node_ref = &node.upgrade().unwrap();
         let is_active = PropertyBool::wrap(node_ref, Role::Internal, "is_active", 0).unwrap();
         let rect = PropertyRect::wrap(node_ref, Role::Internal, "rect").unwrap();
@@ -71,6 +71,7 @@ impl Button {
             node,
             tasks: SyncMutex::new(vec![]),
             renderer,
+            redraw,
             is_active,
             rect,
             priority,
@@ -78,21 +79,9 @@ impl Button {
             debug,
             dc_key: OsRng.gen(),
             mouse_btn_held: AtomicBool::new(false),
-            parent_rect: SyncMutex::new(None),
         });
 
         Pimpl::Button(self_)
-    }
-
-    #[instrument(target = "ui::button")]
-    async fn redraw(self: Arc<Self>, batch: BatchGuardPtr) {
-        let Some(parent_rect) = self.parent_rect.lock().clone() else { return };
-
-        let atom = &mut batch.spawn();
-
-        if let Err(e) = self.rect.eval(atom, &parent_rect) {
-            w!("Rect eval failure in redraw: {e}");
-        }
     }
 }
 
@@ -106,14 +95,18 @@ impl UIObject for Button {
         let me = Arc::downgrade(&self);
 
         let mut on_modify = OnModify::new(ex, self.node.clone(), me.clone());
-        on_modify.when_change(self.rect.prop(), Self::redraw);
+        // Buttons produce no draw output (except the debug outline). The
+        // pass evals the rect for hit-testing; external changes only need
+        // to request a pass. Internal-role eval echoes are skipped.
+        on_modify.when_change_external(self.rect.prop(), |self_, _| async move {
+            self_.redraw.trigger();
+        });
 
         *self.tasks.lock() = on_modify.tasks;
     }
 
     fn stop(&self) {
         self.tasks.lock().clear();
-        *self.parent_rect.lock() = None;
     }
 
     #[instrument(target = "ui::button")]
@@ -122,8 +115,6 @@ impl UIObject for Button {
         parent_rect: Rectangle,
         atom: &mut PropertyAtomicGuard,
     ) -> Option<DrawUpdate> {
-        *self.parent_rect.lock() = Some(parent_rect);
-
         if let Err(e) = self.rect.eval(atom, &parent_rect) {
             w!("Rect eval failure: {e}");
         }
@@ -223,13 +214,7 @@ impl UIObject for Button {
         }
     }
 
-    fn handle_touch_sync(
-        &self,
-        _renderer: &RendererSync,
-        phase: TouchPhase,
-        id: u64,
-        touch_pos: Point,
-    ) -> bool {
+    fn handle_touch_sync(&self, phase: TouchPhase, id: u64, touch_pos: Point) -> bool {
         if !self.is_active.get() {
             return false
         }

@@ -154,7 +154,9 @@ pub async fn create_edit_buttons(
         COLOR_CYAN,
     );
 
-    let node = node.setup(|me| VectorArt::new(me, shape, app.renderer.clone())).await;
+    let node = node
+        .setup(|me| VectorArt::new(me, shape, app.renderer.clone(), app.redraw_trigger.clone()))
+        .await;
     editlayer_node.link(node);
 
     // Create the cancel button
@@ -166,7 +168,8 @@ pub async fn create_edit_buttons(
     prop.set_f32(atom, Role::App, 2, MENU_BTN_W_L).unwrap();
     prop.set_expr(atom, Role::App, 3, expr::load_var("h")).unwrap();
 
-    let cancel_btn = node.setup(|me| Button::new(me, app.renderer.clone())).await;
+    let cancel_btn =
+        node.setup(|me| Button::new(me, app.renderer.clone(), app.redraw_trigger.clone())).await;
     editlayer_node.link(cancel_btn.clone());
 
     // Text for cancel button
@@ -190,7 +193,15 @@ pub async fn create_edit_buttons(
     prop.set_f32(atom, Role::App, 3, COLOR_RED[3]).unwrap();
 
     let node = node
-        .setup(|me| Text::new(me, window_scale.clone(), app.renderer.clone(), i18n_fish.clone()))
+        .setup(|me| {
+            Text::new(
+                me,
+                window_scale.clone(),
+                app.renderer.clone(),
+                i18n_fish.clone(),
+                app.redraw_trigger.clone(),
+            )
+        })
         .await;
     editlayer_node.link(node);
 
@@ -204,7 +215,8 @@ pub async fn create_edit_buttons(
     prop.set_f32(atom, Role::App, 2, MENU_BTN_W_R).unwrap();
     prop.set_expr(atom, Role::App, 3, expr::load_var("h")).unwrap();
 
-    let done_btn = node.setup(|me| Button::new(me, app.renderer.clone())).await;
+    let done_btn =
+        node.setup(|me| Button::new(me, app.renderer.clone(), app.redraw_trigger.clone())).await;
     editlayer_node.link(done_btn.clone());
 
     // Text for done button
@@ -229,7 +241,15 @@ pub async fn create_edit_buttons(
     prop.set_f32(atom, Role::App, 3, COLOR_CYAN[3]).unwrap();
 
     let node = node
-        .setup(|me| Text::new(me, window_scale.clone(), app.renderer.clone(), i18n_fish.clone()))
+        .setup(|me| {
+            Text::new(
+                me,
+                window_scale.clone(),
+                app.renderer.clone(),
+                i18n_fish.clone(),
+                app.redraw_trigger.clone(),
+            )
+        })
         .await;
     editlayer_node.link(node);
 

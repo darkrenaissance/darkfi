@@ -21,8 +21,8 @@ use miniquad::{KeyCode, KeyMods, MouseButton, TouchPhase};
 use std::sync::Arc;
 
 use crate::{
-    gfx::{DrawCall, Point, Rectangle, RendererSync},
-    prop::{BatchGuardPtr, PropertyAtomicGuard},
+    gfx::{Point, Rectangle},
+    prop::PropertyAtomicGuard,
     scene::{Pimpl, SceneNodeWeak},
     util::i18n::I18nBabelFish,
     ExecutorPtr,
@@ -110,14 +110,8 @@ impl UIObject for ScrollLayer {
         self.inner.handle_touch(phase, id, touch_pos).await
     }
 
-    fn handle_touch_sync(
-        &self,
-        renderer: &RendererSync,
-        phase: TouchPhase,
-        id: u64,
-        touch_pos: Point,
-    ) -> bool {
-        self.inner.handle_touch_sync(renderer, phase, id, touch_pos)
+    fn handle_touch_sync(&self, phase: TouchPhase, id: u64, touch_pos: Point) -> bool {
+        self.inner.handle_touch_sync(phase, id, touch_pos)
     }
 
     fn set_i18n(&self, i18n_fish: &I18nBabelFish) {

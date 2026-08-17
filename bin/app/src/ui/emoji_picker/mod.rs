@@ -28,14 +28,12 @@ use std::sync::{
 
 use crate::{
     gfx::{gfxtag, DrawCall, DrawInstruction, Point, Rectangle, RenderApi, Renderer},
-    prop::{
-        BatchGuardPtr, PropertyAtomicGuard, PropertyFloat32, PropertyRect, PropertyUint32, Role,
-    },
+    prop::{PropertyAtomicGuard, PropertyFloat32, PropertyRect, PropertyUint32, Role},
     scene::{Pimpl, SceneNodeWeak},
     ExecutorPtr,
 };
 
-use super::{DrawUpdate, OnModify, UIObject};
+use super::{DrawUpdate, OnModify, RedrawTrigger, UIObject};
 
 mod default;
 use default::DEFAULT_EMOJI_LIST;
@@ -69,7 +67,11 @@ pub struct EmojiPicker {
     emoji_size: PropertyFloat32,
     mouse_scroll_speed: PropertyFloat32,
 
-    parent_rect: SyncMutex<Option<Rectangle>>,
+    redraw: RedrawTrigger,
+    /// Cached emoji grid instructions. `None` means stale (rect, scroll or
+    /// z_index changed). Scroll is set with an internal role, so scroll
+    /// mutation sites invalidate explicitly.
+    draw_cache: SyncMutex<Option<Vec<DrawInstruction>>>,
     is_mouse_hover: AtomicBool,
     touch_info: SyncMutex<Option<TouchInfo>>,
 }
@@ -79,6 +81,7 @@ impl EmojiPicker {
         node: SceneNodeWeak,
         renderer: Renderer,
         emoji_meshes: EmojiMeshesPtr,
+        redraw: RedrawTrigger,
     ) -> Pimpl {
         let node_ref = &node.upgrade().unwrap();
         let rect = PropertyRect::wrap(node_ref, Role::Internal, "rect").unwrap();
@@ -104,7 +107,8 @@ impl EmojiPicker {
             emoji_size,
             mouse_scroll_speed,
 
-            parent_rect: SyncMutex::new(None),
+            redraw,
+            draw_cache: SyncMutex::new(None),
             is_mouse_hover: AtomicBool::new(false),
             touch_info: SyncMutex::new(None),
         });
@@ -180,59 +184,62 @@ impl EmojiPicker {
         }
     }
 
-    #[instrument(target = "ui::emoji_picker")]
-    fn redraw(&self, atom: &mut PropertyAtomicGuard) {
-        let Some(parent_rect) = self.parent_rect.lock().clone() else {
-            warn!(target: "ui:emoji_picker", "Skip draw since parent rect is empty");
-            return
-        };
-        let Some(draw_update) = self.get_draw_calls(parent_rect, atom) else {
-            error!(target: "ui:emoji_picker", "Emoji picker failed to draw");
-            return
-        };
-        self.renderer.replace_draw_calls(Some(atom.batch_id), draw_update.draw_calls);
-    }
-
     fn get_draw_calls(
         &self,
         parent_rect: Rectangle,
         atom: &mut PropertyAtomicGuard,
     ) -> Option<DrawUpdate> {
+        // Rect property is its own memo: compare before/after eval.
+        let prev_rect = self.rect.get();
         if let Err(e) = self.rect.eval(atom, &parent_rect) {
-            warn!(target: "ui::emoji_picker", "Rect eval failed: {e}");
+            warn!(target: "ui:emoji_picker", "Rect eval failed: {e}");
             return None
         }
+        let rect = self.rect.get();
+        let rect_changed = rect != prev_rect;
 
         // Clamp scroll if needed due to window size change
         let max_scroll = self.max_scroll();
         if self.scroll.get() > max_scroll {
             self.scroll.set(atom, max_scroll);
+            *self.draw_cache.lock() = None;
         }
 
-        let rect = self.rect.get();
-        let mut instrs = vec![DrawInstruction::ApplyView(rect)];
+        // The grid depends on rect and scroll. Compute under the lock so
+        // concurrent invalidations land before or after, never between.
+        let mut cache = self.draw_cache.lock();
+        if cache.is_none() || rect_changed {
+            let mut instrs = vec![DrawInstruction::ApplyView(rect)];
 
-        let off_x = self.calc_off_x();
-        let emoji_size = self.emoji_size.get();
+            let off_x = self.calc_off_x();
+            let emoji_size = self.emoji_size.get();
 
-        let mut x = 0.;
-        let mut y = -self.scroll.get();
-        for i in 0..DEFAULT_EMOJI_LIST.len() {
-            let pos = Point::new(x, y);
-            let mesh = self.emoji_meshes.lock().get(i);
-            instrs.extend_from_slice(&[DrawInstruction::SetPos(pos), DrawInstruction::Draw(mesh)]);
+            let mut x = 0.;
+            let mut y = -self.scroll.get();
+            for i in 0..DEFAULT_EMOJI_LIST.len() {
+                let pos = Point::new(x, y);
+                let mesh = self.emoji_meshes.lock().get(i);
+                instrs.extend_from_slice(&[
+                    DrawInstruction::SetPos(pos),
+                    DrawInstruction::Draw(mesh),
+                ]);
 
-            x += off_x;
-            if x > rect.w {
-                x = 0.;
-                y += emoji_size;
-                //d!("Line break after idx={i}");
+                x += off_x;
+                if x > rect.w {
+                    x = 0.;
+                    y += emoji_size;
+                    //d!("Line break after idx={i}");
+                }
+
+                if y > rect.h + emoji_size {
+                    break
+                }
             }
 
-            if y > rect.h + emoji_size {
-                break
-            }
+            *cache = Some(instrs);
         }
+        let instrs = cache.clone().unwrap();
+        drop(cache);
 
         Some(DrawUpdate {
             key: self.dc_key,
@@ -253,20 +260,24 @@ impl UIObject for EmojiPicker {
     async fn start(self: Arc<Self>, ex: ExecutorPtr) {
         let me = Arc::downgrade(&self);
 
-        async fn redraw(self_: Arc<EmojiPicker>, batch: BatchGuardPtr) {
-            let atom = &mut batch.spawn();
-            self_.redraw(atom);
-        }
-
         let mut on_modify = OnModify::new(ex, self.node.clone(), me.clone());
-        on_modify.when_change(self.rect.prop(), redraw);
-        on_modify.when_change(self.z_index.prop(), redraw);
+        // Invalidate the cache, then request a pass. Internal-role echoes
+        // (the pass's own evals) are skipped.
+        on_modify.when_change_external(self.rect.prop(), |self_, _| async move {
+            *self_.draw_cache.lock() = None;
+            self_.redraw.trigger();
+        });
+        on_modify.when_change_external(self.z_index.prop(), |self_, _| async move {
+            *self_.draw_cache.lock() = None;
+            self_.redraw.trigger();
+        });
 
         *self.tasks.lock() = on_modify.tasks;
     }
 
     fn stop(&self) {
         self.tasks.lock().clear();
+        *self.draw_cache.lock() = None;
         self.emoji_meshes.lock().clear();
     }
 
@@ -276,10 +287,8 @@ impl UIObject for EmojiPicker {
         parent_rect: Rectangle,
         atom: &mut PropertyAtomicGuard,
     ) -> Option<DrawUpdate> {
-        *self.parent_rect.lock() = Some(parent_rect);
         self.get_draw_calls(parent_rect, atom)
     }
-
     async fn handle_mouse_move(&self, mouse_pos: Point) -> bool {
         let rect = self.rect.get();
         self.is_mouse_hover.store(rect.contains(mouse_pos), Ordering::Relaxed);
@@ -298,7 +307,8 @@ impl UIObject for EmojiPicker {
         scroll = scroll.clamp(0., self.max_scroll());
         self.scroll.set(atom, scroll);
 
-        self.redraw(atom);
+        *self.draw_cache.lock() = None;
+        self.redraw.trigger();
 
         true
     }
@@ -361,7 +371,9 @@ impl UIObject for EmojiPicker {
                         let mut scroll = touch_info.start_scroll + y_diff;
                         scroll = scroll.clamp(0., self.max_scroll());
                         self.scroll.set(atom, scroll);
-                        self.redraw(atom);
+
+                        *self.draw_cache.lock() = None;
+                        self.redraw.trigger();
                     }
                 }
                 TouchPhase::Ended | TouchPhase::Cancelled => {
@@ -384,8 +396,7 @@ impl UIObject for EmojiPicker {
 impl Drop for EmojiPicker {
     fn drop(&mut self) {
         let atom = self.renderer.make_guard(gfxtag!("EmojiPicker::drop"));
-        self.renderer
-            .replace_draw_calls(Some(atom.batch_id), vec![(self.dc_key, Default::default())]);
+        self.renderer.replace_draw_calls(vec![(self.dc_key, Default::default())]);
     }
 }
 

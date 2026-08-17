@@ -27,7 +27,7 @@ use crate::{
         gfxtag, DrawCall, DrawInstruction, GraphicsEventCharSub, GraphicsEventKeyDownSub,
         GraphicsEventKeyUpSub, GraphicsEventMouseButtonDownSub, GraphicsEventMouseButtonUpSub,
         GraphicsEventMouseMoveSub, GraphicsEventMouseWheelSub, GraphicsEventPublisherPtr,
-        GraphicsEventTouchSub, Point, Rectangle, RenderApi, Renderer, RendererSync,
+        GraphicsEventTouchSub, Point, Rectangle, RenderApi, Renderer,
     },
     prop::{
         BatchGuardPtr, PropertyAtomicGuard, PropertyDimension, PropertyFloat32, PropertyStr, Role,
@@ -223,7 +223,7 @@ impl Window {
                     // Insets are set with an internal role, so draw-pass
                     // widgets skip the echo notifications. Trigger the pass
                     // explicitly so the new insets get laid out.
-                    self_.redraw.trigger();
+                    self_.redraw_tx.trigger();
                 }
             })
         };
@@ -515,17 +515,11 @@ impl Window {
         }
     }
 
-    pub fn handle_touch_sync(
-        &self,
-        renderer: &RendererSync,
-        phase: TouchPhase,
-        id: u64,
-        mut touch_pos: Point,
-    ) -> bool {
+    pub fn handle_touch_sync(&self, phase: TouchPhase, id: u64, mut touch_pos: Point) -> bool {
         self.local_scale(&mut touch_pos);
         for child in self.get_children() {
             let obj = get_ui_object3(&child);
-            if obj.handle_touch_sync(renderer, phase, id, touch_pos) {
+            if obj.handle_touch_sync(phase, id, touch_pos) {
                 return true
             }
         }
@@ -566,7 +560,7 @@ impl Window {
         draw_calls.push((0, dc));
         //t!("  => {:?}", draw_calls);
 
-        self.renderer.replace_draw_calls(Some(atom.batch_id), draw_calls);
+        self.renderer.replace_draw_calls(draw_calls);
     }
 
     async fn reload_locale(&self, atom: &mut PropertyAtomicGuard) {

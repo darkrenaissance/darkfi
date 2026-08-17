@@ -90,7 +90,9 @@ pub async fn make(
     prop.set_f32(atom, Role::App, 3, 500.).unwrap();
     node.set_property_u32(atom, Role::App, "z_index", 2).unwrap();
     let shape = shape::create_back_arrow().scaled(BACKARROW_SCALE);
-    let node = node.setup(|me| VectorArt::new(me, shape, app.renderer.clone())).await;
+    let node = node
+        .setup(|me| VectorArt::new(me, shape, app.renderer.clone(), app.redraw_trigger.clone()))
+        .await;
     send_step1_layer.link(node);
 
     let mut y = 0.;
@@ -118,7 +120,8 @@ pub async fn make(
     });
     app.tasks.lock().unwrap().push(listen_click);
 
-    let node = node.setup(|me| Button::new(me, app.renderer.clone())).await;
+    let node =
+        node.setup(|me| Button::new(me, app.renderer.clone(), app.redraw_trigger.clone())).await;
     send_step1_layer.link(node);
 
     y += HEADER_HEIGHT;
@@ -168,8 +171,9 @@ pub async fn make(
     prop.set_f32(atom, Role::App, 2, 0.2784).unwrap();
     prop.set_f32(atom, Role::App, 3, 1.).unwrap();
 
-    let send_tokens_table =
-        send_tokens_table.setup(|me| TokenTable::new(me, app.renderer.clone())).await;
+    let send_tokens_table = send_tokens_table
+        .setup(|me| TokenTable::new(me, app.renderer.clone(), app.redraw_trigger.clone()))
+        .await;
     send_step1_layer.link(send_tokens_table.clone());
 
     let (slot, recvr) = Slot::new("token_row_clicked");

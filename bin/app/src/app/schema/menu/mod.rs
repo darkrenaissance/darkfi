@@ -250,7 +250,9 @@ pub async fn make(
         [0.15, 0.2, 0.19, 1.],
     );
 
-    let node = node.setup(|me| VectorArt::new(me, shape, app.renderer.clone())).await;
+    let node = node
+        .setup(|me| VectorArt::new(me, shape, app.renderer.clone(), app.redraw_trigger.clone()))
+        .await;
     layer_node.link(node);
 
     // Create some text
@@ -281,7 +283,15 @@ pub async fn make(
     node.set_property_u32(atom, Role::App, "z_index", 1).unwrap();
 
     let node = node
-        .setup(|me| Text::new(me, window_scale.clone(), app.renderer.clone(), i18n_fish.clone()))
+        .setup(|me| {
+            Text::new(
+                me,
+                window_scale.clone(),
+                app.renderer.clone(),
+                i18n_fish.clone(),
+                app.redraw_trigger.clone(),
+            )
+        })
         .await;
     layer_node.link(node);
 
@@ -314,7 +324,9 @@ pub async fn make(
     node.set_property_f32(atom, Role::App, "scale", VERBLOCK_SCALE).unwrap();
     let shape = shape::create_version_block([1., 0., 0.25, 1.]);
 
-    let node = node.setup(|me| VectorArt::new(me, shape, app.renderer.clone())).await;
+    let node = node
+        .setup(|me| VectorArt::new(me, shape, app.renderer.clone(), app.redraw_trigger.clone()))
+        .await;
     mainlayer_node.link(node);
 
     // Write / Menu button
@@ -343,7 +355,9 @@ pub async fn make(
         COLOR_CYAN,
     );
 
-    let node = node.setup(|me| VectorArt::new(me, shape, app.renderer.clone())).await;
+    let node = node
+        .setup(|me| VectorArt::new(me, shape, app.renderer.clone(), app.redraw_trigger.clone()))
+        .await;
     mainlayer_node.link(node);
 
     let node = create_button("write_btn");
@@ -373,7 +387,8 @@ pub async fn make(
     });
     app.tasks.lock().unwrap().push(listen_click);
 
-    let node = node.setup(|me| Button::new(me, app.renderer.clone())).await;
+    let node =
+        node.setup(|me| Button::new(me, app.renderer.clone(), app.redraw_trigger.clone())).await;
     mainlayer_node.link(node);
 
     let node = create_text("write_text");
@@ -397,7 +412,15 @@ pub async fn make(
     prop.set_f32(atom, Role::App, 3, COLOR_CYAN[3]).unwrap();
 
     let node = node
-        .setup(|me| Text::new(me, window_scale.clone(), app.renderer.clone(), i18n_fish.clone()))
+        .setup(|me| {
+            Text::new(
+                me,
+                window_scale.clone(),
+                app.renderer.clone(),
+                i18n_fish.clone(),
+                app.redraw_trigger.clone(),
+            )
+        })
         .await;
     mainlayer_node.link(node);
 
@@ -472,7 +495,15 @@ pub async fn make(
     app.tasks.lock().unwrap().push(listen_click);
 
     let menu_node = node
-        .setup(|me| Menu::new(me, window_scale.clone(), app.renderer.clone(), app.ex.clone()))
+        .setup(|me| {
+            Menu::new(
+                me,
+                window_scale.clone(),
+                app.renderer.clone(),
+                app.redraw_trigger.clone(),
+                app.ex.clone(),
+            )
+        })
         .await;
     layer_node.link(menu_node.clone());
 
@@ -564,7 +595,9 @@ pub async fn setup_wallet_button(app: &App, menu_layer: SceneNodePtr, i18n_fish:
         [0., 0.94, 1., 1.],
     );
 
-    let node = node.setup(|me| VectorArt::new(me, shape, app.renderer.clone())).await;
+    let node = node
+        .setup(|me| VectorArt::new(me, shape, app.renderer.clone(), app.redraw_trigger.clone()))
+        .await;
     mainlayer_node.link(node);
 
     let node = create_button("wallet_btn");
@@ -599,7 +632,8 @@ pub async fn setup_wallet_button(app: &App, menu_layer: SceneNodePtr, i18n_fish:
     app.tasks.lock().unwrap().push(listen_click);
 
     let renderer = app.renderer.clone();
+    let redraw = app.redraw_trigger.clone();
 
-    let node = node.setup(|me| Button::new(me, renderer)).await;
+    let node = node.setup(|me| Button::new(me, renderer, redraw)).await;
     mainlayer_node.link(node);
 }

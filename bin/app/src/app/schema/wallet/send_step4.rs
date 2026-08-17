@@ -89,7 +89,9 @@ pub async fn make(
     prop.set_f32(atom, Role::App, 3, 500.).unwrap();
     node.set_property_u32(atom, Role::App, "z_index", 2).unwrap();
     let shape = shape::create_back_arrow().scaled(BACKARROW_SCALE);
-    let node = node.setup(|me| VectorArt::new(me, shape, app.renderer.clone())).await;
+    let node = node
+        .setup(|me| VectorArt::new(me, shape, app.renderer.clone(), app.redraw_trigger.clone()))
+        .await;
     send_step4_layer.link(node);
 
     let mut y = 0.;
@@ -116,7 +118,8 @@ pub async fn make(
     });
     app.tasks.lock().unwrap().push(listen_click);
 
-    let node = node.setup(|me| Button::new(me, app.renderer.clone())).await;
+    let node =
+        node.setup(|me| Button::new(me, app.renderer.clone(), app.redraw_trigger.clone())).await;
     send_step4_layer.link(node);
 
     y += HEADER_HEIGHT;
@@ -146,7 +149,15 @@ pub async fn make(
     }
     node.set_property_u32(atom, Role::App, "z_index", 2).unwrap();
     let node = node
-        .setup(|me| Text::new(me, window_scale.clone(), app.renderer.clone(), i18n_fish.clone()))
+        .setup(|me| {
+            Text::new(
+                me,
+                window_scale.clone(),
+                app.renderer.clone(),
+                i18n_fish.clone(),
+                app.redraw_trigger.clone(),
+            )
+        })
         .await;
     send_step4_layer.link(node);
 
@@ -172,13 +183,29 @@ pub async fn make(
     }
     node.set_property_u32(atom, Role::App, "z_index", 2).unwrap();
     let node = node
-        .setup(|me| Text::new(me, window_scale.clone(), app.renderer.clone(), i18n_fish.clone()))
+        .setup(|me| {
+            Text::new(
+                me,
+                window_scale.clone(),
+                app.renderer.clone(),
+                i18n_fish.clone(),
+                app.redraw_trigger.clone(),
+            )
+        })
         .await;
     send_step4_layer.link(node);
 
     y += PADDING_Y * 2. + BASE_FONTSIZE + 1.;
 
-    create_separator(&app.renderer, atom, &send_step4_layer, "send_token_separator4", &mut y).await;
+    create_separator(
+        &app.renderer,
+        &app.redraw_trigger,
+        atom,
+        &send_step4_layer,
+        "send_token_separator4",
+        &mut y,
+    )
+    .await;
 
     // Recipient label
     let node = create_text("send_recipient_label4");
@@ -203,7 +230,15 @@ pub async fn make(
     }
     node.set_property_u32(atom, Role::App, "z_index", 2).unwrap();
     let node = node
-        .setup(|me| Text::new(me, window_scale.clone(), app.renderer.clone(), i18n_fish.clone()))
+        .setup(|me| {
+            Text::new(
+                me,
+                window_scale.clone(),
+                app.renderer.clone(),
+                i18n_fish.clone(),
+                app.redraw_trigger.clone(),
+            )
+        })
         .await;
     send_step4_layer.link(node);
 
@@ -235,7 +270,15 @@ pub async fn make(
     }
     recipient_addr_node.set_property_u32(atom, Role::App, "z_index", 2).unwrap();
     let recipient_addr_node = recipient_addr_node
-        .setup(|me| Text::new(me, window_scale.clone(), app.renderer.clone(), i18n_fish.clone()))
+        .setup(|me| {
+            Text::new(
+                me,
+                window_scale.clone(),
+                app.renderer.clone(),
+                i18n_fish.clone(),
+                app.redraw_trigger.clone(),
+            )
+        })
         .await;
     send_step4_layer.link(recipient_addr_node.clone());
 
@@ -244,6 +287,7 @@ pub async fn make(
     let y2 = format!("{y} + (PADDING_Y * 2. + addr_height) + 1");
     let node = create_separator(
         &app.renderer,
+        &app.redraw_trigger,
         atom,
         &send_step4_layer,
         "send_amount_label_separator4",
@@ -288,7 +332,15 @@ pub async fn make(
     amount_text_node.set_property_u32(atom, Role::App, "z_index", 2).unwrap();
     amount_text_node.set_property_str(atom, Role::App, "text", "0").unwrap();
     let amount_text_node = amount_text_node
-        .setup(|me| Text::new(me, window_scale.clone(), app.renderer.clone(), i18n_fish.clone()))
+        .setup(|me| {
+            Text::new(
+                me,
+                window_scale.clone(),
+                app.renderer.clone(),
+                i18n_fish.clone(),
+                app.redraw_trigger.clone(),
+            )
+        })
         .await;
     amount_wrapper.link(amount_text_node.clone());
 
@@ -316,7 +368,15 @@ pub async fn make(
     }
     token_symbol_node.set_property_u32(atom, Role::App, "z_index", 2).unwrap();
     let token_symbol_node = token_symbol_node
-        .setup(|me| Text::new(me, window_scale.clone(), app.renderer.clone(), i18n_fish.clone()))
+        .setup(|me| {
+            Text::new(
+                me,
+                window_scale.clone(),
+                app.renderer.clone(),
+                i18n_fish.clone(),
+                app.redraw_trigger.clone(),
+            )
+        })
         .await;
     amount_wrapper.link(token_symbol_node.clone());
 
@@ -338,7 +398,15 @@ pub async fn make(
     prop.set_f32(atom, Role::App, 3, 0.).unwrap();
     tx_fee_label_node.set_property_u32(atom, Role::App, "z_index", 2).unwrap();
     let tx_fee_label_node = tx_fee_label_node
-        .setup(|me| Text::new(me, window_scale.clone(), app.renderer.clone(), i18n_fish.clone()))
+        .setup(|me| {
+            Text::new(
+                me,
+                window_scale.clone(),
+                app.renderer.clone(),
+                i18n_fish.clone(),
+                app.redraw_trigger.clone(),
+            )
+        })
         .await;
     send_step4_layer.link(tx_fee_label_node.clone());
 
@@ -362,7 +430,15 @@ pub async fn make(
     prop.set_f32(atom, Role::App, 2, 0.).unwrap();
     prop.set_f32(atom, Role::App, 3, 0.).unwrap();
     let tx_fee_value_node = tx_fee_value_node
-        .setup(|me| Text::new(me, window_scale.clone(), app.renderer.clone(), i18n_fish.clone()))
+        .setup(|me| {
+            Text::new(
+                me,
+                window_scale.clone(),
+                app.renderer.clone(),
+                i18n_fish.clone(),
+                app.redraw_trigger.clone(),
+            )
+        })
         .await;
     send_step4_layer.link(tx_fee_value_node.clone());
 

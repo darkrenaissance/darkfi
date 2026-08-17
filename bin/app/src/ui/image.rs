@@ -35,13 +35,14 @@ use crate::{
     ExecutorPtr,
 };
 
-use super::{DrawUpdate, OnModify, UIObject};
+use super::{DrawUpdate, OnModify, RedrawTrigger, UIObject};
 
 pub type ImagePtr = Arc<Image>;
 
 pub struct Image {
     node: SceneNodeWeak,
     renderer: Renderer,
+    redraw: RedrawTrigger,
     tasks: SyncMutex<Vec<smol::Task<()>>>,
 
     texture: SyncMutex<Option<ManagedTexturePtr>>,
@@ -53,11 +54,12 @@ pub struct Image {
     priority: PropertyUint32,
     path: PropertyStr,
 
-    parent_rect: SyncMutex<Option<Rectangle>>,
+    /// Cached draw instructions. `None` means stale.
+    draw_cache: SyncMutex<Option<Vec<DrawInstruction>>>,
 }
 
 impl Image {
-    pub async fn new(node: SceneNodeWeak, renderer: Renderer) -> Pimpl {
+    pub async fn new(node: SceneNodeWeak, renderer: Renderer, redraw: RedrawTrigger) -> Pimpl {
         let node_ref = &node.upgrade().unwrap();
         let rect = PropertyRect::wrap(node_ref, Role::Internal, "rect").unwrap();
         let uv = PropertyRect::wrap(node_ref, Role::Internal, "uv").unwrap();
@@ -68,6 +70,7 @@ impl Image {
         let self_ = Arc::new(Self {
             node,
             renderer,
+            redraw,
             tasks: SyncMutex::new(vec![]),
 
             texture: SyncMutex::new(None),
@@ -79,17 +82,18 @@ impl Image {
             priority,
             path,
 
-            parent_rect: SyncMutex::new(None),
+            draw_cache: SyncMutex::new(None),
         });
 
         Pimpl::Image(self_)
     }
 
-    async fn reload(self: Arc<Self>, batch: BatchGuardPtr) {
-        let texture = self.load_texture();
-        *self.texture.lock() = Some(texture);
+    async fn reload(self_: Arc<Self>, _batch: BatchGuardPtr) {
+        let texture = self_.load_texture();
+        *self_.texture.lock() = Some(texture);
 
-        self.clone().redraw(batch).await;
+        *self_.draw_cache.lock() = None;
+        self_.redraw.trigger();
     }
 
     fn load_texture(&self) -> ManagedTexturePtr {
@@ -119,21 +123,6 @@ impl Image {
         self.renderer.new_texture(width, height, bmp, TextureFormat::RGBA8, gfxtag!("img"))
     }
 
-    #[instrument(target = "ui::image")]
-    async fn redraw(self: Arc<Self>, batch: BatchGuardPtr) {
-        let Some(parent_rect) = self.parent_rect.lock().clone() else {
-            warn!(target: "ui:image", "Skip draw since parent rect is empty");
-            return
-        };
-
-        let atom = &mut batch.spawn();
-        let Some(draw_update) = self.get_draw_calls(atom, parent_rect) else {
-            error!(target: "ui::image", "Image failed to draw");
-            return
-        };
-        self.renderer.replace_draw_calls(Some(batch.id), draw_update.draw_calls);
-    }
-
     /// Called whenever any property changes.
     fn regen_mesh(&self) -> MeshInfo {
         let rect = self.rect.get();
@@ -149,30 +138,35 @@ impl Image {
         atom: &mut PropertyAtomicGuard,
         parent_rect: Rectangle,
     ) -> Option<DrawUpdate> {
+        // Rect property is its own memo: compare before/after eval.
+        let prev_rect = self.rect.get();
         self.rect.eval(atom, &parent_rect).ok()?;
         let rect = self.rect.get();
+        let rect_changed = rect != prev_rect;
         self.uv.eval(atom, &rect).ok()?;
 
-        let mesh = self.regen_mesh();
-        let texture = self.texture.lock().clone().expect("Node missing texture_id!");
-
-        let mesh = DrawMesh {
-            vertex_buffer: mesh.vertex_buffer,
-            index_buffer: mesh.index_buffer,
-            textures: Some(vec![texture]),
-            num_elements: mesh.num_elements,
-        };
+        // Mesh geometry depends on the rect; compute under the lock so a
+        // concurrent invalidation lands before or after, never between.
+        let mut cache = self.draw_cache.lock();
+        if cache.is_none() || rect_changed {
+            let mesh = self.regen_mesh();
+            let texture = self.texture.lock().clone().expect("Node missing texture_id!");
+            let mesh = DrawMesh {
+                vertex_buffer: mesh.vertex_buffer,
+                index_buffer: mesh.index_buffer,
+                textures: Some(vec![texture]),
+                num_elements: mesh.num_elements,
+            };
+            *cache = Some(vec![DrawInstruction::Move(rect.pos()), DrawInstruction::Draw(mesh)]);
+        }
+        let instrs = cache.clone().unwrap();
+        drop(cache);
 
         Some(DrawUpdate {
             key: self.dc_key,
             draw_calls: vec![(
                 self.dc_key,
-                DrawCall::new(
-                    vec![DrawInstruction::Move(rect.pos()), DrawInstruction::Draw(mesh)],
-                    vec![],
-                    self.z_index.get(),
-                    "img",
-                ),
+                DrawCall::new(instrs, vec![], self.z_index.get(), "img"),
             )],
         })
     }
@@ -192,9 +186,20 @@ impl UIObject for Image {
         let me = Arc::downgrade(&self);
 
         let mut on_modify = OnModify::new(ex, self.node.clone(), me.clone());
-        on_modify.when_change(self.rect.prop(), Self::redraw);
-        on_modify.when_change(self.uv.prop(), Self::redraw);
-        on_modify.when_change(self.z_index.prop(), Self::redraw);
+        // Invalidate the cache, then request a pass. Internal-role echoes
+        // (the pass's own evals) are skipped.
+        on_modify.when_change_external(self.rect.prop(), |self_, _| async move {
+            *self_.draw_cache.lock() = None;
+            self_.redraw.trigger();
+        });
+        on_modify.when_change_external(self.uv.prop(), |self_, _| async move {
+            *self_.draw_cache.lock() = None;
+            self_.redraw.trigger();
+        });
+        on_modify.when_change_external(self.z_index.prop(), |self_, _| async move {
+            *self_.draw_cache.lock() = None;
+            self_.redraw.trigger();
+        });
         on_modify.when_change(self.path.prop(), Self::reload);
 
         *self.tasks.lock() = on_modify.tasks;
@@ -202,7 +207,7 @@ impl UIObject for Image {
 
     fn stop(&self) {
         self.tasks.lock().clear();
-        *self.parent_rect.lock() = None;
+        *self.draw_cache.lock() = None;
         *self.texture.lock() = None;
     }
 
@@ -212,7 +217,6 @@ impl UIObject for Image {
         parent_rect: Rectangle,
         atom: &mut PropertyAtomicGuard,
     ) -> Option<DrawUpdate> {
-        *self.parent_rect.lock() = Some(parent_rect);
         self.get_draw_calls(atom, parent_rect)
     }
 }
@@ -220,8 +224,7 @@ impl UIObject for Image {
 impl Drop for Image {
     fn drop(&mut self) {
         let atom = self.renderer.make_guard(gfxtag!("Image::drop"));
-        self.renderer
-            .replace_draw_calls(Some(atom.batch_id), vec![(self.dc_key, Default::default())]);
+        self.renderer.replace_draw_calls(vec![(self.dc_key, Default::default())]);
     }
 }
 

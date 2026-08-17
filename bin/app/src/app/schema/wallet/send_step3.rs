@@ -94,7 +94,9 @@ pub async fn make(
     prop.set_f32(atom, Role::App, 3, 500.).unwrap();
     node.set_property_u32(atom, Role::App, "z_index", 2).unwrap();
     let shape = shape::create_back_arrow().scaled(BACKARROW_SCALE);
-    let node = node.setup(|me| VectorArt::new(me, shape, app.renderer.clone())).await;
+    let node = node
+        .setup(|me| VectorArt::new(me, shape, app.renderer.clone(), app.redraw_trigger.clone()))
+        .await;
     send_step3_layer.link(node);
 
     let mut y = 0.;
@@ -128,7 +130,8 @@ pub async fn make(
     });
     app.tasks.lock().unwrap().push(listen_click);
 
-    let node = node.setup(|me| Button::new(me, app.renderer.clone())).await;
+    let node =
+        node.setup(|me| Button::new(me, app.renderer.clone(), app.redraw_trigger.clone())).await;
     send_step3_layer.link(node);
 
     y += HEADER_HEIGHT;
@@ -161,7 +164,15 @@ pub async fn make(
     }
     node.set_property_u32(atom, Role::App, "z_index", 2).unwrap();
     let node = node
-        .setup(|me| Text::new(me, window_scale.clone(), app.renderer.clone(), i18n_fish.clone()))
+        .setup(|me| {
+            Text::new(
+                me,
+                window_scale.clone(),
+                app.renderer.clone(),
+                i18n_fish.clone(),
+                app.redraw_trigger.clone(),
+            )
+        })
         .await;
     send_step3_layer.link(node);
 
@@ -190,13 +201,29 @@ pub async fn make(
     }
     node.set_property_u32(atom, Role::App, "z_index", 2).unwrap();
     let selected_token_text3 = node
-        .setup(|me| Text::new(me, window_scale.clone(), app.renderer.clone(), i18n_fish.clone()))
+        .setup(|me| {
+            Text::new(
+                me,
+                window_scale.clone(),
+                app.renderer.clone(),
+                i18n_fish.clone(),
+                app.redraw_trigger.clone(),
+            )
+        })
         .await;
     send_step3_layer.link(selected_token_text3.clone());
 
     y += PADDING_Y * 2. + BASE_FONTSIZE + 1.;
 
-    create_separator(&app.renderer, atom, &send_step3_layer, "send_token_separator3", &mut y).await;
+    create_separator(
+        &app.renderer,
+        &app.redraw_trigger,
+        atom,
+        &send_step3_layer,
+        "send_token_separator3",
+        &mut y,
+    )
+    .await;
 
     // Recipient display
     let node = create_text("send_recipient_label3");
@@ -221,7 +248,15 @@ pub async fn make(
     }
     node.set_property_u32(atom, Role::App, "z_index", 2).unwrap();
     let node = node
-        .setup(|me| Text::new(me, window_scale.clone(), app.renderer.clone(), i18n_fish.clone()))
+        .setup(|me| {
+            Text::new(
+                me,
+                window_scale.clone(),
+                app.renderer.clone(),
+                i18n_fish.clone(),
+                app.redraw_trigger.clone(),
+            )
+        })
         .await;
     send_step3_layer.link(node);
 
@@ -253,7 +288,15 @@ pub async fn make(
     }
     node.set_property_u32(atom, Role::App, "z_index", 2).unwrap();
     let node = node
-        .setup(|me| Text::new(me, window_scale.clone(), app.renderer.clone(), i18n_fish.clone()))
+        .setup(|me| {
+            Text::new(
+                me,
+                window_scale.clone(),
+                app.renderer.clone(),
+                i18n_fish.clone(),
+                app.redraw_trigger.clone(),
+            )
+        })
         .await;
     send_step3_layer.link(node);
 
@@ -262,6 +305,7 @@ pub async fn make(
     let y2 = format!("{y} + (PADDING_Y * 2. + addr_height) + 1");
     let node = create_separator(
         &app.renderer,
+        &app.redraw_trigger,
         atom,
         &send_step3_layer,
         "send_amount_label_separator",
@@ -298,7 +342,15 @@ pub async fn make(
     }
     available_balance_node.set_property_u32(atom, Role::App, "z_index", 2).unwrap();
     let available_balance_node = available_balance_node
-        .setup(|me| Text::new(me, window_scale.clone(), app.renderer.clone(), i18n_fish.clone()))
+        .setup(|me| {
+            Text::new(
+                me,
+                window_scale.clone(),
+                app.renderer.clone(),
+                i18n_fish.clone(),
+                app.redraw_trigger.clone(),
+            )
+        })
         .await;
     send_step3_layer.link(available_balance_node.clone());
 
@@ -351,7 +403,15 @@ pub async fn make(
     prop.set_f32(atom, Role::App, 3, 1.).unwrap();
     error_node.set_property_u32(atom, Role::App, "z_index", 2).unwrap();
     let error_node = error_node
-        .setup(|me| Text::new(me, window_scale.clone(), app.renderer.clone(), i18n_fish.clone()))
+        .setup(|me| {
+            Text::new(
+                me,
+                window_scale.clone(),
+                app.renderer.clone(),
+                i18n_fish.clone(),
+                app.redraw_trigger.clone(),
+            )
+        })
         .await;
     send_step3_layer.link(error_node.clone());
 
@@ -421,6 +481,7 @@ pub async fn make(
                 me,
                 window_scale.clone(),
                 app.renderer.clone(),
+                app.redraw_trigger.clone(),
                 BaseEditType::SingleLine,
                 app.ex.clone(),
             )
@@ -493,6 +554,7 @@ pub async fn make(
                 me,
                 window_scale.clone(),
                 app.renderer.clone(),
+                app.redraw_trigger.clone(),
                 BaseEditType::SingleLine,
                 app.ex.clone(),
             )

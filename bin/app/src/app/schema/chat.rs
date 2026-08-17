@@ -242,7 +242,7 @@ pub async fn make(
         expr::load_var("h"),
         [[0., 0., 0., 0.5], [0., 0., 0., 0.5], [0., 0., 0., 0.5], [0., 0., 0., 0.8]],
     );
-    let node = node.setup(|me| VectorArt::new(me, shape, renderer.clone())).await;
+    let node = node.setup(|me| VectorArt::new(me, shape, renderer.clone(), redraw.clone())).await;
     layer_node.link(node);
 
     // Create the toolbar bg
@@ -293,7 +293,7 @@ pub async fn make(
         0.2,
     );
 
-    let node = node.setup(|me| VectorArt::new(me, shape, renderer.clone())).await;
+    let node = node.setup(|me| VectorArt::new(me, shape, renderer.clone(), redraw.clone())).await;
     layer_node.link(node);
 
     // Create the send button
@@ -306,7 +306,8 @@ pub async fn make(
     node.set_property_u32(atom, Role::App, "z_index", 3).unwrap();
 
     let shape = shape::create_back_arrow().scaled(BACKARROW_SCALE);
-    let back_btn_bg_node = node.setup(|me| VectorArt::new(me, shape, renderer.clone())).await;
+    let back_btn_bg_node =
+        node.setup(|me| VectorArt::new(me, shape, renderer.clone(), redraw.clone())).await;
     layer_node.link(back_btn_bg_node.clone());
 
     // Create the back button
@@ -347,7 +348,7 @@ pub async fn make(
     });
     layer_node.push_task(listen_click);
 
-    let node = node.setup(|me| Button::new(me, renderer.clone())).await;
+    let node = node.setup(|me| Button::new(me, renderer.clone(), redraw.clone())).await;
     layer_node.link(node);
 
     // Create shortcut to go back as well
@@ -399,7 +400,9 @@ pub async fn make(
     node.set_property_u32(atom, Role::App, "z_index", 3).unwrap();
 
     let node = node
-        .setup(|me| Text::new(me, window_scale.clone(), renderer.clone(), i18n_fish.clone()))
+        .setup(|me| {
+            Text::new(me, window_scale.clone(), renderer.clone(), i18n_fish.clone(), redraw.clone())
+        })
         .await;
     layer_node.link(node);
 
@@ -420,7 +423,8 @@ pub async fn make(
     //node.set_property_f32(atom, Role::App, "font_size", FONTSIZE).unwrap();
     node.set_property_f32(atom, Role::App, "emoji_size", EMOJI_PICKER_ICON_SIZE).unwrap();
     node.set_property_u32(atom, Role::App, "z_index", 2).unwrap();
-    let node = node.setup(|me| EmojiPicker::new(me, renderer.clone(), emoji_meshes)).await;
+    let node =
+        node.setup(|me| EmojiPicker::new(me, renderer.clone(), emoji_meshes, redraw.clone())).await;
     let emoji_picker_node = node.clone();
     layer_node.link(node);
 
@@ -460,7 +464,7 @@ pub async fn make(
     //    expr::load_var("h"),
     //    [0.41, 0.6, 0.65, 1.],
     //);
-    let node = node.setup(|me| VectorArt::new(me, shape, renderer.clone())).await;
+    let node = node.setup(|me| VectorArt::new(me, shape, renderer.clone(), redraw.clone())).await;
     layer_node.link(node);
 
     // Main content view
@@ -599,6 +603,7 @@ pub async fn make(
                 chat_tree,
                 window_scale.clone(),
                 renderer.clone(),
+                redraw.clone(),
                 sg_root.clone(),
                 ex.clone(),
             )
@@ -670,7 +675,7 @@ pub async fn make(
         bg_color,
     );
     */
-    let node = node.setup(|me| VectorArt::new(me, shape, renderer.clone())).await;
+    let node = node.setup(|me| VectorArt::new(me, shape, renderer.clone(), redraw.clone())).await;
     select_layer.link(node);
 
     // unselect_btn sits over the back button and calls the chatview's unselect.
@@ -692,7 +697,7 @@ pub async fn make(
         });
         select_layer.push_task(listen_click);
     }
-    let node = node.setup(|me| Button::new(me, renderer.clone())).await;
+    let node = node.setup(|me| Button::new(me, renderer.clone(), redraw.clone())).await;
     select_layer.link(node);
 
     // copy_btn sits over the reconnect button and calls the chatview's
@@ -716,7 +721,7 @@ pub async fn make(
         });
         select_layer.push_task(listen_click);
     }
-    let node = node.setup(|me| Button::new(me, renderer.clone())).await;
+    let node = node.setup(|me| Button::new(me, renderer.clone(), redraw.clone())).await;
     select_layer.link(node);
 
     // Show/hide the overlay from the chatview's select_changed signal.
@@ -802,7 +807,7 @@ pub async fn make(
     //    expr::load_var("h"),
     //    [0.41, 0.6, 0.65, 1.],
     //);
-    let node = node.setup(|me| VectorArt::new(me, shape, renderer.clone())).await;
+    let node = node.setup(|me| VectorArt::new(me, shape, renderer.clone(), redraw.clone())).await;
     layer_node.link(node);
 
     // Create the send button
@@ -816,7 +821,7 @@ pub async fn make(
     prop.set_f32(atom, Role::App, 3, 500.).unwrap();
     node.set_property_u32(atom, Role::App, "z_index", 5).unwrap();
     let shape = shape::create_send_arrow().scaled(EMOJI_SCALE);
-    let node = node.setup(|me| VectorArt::new(me, shape, renderer.clone())).await;
+    let node = node.setup(|me| VectorArt::new(me, shape, renderer.clone(), redraw.clone())).await;
     layer_node.link(node);
 
     // Create the emoji button
@@ -834,7 +839,7 @@ pub async fn make(
         ColorScheme::PaperLight => [0., 0., 0., 1.],
     };
     let shape = shape::create_emoji_selector(color).scaled(EMOJI_SCALE);
-    let node = node.setup(|me| VectorArt::new(me, shape, renderer.clone())).await;
+    let node = node.setup(|me| VectorArt::new(me, shape, renderer.clone(), redraw.clone())).await;
     layer_node.link(node);
 
     // Create the emoji button
@@ -849,7 +854,7 @@ pub async fn make(
     prop.set_f32(atom, Role::App, 3, 500.).unwrap();
     node.set_property_u32(atom, Role::App, "z_index", 5).unwrap();
     let shape = shape::create_close_icon().scaled(EMOJI_CLOSE_SCALE);
-    let node = node.setup(|me| VectorArt::new(me, shape, renderer.clone())).await;
+    let node = node.setup(|me| VectorArt::new(me, shape, renderer.clone(), redraw.clone())).await;
     layer_node.link(node);
 
     // Text edit
@@ -971,6 +976,7 @@ pub async fn make(
                 me,
                 window_scale.clone(),
                 renderer.clone(),
+                redraw.clone(),
                 BaseEditType::MultiLine,
                 ex.clone(),
             )
@@ -1023,7 +1029,7 @@ pub async fn make(
         ]
     );
     let node =
-        node.setup(|me| VectorArt::new(me, shape, renderer.clone())).await;
+        node.setup(|me| VectorArt::new(me, shape, renderer.clone(), redraw.clone())).await;
     layer_node.link(node);
     */
 
@@ -1112,7 +1118,7 @@ pub async fn make(
     });
     layer_node.push_task(listen_click);
 
-    let node = node.setup(|me| Button::new(me, renderer.clone())).await;
+    let node = node.setup(|me| Button::new(me, renderer.clone(), redraw.clone())).await;
     layer_node.link(node);
 
     // Create shortcut to send as well
@@ -1216,7 +1222,7 @@ pub async fn make(
     });
     layer_node.push_task(listen_click);
 
-    let node = node.setup(|me| Button::new(me, renderer.clone())).await;
+    let node = node.setup(|me| Button::new(me, renderer.clone(), redraw.clone())).await;
     layer_node.link(node);
 
     // Commands help hint
@@ -1264,7 +1270,7 @@ pub async fn make(
     });
     layer_node.push_task(listen_click);
 
-    let node = node.setup(|me| Button::new(me, renderer.clone())).await;
+    let node = node.setup(|me| Button::new(me, renderer.clone(), redraw.clone())).await;
     cmd_layer_node.link(node);
 
     // Create the actionbar bg
@@ -1307,7 +1313,7 @@ pub async fn make(
         [0.29, 0.51, 0.45, 1.],
     );
 
-    let node = node.setup(|me| VectorArt::new(me, shape, renderer.clone())).await;
+    let node = node.setup(|me| VectorArt::new(me, shape, renderer.clone(), redraw.clone())).await;
     cmd_layer_node.link(node);
 
     // Create some text
@@ -1329,7 +1335,9 @@ pub async fn make(
     node.set_property_u32(atom, Role::App, "z_index", 1).unwrap();
 
     let node = node
-        .setup(|me| Text::new(me, window_scale.clone(), renderer.clone(), i18n_fish.clone()))
+        .setup(|me| {
+            Text::new(me, window_scale.clone(), renderer.clone(), i18n_fish.clone(), redraw.clone())
+        })
         .await;
     cmd_layer_node.link(node);
 
@@ -1352,7 +1360,9 @@ pub async fn make(
     node.set_property_u32(atom, Role::App, "z_index", 1).unwrap();
 
     let node = node
-        .setup(|me| Text::new(me, window_scale.clone(), renderer.clone(), i18n_fish.clone()))
+        .setup(|me| {
+            Text::new(me, window_scale.clone(), renderer.clone(), i18n_fish.clone(), redraw.clone())
+        })
         .await;
     cmd_layer_node.link(node);
 

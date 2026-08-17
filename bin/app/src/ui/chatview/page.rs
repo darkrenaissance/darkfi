@@ -1136,13 +1136,15 @@ impl MessageBuffer {
         self.date_msgs.clear();
     }
 
-    pub fn adjust_window_scale(&mut self) {
+    /// Returns whether the scale changed (and params were re-adjusted).
+    pub fn adjust_window_scale(&mut self) -> bool {
         let window_scale = self.window_scale.get();
         if self.old_window_scale == window_scale {
-            return
+            return false
         }
 
         self.adjust_params();
+        true
     }
 
     /// This will force a reload of everything

@@ -101,13 +101,29 @@ pub async fn make(
     }
     node.set_property_u32(atom, Role::App, "z_index", 2).unwrap();
     let node = node
-        .setup(|me| Text::new(me, window_scale.clone(), app.renderer.clone(), i18n_fish.clone()))
+        .setup(|me| {
+            Text::new(
+                me,
+                window_scale.clone(),
+                app.renderer.clone(),
+                i18n_fish.clone(),
+                app.redraw_trigger.clone(),
+            )
+        })
         .await;
     main_layer.link(node);
 
     y += TITLE_PADDING * 2. + TITLE_FONTSIZE + 1.;
 
-    create_separator(&app.renderer, atom, &main_layer, "wallet_balance_separator", &mut y).await;
+    create_separator(
+        &app.renderer,
+        &app.redraw_trigger,
+        atom,
+        &main_layer,
+        "wallet_balance_separator",
+        &mut y,
+    )
+    .await;
 
     // Receive button bg
     let node = create_vector_art("receive_btn_bg");
@@ -127,7 +143,9 @@ pub async fn make(
         1.,
         COLOR_TEAL,
     );
-    let node = node.setup(|me| VectorArt::new(me, shape, app.renderer.clone())).await;
+    let node = node
+        .setup(|me| VectorArt::new(me, shape, app.renderer.clone(), app.redraw_trigger.clone()))
+        .await;
     main_layer.link(node);
 
     // Receive button click handler
@@ -182,7 +200,8 @@ pub async fn make(
     });
     app.tasks.lock().unwrap().push(listen_click);
 
-    let node = node.setup(|me| Button::new(me, app.renderer.clone())).await;
+    let node =
+        node.setup(|me| Button::new(me, app.renderer.clone(), app.redraw_trigger.clone())).await;
     main_layer.link(node);
 
     // Receive label
@@ -211,7 +230,15 @@ pub async fn make(
     }
     node.set_property_u32(atom, Role::App, "z_index", 3).unwrap();
     let node = node
-        .setup(|me| Text::new(me, window_scale.clone(), app.renderer.clone(), i18n_fish.clone()))
+        .setup(|me| {
+            Text::new(
+                me,
+                window_scale.clone(),
+                app.renderer.clone(),
+                i18n_fish.clone(),
+                app.redraw_trigger.clone(),
+            )
+        })
         .await;
     main_layer.link(node);
 
@@ -234,7 +261,9 @@ pub async fn make(
         1.,
         COLOR_TEAL,
     );
-    let node = node.setup(|me| VectorArt::new(me, shape, app.renderer.clone())).await;
+    let node = node
+        .setup(|me| VectorArt::new(me, shape, app.renderer.clone(), app.redraw_trigger.clone()))
+        .await;
     main_layer.link(node);
 
     // Send button click handler
@@ -264,7 +293,8 @@ pub async fn make(
     });
     app.tasks.lock().unwrap().push(listen_click);
 
-    let node = node.setup(|me| Button::new(me, app.renderer.clone())).await;
+    let node =
+        node.setup(|me| Button::new(me, app.renderer.clone(), app.redraw_trigger.clone())).await;
     main_layer.link(node);
 
     // Send label
@@ -294,13 +324,29 @@ pub async fn make(
     }
     node.set_property_u32(atom, Role::App, "z_index", 3).unwrap();
     let node = node
-        .setup(|me| Text::new(me, window_scale.clone(), app.renderer.clone(), i18n_fish.clone()))
+        .setup(|me| {
+            Text::new(
+                me,
+                window_scale.clone(),
+                app.renderer.clone(),
+                i18n_fish.clone(),
+                app.redraw_trigger.clone(),
+            )
+        })
         .await;
     main_layer.link(node);
 
     y += PADDING_X * 2. + BUTTON_HEIGHT + 1.;
 
-    create_separator(&app.renderer, atom, &main_layer, "wallet_buttons_separator", &mut y).await;
+    create_separator(
+        &app.renderer,
+        &app.redraw_trigger,
+        atom,
+        &main_layer,
+        "wallet_buttons_separator",
+        &mut y,
+    )
+    .await;
 
     create_title(app, atom, &main_layer, &window_scale, i18n_fish, "TOKENS", &mut y).await;
 
@@ -340,7 +386,9 @@ pub async fn make(
     prop.set_f32(atom, Role::App, 2, 0.2784).unwrap();
     prop.set_f32(atom, Role::App, 3, 1.).unwrap();
 
-    let tokens_table = tokens_table.setup(|me| TokenTable::new(me, app.renderer.clone())).await;
+    let tokens_table = tokens_table
+        .setup(|me| TokenTable::new(me, app.renderer.clone(), app.redraw_trigger.clone()))
+        .await;
     main_layer.link(tokens_table.clone());
 
     main_layer
@@ -378,7 +426,9 @@ async fn create_chat_btn(
         1.,
         [0.2, 0.2745, 0.2784, 1.],
     );
-    let node = node.setup(|me| VectorArt::new(me, shape, app.renderer.clone())).await;
+    let node = node
+        .setup(|me| VectorArt::new(me, shape, app.renderer.clone(), app.redraw_trigger.clone()))
+        .await;
     parent.link(node);
 
     let node = create_vector_art("chat_btn_shape");
@@ -394,7 +444,9 @@ async fn create_chat_btn(
     let mut shape = shape::create_netlogo1([0., 0.94, 1., 1.]);
     shape.join(shape::create_netlogo2([0., 0.94, 1., 1.]));
     shape.join(shape::create_netlogo3([0., 0.94, 1., 1.]));
-    let node = node.setup(|me| VectorArt::new(me, shape, app.renderer.clone())).await;
+    let node = node
+        .setup(|me| VectorArt::new(me, shape, app.renderer.clone(), app.redraw_trigger.clone()))
+        .await;
     parent.link(node);
 
     let node = create_button("chat_btn");
@@ -435,6 +487,7 @@ async fn create_chat_btn(
     });
     app.tasks.lock().unwrap().push(listen_click);
 
-    let node = node.setup(|me| Button::new(me, app.renderer.clone())).await;
+    let node =
+        node.setup(|me| Button::new(me, app.renderer.clone(), app.redraw_trigger.clone())).await;
     parent.link(node);
 }

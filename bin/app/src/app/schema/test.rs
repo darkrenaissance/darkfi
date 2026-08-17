@@ -129,7 +129,9 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish) {
         // Color
         [0., 1., 0., 1.],
     );
-    let node = node.setup(|me| VectorArt::new(me, shape, app.renderer.clone())).await;
+    let node = node
+        .setup(|me| VectorArt::new(me, shape, app.renderer.clone(), app.redraw_trigger.clone()))
+        .await;
     layer_node.link(node);
 
     /*
@@ -162,7 +164,7 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish) {
     let indices = vec![0, 2, 1, 1, 2, 3];
     let shape = VectorShape { verts, indices };
     let node =
-        node.setup(|me| VectorArt::new(me, shape, app.renderer.clone(), app.ex.clone())).await;
+        node.setup(|me| VectorArt::new(me, shape, app.renderer.clone(), app.redraw_trigger.clone())).await;
     layer_node.link(node);
 
     // Create the button
@@ -179,7 +181,7 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish) {
     //let slot_click = Slot { name: "button_clicked".to_string(), notify: sender };
     //node.register("click", slot_click).unwrap();
 
-    let node = node.setup(|me| Button::new(me, app.renderer.clone())).await;
+    let node = node.setup(|me| Button::new(me, app.renderer.clone(), app.redraw_trigger.clone())).await;
     layer_node.link(node);
 
     // Create another mesh
@@ -210,7 +212,7 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish) {
     let indices = vec![0, 2, 1, 1, 2, 3];
     let shape = VectorShape { verts, indices };
     let node =
-        node.setup(|me| VectorArt::new(me, shape, app.renderer.clone(), app.ex.clone())).await;
+        node.setup(|me| VectorArt::new(me, shape, app.renderer.clone(), app.redraw_trigger.clone())).await;
     layer_node.link(node);
 
     // Debugging tool
@@ -240,7 +242,7 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish) {
         [0., 1., 0., 1.],
     );
     let node =
-        node.setup(|me| VectorArt::new(me, shape, app.renderer.clone(), app.ex.clone())).await;
+        node.setup(|me| VectorArt::new(me, shape, app.renderer.clone(), app.redraw_trigger.clone())).await;
     layer_node.link(node);
 
     // Create KING GNU!
@@ -252,7 +254,7 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish) {
     prop.set_f32(atom, Role::App, 3, 60.).unwrap();
     node.set_property_str(atom, Role::App, "path", KING_PATH).unwrap();
     node.set_property_u32(atom, Role::App, "z_index", 1).unwrap();
-    let node = node.setup(|me| Image::new(me, app.renderer.clone(), app.ex.clone())).await;
+    let node = node.setup(|me| Image::new(me, app.renderer.clone(), app.redraw_trigger.clone())).await;
     layer_node.link(node);
     */
 
@@ -265,7 +267,11 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish) {
     prop.set_f32(atom, Role::App, 3, 600.).unwrap();
     node.set_property_str(atom, Role::App, "path", VID_PATH).unwrap();
     node.set_property_u32(atom, Role::App, "z_index", 1).unwrap();
-    let node = node.setup(|me| Video::new(me, app.renderer.clone(), app.ex.clone())).await;
+    let node = node
+        .setup(|me| {
+            Video::new(me, app.renderer.clone(), app.redraw_trigger.clone(), app.ex.clone())
+        })
+        .await;
     layer_node.link(node);
 
     /*
@@ -296,7 +302,7 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish) {
     node.set_property_bool(atom, Role::App, "debug", true).unwrap();
 
     let node = node
-        .setup(|me| Text::new(me, window_scale.clone(), app.renderer.clone(), i18n_fish.clone()))
+        .setup(|me| Text::new(me, window_scale.clone(), app.renderer.clone(), i18n_fish.clone(), app.redraw_trigger.clone()))
         .await;
     layer_node.link(node);
 
@@ -379,6 +385,7 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish) {
                 chat_tree,
                 window_scale.clone(),
                 app.renderer.clone(),
+                app.redraw_trigger.clone(),
                 app.sg_root.clone(),
                 app.ex.clone(),
             )
@@ -467,6 +474,7 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish) {
                 me,
                 window_scale.clone(),
                 app.renderer.clone(),
+                app.redraw_trigger.clone(),
                 BaseEditType::SingleLine,
                 app.ex.clone(),
                 //BaseEditType::MultiLine,

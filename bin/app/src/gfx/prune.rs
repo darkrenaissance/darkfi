@@ -16,12 +16,11 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 
 use super::{
     anim::GfxSeqAnim, AnimId, BufferId, EpochIndex, GraphicsMethod, TextureId, DEBUG_GFXAPI,
 };
-use crate::prop::BatchGuardId;
 
 macro_rules! t { ($($arg:tt)*) => { trace!(target: "gfx::prune", $($arg)*) }; }
 
@@ -45,14 +44,13 @@ pub struct PruneMethodHeap {
     /// Existing anim updates
     anim_updates: HashMap<AnimId, HashMap<usize, GraphicsMethod>>,
     /// Existing anim deletes
-    anim_deletes: HashSet<AnimId>,
+    anim_deletes: HashMap<AnimId, ()>,
 
     epoch: EpochIndex,
 
     pub textures: *const HashMap<TextureId, miniquad::TextureId>,
     pub buffers: *const HashMap<BufferId, miniquad::BufferId>,
     pub anims: *const HashMap<AnimId, GfxSeqAnim>,
-    pub dropped_batches: *mut HashSet<BatchGuardId>,
 }
 
 impl PruneMethodHeap {
@@ -63,12 +61,11 @@ impl PruneMethodHeap {
             del: vec![],
             new_anim: HashMap::new(),
             anim_updates: HashMap::new(),
-            anim_deletes: HashSet::new(),
+            anim_deletes: HashMap::new(),
             epoch,
             textures: std::ptr::null(),
             buffers: std::ptr::null(),
             anims: std::ptr::null(),
-            dropped_batches: std::ptr::null_mut(),
         }
     }
 
@@ -160,26 +157,17 @@ impl PruneMethodHeap {
             GraphicsMethod::DeleteSeqAnim((id, _)) => {
                 if self.new_anim.remove(id).is_some() {
                 } else if self.anims().contains_key(id) {
-                    self.anim_deletes.insert(*id);
+                    self.anim_deletes.insert(*id, ());
                     self.anim_updates.remove(id);
                 } else {
                     panic!("DeleteSeqAnim for unknown anim {id}");
                 }
             }
             GraphicsMethod::ReplaceGfxDrawCalls { .. } => {}
-            // Discard batches since we will apply everything all at once anyway
-            // once the screen is switched on.
-            GraphicsMethod::StartBatch { batch_id, tag } => {
-                t!("Pruner drop start batch {batch_id} debug={tag:?}");
-                if !self.dropped_batches().insert(*batch_id) {
-                    panic!("dropped batch {batch_id} already exits!");
-                }
-            }
-            GraphicsMethod::EndBatch { batch_id, timest: _ } => {
-                t!("Pruner drop end batch {batch_id}");
-                // Should have already been dropped previously
-                assert!(self.dropped_batches().contains(batch_id));
-            }
+            // Pauses are transient holds with an absolute expiry; one that
+            // arrives while the screen is off has (almost certainly) already
+            // served its purpose by the time the screen is on again.
+            GraphicsMethod::PauseSeqAnim { .. } => {}
             GraphicsMethod::Noop => panic!("noop"),
         }
     }
@@ -195,10 +183,6 @@ impl PruneMethodHeap {
     fn anims(&self) -> &HashMap<AnimId, GfxSeqAnim> {
         assert!(!self.anims.is_null());
         unsafe { &*self.anims }
-    }
-    fn dropped_batches(&mut self) -> &mut HashSet<BatchGuardId> {
-        assert!(!self.dropped_batches.is_null());
-        unsafe { &mut *self.dropped_batches }
     }
 
     /// Collect everything now the screen is on
@@ -259,7 +243,7 @@ impl PruneMethodHeap {
             meth.push(update);
         }
 
-        for id in std::mem::take(&mut self.anim_deletes) {
+        for (id, _) in std::mem::take(&mut self.anim_deletes) {
             meth.push(GraphicsMethod::DeleteSeqAnim((id, None)));
         }
     }

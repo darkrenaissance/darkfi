@@ -227,7 +227,9 @@ pub async fn make(
         0.2,
     );
 
-    let node = node.setup(|me| VectorArt::new(me, shape, app.renderer.clone())).await;
+    let node = node
+        .setup(|me| VectorArt::new(me, shape, app.renderer.clone(), app.redraw_trigger.clone()))
+        .await;
     content.link(node);
 
     // Create back arrow
@@ -240,7 +242,9 @@ pub async fn make(
     node.set_property_u32(atom, Role::App, "z_index", 3).unwrap();
 
     let shape = shape::create_back_arrow().scaled(BACKARROW_SCALE);
-    let node = node.setup(|me| VectorArt::new(me, shape, app.renderer.clone())).await;
+    let node = node
+        .setup(|me| VectorArt::new(me, shape, app.renderer.clone(), app.redraw_trigger.clone()))
+        .await;
     content.link(node);
 
     // Create back button
@@ -284,7 +288,8 @@ pub async fn make(
     });
     content.push_task(listen_click);
 
-    let node = node.setup(|me| Button::new(me, app.renderer.clone())).await;
+    let node =
+        node.setup(|me| Button::new(me, app.renderer.clone(), app.redraw_trigger.clone())).await;
     content.link(node);
 
     // Create shortcut to go back as well
@@ -339,7 +344,9 @@ pub async fn make(
     node.set_property_u32(atom, Role::App, "z_index", 0).unwrap();
     let mut shape = VectorShape::new();
 
-    let node = node.setup(|me| VectorArt::new(me, shape, app.renderer.clone())).await;
+    let node = node
+        .setup(|me| VectorArt::new(me, shape, app.renderer.clone(), app.redraw_trigger.clone()))
+        .await;
     content.link(node);
 
     // Channels label bg
@@ -371,7 +378,9 @@ pub async fn make(
     shape.verts.append(&mut verts);
     shape.indices.append(&mut indices);
 
-    let node = node.setup(|me| VectorArt::new(me, shape, app.renderer.clone())).await;
+    let node = node
+        .setup(|me| VectorArt::new(me, shape, app.renderer.clone(), app.redraw_trigger.clone()))
+        .await;
     content_area.link(node);
 
     let node = create_vector_art("active_tab_overlay");
@@ -408,7 +417,9 @@ pub async fn make(
         COLOR_CYAN,
     );
 
-    let node = node.setup(|me| VectorArt::new(me, shape, app.renderer.clone())).await;
+    let node = node
+        .setup(|me| VectorArt::new(me, shape, app.renderer.clone(), app.redraw_trigger.clone()))
+        .await;
     content_area.link(node);
 
     let node = create_vector_art("active_tab_bg");
@@ -428,7 +439,9 @@ pub async fn make(
         [0., 0., 0., 0.5],
     );
 
-    let node = node.setup(|me| VectorArt::new(me, shape, app.renderer.clone())).await;
+    let node = node
+        .setup(|me| VectorArt::new(me, shape, app.renderer.clone(), app.redraw_trigger.clone()))
+        .await;
     content_area.link(node);
 
     let node = create_vector_art("inactive_tab_overlay");
@@ -472,7 +485,9 @@ pub async fn make(
         COLOR_INACTIVE,
     );
 
-    let node = node.setup(|me| VectorArt::new(me, shape, app.renderer.clone())).await;
+    let node = node
+        .setup(|me| VectorArt::new(me, shape, app.renderer.clone(), app.redraw_trigger.clone()))
+        .await;
     content_area.link(node);
 
     let node = create_vector_art("input_area_bg");
@@ -494,7 +509,9 @@ pub async fn make(
         [0., 0., 0., 0.5],
     );
 
-    let node = node.setup(|me| VectorArt::new(me, shape, app.renderer.clone())).await;
+    let node = node
+        .setup(|me| VectorArt::new(me, shape, app.renderer.clone(), app.redraw_trigger.clone()))
+        .await;
     content_area.link(node);
 
     let node = create_vector_art("fullscreen_label_bg");
@@ -559,7 +576,9 @@ pub async fn make(
         COLOR_CYAN,
     );
 
-    let node = node.setup(|me| VectorArt::new(me, shape, app.renderer.clone())).await;
+    let node = node
+        .setup(|me| VectorArt::new(me, shape, app.renderer.clone(), app.redraw_trigger.clone()))
+        .await;
     content_area.link(node);
 
     let node = create_button("channels_tab_btn");
@@ -598,7 +617,8 @@ pub async fn make(
     });
     app.tasks.lock().unwrap().push(listen_click);
 
-    let node = node.setup(|me| Button::new(me, app.renderer.clone())).await;
+    let node =
+        node.setup(|me| Button::new(me, app.renderer.clone(), app.redraw_trigger.clone())).await;
     content_area.link(node);
 
     let node = create_text("channels_tab_text");
@@ -631,7 +651,15 @@ pub async fn make(
     prop.set_f32(atom, Role::App, 3, COLOR_MINT[3]).unwrap();
 
     let node = node
-        .setup(|me| Text::new(me, window_scale.clone(), app.renderer.clone(), i18n_fish.clone()))
+        .setup(|me| {
+            Text::new(
+                me,
+                window_scale.clone(),
+                app.renderer.clone(),
+                i18n_fish.clone(),
+                app.redraw_trigger.clone(),
+            )
+        })
         .await;
     content_area.link(node);
 
@@ -670,7 +698,8 @@ pub async fn make(
     });
     app.tasks.lock().unwrap().push(listen_click);
 
-    let node = node.setup(|me| Button::new(me, app.renderer.clone())).await;
+    let node =
+        node.setup(|me| Button::new(me, app.renderer.clone(), app.redraw_trigger.clone())).await;
     content_area.link(node);
 
     let node = create_text("contacts_tab_text");
@@ -698,7 +727,15 @@ pub async fn make(
     prop.set_f32(atom, Role::App, 2, COLOR_INACTIVE[2]).unwrap();
     prop.set_f32(atom, Role::App, 3, COLOR_INACTIVE[3]).unwrap();
     let node = node
-        .setup(|me| Text::new(me, window_scale.clone(), app.renderer.clone(), i18n_fish.clone()))
+        .setup(|me| {
+            Text::new(
+                me,
+                window_scale.clone(),
+                app.renderer.clone(),
+                i18n_fish.clone(),
+                app.redraw_trigger.clone(),
+            )
+        })
         .await;
     content_area.link(node);
 
@@ -797,6 +834,7 @@ pub async fn make(
                 me,
                 window_scale.clone(),
                 app.renderer.clone(),
+                app.redraw_trigger.clone(),
                 BaseEditType::SingleLine,
                 app.ex.clone(),
             )
@@ -824,7 +862,9 @@ pub async fn make(
         [0., 0., 0., 0.5],
     );
 
-    let node = node.setup(|me| VectorArt::new(me, shape, app.renderer.clone())).await;
+    let node = node
+        .setup(|me| VectorArt::new(me, shape, app.renderer.clone(), app.redraw_trigger.clone()))
+        .await;
     content_area.link(node);
 
     let node = create_vector_art("search_outline");
@@ -846,7 +886,9 @@ pub async fn make(
         [0.3, 0.3, 0.3, 1.],
     );
 
-    let node = node.setup(|me| VectorArt::new(me, shape, app.renderer.clone())).await;
+    let node = node
+        .setup(|me| VectorArt::new(me, shape, app.renderer.clone(), app.redraw_trigger.clone()))
+        .await;
     content_area.link(node);
 
     let node = create_singleline_edit("nick_edit");
@@ -943,6 +985,7 @@ pub async fn make(
                 me,
                 window_scale.clone(),
                 app.renderer.clone(),
+                app.redraw_trigger.clone(),
                 BaseEditType::SingleLine,
                 app.ex.clone(),
             )
@@ -969,7 +1012,9 @@ pub async fn make(
         [0., 0., 0., 0.5],
     );
 
-    let node = node.setup(|me| VectorArt::new(me, shape, app.renderer.clone())).await;
+    let node = node
+        .setup(|me| VectorArt::new(me, shape, app.renderer.clone(), app.redraw_trigger.clone()))
+        .await;
     content_area.link(node);
 
     let node = create_vector_art("nick_outline");
@@ -989,7 +1034,9 @@ pub async fn make(
         CONTENT_OUTLINE_SIZE,
         [0.3, 0.3, 0.3, 1.],
     );
-    let node = node.setup(|me| VectorArt::new(me, shape, app.renderer.clone())).await;
+    let node = node
+        .setup(|me| VectorArt::new(me, shape, app.renderer.clone(), app.redraw_trigger.clone()))
+        .await;
     content_area.link(node);
 
     let node = create_singleline_edit("secret_edit");
@@ -1087,6 +1134,7 @@ pub async fn make(
                 me,
                 window_scale.clone(),
                 app.renderer.clone(),
+                app.redraw_trigger.clone(),
                 BaseEditType::SingleLine,
                 app.ex.clone(),
             )
@@ -1114,7 +1162,9 @@ pub async fn make(
         [0., 0., 0., 0.5],
     );
 
-    let node = node.setup(|me| VectorArt::new(me, shape, app.renderer.clone())).await;
+    let node = node
+        .setup(|me| VectorArt::new(me, shape, app.renderer.clone(), app.redraw_trigger.clone()))
+        .await;
     content_area.link(node);
 
     let node = create_vector_art("secret_outline");
@@ -1136,7 +1186,9 @@ pub async fn make(
         CONTENT_OUTLINE_SIZE,
         [0.3, 0.3, 0.3, 1.],
     );
-    let node = node.setup(|me| VectorArt::new(me, shape, app.renderer.clone())).await;
+    let node = node
+        .setup(|me| VectorArt::new(me, shape, app.renderer.clone(), app.redraw_trigger.clone()))
+        .await;
     content_area.link(node);
 
     let node = create_vector_art("receive_copy_btn_bg");
@@ -1155,7 +1207,9 @@ pub async fn make(
     node.set_property_u32(atom, Role::App, "z_index", 8).unwrap();
 
     let shape = shape::create_copy(COLOR_CYAN).scaled(COPY_SCALE);
-    let node = node.setup(|me| VectorArt::new(me, shape, app.renderer.clone())).await;
+    let node = node
+        .setup(|me| VectorArt::new(me, shape, app.renderer.clone(), app.redraw_trigger.clone()))
+        .await;
     content_area.link(node);
 
     // paste clipboard into the KEY field
@@ -1193,7 +1247,8 @@ pub async fn make(
     });
     app.tasks.lock().unwrap().push(listen_click);
 
-    let node = node.setup(|me| Button::new(me, app.renderer.clone())).await;
+    let node =
+        node.setup(|me| Button::new(me, app.renderer.clone(), app.redraw_trigger.clone())).await;
     content_area.link(node);
 
     let node = create_layer("addchannel_btn_layer");
@@ -1230,7 +1285,9 @@ pub async fn make(
         COLOR_CYAN,
     );
 
-    let node = node.setup(|me| VectorArt::new(me, shape, app.renderer.clone())).await;
+    let node = node
+        .setup(|me| VectorArt::new(me, shape, app.renderer.clone(), app.redraw_trigger.clone()))
+        .await;
     editlayer_node.link(node);
 
     let mut node = create_button("addchannel_btn");
@@ -1245,7 +1302,8 @@ pub async fn make(
     let (slot, addchannel_recvr) = Slot::new("add_channel_clicked_handler");
     node.register("click", slot).unwrap();
 
-    let node = node.setup(|me| Button::new(me, app.renderer.clone())).await;
+    let node =
+        node.setup(|me| Button::new(me, app.renderer.clone(), app.redraw_trigger.clone())).await;
     editlayer_node.link(node.clone());
 
     let addchannel_btn = node;
@@ -1270,7 +1328,15 @@ pub async fn make(
     prop.set_f32(atom, Role::App, 3, COLOR_CYAN[3]).unwrap();
 
     let node = node
-        .setup(|me| Text::new(me, window_scale.clone(), app.renderer.clone(), i18n_fish.clone()))
+        .setup(|me| {
+            Text::new(
+                me,
+                window_scale.clone(),
+                app.renderer.clone(),
+                i18n_fish.clone(),
+                app.redraw_trigger.clone(),
+            )
+        })
         .await;
     editlayer_node.link(node);
 
@@ -1330,7 +1396,15 @@ pub async fn make(
     }
 
     let menu_node = node
-        .setup(|me| Menu::new(me, window_scale.clone(), app.renderer.clone(), app.ex.clone()))
+        .setup(|me| {
+            Menu::new(
+                me,
+                window_scale.clone(),
+                app.renderer.clone(),
+                app.redraw_trigger.clone(),
+                app.ex.clone(),
+            )
+        })
         .await;
     content_area.link(menu_node.clone());
 

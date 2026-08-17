@@ -74,7 +74,9 @@ pub async fn make(
     prop.set_f32(atom, Role::App, 3, 500.).unwrap();
     node.set_property_u32(atom, Role::App, "z_index", 2).unwrap();
     let shape = shape::create_back_arrow().scaled(BACKARROW_SCALE);
-    let node = node.setup(|me| VectorArt::new(me, shape, app.renderer.clone())).await;
+    let node = node
+        .setup(|me| VectorArt::new(me, shape, app.renderer.clone(), app.redraw_trigger.clone()))
+        .await;
     receive_layer.link(node);
 
     let mut y = 0.;
@@ -102,7 +104,8 @@ pub async fn make(
     });
     app.tasks.lock().unwrap().push(listen_click);
 
-    let node = node.setup(|me| Button::new(me, app.renderer.clone())).await;
+    let node =
+        node.setup(|me| Button::new(me, app.renderer.clone(), app.redraw_trigger.clone())).await;
     receive_layer.link(node);
 
     y += HEADER_HEIGHT;
@@ -148,7 +151,15 @@ pub async fn make(
     }
     node.set_property_u32(atom, Role::App, "z_index", 2).unwrap();
     let node = node
-        .setup(|me| Text::new(me, window_scale.clone(), app.renderer.clone(), i18n_fish.clone()))
+        .setup(|me| {
+            Text::new(
+                me,
+                window_scale.clone(),
+                app.renderer.clone(),
+                i18n_fish.clone(),
+                app.redraw_trigger.clone(),
+            )
+        })
         .await;
     receive_layer.link(node);
 
@@ -164,7 +175,9 @@ pub async fn make(
     prop.add_depend(&addr_h_prop, 0, "addr_height");
     node.set_property_u32(atom, Role::App, "z_index", 2).unwrap();
     let shape = shape::create_copy(COLOR_CYAN).scaled(COPY_SCALE);
-    let node = node.setup(|me| VectorArt::new(me, shape, app.renderer.clone())).await;
+    let node = node
+        .setup(|me| VectorArt::new(me, shape, app.renderer.clone(), app.redraw_trigger.clone()))
+        .await;
     receive_layer.link(node);
 
     let node = create_button("receive_copy_btn");
@@ -199,7 +212,8 @@ pub async fn make(
     });
     app.tasks.lock().unwrap().push(listen_click);
 
-    let node = node.setup(|me| Button::new(me, app.renderer.clone())).await;
+    let node =
+        node.setup(|me| Button::new(me, app.renderer.clone(), app.redraw_trigger.clone())).await;
     receive_layer.link(node);
 
     // Create tooltip

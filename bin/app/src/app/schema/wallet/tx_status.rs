@@ -140,13 +140,29 @@ pub async fn make(
     }
     node.set_property_u32(atom, Role::App, "z_index", 2).unwrap();
     let node = node
-        .setup(|me| Text::new(me, window_scale.clone(), app.renderer.clone(), i18n_fish.clone()))
+        .setup(|me| {
+            Text::new(
+                me,
+                window_scale.clone(),
+                app.renderer.clone(),
+                i18n_fish.clone(),
+                app.redraw_trigger.clone(),
+            )
+        })
         .await;
     tx_status_layer.link(node);
 
     y += PADDING_Y * 2. + BASE_FONTSIZE + 1.;
 
-    create_separator(&app.renderer, atom, &tx_status_layer, "tx_status_separator", &mut y).await;
+    create_separator(
+        &app.renderer,
+        &app.redraw_trigger,
+        atom,
+        &tx_status_layer,
+        "tx_status_separator",
+        &mut y,
+    )
+    .await;
 
     // Transaction info text: "Sending {amount} {token_symbol} to {recipient_address}"
     let node = create_text("tx_info");
@@ -174,12 +190,27 @@ pub async fn make(
     }
     node.set_property_u32(atom, Role::App, "z_index", 2).unwrap();
     let node = node
-        .setup(|me| Text::new(me, window_scale.clone(), app.renderer.clone(), i18n_fish.clone()))
+        .setup(|me| {
+            Text::new(
+                me,
+                window_scale.clone(),
+                app.renderer.clone(),
+                i18n_fish.clone(),
+                app.redraw_trigger.clone(),
+            )
+        })
         .await;
     tx_status_layer.link(node);
 
-    let sep =
-        create_separator(&app.renderer, atom, &tx_status_layer, "tx_info_separator", &mut 0.).await;
+    let sep = create_separator(
+        &app.renderer,
+        &app.redraw_trigger,
+        atom,
+        &tx_status_layer,
+        "tx_info_separator",
+        &mut 0.,
+    )
+    .await;
     let prop = sep.get_property("rect").unwrap();
     let code = cc.compile(format!("{y} + PADDING_Y * 2 + info_height + 1")).unwrap();
     prop.set_expr(atom, Role::App, 1, code).unwrap();
@@ -213,7 +244,15 @@ pub async fn make(
     prop.set_f32(atom, Role::App, 3, 0.45).unwrap();
     hint_node.set_property_u32(atom, Role::App, "z_index", 2).unwrap();
     let hint_node = hint_node
-        .setup(|me| Text::new(me, window_scale.clone(), app.renderer.clone(), i18n_fish.clone()))
+        .setup(|me| {
+            Text::new(
+                me,
+                window_scale.clone(),
+                app.renderer.clone(),
+                i18n_fish.clone(),
+                app.redraw_trigger.clone(),
+            )
+        })
         .await;
     tx_status_layer.link(hint_node.clone());
 

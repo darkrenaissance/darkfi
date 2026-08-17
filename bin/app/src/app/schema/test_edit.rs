@@ -80,7 +80,9 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish) {
         expr::load_var("h"),
         [0., 0., 0., 1.],
     );
-    let node = node.setup(|me| VectorArt::new(me, shape, app.renderer.clone())).await;
+    let node = node
+        .setup(|me| VectorArt::new(me, shape, app.renderer.clone(), app.redraw_trigger.clone()))
+        .await;
     layer_node.link(node);
 
     // Text edit
@@ -156,6 +158,7 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish) {
                 me,
                 window_scale.clone(),
                 renderer.clone(),
+                app.redraw_trigger.clone(),
                 BaseEditType::MultiLine,
                 ex.clone(),
             )

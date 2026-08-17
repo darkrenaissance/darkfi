@@ -30,7 +30,7 @@ use crate::{
 };
 
 mod guard;
-pub use guard::{BatchGuardId, BatchGuardPtr, PropertyAtomicGuard};
+pub use guard::{BatchGuardPtr, PropertyAtomicGuard};
 mod wrap;
 pub use wrap::{
     PropertyBool, PropertyColor, PropertyDimension, PropertyEnum, PropertyFloat32, PropertyRect,

@@ -26,8 +26,8 @@ use crate::{
     gfx::{gfxtag, DrawCall, DrawInstruction, Rectangle, RenderApi, Renderer},
     mesh::{Color, MeshBuilder},
     prop::{
-        BatchGuardPtr, PropertyAtomicGuard, PropertyBool, PropertyColor, PropertyEnum,
-        PropertyFloat32, PropertyRect, PropertyStr, PropertyUint32, Role,
+        PropertyAtomicGuard, PropertyBool, PropertyColor, PropertyEnum, PropertyFloat32,
+        PropertyRect, PropertyStr, PropertyUint32, Role,
     },
     scene::{Pimpl, SceneNodeWeak},
     text,
@@ -35,7 +35,7 @@ use crate::{
     ExecutorPtr,
 };
 
-use super::{DrawUpdate, OnModify, UIObject};
+use super::{DrawUpdate, OnModify, RedrawTrigger, UIObject};
 
 pub type TextPtr = Arc<Text>;
 
@@ -43,6 +43,7 @@ pub struct Text {
     node: SceneNodeWeak,
     renderer: Renderer,
     i18n_fish: I18nBabelFish,
+    redraw: RedrawTrigger,
     tasks: SyncMutex<Vec<smol::Task<()>>>,
 
     dc_key: u64,
@@ -61,7 +62,9 @@ pub struct Text {
     debug: PropertyBool,
 
     window_scale: PropertyFloat32,
-    parent_rect: SyncMutex<Option<Rectangle>>,
+    /// Cached layout + rendered instrs. `None` means stale: recompute in
+    /// the draw pass. Layout is the expensive part (shaping, line breaks).
+    draw_cache: SyncMutex<Option<(parley::Layout<Color>, Vec<DrawInstruction>)>>,
 }
 
 impl Text {
@@ -70,6 +73,7 @@ impl Text {
         window_scale: PropertyFloat32,
         renderer: Renderer,
         i18n_fish: I18nBabelFish,
+        redraw: RedrawTrigger,
     ) -> Pimpl {
         let node_ref = &node.upgrade().unwrap();
         let rect = PropertyRect::wrap(node_ref, Role::Internal, "rect").unwrap();
@@ -90,6 +94,7 @@ impl Text {
             node,
             renderer,
             i18n_fish,
+            redraw,
             tasks: SyncMutex::new(vec![]),
             dc_key: OsRng.gen(),
 
@@ -107,7 +112,7 @@ impl Text {
             debug,
 
             window_scale,
-            parent_rect: SyncMutex::new(None),
+            draw_cache: SyncMutex::new(None),
         });
 
         Pimpl::Text(self_)
@@ -157,34 +162,33 @@ impl Text {
         text::render_layout_with_opts(layout, debug_opts, &self.renderer, gfxtag!("text"))
     }
 
-    #[instrument(target = "ui::text")]
-    async fn redraw(self: Arc<Self>, batch: BatchGuardPtr) {
-        let Some(parent_rect) = self.parent_rect.lock().clone() else {
-            warn!(target: "ui:text", "Skip draw since parent rect is empty");
-            return
-        };
-
-        let atom = &mut batch.spawn();
-        let Some(draw_update) = self.get_draw_calls(atom, parent_rect) else {
-            error!(target: "ui::text", "Text failed to draw");
-            return
-        };
-        self.renderer.replace_draw_calls(Some(batch.id), draw_update.draw_calls);
-    }
-
     fn get_draw_calls(
         &self,
         atom: &mut PropertyAtomicGuard,
         parent_rect: Rectangle,
     ) -> Option<DrawUpdate> {
+        // Rect property is its own memo: compare before/after eval.
+        let prev_rect = self.rect.get();
         self.rect.eval(atom, &parent_rect).ok()?;
         let rect = self.rect.get();
+        let rect_changed = rect != prev_rect;
 
-        let layout = self.make_layout();
+        // Layout depends on the width, so a rect change invalidates the
+        // layout even if the text itself did not change. Compute under the
+        // lock: the compute is synchronous, so concurrent invalidations
+        // either land before (seen as None) or after (clear our result).
+        let mut cache = self.draw_cache.lock();
+        if cache.is_none() || rect_changed {
+            let layout = self.make_layout();
+            let mut instrs = vec![DrawInstruction::Move(rect.pos())];
+            instrs.append(&mut self.regen_mesh(&layout));
+            *cache = Some((layout, instrs));
+        }
+        let (layout, mut instrs) = cache.clone().unwrap();
+        drop(cache);
+
+        // Height output for parents that depend on it.
         self.height.set(atom, layout.height());
-
-        let mut instrs = vec![DrawInstruction::Move(rect.pos())];
-        instrs.append(&mut self.regen_mesh(&layout));
 
         if self.debug.get() {
             let rect = self.rect.get().with_zero_pos();
@@ -214,20 +218,43 @@ impl UIObject for Text {
         let me = Arc::downgrade(&self);
 
         let mut on_modify = OnModify::new(ex, self.node.clone(), me.clone());
-        on_modify.when_change(self.rect.prop(), Self::redraw);
-        on_modify.when_change(self.z_index.prop(), Self::redraw);
-        on_modify.when_change(self.text.prop(), Self::redraw);
-        on_modify.when_change(self.text_align.prop(), Self::redraw);
-        on_modify.when_change(self.font_size.prop(), Self::redraw);
-        on_modify.when_change(self.text_color.prop(), Self::redraw);
-        on_modify.when_change(self.debug.prop(), Self::redraw);
+        // Invalidate the cache, then request a pass. Internal-role echoes
+        // (the pass's own evals) are skipped.
+        on_modify.when_change_external(self.rect.prop(), |self_, _| async move {
+            *self_.draw_cache.lock() = None;
+            self_.redraw.trigger();
+        });
+        on_modify.when_change_external(self.z_index.prop(), |self_, _| async move {
+            *self_.draw_cache.lock() = None;
+            self_.redraw.trigger();
+        });
+        on_modify.when_change_external(self.text.prop(), |self_, _| async move {
+            *self_.draw_cache.lock() = None;
+            self_.redraw.trigger();
+        });
+        on_modify.when_change_external(self.text_align.prop(), |self_, _| async move {
+            *self_.draw_cache.lock() = None;
+            self_.redraw.trigger();
+        });
+        on_modify.when_change_external(self.font_size.prop(), |self_, _| async move {
+            *self_.draw_cache.lock() = None;
+            self_.redraw.trigger();
+        });
+        on_modify.when_change_external(self.text_color.prop(), |self_, _| async move {
+            *self_.draw_cache.lock() = None;
+            self_.redraw.trigger();
+        });
+        on_modify.when_change_external(self.debug.prop(), |self_, _| async move {
+            *self_.draw_cache.lock() = None;
+            self_.redraw.trigger();
+        });
 
         *self.tasks.lock() = on_modify.tasks;
     }
 
     fn stop(&self) {
         self.tasks.lock().clear();
-        *self.parent_rect.lock() = None;
+        *self.draw_cache.lock() = None;
     }
 
     #[instrument(target = "ui::text")]
@@ -236,7 +263,6 @@ impl UIObject for Text {
         parent_rect: Rectangle,
         atom: &mut PropertyAtomicGuard,
     ) -> Option<DrawUpdate> {
-        *self.parent_rect.lock() = Some(parent_rect);
         self.get_draw_calls(atom, parent_rect)
     }
 
@@ -248,8 +274,7 @@ impl UIObject for Text {
 impl Drop for Text {
     fn drop(&mut self) {
         let atom = self.renderer.make_guard(gfxtag!("Text::drop"));
-        self.renderer
-            .replace_draw_calls(Some(atom.batch_id), vec![(self.dc_key, Default::default())]);
+        self.renderer.replace_draw_calls(vec![(self.dc_key, Default::default())]);
     }
 }
 

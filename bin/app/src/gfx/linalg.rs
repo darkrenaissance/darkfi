@@ -165,7 +165,7 @@ impl Div<f32> for Point {
     }
 }
 
-#[derive(Clone, Copy, SerialEncodable, SerialDecodable)]
+#[derive(Clone, Copy, PartialEq, SerialEncodable, SerialDecodable)]
 pub struct Rectangle {
     pub x: f32,
     pub y: f32,

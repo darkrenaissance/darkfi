@@ -119,7 +119,9 @@ pub async fn make(
     prop.set_f32(atom, Role::App, 3, 500.).unwrap();
     node.set_property_u32(atom, Role::App, "z_index", 2).unwrap();
     let shape = shape::create_back_arrow().scaled(BACKARROW_SCALE);
-    let node = node.setup(|me| VectorArt::new(me, shape, app.renderer.clone())).await;
+    let node = node
+        .setup(|me| VectorArt::new(me, shape, app.renderer.clone(), app.redraw_trigger.clone()))
+        .await;
     send_step2_layer.link(node);
 
     let mut y = 0.;
@@ -146,7 +148,8 @@ pub async fn make(
     });
     app.tasks.lock().unwrap().push(listen_click);
 
-    let node = node.setup(|me| Button::new(me, app.renderer.clone())).await;
+    let node =
+        node.setup(|me| Button::new(me, app.renderer.clone(), app.redraw_trigger.clone())).await;
     send_step2_layer.link(node);
 
     y += HEADER_HEIGHT;
@@ -176,13 +179,29 @@ pub async fn make(
     }
     node.set_property_u32(atom, Role::App, "z_index", 2).unwrap();
     let node = node
-        .setup(|me| Text::new(me, window_scale.clone(), app.renderer.clone(), i18n_fish.clone()))
+        .setup(|me| {
+            Text::new(
+                me,
+                window_scale.clone(),
+                app.renderer.clone(),
+                i18n_fish.clone(),
+                app.redraw_trigger.clone(),
+            )
+        })
         .await;
     send_step2_layer.link(node);
 
     y += PADDING_Y * 2. + BASE_FONTSIZE + 1.;
 
-    create_separator(&app.renderer, atom, &send_step2_layer, "send_token_separator", &mut y).await;
+    create_separator(
+        &app.renderer,
+        &app.redraw_trigger,
+        atom,
+        &send_step2_layer,
+        "send_token_separator",
+        &mut y,
+    )
+    .await;
 
     // Recipient label
     let node = create_text("send_recipient_label");
@@ -207,7 +226,15 @@ pub async fn make(
     }
     node.set_property_u32(atom, Role::App, "z_index", 2).unwrap();
     let node = node
-        .setup(|me| Text::new(me, window_scale.clone(), app.renderer.clone(), i18n_fish.clone()))
+        .setup(|me| {
+            Text::new(
+                me,
+                window_scale.clone(),
+                app.renderer.clone(),
+                i18n_fish.clone(),
+                app.redraw_trigger.clone(),
+            )
+        })
         .await;
     send_step2_layer.link(node);
 
@@ -231,7 +258,9 @@ pub async fn make(
         1.,
         [0.2, 0.2745, 0.2784, 1.],
     );
-    let node = node.setup(|me| VectorArt::new(me, shape, app.renderer.clone())).await;
+    let node = node
+        .setup(|me| VectorArt::new(me, shape, app.renderer.clone(), app.redraw_trigger.clone()))
+        .await;
     send_step2_layer.link(node);
 
     // Recipient input
@@ -311,6 +340,7 @@ pub async fn make(
                 me,
                 window_scale.clone(),
                 app.renderer.clone(),
+                app.redraw_trigger.clone(),
                 BaseEditType::SingleLine,
                 app.ex.clone(),
             )
@@ -328,7 +358,9 @@ pub async fn make(
     prop.set_f32(atom, Role::App, 3, 500.).unwrap();
     node.set_property_u32(atom, Role::App, "z_index", 2).unwrap();
     let shape = shape::create_copy(COLOR_CYAN).scaled(PASTE_SCALE);
-    let node = node.setup(|me| VectorArt::new(me, shape, app.renderer.clone())).await;
+    let node = node
+        .setup(|me| VectorArt::new(me, shape, app.renderer.clone(), app.redraw_trigger.clone()))
+        .await;
     send_step2_layer.link(node);
 
     let node = create_button("send_paste_btn");
@@ -359,7 +391,8 @@ pub async fn make(
     });
     app.tasks.lock().unwrap().push(listen_click);
 
-    let node = node.setup(|me| Button::new(me, app.renderer.clone())).await;
+    let node =
+        node.setup(|me| Button::new(me, app.renderer.clone(), app.redraw_trigger.clone())).await;
     send_step2_layer.link(node);
 
     // Add recipient button

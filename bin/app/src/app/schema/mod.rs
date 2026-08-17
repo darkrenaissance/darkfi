@@ -374,7 +374,11 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish, db
         node.set_property_u32(atom, Role::App, "z_index", 0).unwrap();
         //let node = node.setup(|me| Image::new(me, app.renderer.clone())).await;
         //layer_node.link(node);
-        let node = node.setup(|me| Video::new(me, app.renderer.clone(), app.ex.clone())).await;
+        let node = node
+            .setup(|me| {
+                Video::new(me, app.renderer.clone(), app.redraw_trigger.clone(), app.ex.clone())
+            })
+            .await;
         content.link(node);
     } else if COLOR_SCHEME == ColorScheme::PaperLight {
         let node = create_vector_art("bg");
@@ -395,7 +399,9 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish, db
             expr::load_var("h"),
             [c, c, c, 0.3],
         );
-        let node = node.setup(|me| VectorArt::new(me, shape, app.renderer.clone())).await;
+        let node = node
+            .setup(|me| VectorArt::new(me, shape, app.renderer.clone(), app.redraw_trigger.clone()))
+            .await;
         window.link(node);
     }
 
@@ -427,7 +433,9 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish, db
     let mut shape = shape::create_netlogo1([1., 0., 0.25, 1.]);
     shape.join(shape::create_netlogo2([0.27, 0.4, 0.4, 1.]));
     shape.join(shape::create_netlogo3([0.27, 0.4, 0.4, 1.]));
-    let net0_node = node.setup(|me| VectorArt::new(me, shape, app.renderer.clone())).await;
+    let net0_node = node
+        .setup(|me| VectorArt::new(me, shape, app.renderer.clone(), app.redraw_trigger.clone()))
+        .await;
     netlayer_node.link(net0_node);
 
     let node = create_vector_art("net1");
@@ -442,7 +450,9 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish, db
     let mut shape = shape::create_netlogo1([0.49, 0.57, 1., 1.]);
     shape.join(shape::create_netlogo2([0.49, 0.57, 1., 1.]));
     shape.join(shape::create_netlogo3([0.27, 0.4, 0.4, 1.]));
-    let net1_node = node.setup(|me| VectorArt::new(me, shape, app.renderer.clone())).await;
+    let net1_node = node
+        .setup(|me| VectorArt::new(me, shape, app.renderer.clone(), app.redraw_trigger.clone()))
+        .await;
     netlayer_node.link(net1_node);
 
     let node = create_vector_art("net2");
@@ -457,7 +467,9 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish, db
     let mut shape = shape::create_netlogo1([0., 0.94, 1., 1.]);
     shape.join(shape::create_netlogo2([0., 0.94, 1., 1.]));
     shape.join(shape::create_netlogo3([0., 0.94, 1., 1.]));
-    let net2_node = node.setup(|me| VectorArt::new(me, shape, app.renderer.clone())).await;
+    let net2_node = node
+        .setup(|me| VectorArt::new(me, shape, app.renderer.clone(), app.redraw_trigger.clone()))
+        .await;
     netlayer_node.link(net2_node);
 
     let node = create_vector_art("net3");
@@ -472,7 +484,9 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish, db
     let mut shape = shape::create_netlogo1([0., 0.94, 1., 1.]);
     shape.join(shape::create_netlogo2([0., 0.94, 1., 1.]));
     shape.join(shape::create_netlogo3([0., 0.94, 1., 1.]));
-    let net3_node = node.setup(|me| VectorArt::new(me, shape, app.renderer.clone())).await;
+    let net3_node = node
+        .setup(|me| VectorArt::new(me, shape, app.renderer.clone(), app.redraw_trigger.clone()))
+        .await;
     netlayer_node.link(net3_node);
 
     // netstat-klik icon (visual feedback when reconnect button is clicked)
@@ -494,7 +508,9 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish, db
         expr::const_f32(NETSTATUS_ICON_SIZE),
         klik_color,
     );
-    let netstat_klik_node = node.setup(|me| VectorArt::new(me, shape, app.renderer.clone())).await;
+    let netstat_klik_node = node
+        .setup(|me| VectorArt::new(me, shape, app.renderer.clone(), app.redraw_trigger.clone()))
+        .await;
     netlayer_node.link(netstat_klik_node.clone());
 
     // Reconnect Button (overlaid on netstatus icons)
@@ -552,7 +568,8 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish, db
     });
     app.tasks.lock().unwrap().push(reconnect_task);
 
-    let node = node.setup(|me| Button::new(me, app.renderer.clone())).await;
+    let node =
+        node.setup(|me| Button::new(me, app.renderer.clone(), app.redraw_trigger.clone())).await;
     netlayer_node.link(node);
 
     // Navbar Settings Button
@@ -583,7 +600,7 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish, db
     node.set_property_u32(atom, Role::App, "z_index", 0).unwrap();
     let shape = shape::create_settings([0., 0.94, 1., 1.]).scaled(20.);
     let node =
-        node.setup(|me| VectorArt::new(me, shape, app.renderer.clone())).await;
+        node.setup(|me| VectorArt::new(me, shape, app.renderer.clone(), app.redraw_trigger.clone())).await;
     settingslayer_node.link(node);
 
     // Button
@@ -642,7 +659,7 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish, db
     });
     app.tasks.lock().unwrap().push(listen_click);
 
-    let node = node.setup(|me| Button::new(me, app.renderer.clone())).await;
+    let node = node.setup(|me| Button::new(me, app.renderer.clone(), app.redraw_trigger.clone())).await;
     settingslayer_node.link(node);
     */
 

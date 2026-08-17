@@ -33,17 +33,17 @@ use std::{
 };
 
 use crate::{
-    gfx::{gfxtag, DrawCall, DrawInstruction, Point, Rectangle, RenderApi, Renderer, RendererSync},
+    gfx::{gfxtag, DrawCall, DrawInstruction, Point, Rectangle, Renderer},
     mesh::MeshBuilder,
     prop::{
-        BatchGuardId, BatchGuardPtr, PropertyAtomicGuard, PropertyBool, PropertyColor,
-        PropertyFloat32, PropertyPtr, PropertyRect, PropertyUint32, Role,
+        PropertyAtomicGuard, PropertyBool, PropertyColor, PropertyFloat32, PropertyPtr,
+        PropertyRect, PropertyUint32, Role,
     },
     scene::{MethodCallSub, Pimpl, SceneNodeWeak},
     text, ExecutorPtr,
 };
 
-use super::{DrawUpdate, OnModify, UIObject};
+use super::{DrawUpdate, OnModify, RedrawTrigger, UIObject};
 
 mod shape;
 
@@ -118,6 +118,7 @@ pub struct Menu {
     me: Weak<Self>,
     ex: ExecutorPtr,
     renderer: Renderer,
+    redraw: RedrawTrigger,
     tasks: SyncMutex<Vec<smol::Task<()>>>,
     root_dc_key: u64,
     content_dc_key: u64,
@@ -156,6 +157,9 @@ pub struct Menu {
 
     parent_rect: SyncMutex<Option<Rectangle>>,
     saved_items: SyncMutex<Option<Vec<String>>>,
+
+    /// Cached content draw instructions. `None` means stale.
+    draw_cache: SyncMutex<Option<Vec<DrawInstruction>>>,
 }
 
 impl Menu {
@@ -163,6 +167,7 @@ impl Menu {
         node: SceneNodeWeak,
         window_scale: PropertyFloat32,
         renderer: Renderer,
+        redraw: RedrawTrigger,
         ex: ExecutorPtr,
     ) -> Pimpl {
         let node_ref = &node.upgrade().unwrap();
@@ -199,6 +204,7 @@ impl Menu {
             me: me.clone(),
             ex,
             renderer: renderer.clone(),
+            redraw,
             tasks: SyncMutex::new(vec![]),
             root_dc_key: OsRng.gen(),
             content_dc_key: OsRng.gen(),
@@ -233,6 +239,7 @@ impl Menu {
             is_edit_mode: AtomicBool::new(false),
             parent_rect: SyncMutex::new(None),
             saved_items: SyncMutex::new(None),
+            draw_cache: SyncMutex::new(None),
         });
 
         Pimpl::Menu(self_)
@@ -291,8 +298,8 @@ impl Menu {
                 self.is_edit_mode.store(true, Ordering::Release);
                 let node = self.node.upgrade().unwrap();
                 node.trigger("edit_active", vec![]).await.unwrap();
-                let atom = &mut self.renderer.make_guard(gfxtag!("Menu::long_press"));
-                self.redraw(atom);
+                *self.draw_cache.lock() = None;
+                self.redraw.trigger();
             }
         } else if is_tap {
             let is_edit_mode = self.is_edit_mode.load(Ordering::Relaxed);
@@ -312,7 +319,6 @@ impl Menu {
                         info!(target: "app::menu", "X clicked for item: {item_name}");
                         let atom = &mut self.renderer.make_guard(gfxtag!("Menu::delete_item"));
                         self.items.remove_str(atom, Role::App, item_idx).unwrap();
-                        self.redraw(atom);
                     } else {
                         self.handle_selection(item_idx).await;
                     }
@@ -323,14 +329,10 @@ impl Menu {
         }
     }
 
-    fn get_draw_calls(
-        &self,
-        atom: &mut PropertyAtomicGuard,
-        parent_rect: Rectangle,
-    ) -> Option<DrawUpdate> {
-        self.rect.eval(atom, &parent_rect).ok()?;
-        let rect = self.rect.get();
-
+    /// Build the content draw instructions. Called only when the draw
+    /// cache is stale or the rect changed; the root shell is re-emitted
+    /// cheaply by the draw pass on every pass.
+    fn make_content_instrs(&self, rect: &Rectangle) -> Vec<DrawInstruction> {
         let mut instrs = vec![];
 
         let scroll = self.scroll.load(Ordering::Relaxed);
@@ -462,57 +464,7 @@ impl Menu {
             }
         }
 
-        Some(DrawUpdate {
-            key: self.root_dc_key,
-            draw_calls: vec![
-                (
-                    self.root_dc_key,
-                    DrawCall {
-                        instrs: vec![
-                            DrawInstruction::ApplyView(rect),
-                            DrawInstruction::Move(Point::new(0., -scroll)),
-                        ],
-                        dcs: vec![self.content_dc_key],
-                        z_index: self.z_index.get(),
-                        debug_str: "menu_root",
-                    },
-                ),
-                (
-                    self.content_dc_key,
-                    DrawCall {
-                        instrs,
-                        dcs: vec![],
-                        z_index: self.z_index.get(),
-                        debug_str: "menu_content",
-                    },
-                ),
-            ],
-        })
-    }
-
-    fn redraw(&self, atom: &mut PropertyAtomicGuard) {
-        let Some(parent_rect) = self.parent_rect.lock().clone() else { return };
-        let Some(draw_update) = self.get_draw_calls(atom, parent_rect) else { return };
-        self.renderer.replace_draw_calls(Some(atom.batch_id), draw_update.draw_calls);
-    }
-
-    fn redraw_scroll<R: RenderApi>(&self, renderer: &R) {
-        let rect = self.rect.get();
-        let scroll = self.scroll.load(Ordering::Relaxed);
-
-        // Only recreate root with updated scroll position
-        let root_instrs =
-            vec![DrawInstruction::ApplyView(rect), DrawInstruction::Move(Point::new(0., -scroll))];
-
-        let root_dc = DrawCall {
-            instrs: root_instrs,
-            dcs: vec![self.content_dc_key],
-            z_index: self.z_index.get(),
-            debug_str: "menu_root",
-        };
-
-        let draw_calls = vec![(self.root_dc_key, root_dc)];
-        renderer.replace_draw_calls(None, draw_calls);
+        instrs
     }
 
     fn scrollview(&self, scroll: f32) {
@@ -545,7 +497,7 @@ impl Menu {
                 speed = self.speed.load(Ordering::Relaxed);
                 let scroll = self.scroll.load(Ordering::Relaxed);
                 self.scrollview(scroll + speed);
-                self.redraw_scroll(&self.renderer);
+                self.redraw.trigger();
                 speed *= resist;
                 self.speed.store(speed, Ordering::Relaxed);
                 darkfi::system::msleep(16).await;
@@ -592,7 +544,8 @@ impl Menu {
 
         // Exit edit mode
         self_.is_edit_mode.store(false, Ordering::Release);
-        self_.redraw(atom);
+        *self_.draw_cache.lock() = None;
+        self_.redraw.trigger();
 
         true
     }
@@ -625,8 +578,8 @@ impl Menu {
         node.trigger("edit_done", data).await.unwrap();
 
         self_.is_edit_mode.store(false, Ordering::Release);
-        let atom = &mut self_.renderer.make_guard(gfxtag!("Menu::done_edit"));
-        self_.redraw(atom);
+        *self_.draw_cache.lock() = None;
+        self_.redraw.trigger();
 
         true
     }
@@ -668,23 +621,58 @@ impl UIObject for Menu {
 
         let mut on_modify = OnModify::new(ex, self.node.clone(), me.clone());
 
-        async fn redraw(self_: Arc<Menu>, batch: BatchGuardPtr) {
-            let atom = &mut batch.spawn();
-            self_.redraw(atom);
-        }
-
-        on_modify.when_change(self.items.clone(), redraw);
-        on_modify.when_change(self.rect.prop(), redraw);
-        on_modify.when_change(self.font_size.prop(), redraw);
-        on_modify.when_change(self.padding.clone(), redraw);
-        on_modify.when_change(self.text_color.prop(), redraw);
-        on_modify.when_change(self.bg_color.prop(), redraw);
-        on_modify.when_change(self.sep_size.prop(), redraw);
-        on_modify.when_change(self.sep_color.prop(), redraw);
-        on_modify.when_change(self.role1_color.prop(), redraw);
-        on_modify.when_change(self.role1_group.clone(), redraw);
-        on_modify.when_change(self.role2_color.prop(), redraw);
-        on_modify.when_change(self.role2_group.clone(), redraw);
+        on_modify.when_change_external(self.items.clone(), |self_, _| async move {
+            *self_.draw_cache.lock() = None;
+            self_.redraw.trigger();
+        });
+        on_modify.when_change_external(self.rect.prop(), |self_, _| async move {
+            *self_.draw_cache.lock() = None;
+            self_.redraw.trigger();
+        });
+        on_modify.when_change_external(self.font_size.prop(), |self_, _| async move {
+            *self_.draw_cache.lock() = None;
+            self_.redraw.trigger();
+        });
+        on_modify.when_change_external(self.padding.clone(), |self_, _| async move {
+            *self_.draw_cache.lock() = None;
+            self_.redraw.trigger();
+        });
+        on_modify.when_change_external(self.text_color.prop(), |self_, _| async move {
+            *self_.draw_cache.lock() = None;
+            self_.redraw.trigger();
+        });
+        on_modify.when_change_external(self.bg_color.prop(), |self_, _| async move {
+            *self_.draw_cache.lock() = None;
+            self_.redraw.trigger();
+        });
+        on_modify.when_change_external(self.sep_size.prop(), |self_, _| async move {
+            *self_.draw_cache.lock() = None;
+            self_.redraw.trigger();
+        });
+        on_modify.when_change_external(self.sep_color.prop(), |self_, _| async move {
+            *self_.draw_cache.lock() = None;
+            self_.redraw.trigger();
+        });
+        on_modify.when_change_external(self.role1_color.prop(), |self_, _| async move {
+            *self_.draw_cache.lock() = None;
+            self_.redraw.trigger();
+        });
+        on_modify.when_change_external(self.role1_group.clone(), |self_, _| async move {
+            *self_.draw_cache.lock() = None;
+            self_.redraw.trigger();
+        });
+        on_modify.when_change_external(self.role2_color.prop(), |self_, _| async move {
+            *self_.draw_cache.lock() = None;
+            self_.redraw.trigger();
+        });
+        on_modify.when_change_external(self.role2_group.clone(), |self_, _| async move {
+            *self_.draw_cache.lock() = None;
+            self_.redraw.trigger();
+        });
+        on_modify.when_change_external(self.window_scale.prop(), |self_, _| async move {
+            *self_.draw_cache.lock() = None;
+            self_.redraw.trigger();
+        });
 
         let mut tasks = vec![motion_task, cancel_task, done_task];
         tasks.append(&mut on_modify.tasks);
@@ -693,6 +681,7 @@ impl UIObject for Menu {
 
     fn stop(&self) {
         *self.tasks.lock() = vec![];
+        *self.draw_cache.lock() = None;
     }
 
     async fn draw(
@@ -701,7 +690,52 @@ impl UIObject for Menu {
         atom: &mut PropertyAtomicGuard,
     ) -> Option<DrawUpdate> {
         *self.parent_rect.lock() = Some(parent_rect);
-        self.get_draw_calls(atom, parent_rect)
+
+        // Rect property is its own memo: compare before/after eval.
+        let prev_rect = self.rect.get();
+        self.rect.eval(atom, &parent_rect).ok()?;
+        let rect = self.rect.get();
+        let rect_changed = rect != prev_rect;
+
+        // Compute under the lock so a concurrent invalidation lands
+        // before or after, never between.
+        let mut cache = self.draw_cache.lock();
+        if cache.is_none() || rect_changed {
+            *cache = Some(self.make_content_instrs(&rect));
+        }
+        let instrs = cache.clone().unwrap();
+        drop(cache);
+
+        // The root shell is cheap: re-emit it every pass with the
+        // current scroll so scroll pokes don't invalidate content.
+        let scroll = self.scroll.load(Ordering::Relaxed);
+
+        Some(DrawUpdate {
+            key: self.root_dc_key,
+            draw_calls: vec![
+                (
+                    self.root_dc_key,
+                    DrawCall {
+                        instrs: vec![
+                            DrawInstruction::ApplyView(rect),
+                            DrawInstruction::Move(Point::new(0., -scroll)),
+                        ],
+                        dcs: vec![self.content_dc_key],
+                        z_index: self.z_index.get(),
+                        debug_str: "menu_root",
+                    },
+                ),
+                (
+                    self.content_dc_key,
+                    DrawCall {
+                        instrs,
+                        dcs: vec![],
+                        z_index: self.z_index.get(),
+                        debug_str: "menu_content",
+                    },
+                ),
+            ],
+        })
     }
 
     async fn handle_mouse_btn_down(&self, btn: MouseButton, mouse_pos: Point) -> bool {
@@ -758,8 +792,8 @@ impl UIObject for Menu {
                     arc_self.is_edit_mode.store(true, Ordering::Release);
                     let node = arc_self.node.upgrade().unwrap();
                     node.trigger("edit_active", vec![]).await.unwrap();
-                    let atom = &mut arc_self.renderer.make_guard(gfxtag!("Menu::long_press"));
-                    arc_self.redraw(atom);
+                    *arc_self.draw_cache.lock() = None;
+                    arc_self.redraw.trigger();
                 }
             }
         });
@@ -840,20 +874,14 @@ impl UIObject for Menu {
         }
 
         if should_redraw {
-            let atom = &mut self.renderer.make_guard(gfxtag!("Menu::drag_update"));
-            self.redraw(atom);
+            *self.draw_cache.lock() = None;
+            self.redraw.trigger();
         }
 
         false
     }
 
-    fn handle_touch_sync(
-        &self,
-        renderer: &RendererSync,
-        phase: TouchPhase,
-        id: u64,
-        touch_pos: Point,
-    ) -> bool {
+    fn handle_touch_sync(&self, phase: TouchPhase, id: u64, touch_pos: Point) -> bool {
         if id != 0 {
             return false
         }
@@ -906,8 +934,8 @@ impl UIObject for Menu {
                 }
 
                 if should_redraw {
-                    let atom = &mut self.renderer.make_guard(gfxtag!("Menu::drag_update"));
-                    self.redraw(atom);
+                    *self.draw_cache.lock() = None;
+                    self.redraw.trigger();
                 }
 
                 let scroll = {
@@ -932,7 +960,7 @@ impl UIObject for Menu {
                 };
 
                 self.scrollview(scroll);
-                self.redraw_scroll(renderer);
+                self.redraw.trigger();
                 true
             }
 

@@ -17,7 +17,7 @@
  */
 
 use std::{
-    cell::{Cell, UnsafeCell},
+    cell::Cell,
     sync::{
         atomic::{AtomicU32, Ordering},
         Arc,
@@ -25,13 +25,10 @@ use std::{
 };
 
 use super::{
-    anim::Frame as AnimFrame, AnimId, BufferId, DebugTag, DrawCall, Stage, TextureFormat,
-    TextureId, Vertex,
+    anim::Frame as AnimFrame, AnimId, BufferId, DebugTag, DrawCall, TextureFormat, TextureId,
+    Vertex,
 };
-use crate::{
-    prop::{BatchGuardId, PropertyAtomicGuard},
-    util::unixtime,
-};
+use crate::prop::PropertyAtomicGuard;
 
 pub type EpochIndex = u32;
 type DcId = u64;
@@ -98,6 +95,13 @@ impl ManagedSeqAnim {
         assert!(frame_idx < self.frames_len);
         self.renderer.update_unmanaged_anim(self.id, frame_idx, frame, self.epoch, self.tag);
     }
+
+    /// Hold `frame_idx` for `duration_ms`, then resume ticking. Re-issuing
+    /// re-arms the hold. No timed commit happens app-side; the anim's own
+    /// frame ticks implement the resume.
+    pub fn pause(&self, frame_idx: usize, duration_ms: u64) {
+        self.renderer.pause_unmanaged_anim(self.id, frame_idx, duration_ms, self.epoch, self.tag);
+    }
 }
 
 impl Drop for ManagedSeqAnim {
@@ -112,8 +116,8 @@ impl std::fmt::Debug for ManagedSeqAnim {
     }
 }
 
-/// This trait allows `Renderer` and `RendererSync` to be used interchangeably helping with
-/// code reuse.
+/// The async renderer API: allocates GPU resources and modifies the render
+/// tree by sending methods to the gfx Stage thread.
 pub trait RenderApi {
     /// Allocate a texture on the gfx card
     fn new_texture(
@@ -132,7 +136,7 @@ pub trait RenderApi {
     fn new_index_buffer(&self, indices: Vec<u16>, tag: DebugTag) -> ManagedBufferPtr;
 
     /// Modify render tree.
-    fn replace_draw_calls(&self, batch_id: Option<BatchGuardId>, dcs: Vec<(DcId, DrawCall)>);
+    fn replace_draw_calls(&self, dcs: Vec<(DcId, DrawCall)>);
 }
 
 #[derive(Clone)]
@@ -250,31 +254,33 @@ impl Renderer {
         self.send_with_epoch(method, epoch);
     }
 
+    pub fn pause_unmanaged_anim(
+        &self,
+        anim: AnimId,
+        frame_idx: usize,
+        duration_ms: u64,
+        epoch: EpochIndex,
+        tag: DebugTag,
+    ) {
+        let method = GraphicsMethod::PauseSeqAnim { id: anim, frame_idx, duration_ms, tag };
+        self.send_with_epoch(method, epoch);
+
+        // Force an update so the pause takes effect promptly on Android
+        #[cfg(target_os = "android")]
+        miniquad::window::schedule_update();
+    }
+
     fn delete_unmanaged_anim(&self, anim: AnimId, epoch: EpochIndex, tag: DebugTag) {
         let method = GraphicsMethod::DeleteSeqAnim((anim, tag));
         self.send_with_epoch(method, epoch);
     }
 
-    fn start_batch(&self, batch_id: BatchGuardId, tag: DebugTag) {
-        let method = GraphicsMethod::StartBatch { batch_id, tag };
-        self.send(method);
-    }
-    fn end_batch(&self, batch_id: BatchGuardId) {
-        let timest = unixtime();
-        let method = GraphicsMethod::EndBatch { batch_id, timest };
-        self.send(method);
-
-        // Force an update
-        #[cfg(target_os = "android")]
-        miniquad::window::schedule_update();
-    }
-
-    pub fn make_guard(&self, debug_str: Option<&'static str>) -> PropertyAtomicGuard {
-        let r = self.clone();
-        let start_batch = Box::new(move |bid| r.start_batch(bid, debug_str));
-        let r = self.clone();
-        let end_batch = Box::new(move |bid| r.end_batch(bid));
-        PropertyAtomicGuard::new(start_batch, end_batch)
+    /// Property transactions only: notifications are deferred until the
+    /// guard drops. Since the draw-pass migration there is no gfx-side
+    /// batching anymore — draw commits are single immediate messages —
+    /// so the guard no longer opens or closes renderer batches.
+    pub fn make_guard(&self, _debug_str: Option<&'static str>) -> PropertyAtomicGuard {
+        PropertyAtomicGuard::none()
     }
 }
 
@@ -300,8 +306,8 @@ impl RenderApi for Renderer {
         Arc::new(ManagedBuffer { id, epoch, renderer: self.clone(), tag, buftype: 1 })
     }
 
-    fn replace_draw_calls(&self, batch_id: Option<BatchGuardId>, dcs: Vec<(DcId, DrawCall)>) {
-        let method = GraphicsMethod::ReplaceGfxDrawCalls { batch_id, dcs };
+    fn replace_draw_calls(&self, dcs: Vec<(DcId, DrawCall)>) {
+        let method = GraphicsMethod::ReplaceGfxDrawCalls { dcs };
         self.send(method);
 
         // I'm not sure whether we need this. Anyway its not fully reliable either since
@@ -321,10 +327,9 @@ pub enum GraphicsMethod {
     DeleteBuffer((BufferId, DebugTag, u8)),
     NewSeqAnim { id: AnimId, frames_len: usize, oneshot: bool, tag: DebugTag },
     UpdateSeqAnim { id: AnimId, frame_idx: usize, frame: AnimFrame, tag: DebugTag },
+    PauseSeqAnim { id: AnimId, frame_idx: usize, duration_ms: u64, tag: DebugTag },
     DeleteSeqAnim((AnimId, DebugTag)),
-    ReplaceGfxDrawCalls { batch_id: Option<BatchGuardId>, dcs: Vec<(DcId, DrawCall)> },
-    StartBatch { batch_id: BatchGuardId, tag: DebugTag },
-    EndBatch { batch_id: BatchGuardId, timest: u64 },
+    ReplaceGfxDrawCalls { dcs: Vec<(DcId, DrawCall)> },
     Noop,
 }
 
@@ -338,13 +343,9 @@ impl std::fmt::Debug for GraphicsMethod {
             Self::DeleteBuffer(_) => write!(f, "DeleteBuffer"),
             Self::NewSeqAnim { .. } => write!(f, "NewSeqAnim"),
             Self::UpdateSeqAnim { .. } => write!(f, "UpdateSeqAnim"),
+            Self::PauseSeqAnim { .. } => write!(f, "PauseSeqAnim"),
             Self::DeleteSeqAnim(_) => write!(f, "DeleteSeqAnim"),
-            Self::ReplaceGfxDrawCalls { batch_id, dcs: _ } => match batch_id {
-                Some(bid) => write!(f, "ReplaceGfxDrawCalls({bid})"),
-                None => write!(f, "ReplaceGfxDrawCalls(immediate)"),
-            },
-            Self::StartBatch { batch_id, tag } => write!(f, "StartBatch({batch_id}, {tag:?})"),
-            Self::EndBatch { batch_id, timest } => write!(f, "EndBatch({batch_id}, {timest})"),
+            Self::ReplaceGfxDrawCalls { dcs: _ } => write!(f, "ReplaceGfxDrawCalls"),
             Self::Noop => write!(f, "Noop"),
         }
     }
@@ -353,67 +354,5 @@ impl std::fmt::Debug for GraphicsMethod {
 impl Default for GraphicsMethod {
     fn default() -> Self {
         GraphicsMethod::Noop
-    }
-}
-
-pub struct RendererSync<'a> {
-    stage: UnsafeCell<&'a mut Stage>,
-}
-
-impl<'a> RendererSync<'a> {
-    pub(super) fn new(stage: &'a mut Stage) -> Self {
-        Self { stage: UnsafeCell::new(stage) }
-    }
-
-    // SAFETY: The '&a mut Stage' reference stored in UnsafeCell is guaranteed to be unique
-    // for the lifetime 'a of this RendererSync. No other references to this Stage can exist
-    // while RendererSync is alive, due to Rust's borrow checker rules on mutable references.
-    // Therefore, it's safe to return &mut Stage through &self.
-    fn stage(&self) -> &mut Stage {
-        unsafe { &mut *self.stage.get() }
-    }
-}
-
-impl RenderApi for RendererSync<'_> {
-    fn new_texture(
-        &self,
-        width: u16,
-        height: u16,
-        data: Vec<u8>,
-        fmt: TextureFormat,
-        tag: DebugTag,
-    ) -> ManagedTexturePtr {
-        let stage = self.stage();
-        let renderer = stage.renderer.clone();
-        let id = NEXT_TEXTURE_ID.fetch_add(1, Ordering::Relaxed);
-        stage.method_new_texture(width, height, &data, fmt, id);
-        Arc::new(ManagedTexture { id, epoch: 0, renderer, tag })
-    }
-
-    fn new_vertex_buffer(&self, verts: Vec<Vertex>, tag: DebugTag) -> ManagedBufferPtr {
-        let stage = self.stage();
-        let renderer = stage.renderer.clone();
-        let id = NEXT_BUFFER_ID.fetch_add(1, Ordering::Relaxed);
-        stage.method_new_vertex_buffer(&verts, id);
-        Arc::new(ManagedBuffer { id, epoch: 0, renderer, tag, buftype: 0 })
-    }
-
-    fn new_index_buffer(&self, indices: Vec<u16>, tag: DebugTag) -> ManagedBufferPtr {
-        let stage = self.stage();
-        let renderer = stage.renderer.clone();
-        let id = NEXT_BUFFER_ID.fetch_add(1, Ordering::Relaxed);
-        stage.method_new_index_buffer(&indices, id);
-        Arc::new(ManagedBuffer { id, epoch: 0, renderer, tag, buftype: 1 })
-    }
-
-    /// Draw calls (no batching). The batch ID is ignored here.
-    fn replace_draw_calls(&self, _: Option<BatchGuardId>, dcs: Vec<(DcId, DrawCall)>) {
-        let stage = self.stage();
-        let timest = unixtime();
-        stage.apply_draw_calls(timest, dcs);
-
-        // Force an update
-        #[cfg(target_os = "android")]
-        miniquad::window::schedule_update();
     }
 }

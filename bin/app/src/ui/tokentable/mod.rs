@@ -28,8 +28,7 @@ use crate::{
     gfx::{gfxtag, DrawCall, DrawInstruction, Point, Rectangle, RenderApi, Renderer},
     mesh::MeshBuilder,
     prop::{
-        BatchGuardId, PropertyAtomicGuard, PropertyColor, PropertyFloat32, PropertyRect,
-        PropertyUint32, Role,
+        PropertyAtomicGuard, PropertyColor, PropertyFloat32, PropertyRect, PropertyUint32, Role,
     },
     scene::SceneNodeWeak,
     text,
@@ -37,7 +36,7 @@ use crate::{
     ExecutorPtr,
 };
 
-use super::{DrawUpdate, UIObject};
+use super::{DrawUpdate, OnModify, RedrawTrigger, UIObject};
 
 macro_rules! d { ($($arg:tt)*) => { debug!(target: "ui::tokentable", $($arg)*); } }
 macro_rules! t { ($($arg:tt)*) => { trace!(target: "ui::tokentable", $($arg)*); } }
@@ -63,6 +62,7 @@ pub type TokenTablePtr = Arc<TokenTable>;
 pub struct TokenTable {
     node: SceneNodeWeak,
     renderer: Renderer,
+    redraw: RedrawTrigger,
     mouse_btn_token: SyncMutex<Option<TokenId>>,
 
     rows: SyncMutex<Vec<TokenRow>>,
@@ -78,12 +78,15 @@ pub struct TokenTable {
     padding_x: PropertyFloat32,
     padding_y: PropertyFloat32,
 
+    /// Cached draw instructions. `None` means stale.
+    draw_cache: SyncMutex<Option<Vec<DrawInstruction>>>,
+
     parent_rect: SyncMutex<Option<Rectangle>>,
     tasks: SyncMutex<Vec<smol::Task<()>>>,
 }
 
 impl TokenTable {
-    pub async fn new(node: SceneNodeWeak, renderer: Renderer) -> Pimpl {
+    pub async fn new(node: SceneNodeWeak, renderer: Renderer, redraw: RedrawTrigger) -> Pimpl {
         let node_ref = &node.upgrade().unwrap();
         let rect = PropertyRect::wrap(node_ref, Role::Internal, "rect").unwrap();
         let font_size = PropertyFloat32::wrap(node_ref, Role::Internal, "font_size", 0).unwrap();
@@ -98,6 +101,7 @@ impl TokenTable {
         let self_ = Arc::new(Self {
             node: node.clone(),
             renderer: renderer.clone(),
+            redraw,
             mouse_btn_token: SyncMutex::new(None),
             rows: SyncMutex::new(vec![]),
             dc_key: OsRng.gen(),
@@ -109,6 +113,7 @@ impl TokenTable {
             separator_color,
             padding_x,
             padding_y,
+            draw_cache: SyncMutex::new(None),
             parent_rect: SyncMutex::new(None),
             tasks: SyncMutex::new(vec![]),
         });
@@ -136,12 +141,12 @@ impl TokenTable {
             return false
         };
 
-        self_.set_tokens(rows).await;
+        self_.set_tokens(rows);
         true
     }
 
     /// Replace all rows in the token table
-    pub async fn set_tokens(&self, rows: Vec<TokenRow>) {
+    pub fn set_tokens(&self, rows: Vec<TokenRow>) {
         // Ensure DRK token is always shown first (balance is set to 0 if not present)
         let rows = if rows.iter().any(|row| row.id == *DARK_TOKEN_ID) {
             let mut drk_row = None;
@@ -177,8 +182,8 @@ impl TokenTable {
 
         *self.rows.lock() = rows;
 
-        let atom = self.renderer.make_guard(gfxtag!("TokenTable::set_tokens"));
-        self.redraw_cached(atom.batch_id).await;
+        *self.draw_cache.lock() = None;
+        self.redraw.trigger();
     }
 
     /// Get row at specific screen y position
@@ -203,28 +208,7 @@ impl TokenTable {
         }
     }
 
-    /// Invalidates cache and redraws everything
-    async fn redraw_all(&self, atom: &mut PropertyAtomicGuard) {
-        let parent_rect = self.parent_rect.lock().unwrap().clone();
-        self.rect.eval(atom, &parent_rect).expect("unable to eval rect");
-        self.redraw_cached(atom.batch_id).await;
-    }
-
-    async fn redraw_cached(&self, batch_id: BatchGuardId) {
-        let rect = self.rect.get();
-
-        let mut mesh_instrs = self.get_meshes(&rect).await;
-
-        let mut instrs = vec![DrawInstruction::ApplyView(rect)];
-        instrs.append(&mut mesh_instrs);
-
-        let draw_calls =
-            vec![(self.dc_key, DrawCall::new(instrs, vec![], self.z_index.get(), "tokentable"))];
-
-        self.renderer.replace_draw_calls(Some(batch_id), draw_calls);
-    }
-
-    async fn get_meshes(&self, rect: &Rectangle) -> Vec<DrawInstruction> {
+    fn get_meshes(&self, rect: &Rectangle) -> Vec<DrawInstruction> {
         let rows = self.rows.lock();
         let font_size = self.font_size.get();
         let text_color = self.text_color.get();
@@ -299,12 +283,46 @@ impl UIObject for TokenTable {
             }
         });
 
-        *self.tasks.lock() = vec![set_tokens_method_task];
+        let mut on_modify = OnModify::new(ex, self.node.clone(), me.clone());
+
+        on_modify.when_change_external(self.rect.prop(), |self_, _| async move {
+            *self_.draw_cache.lock() = None;
+            self_.redraw.trigger();
+        });
+        on_modify.when_change_external(self.font_size.prop(), |self_, _| async move {
+            *self_.draw_cache.lock() = None;
+            self_.redraw.trigger();
+        });
+        on_modify.when_change_external(self.text_color.prop(), |self_, _| async move {
+            *self_.draw_cache.lock() = None;
+            self_.redraw.trigger();
+        });
+        on_modify.when_change_external(self.separator_color.prop(), |self_, _| async move {
+            *self_.draw_cache.lock() = None;
+            self_.redraw.trigger();
+        });
+        on_modify.when_change_external(self.padding_x.prop(), |self_, _| async move {
+            *self_.draw_cache.lock() = None;
+            self_.redraw.trigger();
+        });
+        on_modify.when_change_external(self.padding_y.prop(), |self_, _| async move {
+            *self_.draw_cache.lock() = None;
+            self_.redraw.trigger();
+        });
+        on_modify.when_change_external(self.z_index.prop(), |self_, _| async move {
+            *self_.draw_cache.lock() = None;
+            self_.redraw.trigger();
+        });
+
+        let mut tasks = vec![set_tokens_method_task];
+        tasks.append(&mut on_modify.tasks);
+        *self.tasks.lock() = tasks;
     }
 
     fn stop(&self) {
         self.tasks.lock().clear();
         *self.parent_rect.lock() = None;
+        *self.draw_cache.lock() = None;
     }
 
     async fn draw(
@@ -313,13 +331,24 @@ impl UIObject for TokenTable {
         atom: &mut PropertyAtomicGuard,
     ) -> Option<DrawUpdate> {
         *self.parent_rect.lock() = Some(parent_rect);
+
+        // Rect property is its own memo: compare before/after eval.
+        let prev_rect = self.rect.get();
         self.rect.eval(atom, &parent_rect).ok()?;
         let rect = self.rect.get();
+        let rect_changed = rect != prev_rect;
 
-        let mut mesh_instrs = self.get_meshes(&rect).await;
-
-        let mut instrs = vec![DrawInstruction::ApplyView(rect)];
-        instrs.append(&mut mesh_instrs);
+        // Compute under the lock so a concurrent invalidation lands
+        // before or after, never between.
+        let mut cache = self.draw_cache.lock();
+        if cache.is_none() || rect_changed {
+            let mut mesh_instrs = self.get_meshes(&rect);
+            let mut instrs = vec![DrawInstruction::ApplyView(rect)];
+            instrs.append(&mut mesh_instrs);
+            *cache = Some(instrs);
+        }
+        let instrs = cache.clone().unwrap();
+        drop(cache);
 
         Some(DrawUpdate {
             key: self.dc_key,
@@ -409,8 +438,7 @@ impl UIObject for TokenTable {
 impl Drop for TokenTable {
     fn drop(&mut self) {
         let atom = self.renderer.make_guard(gfxtag!("TokenTable::drop"));
-        self.renderer
-            .replace_draw_calls(Some(atom.batch_id), vec![(self.dc_key, Default::default())]);
+        self.renderer.replace_draw_calls(vec![(self.dc_key, Default::default())]);
     }
 }
 
