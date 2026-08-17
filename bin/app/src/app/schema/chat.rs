@@ -584,9 +584,9 @@ pub async fn make(
         prop.set_f32(atom, Role::App, 2, 0.5).unwrap();
         prop.set_f32(atom, Role::App, 3, 1.).unwrap();
     } else if COLOR_SCHEME == ColorScheme::DarkMode {
-        prop.set_f32(atom, Role::App, 0, 0.5).unwrap();
-        prop.set_f32(atom, Role::App, 1, 0.5).unwrap();
-        prop.set_f32(atom, Role::App, 2, 0.5).unwrap();
+        prop.set_f32(atom, Role::App, 0, 0.).unwrap();
+        prop.set_f32(atom, Role::App, 1, 0.2).unwrap();
+        prop.set_f32(atom, Role::App, 2, 0.2).unwrap();
         prop.set_f32(atom, Role::App, 3, 1.).unwrap();
     }
 
