@@ -1506,15 +1506,30 @@ impl MessageBuffer {
         colors
     }
 
-    pub async fn get_line(&mut self, y: f32) -> Option<(&mut Message, f32)> {
+    pub async fn get_line(&mut self, rect: &Rectangle, y: f32) -> Option<(&mut Message, f32)> {
         let line_height = self.line_height.get();
         let msg_spacing = self.msg_spacing.get();
+        let timestamp_width = self.timestamp_width.get();
+        let text_color = self.text_color.get();
+        let url_text_color = self.url_text_color.get();
+        let nick_colors = self.read_nick_colors();
 
         let msgs = self.msgs_with_date();
         let mut msgs = pin!(msgs);
 
         let mut current_pos = 0.;
         while let Some(msg) = msgs.next().await {
+            // Messages can have their layout cache cleared at any time
+            // (e.g. by select/deselect), so make sure it exists before
+            // measuring, same as in calc_total_height().
+            msg.cache_txt_layout(
+                rect,
+                line_height,
+                timestamp_width,
+                &nick_colors,
+                text_color,
+                url_text_color,
+            );
             let mesh_height = msg.height(line_height);
             let msg_bottom = current_pos;
             let msg_top = current_pos + mesh_height + msg_spacing;
@@ -1530,13 +1545,13 @@ impl MessageBuffer {
         None
     }
 
-    pub async fn url_at(&mut self, x: f32, y: f32) -> Option<String> {
-        let (msg, msg_top) = self.get_line(y).await?;
+    pub async fn url_at(&mut self, rect: &Rectangle, x: f32, y: f32) -> Option<String> {
+        let (msg, msg_top) = self.get_line(rect, y).await?;
         msg.url_hit(Point::new(x, msg_top - y))
     }
 
-    pub async fn select_line(&mut self, y: f32) {
-        if let Some((msg, _)) = self.get_line(y).await {
+    pub async fn select_line(&mut self, rect: &Rectangle, y: f32) {
+        if let Some((msg, _)) = self.get_line(rect, y).await {
             // Do nothing
             if msg.is_date() {
                 return
@@ -1548,8 +1563,8 @@ impl MessageBuffer {
         }
     }
 
-    pub async fn deselect_line(&mut self, y: f32) {
-        if let Some((msg, _)) = self.get_line(y).await {
+    pub async fn deselect_line(&mut self, rect: &Rectangle, y: f32) {
+        if let Some((msg, _)) = self.get_line(rect, y).await {
             if msg.is_date() {
                 return
             }
@@ -1560,8 +1575,8 @@ impl MessageBuffer {
         }
     }
 
-    pub async fn is_line_selected(&mut self, y: f32) -> bool {
-        if let Some((msg, _)) = self.get_line(y).await {
+    pub async fn is_line_selected(&mut self, rect: &Rectangle, y: f32) -> bool {
+        if let Some((msg, _)) = self.get_line(rect, y).await {
             if msg.is_date() {
                 return false
             }

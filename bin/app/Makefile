@@ -100,11 +100,11 @@ assets/forest_720x1280.mp4:
 
 compile-dev: $(SRC) fonts assets/forest_1920x1080.ivf
 	$(CARGO) lbuild --no-default-features $(DEV_FEATURES)
+	-mv target/debug/darkfi-app .
 
 dev:
 	$(MAKE) compile-dev
-	-mv target/debug/darkfi-app .
-	./darkfi-app
+	./darkfi-app 2>&1 | tee app.log
 
 # Users should use the android-release and android-debug targets instead.
 apk:
@@ -114,9 +114,9 @@ apk:
 
 compile-apk: $(SRC) fonts assets/forest_720x1280.mp4
 	cargo quad-apk build --no-default-features $(DEV_FEATURES)
+	-mv $(DEBUG_APK) .
 
 install-apk:
-	-mv $(DEBUG_APK) .
 	-adb $(ADB_DEVICE_INST) uninstall darkfi.darkfi_app
 	adb $(ADB_DEVICE_INST) install -r darkfi-app.apk
 

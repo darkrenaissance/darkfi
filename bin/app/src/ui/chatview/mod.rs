@@ -586,7 +586,7 @@ impl ChatView {
 
         let mut msgbuf = self.msgbuf.lock().await;
         let had = msgbuf.has_selection();
-        msgbuf.select_line(y).await;
+        msgbuf.select_line(&rect, y).await;
         let has = msgbuf.has_selection();
         drop(msgbuf);
 
@@ -604,7 +604,7 @@ impl ChatView {
 
         let mut msgbuf = self.msgbuf.lock().await;
         let had = msgbuf.has_selection();
-        msgbuf.deselect_line(y).await;
+        msgbuf.deselect_line(&rect, y).await;
         let has = msgbuf.has_selection();
         drop(msgbuf);
 
@@ -614,9 +614,10 @@ impl ChatView {
 
     /// Query whether the line under screen y is currently selected.
     async fn is_line_selected(&self, screen_y: f32) -> bool {
+        let rect = self.rect.get();
         let y = self.to_msgbuf_pos(Point::new(0., screen_y)).y;
         let mut msgbuf = self.msgbuf.lock().await;
-        msgbuf.is_line_selected(y).await
+        msgbuf.is_line_selected(&rect, y).await
     }
 
     /// Emit `select_changed(true/false)` whenever the presence of any selected
@@ -1100,7 +1101,7 @@ impl ChatView {
         // URL under the finger takes priority: copy it, don't select.
         let msgbuf_pos = self.to_msgbuf_pos(start_pos);
         let mut msgbuf = self.msgbuf.lock().await;
-        let on_url = msgbuf.url_at(msgbuf_pos.x, msgbuf_pos.y).await;
+        let on_url = msgbuf.url_at(&rect, msgbuf_pos.x, msgbuf_pos.y).await;
         drop(msgbuf);
 
         if let Some(url) = on_url {
@@ -1289,7 +1290,7 @@ impl UIObject for ChatView {
         if rect.contains(mouse_pos) {
             let mut msgbuf = self.msgbuf.lock().await;
             let msgbuf_pos = self.to_msgbuf_pos(mouse_pos);
-            if let Some((msg, msg_top)) = msgbuf.get_line(msgbuf_pos.y).await {
+            if let Some((msg, msg_top)) = msgbuf.get_line(&rect, msgbuf_pos.y).await {
                 if msg
                     .handle_mouse_btn_down(btn, Point::new(msgbuf_pos.x, msg_top - msgbuf_pos.y))
                     .await
@@ -1303,7 +1304,7 @@ impl UIObject for ChatView {
         if btn == MouseButton::Right && rect.contains(mouse_pos) {
             let msgbuf_pos = self.to_msgbuf_pos(mouse_pos);
             let mut msgbuf = self.msgbuf.lock().await;
-            if let Some(url) = msgbuf.url_at(msgbuf_pos.x, msgbuf_pos.y).await {
+            if let Some(url) = msgbuf.url_at(&rect, msgbuf_pos.x, msgbuf_pos.y).await {
                 drop(msgbuf);
                 self.show_toast(&url, mouse_pos - rect.pos()).await;
                 return true
@@ -1315,7 +1316,7 @@ impl UIObject for ChatView {
         if btn == MouseButton::Left && rect.contains(mouse_pos) {
             let msgbuf_pos = self.to_msgbuf_pos(mouse_pos);
             let mut msgbuf = self.msgbuf.lock().await;
-            if msgbuf.url_at(msgbuf_pos.x, msgbuf_pos.y).await.is_some() {
+            if msgbuf.url_at(&rect, msgbuf_pos.x, msgbuf_pos.y).await.is_some() {
                 return true
             }
         }
@@ -1349,7 +1350,7 @@ impl UIObject for ChatView {
         if rect.contains(mouse_pos) {
             let mut msgbuf = self.msgbuf.lock().await;
             let msgbuf_pos = self.to_msgbuf_pos(mouse_pos);
-            if let Some((msg, msg_top)) = msgbuf.get_line(msgbuf_pos.y).await {
+            if let Some((msg, msg_top)) = msgbuf.get_line(&rect, msgbuf_pos.y).await {
                 if msg
                     .handle_mouse_btn_up(btn, Point::new(msgbuf_pos.x, msg_top - msgbuf_pos.y))
                     .await
@@ -1412,7 +1413,7 @@ impl UIObject for ChatView {
 
         let mut msgbuf = self.msgbuf.lock().await;
         let msgbuf_pos = self.to_msgbuf_pos(mouse_pos);
-        if let Some((msg, msg_top)) = msgbuf.get_line(msgbuf_pos.y).await {
+        if let Some((msg, msg_top)) = msgbuf.get_line(&rect, msgbuf_pos.y).await {
             msg.handle_mouse_move(Point::new(msgbuf_pos.x, msg_top - msgbuf_pos.y)).await;
         }
         false
@@ -1542,7 +1543,9 @@ impl UIObject for ChatView {
                     let mut msgbuf = self.msgbuf.lock().await;
                     let msgbuf_pos = self.to_msgbuf_pos(touch_pos);
                     let mut is_handled = false;
-                    if let Some((msg, msg_top)) = msgbuf.get_line(msgbuf_pos.y).await {
+                    if let Some((msg, msg_top)) =
+                        msgbuf.get_line(&self.rect.get(), msgbuf_pos.y).await
+                    {
                         is_handled = msg
                             .handle_touch(
                                 TouchPhase::Ended,
