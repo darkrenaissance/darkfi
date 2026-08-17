@@ -120,7 +120,7 @@ async fn sync_blocks_real(ex: Arc<Executor<'static>>) -> Result<()> {
     settings.inbound_addrs = vec![charlie_url];
     let bob_url = th.bob.p2p_handler.p2p.settings().read().await.inbound_addrs[0].clone();
     settings.peers = vec![bob_url];
-    let charlie = generate_node(
+    let (charlie, _kvdb_folder) = generate_node(
         &th.vks,
         &th.validator_config,
         &settings,
@@ -132,8 +132,8 @@ async fn sync_blocks_real(ex: Arc<Executor<'static>>) -> Result<()> {
     // Verify node synced
     let alice = th.alice.validator.read().await;
     let charlie_validator = charlie.validator.read().await;
-    assert_eq!(alice.blockchain.len(), charlie_validator.blockchain.len());
-    assert!(charlie_validator.blockchain.headers.is_empty_sync());
+    assert_eq!(alice.blockchain.len()?, charlie_validator.blockchain.len()?);
+    assert!(charlie_validator.blockchain.headers.is_empty_sync()?);
     // Node must have just the best fork
     let index = best_fork_index(&alice.consensus.forks)?;
     let best_fork = &alice.consensus.forks[index];
@@ -173,7 +173,7 @@ async fn sync_blocks_real(ex: Arc<Executor<'static>>) -> Result<()> {
     loop {
         th.add_blocks(&[th.generate_next_block(&mut fork).await?]).await?;
         // Check if confirmation occured
-        if th.alice.validator.read().await.blockchain.len() > 4 {
+        if th.alice.validator.read().await.blockchain.len()? > 4 {
             break
         }
     }
@@ -194,8 +194,8 @@ async fn sync_blocks_real(ex: Arc<Executor<'static>>) -> Result<()> {
     let mut charlie = charlie.validator.write().await;
     charlie.confirmation().await?;
     charlie.validate_blockchain(pow_target, pow_fixed_difficulty).await?;
-    assert_eq!(alice.blockchain.len(), charlie.blockchain.len());
-    assert!(charlie.blockchain.headers.is_empty_sync());
+    assert_eq!(alice.blockchain.len()?, charlie.blockchain.len()?);
+    assert!(charlie.blockchain.headers.is_empty_sync()?);
     assert_eq!(last, charlie.blockchain.last()?.1);
     assert_eq!(charlie.consensus.forks.len(), 1);
     assert_eq!(charlie.consensus.forks[0].proposals.len(), 2);
@@ -255,9 +255,9 @@ fn darkfid_programmatic_control() -> Result<()> {
                 let mut genesis_block = darkfi::blockchain::BlockInfo::default();
                 let producer_tx = genesis_block.txs.pop().unwrap();
                 genesis_block.append_txs(vec![producer_tx]);
-                let sled_db = sled_overlay::sled::Config::new().temporary(true).open().unwrap();
+                let (kvdb, _kvdb_folder) = kvdb_overlay::Database::open_temp().unwrap();
                 let overlay = darkfi::blockchain::BlockchainOverlay::new(
-                    &darkfi::blockchain::Blockchain::new(&sled_db).unwrap(),
+                    &darkfi::blockchain::Blockchain::new(&kvdb).unwrap(),
                 )
                 .unwrap();
                 let (_, vks) = darkfi_contract_test_harness::vks::get_cached_pks_and_vks().unwrap();
@@ -291,7 +291,7 @@ fn darkfid_programmatic_control() -> Result<()> {
                 // Initialize a daemon
                 let daemon = crate::Darkfid::init(
                     Network::Mainnet,
-                    &sled_db,
+                    &kvdb,
                     &config,
                     &darkfi::net::Settings::default(),
                     &ex,

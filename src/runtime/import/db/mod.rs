@@ -18,7 +18,7 @@
 
 use darkfi_sdk::crypto::contract_id::ContractId;
 
-/// Internal wasm runtime API for sled trees or tx-local dbs
+/// Internal wasm runtime API for kvdb trees or tx-local dbs
 #[derive(PartialEq)]
 pub struct DbHandle {
     pub contract_id: ContractId,
@@ -28,6 +28,10 @@ pub struct DbHandle {
 impl DbHandle {
     pub fn new(contract_id: ContractId, tree: [u8; 32]) -> Self {
         Self { contract_id, tree }
+    }
+
+    pub fn tree_str(&self) -> String {
+        blake3::Hash::from(self.tree).to_string()
     }
 }
 

@@ -124,7 +124,7 @@ pub(crate) fn zkas_db_set(mut ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, ptr_le
         .overlay
         .lock()
         .unwrap()
-        .get(&db_handle.tree, &serialize(&zkbin.namespace))
+        .get(&db_handle.tree_str(), &serialize(&zkbin.namespace))
     {
         Ok(v) => {
             if let Some(bytes) = v {
@@ -190,7 +190,7 @@ pub(crate) fn zkas_db_set(mut ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, ptr_le
         .overlay
         .lock()
         .unwrap()
-        .insert(&db_handle.tree, &key, &value)
+        .insert(&db_handle.tree_str(), &key, &value)
         .is_err()
     {
         error!(

@@ -19,8 +19,8 @@
 use std::{collections::HashMap, sync::Arc};
 
 use darkfi_sdk::{blockchain::compute_fee, crypto::MerkleTree};
+use kvdb_overlay::Database;
 use num_bigint::BigUint;
-use sled_overlay::sled;
 use smol::lock::RwLock;
 use tracing::{debug, error, info, warn};
 
@@ -95,11 +95,11 @@ pub struct Validator {
 }
 
 impl Validator {
-    pub async fn new(db: &sled::Db, config: &ValidatorConfig) -> Result<ValidatorPtr> {
+    pub async fn new(kvdb: &Database, config: &ValidatorConfig) -> Result<ValidatorPtr> {
         info!(target: "validator::new", "Initializing Validator");
 
         info!(target: "validator::new", "Initializing Blockchain");
-        let blockchain = Blockchain::new(db)?;
+        let blockchain = Blockchain::new(kvdb)?;
 
         // Create an overlay over whole blockchain so we can write
         // stuff.
@@ -648,7 +648,7 @@ impl Validator {
         pow_fixed_difficulty: Option<BigUint>,
     ) -> Result<()> {
         // An empty blockchain is considered valid
-        let mut blocks_count = self.blockchain.len() as u32;
+        let mut blocks_count = self.blockchain.len()? as u32;
         info!(target: "validator::validate_blockchain", "Validating {blocks_count} blocks...");
         if blocks_count == 0 {
             info!(target: "validator::validate_blockchain", "Blockchain validated successfully!");
@@ -656,8 +656,8 @@ impl Validator {
         }
 
         // Create an in memory blockchain overlay
-        let sled_db = sled::Config::new().temporary(true).open()?;
-        let blockchain = Blockchain::new(&sled_db)?;
+        let (kvdb, _folder) = Database::open_temp()?;
+        let blockchain = Blockchain::new(&kvdb)?;
         let overlay = BlockchainOverlay::new(&blockchain)?;
 
         // Set previous
@@ -781,7 +781,7 @@ impl Validator {
         self.blockchain.blocks.difficulty.clear()?;
 
         // An empty blockchain doesn't have difficulty records
-        let mut blocks_count = self.blockchain.len() as u32;
+        let mut blocks_count = self.blockchain.len()? as u32;
         info!(target: "validator::rebuild_block_difficulties", "Rebuilding {blocks_count} block difficulties...");
         if blocks_count == 0 {
             info!(target: "validator::rebuild_block_difficulties", "Validator block difficulties rebuilt successfully!");
@@ -840,7 +840,7 @@ impl Validator {
         }
 
         // Flush the database
-        self.blockchain.sled_db.flush()?;
+        self.blockchain.kvdb.flush_default_mode()?;
 
         info!(target: "validator::rebuild_block_difficulties", "Validator block difficulties rebuilt successfully!");
 

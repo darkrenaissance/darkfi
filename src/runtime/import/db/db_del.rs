@@ -179,7 +179,7 @@ fn db_del_internal(
         .overlay
         .lock()
         .unwrap()
-        .remove(&db_handle.tree, &key)
+        .remove(&db_handle.tree_str(), &key)
         .is_err()
     {
         error!(

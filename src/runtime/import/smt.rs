@@ -35,20 +35,20 @@ use wasmer::{FunctionEnvMut, WasmPtr};
 use super::acl::acl_allow;
 use crate::runtime::vm_runtime::{ContractSection, Env};
 
-/// An SMT adapter for sled overlay storage. Compatible with the WasmDb SMT adapter
-pub struct SledStorage<'a> {
-    overlay: &'a mut sled_overlay::SledDbOverlay,
-    tree_key: &'a [u8],
+/// An SMT adapter for kvdb overlay storage. Compatible with the WasmDb SMT adapter
+pub struct KvdbStorage<'a> {
+    overlay: &'a mut kvdb_overlay::DatabaseOverlay,
+    tree_key: &'a str,
 }
 
-impl StorageAdapter for SledStorage<'_> {
+impl StorageAdapter for KvdbStorage<'_> {
     type Value = pallas::Base;
 
     fn put(&mut self, key: BigUint, value: pallas::Base) -> ContractResult {
         if let Err(e) = self.overlay.insert(self.tree_key, &key.to_bytes_le(), &value.to_repr()) {
             error!(
-                target: "runtime::smt::SledStorage::put",
-                "[WASM] SledStorage::put(): inserting key {key:?}, value {value:?} into DB tree: {:?}: {e}",
+                target: "runtime::smt::KvdbStorage::put",
+                "[WASM] KvdbStorage::put(): inserting key {key:?}, value {value:?} into DB tree: {:?}: {e}",
                 self.tree_key
             );
             return Err(ContractError::SmtPutFailed)
@@ -62,8 +62,8 @@ impl StorageAdapter for SledStorage<'_> {
             Ok(v) => v,
             Err(e) => {
                 error!(
-                    target: "runtime::smt::SledStorage::get",
-                    "[WASM] SledStorage::get(): Fetching key {key:?} from DB tree: {:?}: {e}",
+                    target: "runtime::smt::KvdbStorage::get",
+                    "[WASM] KvdbStorage::get(): Fetching key {key:?} from DB tree: {:?}: {e}",
                     self.tree_key
                 );
                 return None
@@ -80,8 +80,8 @@ impl StorageAdapter for SledStorage<'_> {
     fn del(&mut self, key: &BigUint) -> ContractResult {
         if let Err(e) = self.overlay.remove(self.tree_key, &key.to_bytes_le()) {
             error!(
-                target: "runtime::smt::SledStorage::del",
-                "[WASM] SledStorage::del(): Removing key {key:?} from DB tree: {:?}: {e}",
+                target: "runtime::smt::KvdbStorage::del",
+                "[WASM] KvdbStorage::del(): Removing key {key:?} from DB tree: {:?}: {e}",
                 self.tree_key
             );
             return Err(ContractError::SmtDelFailed)
@@ -204,7 +204,7 @@ pub(crate) fn sparse_merkle_insert_batch(
         return darkfi_sdk::error::CALLER_ACCESS_DENIED
     }
 
-    // This `key` represents the sled key in info where the latest root is
+    // This `key` represents the kvdb key in info where the latest root is
     let root_key: Vec<u8> = match Decodable::decode(&mut buf_reader) {
         Ok(v) => v,
         Err(e) => {
@@ -237,17 +237,17 @@ pub(crate) fn sparse_merkle_insert_batch(
         return darkfi_sdk::error::INTERNAL_ERROR
     }
 
-    // Generate the SledStorage SMT
+    // Generate the KvdbStorage SMT
     let hasher = PoseidonFp::new();
     let lock = env.blockchain.lock().unwrap();
     let mut overlay = lock.overlay.lock().unwrap();
-    let smt_store = SledStorage { overlay: &mut overlay, tree_key: &db_smt.tree };
+    let smt_store = KvdbStorage { overlay: &mut overlay, tree_key: &db_smt.tree_str() };
     let mut smt = SparseMerkleTree::<
         SMT_FP_DEPTH,
         { SMT_FP_DEPTH + 1 },
         pallas::Base,
         PoseidonFp,
-        SledStorage,
+        KvdbStorage,
     >::new(smt_store, hasher, &EMPTY_NODES_FP);
 
     // Count the nullifiers for gas calculation
@@ -302,7 +302,7 @@ pub(crate) fn sparse_merkle_insert_batch(
     }
 
     // Retrieve snapshot root data set
-    let root_value_data_set = match overlay.get(&db_roots.tree, &latest_root_data) {
+    let root_value_data_set = match overlay.get(&db_roots.tree_str(), &latest_root_data) {
         Ok(data) => data,
         Err(e) => {
             error!(
@@ -342,7 +342,9 @@ pub(crate) fn sparse_merkle_insert_batch(
         target: "runtime::smt::sparse_merkle_insert_batch",
         "[WASM] [{cid}] sparse_merkle_insert_batch(): Appending SMT root to db: {latest_root:?}"
     );
-    if overlay.insert(&db_roots.tree, &latest_root_data, &serialize(&root_value_data_set)).is_err()
+    if overlay
+        .insert(&db_roots.tree_str(), &latest_root_data, &serialize(&root_value_data_set))
+        .is_err()
     {
         error!(
             target: "runtime::smt::sparse_merkle_insert_batch",
@@ -356,7 +358,7 @@ pub(crate) fn sparse_merkle_insert_batch(
         target: "runtime::smt::sparse_merkle_insert_batch",
         "[WASM] [{cid}] sparse_merkle_insert_batch(): Replacing latest SMT root pointer"
     );
-    if overlay.insert(&db_info.tree, &root_key, &latest_root_data).is_err() {
+    if overlay.insert(&db_info.tree_str(), &root_key, &latest_root_data).is_err() {
         error!(
             target: "runtime::smt::sparse_merkle_insert_batch",
             "[WASM] [{cid}] sparse_merkle_insert_batch(): Couldn't insert latest root to db_info tree"

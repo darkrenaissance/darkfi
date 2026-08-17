@@ -56,7 +56,7 @@ pub(crate) fn db_init(mut ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, ptr_len: u
     }
 
     // Subtract used gas.
-    // TODO: There should probably be an additional fee to open a new sled tree.
+    // TODO: There should probably be an additional fee to open a new kvdb tree.
     env.subtract_gas(&mut store, 1);
 
     // Get the wasm memory reader
@@ -127,7 +127,7 @@ pub(crate) fn db_init(mut ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, ptr_len: u
 
     // Now try to initialize the tree. If this returns an error,
     // it usually means that this DB was already initialized.
-    // An alternative error might happen if something in sled fails,
+    // An alternative error might happen if something in kvdb fails,
     // for this we should take care to stop the node or do something to
     // be able to gracefully recover.
     // (src/blockchain/contract_store.rs holds this init() function)

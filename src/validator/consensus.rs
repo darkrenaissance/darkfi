@@ -16,12 +16,15 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::collections::{BTreeSet, HashMap};
+use std::{
+    collections::{BTreeSet, HashMap},
+    str::FromStr,
+};
 
 use darkfi_sdk::{crypto::MerkleTree, tx::TransactionHash};
-use darkfi_serial::{async_trait, deserialize, SerialDecodable, SerialEncodable};
+use darkfi_serial::{async_trait, SerialDecodable, SerialEncodable};
+use kvdb_overlay::DatabaseOverlayStateDiff;
 use num_bigint::BigUint;
-use sled_overlay::{database::SledDbOverlayStateDiff, sled::IVec};
 use tracing::{debug, info, warn};
 
 use crate::{
@@ -530,7 +533,7 @@ impl Consensus {
         let mut iter = keep.iter();
         self.forks.retain(|_| *iter.next().unwrap());
 
-        // Remove confirmed proposals txs from the unporposed txs sled
+        // Remove confirmed proposals txs from the unporposed txs kvdb
         // tree.
         self.blockchain.remove_pending_txs_hashes(&confirmed_txs_hashes)?;
 
@@ -588,7 +591,7 @@ impl Consensus {
     /// from the database.
     pub async fn purge_unreferenced_trees(
         &self,
-        referenced_trees: &mut BTreeSet<IVec>,
+        referenced_trees: &mut BTreeSet<String>,
     ) -> Result<()> {
         // Check if we have forks
         if self.forks.is_empty() {
@@ -604,7 +607,7 @@ impl Consensus {
         }
 
         // Retrieve current database trees
-        let current_trees = self.blockchain.sled_db.tree_names();
+        let current_trees = self.blockchain.kvdb.tree_names()?;
 
         // Iterate over current database trees and drop unreferenced
         // contracts ones.
@@ -615,11 +618,13 @@ impl Consensus {
             }
 
             // Check if its a contract tree pointer
-            let Ok(tree) = deserialize::<[u8; 32]>(&tree) else { continue };
+            if blake3::Hash::from_str(&tree).is_err() {
+                continue
+            };
 
             // Drop it
-            debug!(target: "validator::consensus::purge_unreferenced_trees", "Dropping unreferenced tree: {}", blake3::Hash::from(tree));
-            self.blockchain.sled_db.drop_tree(tree)?;
+            debug!(target: "validator::consensus::purge_unreferenced_trees", "Dropping unreferenced tree: {tree}");
+            self.blockchain.kvdb.drop_tree(&tree)?;
         }
 
         Ok(())
@@ -665,7 +670,7 @@ pub struct Fork {
     /// Fork proposal hashes sequence
     pub proposals: Vec<HeaderHash>,
     /// Fork proposal overlay diffs sequence
-    pub diffs: Vec<SledDbOverlayStateDiff>,
+    pub diffs: Vec<DatabaseOverlayStateDiff>,
     /// Current fork mining targets rank, cached for better performance
     pub targets_rank: BigUint,
     /// Current fork hashes rank, cached for better performance
@@ -757,7 +762,7 @@ impl Fork {
         verify_fees: bool,
     ) -> Result<(Vec<Transaction>, u64, u64)> {
         // Check if our mempool is empty
-        if self.blockchain.transactions.pending.is_empty() {
+        if self.blockchain.transactions.pending.is_empty()? {
             return Ok((vec![], 0, 0))
         }
 
@@ -882,7 +887,7 @@ impl Fork {
 
     /// Auxiliary function to retrieve all referenced trees from the
     /// fork overlay and insert them to provided `BTreeSet`.
-    pub fn referenced_trees(&self, trees: &mut BTreeSet<IVec>) {
+    pub fn referenced_trees(&self, trees: &mut BTreeSet<String>) {
         // Grab its current overlay
         let fork_overlay = self.overlay.lock().unwrap();
         let overlay = fork_overlay.overlay.lock().unwrap();

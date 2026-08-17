@@ -228,8 +228,8 @@ impl DarkfiNode {
         drop(validator);
 
         // Rebroadcast all pending transactions
-        for value in pending.values() {
-            let value = match value {
+        for record in pending {
+            let (_, value) = match record {
                 Ok(v) => v,
                 Err(e) => {
                     error!(target: "darkfid::rpc::tx_rebroadcast_pending", "Failed retrieving pending tx: {e}");

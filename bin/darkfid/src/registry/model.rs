@@ -19,7 +19,6 @@
 use std::{collections::HashMap, str::FromStr};
 
 use rand::rngs::OsRng;
-use sled_overlay::sled::IVec;
 use tinyjson::JsonValue;
 use tracing::info;
 
@@ -140,8 +139,8 @@ impl MinerRewardsRecipientConfig {
 pub struct BlockTemplate {
     /// Block that is being mined
     pub block: BlockInfo,
-    /// New `sled` trees opened the overlay this block was generated
-    pub new_trees: Vec<IVec>,
+    /// New kvdb trees opened the overlay this block was generated
+    pub new_trees: Vec<String>,
     /// RandomX current and next keys pair
     pub randomx_keys: (HeaderHash, Option<HeaderHash>),
     /// Compacted block mining target
@@ -157,7 +156,7 @@ pub struct BlockTemplate {
 impl BlockTemplate {
     fn new(
         block: BlockInfo,
-        new_trees: Vec<IVec>,
+        new_trees: Vec<String>,
         randomx_keys: (HeaderHash, Option<HeaderHash>),
         target: Vec<u8>,
         difficulty: f64,
@@ -281,11 +280,10 @@ impl PowRewardV1Zk {
         );
 
         let validator = validator.read().await;
-        let (zkbin, _) = validator.blockchain.contracts.get_zkas(
-            &validator.blockchain.sled_db,
-            &MONEY_CONTRACT_ID,
-            MONEY_CONTRACT_ZKAS_MINT_NS_V1,
-        )?;
+        let (zkbin, _) = validator
+            .blockchain
+            .contracts
+            .get_zkas(&MONEY_CONTRACT_ID, MONEY_CONTRACT_ZKAS_MINT_NS_V1)?;
 
         let circuit = ZkCircuit::new(empty_witnesses(&zkbin)?, &zkbin);
         let provingkey = ProvingKey::build(zkbin.k, &circuit);

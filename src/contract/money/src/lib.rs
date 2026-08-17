@@ -71,7 +71,7 @@ pub mod entrypoint;
 /// Client API for interaction with this smart contract
 pub mod client;
 
-// These are the different sled trees that will be created
+// These are the different kvdb trees that will be created
 pub const MONEY_CONTRACT_INFO_TREE: &str = "info";
 pub const MONEY_CONTRACT_COINS_TREE: &str = "coins";
 pub const MONEY_CONTRACT_COIN_ROOTS_TREE: &str = "coin_roots";

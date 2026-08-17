@@ -19,10 +19,10 @@ darkfi-serial = {path = "../../src/serial"}
 # Misc
 blake3 = "1.8.5"
 bs58 = "0.5.1"
+kvdb-overlay = {git = "https://git.dark.fi/darkrenaissance/kvdb-overlay", version = "0.1.0"}
 tracing = "0.1.44"
 num-bigint = "0.4.6"
 rand = "0.8.6"
-sled-overlay = "0.1.20"
 toml = "0.9.8"
 
 # JSON-RPC

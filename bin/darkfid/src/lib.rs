@@ -122,14 +122,14 @@ impl Darkfid {
     /// along with all the corresponding background tasks.
     pub async fn init(
         network: Network,
-        sled_db: &sled_overlay::sled::Db,
+        kvdb: &kvdb_overlay::Database,
         config: &ValidatorConfig,
         net_settings: &Settings,
         ex: &ExecutorPtr,
     ) -> Result<DarkfidPtr> {
         info!(target: "darkfid::Darkfid::init", "Initializing a Darkfi daemon...");
         // Initialize validator
-        let validator = Validator::new(sled_db, config).await?;
+        let validator = Validator::new(kvdb, config).await?;
 
         // Initialize P2P network
         let p2p_handler = DarkfidP2pHandler::init(net_settings, ex).await?;
@@ -314,11 +314,9 @@ impl Darkfid {
         info!(target: "darkfid::Darkfid::stop", "Stopping consensus task...");
         self.consensus_task.stop().await;
 
-        // Flush sled database data
-        info!(target: "darkfid::Darkfid::stop", "Flushing sled database...");
-        let flushed_bytes =
-            self.node.validator.read().await.blockchain.sled_db.flush_async().await?;
-        info!(target: "darkfid::Darkfid::stop", "Flushed {flushed_bytes} bytes");
+        // Flush kvdb database data
+        info!(target: "darkfid::Darkfid::stop", "Flushing kvdb database...");
+        self.node.validator.read().await.blockchain.kvdb.flush_default_mode_async().await?;
 
         info!(target: "darkfid::Darkfid::stop", "Darkfi daemon terminated successfully!");
         Ok(())

@@ -72,12 +72,12 @@ impl TestHarness {
             .unwrap()
             .clone();
 
-        // Useful code snippet to dump a sled contract DB
+        // Useful code snippet to dump a kvdb contract DB
         /*{
             let blockchain = &wallet.validator.read().await.blockchain;
             let contracts = &blockchain.contracts;
             let tree = contracts
-                .lookup(&blockchain.sled_db, &MONEY_CONTRACT_ID, "nullifier_roots")
+                .lookup(&blockchain.kvdb, &MONEY_CONTRACT_ID, "nullifier_roots")
                 .unwrap();
             for kv in tree.iter() {
                 let (key, value) = kv.unwrap();

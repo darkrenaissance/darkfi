@@ -69,7 +69,7 @@ pub async fn garbage_collect_task(receiver: Receiver<()>, node: DarkfiNodePtr) -
         // Check if our mempool is empty
         trigger_queue_check!(receiver, 'outer);
         let validator = node.validator.read().await;
-        if validator.blockchain.transactions.pending.is_empty() {
+        if validator.blockchain.transactions.pending.is_empty()? {
             debug!(target: "darkfid::task::garbage_collect_task", "No pending transactions to process");
             continue
         }

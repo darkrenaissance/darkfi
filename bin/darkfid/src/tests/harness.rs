@@ -45,8 +45,8 @@ use darkfi_sdk::{
     ContractCall,
 };
 use darkfi_serial::Encodable;
+use kvdb_overlay::{Database, TempDir};
 use num_bigint::BigUint;
-use sled_overlay::sled;
 use url::Url;
 
 use crate::{
@@ -71,6 +71,7 @@ pub struct Harness {
     pub validator_config: ValidatorConfig,
     pub alice: DarkfiNodePtr,
     pub bob: DarkfiNodePtr,
+    _temp_dirs: Vec<TempDir>,
 }
 
 impl Harness {
@@ -89,8 +90,8 @@ impl Harness {
         genesis_block.append_txs(vec![producer_tx]);
 
         // Compute genesis contracts states monotree root
-        let sled_db = sled::Config::new().temporary(true).open()?;
-        let overlay = BlockchainOverlay::new(&Blockchain::new(&sled_db)?)?;
+        let (kvdb, _kvdb_folder) = Database::open_temp()?;
+        let overlay = BlockchainOverlay::new(&Blockchain::new(&kvdb)?)?;
         let (_, vks) = vks::get_cached_pks_and_vks()?;
         vks::inject(&overlay, &vks)?;
         deploy_native_contracts(&overlay, config.pow_target).await?;
@@ -111,6 +112,7 @@ impl Harness {
         };
 
         // Generate validators
+        let mut _temp_dirs = vec![];
         let mut settings = Settings {
             active_profiles: vec!["tcp+tls".to_string()],
             localnet: true,
@@ -121,15 +123,19 @@ impl Harness {
         // Alice
         let alice_url = Url::parse(&config.alice_url)?;
         settings.inbound_addrs = vec![alice_url.clone()];
-        let alice = generate_node(&vks, &validator_config, &settings, ex, true, None).await?;
+        let (alice, alice_folder) =
+            generate_node(&vks, &validator_config, &settings, ex, true, None).await?;
+        _temp_dirs.push(alice_folder);
 
         // Bob
         let bob_url = Url::parse(&config.bob_url)?;
         settings.inbound_addrs = vec![bob_url];
         settings.peers = vec![alice_url];
-        let bob = generate_node(&vks, &validator_config, &settings, ex, false, None).await?;
+        let (bob, bob_folder) =
+            generate_node(&vks, &validator_config, &settings, ex, false, None).await?;
+        _temp_dirs.push(bob_folder);
 
-        Ok(Self { config, vks, validator_config, alice, bob })
+        Ok(Self { config, vks, validator_config, alice, bob, _temp_dirs })
     }
 
     pub async fn validate_chains(&self, total_blocks: usize) -> Result<()> {
@@ -143,11 +149,11 @@ impl Harness {
         bob.validate_blockchain(self.config.pow_target, self.config.pow_fixed_difficulty.clone())
             .await?;
 
-        let alice_blockchain_len = alice.blockchain.len();
-        assert_eq!(alice_blockchain_len, bob.blockchain.len());
+        let alice_blockchain_len = alice.blockchain.len()?;
+        assert_eq!(alice_blockchain_len, bob.blockchain.len()?);
         assert_eq!(alice_blockchain_len, total_blocks);
-        assert!(alice.blockchain.headers.is_empty_sync());
-        assert!(bob.blockchain.headers.is_empty_sync());
+        assert!(alice.blockchain.headers.is_empty_sync()?);
+        assert!(bob.blockchain.headers.is_empty_sync()?);
 
         Ok(())
     }
@@ -287,15 +293,15 @@ pub async fn generate_node(
     ex: &Arc<smol::Executor<'static>>,
     skip_sync: bool,
     checkpoint: Option<(u32, HeaderHash)>,
-) -> Result<DarkfiNodePtr> {
-    let sled_db = sled::Config::new().temporary(true).open()?;
-    let overlay = BlockchainOverlay::new(&Blockchain::new(&sled_db)?)?;
+) -> Result<(DarkfiNodePtr, TempDir)> {
+    let (kvdb, kvdb_folder) = Database::open_temp()?;
+    let overlay = BlockchainOverlay::new(&Blockchain::new(&kvdb)?)?;
     vks::inject(&overlay, vks)?;
     deploy_native_contracts(&overlay, config.pow_target).await?;
     let diff = overlay.lock().unwrap().overlay.lock().unwrap().diff(&[])?;
     overlay.lock().unwrap().contracts.update_state_monotree(&diff)?;
     overlay.lock().unwrap().overlay.lock().unwrap().apply()?;
-    let validator = Validator::new(&sled_db, config).await?;
+    let validator = Validator::new(&kvdb, config).await?;
 
     let mut subscribers = HashMap::new();
     subscribers.insert("blocks", JsonSubscriber::new("blockchain.subscribe_blocks"));
@@ -319,5 +325,5 @@ pub async fn generate_node(
         node.validator.write().await.synced = true;
     }
 
-    Ok(node)
+    Ok((node, kvdb_folder))
 }

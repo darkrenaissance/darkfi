@@ -20,89 +20,88 @@ use std::collections::HashMap;
 
 use darkfi_sdk::tx::TransactionHash;
 use darkfi_serial::{deserialize, serialize};
-use sled_overlay::sled;
+use kvdb_overlay::{Batch, Database, Tree};
 
 use crate::{tx::Transaction, Error, Result};
 
-use super::{parse_record, SledDbOverlayPtr};
+use super::{parse_record, KvdbOverlayPtr};
 
-pub const SLED_TX_TREE: &[u8] = b"_transactions";
-pub const SLED_TX_LOCATION_TREE: &[u8] = b"_transaction_location";
-pub const SLED_PENDING_TX_TREE: &[u8] = b"_pending_transactions";
+pub const KVDB_TX_TREE: &str = "_transactions";
+pub const KVDB_TX_LOCATION_TREE: &str = "_transaction_location";
+pub const KVDB_PENDING_TX_TREE: &str = "_pending_transactions";
 
-/// The `TxStore` is a structure representing all `sled` trees related
+/// The `TxStore` is a structure representing all kvdb trees related
 /// to storing the blockchain's transactions information.
 #[derive(Clone)]
 pub struct TxStore {
-    /// Main `sled` tree, storing all the blockchain's transactions, where
+    /// Main pointer to the kvdb connection
+    pub kvdb: Database,
+    /// Main kvdb tree, storing all the blockchain's transactions, where
     /// the key is the transaction hash, and the value is the serialized
     /// transaction.
-    pub main: sled::Tree,
-    /// The `sled` tree storing the location of the blockchain's transactions
+    pub main: Tree,
+    /// The kvdb tree storing the location of the blockchain's transactions
     /// locations, where the key is the transaction hash, and the value is a
     /// serialized tuple containing the height and the vector index of the
     /// block the transaction is included.
-    pub location: sled::Tree,
-    /// The `sled` tree storing all the node pending transactions, where
+    pub location: Tree,
+    /// The kvdb tree storing all the node pending transactions, where
     /// the key is the transaction hash, and the value is the serialized
     /// transaction.
-    pub pending: sled::Tree,
+    pub pending: Tree,
 }
 
 impl TxStore {
-    /// Opens a new or existing `TxStore` on the given sled database.
-    pub fn new(db: &sled::Db) -> Result<Self> {
-        let main = db.open_tree(SLED_TX_TREE)?;
-        let location = db.open_tree(SLED_TX_LOCATION_TREE)?;
-        let pending = db.open_tree(SLED_PENDING_TX_TREE)?;
-        Ok(Self { main, location, pending })
+    /// Opens a new or existing `TxStore` on the given kvdb database.
+    pub fn new(kvdb: &Database) -> Result<Self> {
+        let main = kvdb.open_tree_default(KVDB_TX_TREE)?;
+        let location = kvdb.open_tree_default(KVDB_TX_LOCATION_TREE)?;
+        let pending = kvdb.open_tree_default(KVDB_PENDING_TX_TREE)?;
+        Ok(Self { kvdb: kvdb.clone(), main, location, pending })
     }
 
     /// Insert a slice of [`Transaction`] into the store's main tree.
     pub fn insert(&self, transactions: &[Transaction]) -> Result<Vec<TransactionHash>> {
         let (batch, ret) = self.insert_batch(transactions);
-        self.main.apply_batch(batch)?;
+        self.kvdb.atomic_write(&[(&self.main, &batch)])?;
         Ok(ret)
     }
 
     /// Insert a slice of [`TransactionHash`] into the store's location tree.
     pub fn insert_location(&self, txs_hashes: &[TransactionHash], block_height: u32) -> Result<()> {
         let batch = self.insert_batch_location(txs_hashes, block_height);
-        self.location.apply_batch(batch)?;
+        self.kvdb.atomic_write(&[(&self.location, &batch)])?;
         Ok(())
     }
 
     /// Insert a slice of [`Transaction`] into the store's pending txs tree.
     pub fn insert_pending(&self, transactions: &[Transaction]) -> Result<Vec<TransactionHash>> {
         let (batch, ret) = self.insert_batch_pending(transactions);
-        self.pending.apply_batch(batch)?;
+        self.kvdb.atomic_write(&[(&self.pending, &batch)])?;
         Ok(ret)
     }
 
-    /// Generate the sled batch corresponding to an insert to the main tree,
+    /// Generate the kvdb batch corresponding to an insert to the main tree,
     /// so caller can handle the write operation.
     /// The transactions are hashed with BLAKE3 and this hash is used as
     /// the key, while the value is the serialized [`Transaction`] itself.
     /// On success, the function returns the transaction hashes in the same
     /// order as the input transactions, along with the corresponding operation
     /// batch.
-    pub fn insert_batch(
-        &self,
-        transactions: &[Transaction],
-    ) -> (sled::Batch, Vec<TransactionHash>) {
+    pub fn insert_batch(&self, transactions: &[Transaction]) -> (Batch, Vec<TransactionHash>) {
         let mut ret = Vec::with_capacity(transactions.len());
-        let mut batch = sled::Batch::default();
+        let mut batch = Batch::new();
 
         for tx in transactions {
             let tx_hash = tx.hash();
-            batch.insert(tx_hash.inner(), serialize(tx));
+            batch.insert(tx_hash.inner(), &serialize(tx));
             ret.push(tx_hash);
         }
 
         (batch, ret)
     }
 
-    /// Generate the sled batch corresponding to an insert to the location tree,
+    /// Generate the kvdb batch corresponding to an insert to the location tree,
     /// so caller can handle the write operation.
     /// The location tuple is built using the index of each transaction has in
     /// the slice, along with the provided block height
@@ -110,18 +109,18 @@ impl TxStore {
         &self,
         txs_hashes: &[TransactionHash],
         block_height: u32,
-    ) -> sled::Batch {
-        let mut batch = sled::Batch::default();
+    ) -> Batch {
+        let mut batch = Batch::new();
 
         for (index, tx_hash) in txs_hashes.iter().enumerate() {
             let serialized = serialize(&(block_height, index as u16));
-            batch.insert(tx_hash.inner(), serialized);
+            batch.insert(tx_hash.inner(), &serialized);
         }
 
         batch
     }
 
-    /// Generate the sled batch corresponding to an insert to the pending txs tree,
+    /// Generate the kvdb batch corresponding to an insert to the pending txs tree,
     /// so caller can handle the write operation.
     /// The transactions are hashed with BLAKE3 and this hash is used as
     /// the key, while the value is the serialized [`Transaction`] itself.
@@ -131,13 +130,13 @@ impl TxStore {
     pub fn insert_batch_pending(
         &self,
         transactions: &[Transaction],
-    ) -> (sled::Batch, Vec<TransactionHash>) {
+    ) -> (Batch, Vec<TransactionHash>) {
         let mut ret = Vec::with_capacity(transactions.len());
-        let mut batch = sled::Batch::default();
+        let mut batch = Batch::new();
 
         for tx in transactions {
             let tx_hash = tx.hash();
-            batch.insert(tx_hash.inner(), serialize(tx));
+            batch.insert(tx_hash.inner(), &serialize(tx));
             ret.push(tx_hash);
         }
 
@@ -283,10 +282,10 @@ impl TxStore {
         n: usize,
     ) -> Result<Vec<Transaction>> {
         let mut txs = vec![];
-        let mut key = tx_hash.inner().into();
+        let mut key = tx_hash.inner().to_vec();
         let mut counter = 0;
         while counter < n {
-            if let Some((tx_hash, tx)) = self.pending.get_gt(key)? {
+            if let Some((tx_hash, tx)) = self.pending.get_gt(&key)? {
                 key = tx_hash;
                 txs.push(deserialize(&tx)?);
                 counter += 1;
@@ -299,26 +298,26 @@ impl TxStore {
     }
 
     /// Retrieve records count of the store's main tree.
-    pub fn len(&self) -> usize {
-        self.main.len()
+    pub fn len(&self) -> Result<usize> {
+        Ok(self.main.len()?)
     }
 
     /// Check if the store's main tree is empty.
-    pub fn is_empty(&self) -> bool {
-        self.main.is_empty()
+    pub fn is_empty(&self) -> Result<bool> {
+        Ok(self.main.is_empty()?)
     }
 
     /// Remove a slice of [`TransactionHash`] from the store's pending txs tree.
     pub fn remove_pending(&self, txs_hashes: &[TransactionHash]) -> Result<()> {
         let batch = self.remove_batch_pending(txs_hashes);
-        self.pending.apply_batch(batch)?;
+        self.kvdb.atomic_write(&[(&self.pending, &batch)])?;
         Ok(())
     }
 
-    /// Generate the sled batch corresponding to a remove from the store's pending
+    /// Generate the kvdb batch corresponding to a remove from the store's pending
     /// txs tree, so caller can handle the write operation.
-    pub fn remove_batch_pending(&self, txs_hashes: &[TransactionHash]) -> sled::Batch {
-        let mut batch = sled::Batch::default();
+    pub fn remove_batch_pending(&self, txs_hashes: &[TransactionHash]) -> Batch {
+        let mut batch = Batch::new();
 
         for tx_hash in txs_hashes {
             batch.remove(tx_hash.inner());
@@ -327,10 +326,10 @@ impl TxStore {
         batch
     }
 
-    /// Generate the sled batch corresponding to a remove from the store's pending
+    /// Generate the kvdb batch corresponding to a remove from the store's pending
     /// txs order tree, so caller can handle the write operation.
-    pub fn remove_batch_pending_order(&self, indexes: &[u64]) -> sled::Batch {
-        let mut batch = sled::Batch::default();
+    pub fn remove_batch_pending_order(&self, indexes: &[u64]) -> Batch {
+        let mut batch = Batch::new();
 
         for index in indexes {
             batch.remove(&index.to_be_bytes());
@@ -341,12 +340,12 @@ impl TxStore {
 }
 
 /// Overlay structure over a [`TxStore`] instance.
-pub struct TxStoreOverlay(SledDbOverlayPtr);
+pub struct TxStoreOverlay(KvdbOverlayPtr);
 
 impl TxStoreOverlay {
-    pub fn new(overlay: &SledDbOverlayPtr) -> Result<Self> {
-        overlay.lock().unwrap().open_tree(SLED_TX_TREE, true)?;
-        overlay.lock().unwrap().open_tree(SLED_TX_LOCATION_TREE, true)?;
+    pub fn new(overlay: &KvdbOverlayPtr) -> Result<Self> {
+        overlay.lock().unwrap().open_tree_default(KVDB_TX_TREE, true)?;
+        overlay.lock().unwrap().open_tree_default(KVDB_TX_LOCATION_TREE, true)?;
         Ok(Self(overlay.clone()))
     }
 
@@ -361,7 +360,7 @@ impl TxStoreOverlay {
 
         for tx in transactions {
             let tx_hash = tx.hash();
-            lock.insert(SLED_TX_TREE, tx_hash.inner(), &serialize(tx))?;
+            lock.insert(KVDB_TX_TREE, tx_hash.inner(), &serialize(tx))?;
             ret.push(tx_hash);
         }
 
@@ -376,7 +375,7 @@ impl TxStoreOverlay {
 
         for (index, tx_hash) in txs_hashes.iter().enumerate() {
             let serialized = serialize(&(block_height, index as u16));
-            lock.insert(SLED_TX_LOCATION_TREE, tx_hash.inner(), &serialized)?;
+            lock.insert(KVDB_TX_LOCATION_TREE, tx_hash.inner(), &serialized)?;
         }
 
         Ok(())
@@ -384,7 +383,7 @@ impl TxStoreOverlay {
 
     /// Check if the overlay's main tree contains a given transaction hash.
     pub fn contains(&self, tx_hash: &TransactionHash) -> Result<bool> {
-        Ok(self.0.lock().unwrap().contains_key(SLED_TX_TREE, tx_hash.inner())?)
+        Ok(self.0.lock().unwrap().contains_key(KVDB_TX_TREE, tx_hash.inner())?)
     }
 
     /// Fetch given tx hashes from the overlay's main tree.
@@ -401,7 +400,7 @@ impl TxStoreOverlay {
         let lock = self.0.lock().unwrap();
 
         for tx_hash in tx_hashes {
-            if let Some(found) = lock.get(SLED_TX_TREE, tx_hash.inner())? {
+            if let Some(found) = lock.get(KVDB_TX_TREE, tx_hash.inner())? {
                 let tx = deserialize(&found)?;
                 ret.push(Some(tx));
                 continue
@@ -421,7 +420,7 @@ impl TxStoreOverlay {
     /// was found in the overlay, and otherwise it is `None`, if it has not.
     pub fn get_raw(&self, tx_hash: &[u8; 32]) -> Result<Option<Vec<u8>>> {
         let lock = self.0.lock().unwrap();
-        if let Some(found) = lock.get(SLED_TX_TREE, tx_hash)? {
+        if let Some(found) = lock.get(KVDB_TX_TREE, tx_hash)? {
             return Ok(Some(found.to_vec()))
         }
         Ok(None)
@@ -434,7 +433,7 @@ impl TxStoreOverlay {
     /// is `None`, if it has not.
     pub fn get_location_raw(&self, tx_hash: &[u8; 32]) -> Result<Option<Vec<u8>>> {
         let lock = self.0.lock().unwrap();
-        if let Some(found) = lock.get(SLED_TX_LOCATION_TREE, tx_hash)? {
+        if let Some(found) = lock.get(KVDB_TX_LOCATION_TREE, tx_hash)? {
             return Ok(Some(found.to_vec()))
         }
         Ok(None)

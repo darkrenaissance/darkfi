@@ -177,13 +177,20 @@ fn db_contains_key_internal(
     }
 
     // On-chain db
-    match env.blockchain.lock().unwrap().overlay.lock().unwrap().contains_key(&db_handle.tree, &key)
+    match env
+        .blockchain
+        .lock()
+        .unwrap()
+        .overlay
+        .lock()
+        .unwrap()
+        .contains_key(&db_handle.tree_str(), &key)
     {
         Ok(v) => i64::from(v), // <- 0=false, 1=true. Convert bool to i64.
         Err(e) => {
             error!(
                 target: "runtime::db::{lt}",
-                "[WASM] [{cid}] {lt}(): sled.tree.contains_key failed: {e}",
+                "[WASM] [{cid}] {lt}(): kvdb.tree.contains_key failed: {e}",
             );
             darkfi_sdk::error::DB_CONTAINS_KEY_FAILED
         }

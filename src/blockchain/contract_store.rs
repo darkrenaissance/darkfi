@@ -16,17 +16,17 @@ r* This program is distributed in the hope that it will be useful,
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::{collections::BTreeMap, io::Cursor};
+use std::{collections::BTreeMap, io::Cursor, str::FromStr};
 
 use darkfi_sdk::{
     crypto::contract_id::{
         ContractId, NATIVE_CONTRACT_IDS_BYTES, SMART_CONTRACT_MONOTREE_DB_NAME,
         SMART_CONTRACT_ZKAS_DB_NAME,
     },
-    monotree::{Hash as StateHash, Monotree, SledOverlayDb, SledTreeDb, EMPTY_HASH},
+    monotree::{Hash as StateHash, KvdbOverlayDb, KvdbTreeDb, Monotree, EMPTY_HASH},
 };
 use darkfi_serial::{deserialize, serialize};
-use sled_overlay::{sled, SledDbOverlayStateDiff};
+use kvdb_overlay::{Database, DatabaseOverlayStateDiff, Tree};
 use tracing::{debug, error};
 
 use crate::{
@@ -35,29 +35,29 @@ use crate::{
     Error, Result,
 };
 
-use super::{parse_record, SledDbOverlayPtr};
+use super::{parse_record, KvdbOverlayPtr};
 
-pub const SLED_CONTRACTS_TREE: &[u8] = b"_contracts";
-pub const SLED_CONTRACTS_TREES_TREE: &[u8] = b"_contracts_trees";
+pub const KVDB_CONTRACTS_TREE: &str = "_contracts";
+pub const KVDB_CONTRACTS_TREES_TREE: &str = "_contracts_trees";
 // blake3 hash of `_contracts_monotree`
-pub const SLED_CONTRACTS_MONOTREE_TREE: &[u8; 32] = &[
-    82, 161, 124, 97, 228, 243, 197, 75, 11, 86, 60, 214, 241, 24, 64, 100, 86, 48, 159, 147, 254,
-    116, 94, 17, 165, 22, 39, 3, 149, 120, 122, 175,
-];
-pub const SLED_BINCODE_TREE: &[u8] = b"_wasm_bincode";
+pub const KVDB_CONTRACTS_MONOTREE_TREE: &str =
+    "52a17c61e4f3c54b0b563cd6f118406456309f93fe745e11a516270395787aaf";
+pub const KVDB_BINCODE_TREE: &str = "_wasm_bincode";
 
-/// The `ContractStore` is a structure representing all `sled` trees related
+/// The `ContractStore` is a structure representing all kvdb trees related
 /// to storing the blockchain's contracts information.
 #[derive(Clone)]
 pub struct ContractStore {
-    /// The `sled` tree storing the wasm bincode for deployed contracts.
+    /// Main pointer to the kvdb connection
+    pub kvdb: Database,
+    /// The kvdb tree storing the wasm bincode for deployed contracts.
     /// The layout looks like this:
     /// ```plaintext
     ///  tree: "_wasm_bincode"
     ///   key: ContractId
     /// value: Vec<u8>
-    pub wasm: sled::Tree,
-    /// The `sled` tree storing the pointers to contracts' databases.
+    pub wasm: Tree,
+    /// The kvdb tree storing the pointers to contracts' databases.
     /// See the rustdoc for the impl functions for more info.
     /// The layout looks like this:
     /// ```plaintext
@@ -66,8 +66,8 @@ pub struct ContractStore {
     /// value: Vec<blake3(ContractId || tree_name)>
     /// ```
     /// These values get mutated with `init()` and `remove()`.
-    pub state: sled::Tree,
-    /// The `sled` tree storing the inverse pointers to contracts'
+    pub state: Tree,
+    /// The kvdb tree storing the inverse pointers to contracts'
     /// databases. See the rustdoc for the impl functions for more
     /// info.
     /// The layout looks like this:
@@ -77,8 +77,8 @@ pub struct ContractStore {
     /// value: ContractId
     /// ```
     /// These values get mutated with `init()` and `remove()`.
-    pub state_trees: sled::Tree,
-    /// The `sled` tree storing the full contracts states monotree,
+    pub state_trees: Tree,
+    /// The kvdb tree storing the full contracts states monotree,
     /// excluding native contracts wasm bincodes.
     /// The layout looks like this:
     /// ```plaintext
@@ -88,23 +88,24 @@ pub struct ContractStore {
     /// ```
     /// These values get mutated on each block/proposal append with
     /// `update_state_monotree()`.
-    pub state_monotree: sled::Tree,
+    pub state_monotree: Tree,
 }
 
 impl ContractStore {
-    /// Opens a new or existing `ContractStore` on the given sled database.
-    pub fn new(db: &sled::Db) -> Result<Self> {
-        let wasm = db.open_tree(SLED_BINCODE_TREE)?;
-        let state = db.open_tree(SLED_CONTRACTS_TREE)?;
-        let state_trees = db.open_tree(SLED_CONTRACTS_TREES_TREE)?;
-        let state_monotree = db.open_tree(SLED_CONTRACTS_MONOTREE_TREE)?;
-        Ok(Self { wasm, state, state_trees, state_monotree })
+    /// Opens a new or existing `ContractStore` on the given key-value
+    /// database.
+    pub fn new(kvdb: &Database) -> Result<Self> {
+        let wasm = kvdb.open_tree_default(KVDB_BINCODE_TREE)?;
+        let state = kvdb.open_tree_default(KVDB_CONTRACTS_TREE)?;
+        let state_trees = kvdb.open_tree_default(KVDB_CONTRACTS_TREES_TREE)?;
+        let state_monotree = kvdb.open_tree_default(KVDB_CONTRACTS_MONOTREE_TREE)?;
+        Ok(Self { kvdb: kvdb.clone(), wasm, state, state_trees, state_monotree })
     }
 
     /// Fetches the bincode for a given ContractId from the store's wasm tree.
     /// Returns an error if the bincode is not found.
     pub fn get(&self, contract_id: ContractId) -> Result<Vec<u8>> {
-        if let Some(bincode) = self.wasm.get(serialize(&contract_id))? {
+        if let Some(bincode) = self.wasm.get(&serialize(&contract_id))? {
             return Ok(bincode.to_vec())
         }
 
@@ -115,12 +116,7 @@ impl ContractStore {
     /// state must have been previously initialized with `init()`. If the
     /// state has been found, a handle to it will be returned. Otherwise, we
     /// return an error.
-    pub fn lookup(
-        &self,
-        db: &sled::Db,
-        contract_id: &ContractId,
-        tree_name: &str,
-    ) -> Result<sled::Tree> {
+    pub fn lookup(&self, contract_id: &ContractId, tree_name: &str) -> Result<Tree> {
         debug!(target: "blockchain::contractstore::lookup", "Looking up state tree for {contract_id}:{tree_name}");
 
         // A guard to make sure we went through init()
@@ -140,7 +136,7 @@ impl ContractStore {
         }
 
         // We open the tree and return its handle
-        let tree = db.open_tree(ptr)?;
+        let tree = self.kvdb.open_tree_default(&blake3::Hash::from(ptr).to_string())?;
         Ok(tree)
     }
 
@@ -151,7 +147,7 @@ impl ContractStore {
     /// found as initialized, an error is returned.
     /// NOTE: this function is not used right now, we keep it for future proofing,
     ///       and its obviously untested.
-    pub fn remove(&self, db: &sled::Db, contract_id: &ContractId, tree_name: &str) -> Result<()> {
+    pub fn remove(&self, contract_id: &ContractId, tree_name: &str) -> Result<()> {
         debug!(target: "blockchain::contractstore::remove", "Removing state tree for {contract_id}:{tree_name}");
 
         // A guard to make sure we went through init()
@@ -169,39 +165,38 @@ impl ContractStore {
         if !state_pointers.contains(&ptr) {
             return Err(Error::ContractStateNotFound)
         }
-        if !self.state_trees.contains_key(ptr)? {
+        if !self.state_trees.contains_key(&ptr)? {
             return Err(Error::ContractStateNotFound)
         }
 
         // Remove the deleted tree from the state pointer set.
         state_pointers.retain(|x| *x != ptr);
-        self.state.insert(contract_id_bytes, serialize(&state_pointers))?;
-        self.state_trees.remove(ptr)?;
+        self.state.insert(&contract_id_bytes, &serialize(&state_pointers))?;
+        self.state_trees.remove(&ptr)?;
 
         // Drop the deleted tree from the database
-        db.drop_tree(ptr)?;
+        self.kvdb.drop_tree(&blake3::Hash::from(ptr).to_string())?;
 
         Ok(())
     }
 
     /// Abstraction function for fetching a `ZkBinary` and its respective `VerifyingKey`
-    /// from a contract's zkas sled tree.
+    /// from a contract's zkas kvdb tree.
     pub fn get_zkas(
         &self,
-        db: &sled::Db,
         contract_id: &ContractId,
         zkas_ns: &str,
     ) -> Result<(ZkBinary, VerifyingKey)> {
         debug!(target: "blockchain::contractstore::get_zkas", "Looking up \"{contract_id}:{zkas_ns}\" zkas circuit & vk");
 
-        let zkas_tree = self.lookup(db, contract_id, SMART_CONTRACT_ZKAS_DB_NAME)?;
+        let zkas_tree = self.lookup(contract_id, SMART_CONTRACT_ZKAS_DB_NAME)?;
 
-        let Some(zkas_bytes) = zkas_tree.get(serialize(&zkas_ns))? else {
+        let Some(zkas_bytes) = zkas_tree.get(&serialize(&zkas_ns))? else {
             return Err(Error::ZkasBincodeNotFound)
         };
 
         // If anything in this function panics, that means corrupted data managed
-        // to get into this sled tree. This should not be possible.
+        // to get into this kvdb tree. This should not be possible.
         let (zkbin, vkbin): (Vec<u8>, Vec<u8>) = deserialize(&zkas_bytes).unwrap();
 
         // The first vec is the compiled zkas binary
@@ -245,10 +240,9 @@ impl ContractStore {
         Ok(contracts)
     }
 
-    /// Retrieve provided key value bytes from a contract's zkas sled tree.
+    /// Retrieve provided key value bytes from a contract's zkas kvdb tree.
     pub fn get_state_tree_value(
         &self,
-        db: &sled::Db,
         contract_id: &ContractId,
         tree_name: &str,
         key: &[u8],
@@ -256,7 +250,7 @@ impl ContractStore {
         debug!(target: "blockchain::contractstore::get_state_tree_value", "Looking up state tree value for {contract_id}:{tree_name}");
 
         // Grab the state tree
-        let state_tree = self.lookup(db, contract_id, tree_name)?;
+        let state_tree = self.lookup(contract_id, tree_name)?;
 
         // Grab the key value
         match state_tree.get(key)? {
@@ -267,18 +261,17 @@ impl ContractStore {
         }
     }
 
-    /// Retrieve all records from a contract's zkas sled tree, as a `BTreeMap`.
+    /// Retrieve all records from a contract's zkas kvdb tree, as a `BTreeMap`.
     /// Be careful as this will try to load everything in memory.
     pub fn get_state_tree_records(
         &self,
-        db: &sled::Db,
         contract_id: &ContractId,
         tree_name: &str,
     ) -> Result<BTreeMap<Vec<u8>, Vec<u8>>> {
         debug!(target: "blockchain::contractstore::get_state_tree_records", "Looking up state tree records for {contract_id}:{tree_name}");
 
         // Grab the state tree
-        let state_tree = self.lookup(db, contract_id, tree_name)?;
+        let state_tree = self.lookup(contract_id, tree_name)?;
 
         // Retrieve its records
         let mut ret = BTreeMap::new();
@@ -294,7 +287,7 @@ impl ContractStore {
     ///
     /// Note: native contracts wasm bincodes are excluded.
     pub fn get_state_monotree_root(&self) -> Result<StateHash> {
-        let monotree_db = SledTreeDb::new(&self.state_monotree);
+        let monotree_db = KvdbTreeDb::new(&self.state_monotree);
         let monotree = Monotree::new(monotree_db);
         Ok(match monotree.get_headroot()? {
             Some(hash) => hash,
@@ -304,14 +297,14 @@ impl ContractStore {
 }
 
 /// Overlay structure over a [`ContractStore`] instance.
-pub struct ContractStoreOverlay(SledDbOverlayPtr);
+pub struct ContractStoreOverlay(KvdbOverlayPtr);
 
 impl ContractStoreOverlay {
-    pub fn new(overlay: &SledDbOverlayPtr) -> Result<Self> {
-        overlay.lock().unwrap().open_tree(SLED_BINCODE_TREE, true)?;
-        overlay.lock().unwrap().open_tree(SLED_CONTRACTS_TREE, true)?;
-        overlay.lock().unwrap().open_tree(SLED_CONTRACTS_TREES_TREE, true)?;
-        overlay.lock().unwrap().open_tree(SLED_CONTRACTS_MONOTREE_TREE, true)?;
+    pub fn new(overlay: &KvdbOverlayPtr) -> Result<Self> {
+        overlay.lock().unwrap().open_tree_default(KVDB_BINCODE_TREE, true)?;
+        overlay.lock().unwrap().open_tree_default(KVDB_CONTRACTS_TREE, true)?;
+        overlay.lock().unwrap().open_tree_default(KVDB_CONTRACTS_TREES_TREE, true)?;
+        overlay.lock().unwrap().open_tree_default(KVDB_CONTRACTS_MONOTREE_TREE, true)?;
         Ok(Self(overlay.clone()))
     }
 
@@ -319,7 +312,7 @@ impl ContractStoreOverlay {
     /// Returns an error if the bincode is not found.
     pub fn get(&self, contract_id: ContractId) -> Result<Vec<u8>> {
         if let Some(bincode) =
-            self.0.lock().unwrap().get(SLED_BINCODE_TREE, &serialize(&contract_id))?
+            self.0.lock().unwrap().get(KVDB_BINCODE_TREE, &serialize(&contract_id))?
         {
             return Ok(bincode.to_vec())
         }
@@ -331,7 +324,7 @@ impl ContractStoreOverlay {
     /// wasm tree.
     pub fn insert(&self, contract_id: ContractId, bincode: &[u8]) -> Result<()> {
         if let Err(e) =
-            self.0.lock().unwrap().insert(SLED_BINCODE_TREE, &serialize(&contract_id), bincode)
+            self.0.lock().unwrap().insert(KVDB_BINCODE_TREE, &serialize(&contract_id), bincode)
         {
             error!(target: "blockchain::contractstoreoverlay::insert", "Failed to insert bincode to Wasm tree: {e}");
             return Err(e.into())
@@ -358,8 +351,8 @@ impl ContractStoreOverlay {
         // If not, just start with an empty vector.
         let contract_id_bytes = serialize(contract_id);
         let mut state_pointers: Vec<[u8; 32]> =
-            if lock.contains_key(SLED_CONTRACTS_TREE, &contract_id_bytes)? {
-                let bytes = lock.get(SLED_CONTRACTS_TREE, &contract_id_bytes)?.unwrap();
+            if lock.contains_key(KVDB_CONTRACTS_TREE, &contract_id_bytes)? {
+                let bytes = lock.get(KVDB_CONTRACTS_TREE, &contract_id_bytes)?.unwrap();
                 deserialize(&bytes)?
             } else {
                 vec![]
@@ -373,9 +366,9 @@ impl ContractStoreOverlay {
 
         // Now we add it so it's marked as initialized and create its tree.
         state_pointers.push(ptr);
-        lock.insert(SLED_CONTRACTS_TREE, &contract_id_bytes, &serialize(&state_pointers))?;
-        lock.insert(SLED_CONTRACTS_TREES_TREE, &ptr, &contract_id_bytes)?;
-        lock.open_tree(&ptr, false)?;
+        lock.insert(KVDB_CONTRACTS_TREE, &contract_id_bytes, &serialize(&state_pointers))?;
+        lock.insert(KVDB_CONTRACTS_TREES_TREE, &ptr, &contract_id_bytes)?;
+        lock.open_tree_default(&blake3::Hash::from(ptr).to_string(), false)?;
 
         Ok(ptr)
     }
@@ -390,11 +383,11 @@ impl ContractStoreOverlay {
 
         // A guard to make sure we went through init()
         let contract_id_bytes = serialize(contract_id);
-        if !lock.contains_key(SLED_CONTRACTS_TREE, &contract_id_bytes)? {
+        if !lock.contains_key(KVDB_CONTRACTS_TREE, &contract_id_bytes)? {
             return Err(Error::ContractNotFound(contract_id.to_string()))
         }
 
-        let state_pointers = lock.get(SLED_CONTRACTS_TREE, &contract_id_bytes)?.unwrap();
+        let state_pointers = lock.get(KVDB_CONTRACTS_TREE, &contract_id_bytes)?.unwrap();
         let state_pointers: Vec<[u8; 32]> = deserialize(&state_pointers)?;
 
         // We assume the tree has been created already, so it should be listed
@@ -403,17 +396,17 @@ impl ContractStoreOverlay {
         if !state_pointers.contains(&ptr) {
             return Err(Error::ContractStateNotFound)
         }
-        if !lock.contains_key(SLED_CONTRACTS_TREES_TREE, &ptr)? {
+        if !lock.contains_key(KVDB_CONTRACTS_TREES_TREE, &ptr)? {
             return Err(Error::ContractStateNotFound)
         }
 
         // We open the tree and return its handle
-        lock.open_tree(&ptr, false)?;
+        lock.open_tree_default(&blake3::Hash::from(ptr).to_string(), false)?;
         Ok(ptr)
     }
 
     /// Abstraction function for fetching a `ZkBinary` and its respective `VerifyingKey`
-    /// from a contract's zkas sled tree.
+    /// from a contract's zkas kvdb tree.
     pub fn get_zkas(
         &self,
         contract_id: &ContractId,
@@ -421,14 +414,15 @@ impl ContractStoreOverlay {
     ) -> Result<(ZkBinary, VerifyingKey)> {
         debug!(target: "blockchain::contractstoreoverlay::get_zkas", "Looking up \"{contract_id}:{zkas_ns}\" zkas circuit & vk");
 
-        let zkas_tree = self.lookup(contract_id, SMART_CONTRACT_ZKAS_DB_NAME)?;
+        let zkas_tree =
+            blake3::Hash::from(self.lookup(contract_id, SMART_CONTRACT_ZKAS_DB_NAME)?).to_string();
 
         let Some(zkas_bytes) = self.0.lock().unwrap().get(&zkas_tree, &serialize(&zkas_ns))? else {
             return Err(Error::ZkasBincodeNotFound)
         };
 
         // If anything in this function panics, that means corrupted data managed
-        // to get into this sled tree. This should not be possible.
+        // to get into this kvdb tree. This should not be possible.
         let (zkbin, vkbin): (Vec<u8>, Vec<u8>) = deserialize(&zkas_bytes).unwrap();
 
         // The first vec is the compiled zkas binary
@@ -449,7 +443,7 @@ impl ContractStoreOverlay {
     /// Note: native contracts wasm bincodes are excluded.
     pub fn get_state_monotree_root(&self) -> Result<StateHash> {
         let mut lock = self.0.lock().unwrap();
-        let monotree_db = SledOverlayDb::new(&mut lock, SLED_CONTRACTS_MONOTREE_TREE)?;
+        let monotree_db = KvdbOverlayDb::new(&mut lock, KVDB_CONTRACTS_MONOTREE_TREE)?;
         let monotree = Monotree::new(monotree_db);
         Ok(match monotree.get_headroot()? {
             Some(hash) => hash,
@@ -465,7 +459,7 @@ impl ContractStoreOverlay {
     /// contracts.
     ///
     /// Note: native contracts wasm bincodes are excluded.
-    pub fn update_state_monotree(&self, diff: &SledDbOverlayStateDiff) -> Result<StateHash> {
+    pub fn update_state_monotree(&self, diff: &DatabaseOverlayStateDiff) -> Result<StateHash> {
         // Grab lock over the overlay
         let mut lock = self.0.lock().unwrap();
         debug!(target: "blockchain::contractstoreoverlay::update_state_monotree", "Retrieving contracts updates...");
@@ -475,7 +469,7 @@ impl ContractStoreOverlay {
         for (state_key, (state_cache, _)) in &diff.caches {
             // Grab new/redeployed contracts wasm bincodes to include them
             // in their monotrees, excluding native ones.
-            if state_key == SLED_BINCODE_TREE {
+            if state_key == KVDB_BINCODE_TREE {
                 for (contract_id_bytes, (_, value)) in &state_cache.cache {
                     // Grab the actual contract ID bytes
                     let contract_id_bytes = deserialize(contract_id_bytes)?;
@@ -515,10 +509,10 @@ impl ContractStoreOverlay {
             }
 
             // Grab the actual state key
-            let state_key: [u8; 32] = deserialize(state_key)?;
+            let state_key: [u8; 32] = *blake3::Hash::from_str(state_key)?.as_bytes();
 
             // Grab its contract id
-            let Some(contract_id_bytes) = lock.get(SLED_CONTRACTS_TREES_TREE, &state_key)? else {
+            let Some(contract_id_bytes) = lock.get(KVDB_CONTRACTS_TREES_TREE, &state_key)? else {
                 return Err(Error::ContractStateNotFound)
             };
             let contract_id_bytes: [u8; 32] = deserialize(&contract_id_bytes)?;
@@ -589,7 +583,8 @@ impl ContractStoreOverlay {
             debug!(target: "blockchain::contractstoreoverlay::update_state_monotree", "Updating monotree for contract: {contract_id}");
 
             // Grab its monotree
-            let monotree_db = SledOverlayDb::new(&mut lock, &contract_updates.monotree_pointer)?;
+            let monotree_ptr = blake3::Hash::from(contract_updates.monotree_pointer).to_string();
+            let monotree_db = KvdbOverlayDb::new(&mut lock, &monotree_ptr)?;
             let mut monotree = Monotree::new(monotree_db);
             let mut monotree_root = monotree.get_headroot()?;
             let monotree_root_hash = match monotree_root {
@@ -624,7 +619,7 @@ impl ContractStoreOverlay {
         }
 
         // Grab the contracts states monotree
-        let monotree_db = SledOverlayDb::new(&mut lock, SLED_CONTRACTS_MONOTREE_TREE)?;
+        let monotree_db = KvdbOverlayDb::new(&mut lock, KVDB_CONTRACTS_MONOTREE_TREE)?;
         let mut monotree = Monotree::new(monotree_db);
         let mut monotree_root = monotree.get_headroot()?;
         let monotree_root_hash = match monotree_root {

@@ -374,6 +374,10 @@ pub enum Error {
     #[error(transparent)]
     SledTransactionError(#[from] sled_overlay::sled::transaction::TransactionError),
 
+    #[cfg(feature = "kvdb-overlay")]
+    #[error(transparent)]
+    KvdbError(#[from] kvdb_overlay::Error),
+
     #[error("Transaction {0} not found in database")]
     TransactionNotFound(String),
 

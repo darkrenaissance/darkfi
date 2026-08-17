@@ -26,13 +26,13 @@ use darkfi_sdk::{
 #[cfg(feature = "async-serial")]
 use darkfi_serial::{async_trait, FutAsyncWriteExt};
 use darkfi_serial::{deserialize, serialize, Encodable, SerialDecodable, SerialEncodable};
-use sled_overlay::sled;
+use kvdb_overlay::{Batch, Database, Tree};
 
 use crate::{util::time::Timestamp, Error, Result};
 
 use super::{
     monero::{extract_aux_merkle_root, MoneroPowData},
-    parse_record, parse_u32_key_record, SledDbOverlayPtr,
+    parse_record, parse_u32_key_record, KvdbOverlayPtr,
 };
 
 /// Struct representing the Proof of Work used in a block.
@@ -236,72 +236,74 @@ impl fmt::Display for Header {
     }
 }
 
-pub const SLED_HEADER_TREE: &[u8] = b"_headers";
-pub const SLED_SYNC_HEADER_TREE: &[u8] = b"_sync_headers";
+pub const KVDB_HEADER_TREE: &str = "_headers";
+pub const KVDB_SYNC_HEADER_TREE: &str = "_sync_headers";
 
-/// The `HeaderStore` is a structure representing all `sled` trees related
+/// The `HeaderStore` is a structure representing all kvdb trees related
 /// to storing the blockchain's blocks's header information.
 #[derive(Clone)]
 pub struct HeaderStore {
-    /// Main `sled` tree, storing all the blockchain's blocks' headers,
+    /// Main pointer to the kvdb connection
+    pub kvdb: Database,
+    /// Main kvdb tree, storing all the blockchain's blocks' headers,
     /// where the key is the headers' hash, and value is the serialized header.
-    pub main: sled::Tree,
-    /// The `sled` tree storing all the node pending headers while syncing,
+    pub main: Tree,
+    /// The kvdb tree storing all the node pending headers while syncing,
     /// where the key is the height number, and the value is the serialized
     /// header.
-    pub sync: sled::Tree,
+    pub sync: Tree,
 }
 
 impl HeaderStore {
-    /// Opens a new or existing `HeaderStore` on the given sled database.
-    pub fn new(db: &sled::Db) -> Result<Self> {
-        let main = db.open_tree(SLED_HEADER_TREE)?;
-        let sync = db.open_tree(SLED_SYNC_HEADER_TREE)?;
-        Ok(Self { main, sync })
+    /// Opens a new or existing `HeaderStore` on the given kvdb database.
+    pub fn new(kvdb: &Database) -> Result<Self> {
+        let main = kvdb.open_tree_default(KVDB_HEADER_TREE)?;
+        let sync = kvdb.open_tree_default(KVDB_SYNC_HEADER_TREE)?;
+        Ok(Self { kvdb: kvdb.clone(), main, sync })
     }
 
     /// Insert a slice of [`Header`] into the store's main tree.
     pub fn insert(&self, headers: &[Header]) -> Result<Vec<HeaderHash>> {
         let (batch, ret) = self.insert_batch(headers);
-        self.main.apply_batch(batch)?;
+        self.kvdb.atomic_write(&[(&self.main, &batch)])?;
         Ok(ret)
     }
 
     /// Insert a slice of [`Header`] into the store's sync tree.
     pub fn insert_sync(&self, headers: &[Header]) -> Result<()> {
         let batch = self.insert_batch_sync(headers);
-        self.sync.apply_batch(batch)?;
+        self.kvdb.atomic_write(&[(&self.sync, &batch)])?;
         Ok(())
     }
 
-    /// Generate the sled batch corresponding to an insert to the main
+    /// Generate the kvdb batch corresponding to an insert to the main
     /// tree, so caller can handle the write operation.
     /// The header's hash() function output is used as the key,
     /// while value is the serialized [`Header`] itself.
     /// On success, the function returns the header hashes in the same
     /// order, along with the corresponding operation batch.
-    pub fn insert_batch(&self, headers: &[Header]) -> (sled::Batch, Vec<HeaderHash>) {
+    pub fn insert_batch(&self, headers: &[Header]) -> (Batch, Vec<HeaderHash>) {
         let mut ret = Vec::with_capacity(headers.len());
-        let mut batch = sled::Batch::default();
+        let mut batch = Batch::new();
 
         for header in headers {
             let headerhash = header.hash();
-            batch.insert(headerhash.inner(), serialize(header));
+            batch.insert(headerhash.inner(), &serialize(header));
             ret.push(headerhash);
         }
 
         (batch, ret)
     }
 
-    /// Generate the sled batch corresponding to an insert to the sync
+    /// Generate the kvdb batch corresponding to an insert to the sync
     /// tree, so caller can handle the write operation.
     /// The header height is used as the key, while value is the serialized
     /// [`Header`] itself.
-    pub fn insert_batch_sync(&self, headers: &[Header]) -> sled::Batch {
-        let mut batch = sled::Batch::default();
+    pub fn insert_batch_sync(&self, headers: &[Header]) -> Batch {
+        let mut batch = Batch::new();
 
         for header in headers {
-            batch.insert(&header.height.to_be_bytes(), serialize(header));
+            batch.insert(&header.height.to_be_bytes(), &serialize(header));
         }
 
         batch
@@ -388,7 +390,7 @@ impl HeaderStore {
         let mut key = height;
         let mut counter = 0;
         while counter < n {
-            if let Some(found) = self.sync.get_gt(key.to_be_bytes())? {
+            if let Some(found) = self.sync.get_gt(&key.to_be_bytes())? {
                 let (height, hash) = parse_u32_key_record(found)?;
                 key = height;
                 ret.push(hash);
@@ -402,19 +404,19 @@ impl HeaderStore {
     }
 
     /// Retrieve store's sync tree records count.
-    pub fn len_sync(&self) -> usize {
-        self.sync.len()
+    pub fn len_sync(&self) -> Result<usize> {
+        Ok(self.sync.len()?)
     }
 
     /// Check if store's sync tree contains any records.
-    pub fn is_empty_sync(&self) -> bool {
-        self.sync.is_empty()
+    pub fn is_empty_sync(&self) -> Result<bool> {
+        Ok(self.sync.is_empty()?)
     }
 
     /// Remove a slice of [`u32`] from the store's sync tree.
     pub fn remove_sync(&self, heights: &[u32]) -> Result<()> {
         let batch = self.remove_batch_sync(heights);
-        self.sync.apply_batch(batch)?;
+        self.kvdb.atomic_write(&[(&self.sync, &batch)])?;
         Ok(())
     }
 
@@ -423,14 +425,14 @@ impl HeaderStore {
         let headers = self.get_all_sync()?;
         let heights = headers.iter().map(|h| h.0).collect::<Vec<u32>>();
         let batch = self.remove_batch_sync(&heights);
-        self.sync.apply_batch(batch)?;
+        self.kvdb.atomic_write(&[(&self.sync, &batch)])?;
         Ok(())
     }
 
-    /// Generate the sled batch corresponding to a remove from the store's sync
+    /// Generate the kvdb batch corresponding to a remove from the store's sync
     /// tree, so caller can handle the write operation.
-    pub fn remove_batch_sync(&self, heights: &[u32]) -> sled::Batch {
-        let mut batch = sled::Batch::default();
+    pub fn remove_batch_sync(&self, heights: &[u32]) -> Batch {
+        let mut batch = Batch::new();
 
         for height in heights {
             batch.remove(&height.to_be_bytes());
@@ -441,11 +443,11 @@ impl HeaderStore {
 }
 
 /// Overlay structure over a [`HeaderStore`] instance.
-pub struct HeaderStoreOverlay(SledDbOverlayPtr);
+pub struct HeaderStoreOverlay(KvdbOverlayPtr);
 
 impl HeaderStoreOverlay {
-    pub fn new(overlay: &SledDbOverlayPtr) -> Result<Self> {
-        overlay.lock().unwrap().open_tree(SLED_HEADER_TREE, true)?;
+    pub fn new(overlay: &KvdbOverlayPtr) -> Result<Self> {
+        overlay.lock().unwrap().open_tree_default(KVDB_HEADER_TREE, true)?;
         Ok(Self(overlay.clone()))
     }
 
@@ -459,7 +461,7 @@ impl HeaderStoreOverlay {
 
         for header in headers {
             let headerhash = header.hash();
-            lock.insert(SLED_HEADER_TREE, headerhash.inner(), &serialize(header))?;
+            lock.insert(KVDB_HEADER_TREE, headerhash.inner(), &serialize(header))?;
             ret.push(headerhash);
         }
 
@@ -476,7 +478,7 @@ impl HeaderStoreOverlay {
         let lock = self.0.lock().unwrap();
 
         for hash in headerhashes {
-            if let Some(found) = lock.get(SLED_HEADER_TREE, hash.inner())? {
+            if let Some(found) = lock.get(KVDB_HEADER_TREE, hash.inner())? {
                 let header = deserialize(&found)?;
                 ret.push(Some(header));
                 continue

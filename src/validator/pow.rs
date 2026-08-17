@@ -696,8 +696,8 @@ mod tests {
     };
 
     use darkfi_sdk::num_traits::Num;
+    use kvdb_overlay::Database;
     use num_bigint::BigUint;
-    use sled_overlay::sled;
 
     use crate::{
         blockchain::{header_store::Header, BlockInfo, Blockchain},
@@ -711,8 +711,8 @@ mod tests {
 
     #[test]
     fn test_wide_difficulty() -> Result<()> {
-        let sled_db = sled::Config::new().temporary(true).open()?;
-        let blockchain = Blockchain::new(&sled_db)?;
+        let (kvdb, _folder) = Database::open_temp()?;
+        let blockchain = Blockchain::new(&kvdb)?;
         let genesis_block = BlockInfo::default();
         blockchain.add_block(&genesis_block)?;
 
@@ -754,8 +754,8 @@ mod tests {
     #[test]
     fn test_miner_correctness() -> Result<()> {
         // Default setup
-        let sled_db = sled::Config::new().temporary(true).open()?;
-        let blockchain = Blockchain::new(&sled_db)?;
+        let (kvdb, _folder) = Database::open_temp()?;
+        let blockchain = Blockchain::new(&kvdb)?;
         let mut genesis_block = BlockInfo::default();
         genesis_block.header.timestamp = 0.into();
         blockchain.add_block(&genesis_block)?;

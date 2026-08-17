@@ -167,7 +167,15 @@ pub(crate) fn db_get_internal(
 
         tree.get(&key).cloned()
     } else {
-        match env.blockchain.lock().unwrap().overlay.lock().unwrap().get(&db_handle.tree, &key) {
+        match env
+            .blockchain
+            .lock()
+            .unwrap()
+            .overlay
+            .lock()
+            .unwrap()
+            .get(&db_handle.tree_str(), &key)
+        {
             Ok(v) => v.map(|iv| iv.to_vec()),
             Err(e) => {
                 error!(

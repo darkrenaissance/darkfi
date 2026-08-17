@@ -233,12 +233,12 @@ pub(crate) fn merkle_add_internal(
             }
         }
     } else {
-        match overlay.get(&db_info.tree, &tree_key) {
+        match overlay.get(&db_info.tree_str(), &tree_key) {
             Ok(v) => v.map(|iv| iv.to_vec()),
             Err(e) => {
                 error!(
                     target: "runtime::merkle::{lt}",
-                    "[WASM] [{cid}] {lt}(): Error getting from sled tree: {e}",
+                    "[WASM] [{cid}] {lt}(): Error getting from kvdb tree: {e}",
                 );
                 return darkfi_sdk::error::INTERNAL_ERROR
             }
@@ -305,7 +305,7 @@ pub(crate) fn merkle_add_internal(
         let db_cid = tx_local_db.get_mut(&db_info.contract_id).unwrap();
         let tree = db_cid.get_mut(&db_info.tree).unwrap();
         tree.insert(tree_key, merkle_tree_data);
-    } else if let Err(e) = overlay.insert(&db_info.tree, &tree_key, &merkle_tree_data) {
+    } else if let Err(e) = overlay.insert(&db_info.tree_str(), &tree_key, &merkle_tree_data) {
         error!(
             target: "runtime::merkle::{lt}",
             "[WASM] [{cid}] {lt}(): Could not insert tree to db_info: {e}",
@@ -348,7 +348,7 @@ pub(crate) fn merkle_add_internal(
         let roots_tree = db_cid.entry(db_roots.tree).or_default();
         roots_tree.insert(latest_root_data, value_data);
     } else {
-        if let Err(e) = overlay.insert(&db_roots.tree, &latest_root_data, &value_data) {
+        if let Err(e) = overlay.insert(&db_roots.tree_str(), &latest_root_data, &value_data) {
             error!(
                 target: "runtime::merkle::{lt}",
                 "[WASM] [{cid}] {lt}(): Could not insert to db_roots tree: {e}",
@@ -356,7 +356,7 @@ pub(crate) fn merkle_add_internal(
             return darkfi_sdk::error::INTERNAL_ERROR
         }
 
-        if let Err(e) = overlay.insert(&db_info.tree, &root_key, &latest_root_data) {
+        if let Err(e) = overlay.insert(&db_info.tree_str(), &root_key, &latest_root_data) {
             error!(
                 target: "runtime::merkle::{lt}",
                 "[WASM] [{cid}] {lt}(): Could not insert latest root to db_info: {e}",

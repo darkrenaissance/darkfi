@@ -23,70 +23,68 @@ use std::{
 
 use darkfi_sdk::tx::TransactionHash;
 use darkfi_serial::{deserialize, Decodable};
-use sled_overlay::{
-    sled,
-    sled::{IVec, Transactional},
-};
+use kvdb_overlay::{Database, DatabaseOverlay};
 use tracing::debug;
 
 #[cfg(feature = "async-serial")]
 use darkfi_serial::{deserialize_async, AsyncDecodable};
 
-use crate::{tx::Transaction, util::time::Timestamp, Error, Result};
+use crate::{tx::Transaction, util::time::Timestamp, Result};
 
 /// Block related definitions and storage implementations
 pub mod block_store;
 pub use block_store::{
-    Block, BlockDifficulty, BlockInfo, BlockStore, BlockStoreOverlay, SLED_BLOCK_DIFFICULTY_TREE,
-    SLED_BLOCK_ORDER_TREE, SLED_BLOCK_STATE_INVERSE_DIFF_TREE, SLED_BLOCK_TREE,
+    Block, BlockDifficulty, BlockInfo, BlockStore, BlockStoreOverlay, KVDB_BLOCK_DIFFICULTY_TREE,
+    KVDB_BLOCK_ORDER_TREE, KVDB_BLOCK_STATE_INVERSE_DIFF_TREE, KVDB_BLOCK_TREE,
 };
 
 /// Header definition and storage implementation
 pub mod header_store;
 pub use header_store::{
-    Header, HeaderHash, HeaderStore, HeaderStoreOverlay, SLED_HEADER_TREE, SLED_SYNC_HEADER_TREE,
+    Header, HeaderHash, HeaderStore, HeaderStoreOverlay, KVDB_HEADER_TREE, KVDB_SYNC_HEADER_TREE,
 };
 
 /// Transactions related storage implementations
 pub mod tx_store;
 pub use tx_store::{
-    TxStore, TxStoreOverlay, SLED_PENDING_TX_TREE, SLED_TX_LOCATION_TREE, SLED_TX_TREE,
+    TxStore, TxStoreOverlay, KVDB_PENDING_TX_TREE, KVDB_TX_LOCATION_TREE, KVDB_TX_TREE,
 };
 
 /// Contracts and Wasm storage implementations
 pub mod contract_store;
 pub use contract_store::{
-    ContractStore, ContractStoreOverlay, SLED_BINCODE_TREE, SLED_CONTRACTS_TREE,
-    SLED_CONTRACTS_TREES_TREE,
+    ContractStore, ContractStoreOverlay, KVDB_BINCODE_TREE, KVDB_CONTRACTS_TREE,
+    KVDB_CONTRACTS_TREES_TREE,
 };
 
 /// Monero definitions needed for merge mining
 pub mod monero;
 
-/// Structure holding all sled trees that define the concept of Blockchain.
+/// Structure holding all kvdb trees that define the concept of Blockchain.
 #[derive(Clone)]
 pub struct Blockchain {
-    /// Main pointer to the sled db connection
-    pub sled_db: sled::Db,
-    /// Headers sled tree
+    /// Main pointer to the kvdb connection
+    pub kvdb: Database,
+    /// Headers kvdb tree
     pub headers: HeaderStore,
-    /// Blocks sled tree
+    /// Blocks kvdb tree
     pub blocks: BlockStore,
-    /// Transactions related sled trees
+    /// Transactions related kvdb trees
     pub transactions: TxStore,
-    /// Contracts related sled trees
+    /// Contracts related kvdb trees
     pub contracts: ContractStore,
 }
 
 impl Blockchain {
-    /// Instantiate a new `Blockchain` with the given `sled` database.
-    pub fn new(db: &sled::Db) -> Result<Self> {
-        let headers = HeaderStore::new(db)?;
-        let blocks = BlockStore::new(db)?;
-        let transactions = TxStore::new(db)?;
-        let contracts = ContractStore::new(db)?;
+    /// Instantiate a new `Blockchain` with the given key-value
+    /// database.
+    pub fn new(kvdb: &Database) -> Result<Self> {
+        let headers = HeaderStore::new(kvdb)?;
+        let blocks = BlockStore::new(kvdb)?;
+        let transactions = TxStore::new(kvdb)?;
+        let contracts = ContractStore::new(kvdb)?;
 
-        Ok(Self { sled_db: db.clone(), headers, blocks, transactions, contracts })
+        Ok(Self { kvdb: kvdb.clone(), headers, blocks, transactions, contracts })
     }
 
     /// Insert a given [`BlockInfo`] into the blockchain database.
@@ -95,41 +93,35 @@ impl Blockchain {
     /// Upon success, the functions returns the block hash that
     /// were given and appended to the ledger.
     pub fn add_block(&self, block: &BlockInfo) -> Result<HeaderHash> {
-        let mut trees = vec![];
-        let mut batches = vec![];
+        let mut changes = vec![];
 
         // Store header
         let (headers_batch, _) = self.headers.insert_batch(slice::from_ref(&block.header));
-        trees.push(self.headers.main.clone());
-        batches.push(headers_batch);
+        changes.push((&self.headers.main, &headers_batch));
 
         // Store block
         let blk: Block = Block::from_block_info(block);
         let (bocks_batch, block_hashes) = self.blocks.insert_batch(&[blk]);
         let block_hash = block_hashes[0];
         let block_hash_vec = [block_hash];
-        trees.push(self.blocks.main.clone());
-        batches.push(bocks_batch);
+        changes.push((&self.blocks.main, &bocks_batch));
 
         // Store block order
         let blocks_order_batch =
             self.blocks.insert_batch_order(&[block.header.height], &block_hash_vec);
-        trees.push(self.blocks.order.clone());
-        batches.push(blocks_order_batch);
+        changes.push((&self.blocks.order, &blocks_order_batch));
 
         // Store transactions
         let (txs_batch, txs_hashes) = self.transactions.insert_batch(&block.txs);
-        trees.push(self.transactions.main.clone());
-        batches.push(txs_batch);
+        changes.push((&self.transactions.main, &txs_batch));
 
         // Store transactions_locations
         let txs_locations_batch =
             self.transactions.insert_batch_location(&txs_hashes, block.header.height);
-        trees.push(self.transactions.location.clone());
-        batches.push(txs_locations_batch);
+        changes.push((&self.transactions.location, &txs_locations_batch));
 
         // Perform an atomic transaction over the trees and apply the batches.
-        self.atomic_write(&trees, &batches)?;
+        self.kvdb.atomic_write(&changes)?;
 
         Ok(block_hash)
     }
@@ -222,17 +214,17 @@ impl Blockchain {
     }
 
     /// Retrieve stored blocks count
-    pub fn len(&self) -> usize {
+    pub fn len(&self) -> Result<usize> {
         self.blocks.len()
     }
 
     /// Retrieve stored txs count
-    pub fn txs_len(&self) -> usize {
+    pub fn txs_len(&self) -> Result<usize> {
         self.transactions.len()
     }
 
     /// Check if blockchain contains any blocks
-    pub fn is_empty(&self) -> bool {
+    pub fn is_empty(&self) -> Result<bool> {
         self.blocks.is_empty()
     }
 
@@ -315,23 +307,6 @@ impl Blockchain {
         self.transactions.remove_pending(txs)
     }
 
-    /// Auxiliary function to write to multiple trees completely atomic.
-    fn atomic_write(&self, trees: &[sled::Tree], batches: &[sled::Batch]) -> Result<()> {
-        if trees.len() != batches.len() {
-            return Err(Error::InvalidInputLengths)
-        }
-
-        trees.transaction(|trees| {
-            for (index, tree) in trees.iter().enumerate() {
-                tree.apply_batch(&batches[index])?;
-            }
-
-            Ok::<(), sled::transaction::ConflictableTransactionError<sled::Error>>(())
-        })?;
-
-        Ok(())
-    }
-
     /// Retrieve all blocks contained in the blockchain in order.
     /// Be careful as this will try to load everything in memory.
     pub fn get_all(&self) -> Result<Vec<BlockInfo>> {
@@ -392,7 +367,7 @@ impl Blockchain {
             let inverse_diff = inverse_diff.unwrap();
             lock.add_diff(&inverse_diff)?;
             lock.apply_diff(&inverse_diff)?;
-            self.sled_db.flush()?;
+            self.kvdb.flush_default_mode()?;
         }
         drop(lock);
         drop(overlay_lock);
@@ -463,16 +438,16 @@ impl Blockchain {
     }
 }
 
-/// Atomic pointer to sled db overlay.
-pub type SledDbOverlayPtr = Arc<Mutex<sled_overlay::SledDbOverlay>>;
+/// Atomic pointer to kvdb overlay.
+pub type KvdbOverlayPtr = Arc<Mutex<DatabaseOverlay>>;
 
 /// Atomic pointer to blockchain overlay.
 pub type BlockchainOverlayPtr = Arc<Mutex<BlockchainOverlay>>;
 
 /// Overlay structure over a [`Blockchain`] instance.
 pub struct BlockchainOverlay {
-    /// Main [`sled_overlay::SledDbOverlay`] to the sled db connection
-    pub overlay: SledDbOverlayPtr,
+    /// Main [`kvdb_overlay::DatabaseOverlay`] to the kvdb connection
+    pub overlay: KvdbOverlayPtr,
     /// Headers overlay
     pub headers: HeaderStoreOverlay,
     /// Blocks overlay
@@ -486,25 +461,23 @@ pub struct BlockchainOverlay {
 impl BlockchainOverlay {
     /// Instantiate a new `BlockchainOverlay` over the given [`Blockchain`] instance.
     pub fn new(blockchain: &Blockchain) -> Result<BlockchainOverlayPtr> {
-        // Here we configure all our blockchain sled trees to be protected in the overlay
+        // Here we configure all our blockchain kvdb trees to be protected in the overlay
         let protected_trees = vec![
-            SLED_BLOCK_TREE,
-            SLED_BLOCK_ORDER_TREE,
-            SLED_BLOCK_DIFFICULTY_TREE,
-            SLED_BLOCK_STATE_INVERSE_DIFF_TREE,
-            SLED_HEADER_TREE,
-            SLED_SYNC_HEADER_TREE,
-            SLED_TX_TREE,
-            SLED_TX_LOCATION_TREE,
-            SLED_PENDING_TX_TREE,
-            SLED_CONTRACTS_TREE,
-            SLED_CONTRACTS_TREES_TREE,
-            SLED_BINCODE_TREE,
+            KVDB_BLOCK_TREE.to_string(),
+            KVDB_BLOCK_ORDER_TREE.to_string(),
+            KVDB_BLOCK_DIFFICULTY_TREE.to_string(),
+            KVDB_BLOCK_STATE_INVERSE_DIFF_TREE.to_string(),
+            KVDB_HEADER_TREE.to_string(),
+            KVDB_SYNC_HEADER_TREE.to_string(),
+            KVDB_TX_TREE.to_string(),
+            KVDB_TX_LOCATION_TREE.to_string(),
+            KVDB_PENDING_TX_TREE.to_string(),
+            KVDB_CONTRACTS_TREE.to_string(),
+            KVDB_CONTRACTS_TREES_TREE.to_string(),
+            KVDB_BINCODE_TREE.to_string(),
         ];
-        let overlay = Arc::new(Mutex::new(sled_overlay::SledDbOverlay::new(
-            &blockchain.sled_db,
-            protected_trees,
-        )));
+        let overlay =
+            Arc::new(Mutex::new(DatabaseOverlay::new(&blockchain.kvdb, protected_trees)?));
         let headers = HeaderStoreOverlay::new(&overlay)?;
         let blocks = BlockStoreOverlay::new(&overlay)?;
         let transactions = TxStoreOverlay::new(&overlay)?;
@@ -643,7 +616,7 @@ impl BlockchainOverlay {
         self.overlay.lock().unwrap().revert_to_checkpoint();
     }
 
-    /// Auxiliary function to create a full clone using SledDbOverlay::clone,
+    /// Auxiliary function to create a full clone using DatabaseOverlay::clone,
     /// generating new pointers for the underlying overlays.
     pub fn full_clone(&self) -> Result<BlockchainOverlayPtr> {
         let overlay = Arc::new(Mutex::new(self.overlay.lock().unwrap().clone()));
@@ -656,28 +629,28 @@ impl BlockchainOverlay {
     }
 }
 
-/// Parse a sled record in the form of a tuple (`key`, `value`).
-pub fn parse_record<T1: Decodable, T2: Decodable>(record: (IVec, IVec)) -> Result<(T1, T2)> {
+/// Parse a kvdb record in the form of a tuple (`key`, `value`).
+pub fn parse_record<T1: Decodable, T2: Decodable>(record: (Vec<u8>, Vec<u8>)) -> Result<(T1, T2)> {
     let key = deserialize(&record.0)?;
     let value = deserialize(&record.1)?;
 
     Ok((key, value))
 }
 
-/// Parse a sled record with a u32 key, encoded in Big Endian bytes,
+/// Parse a kvdb record with a u32 key, encoded in Big Endian bytes,
 /// in the form of a tuple (`key`, `value`).
-pub fn parse_u32_key_record<T: Decodable>(record: (IVec, IVec)) -> Result<(u32, T)> {
-    let key_bytes: [u8; 4] = record.0.as_ref().try_into().unwrap();
+pub fn parse_u32_key_record<T: Decodable>(record: (Vec<u8>, Vec<u8>)) -> Result<(u32, T)> {
+    let key_bytes: [u8; 4] = record.0.try_into().unwrap();
     let key = u32::from_be_bytes(key_bytes);
     let value = deserialize(&record.1)?;
 
     Ok((key, value))
 }
 
-/// Parse a sled record with a u64 key, encoded in Big Endian bytes,
+/// Parse a kvdb record with a u64 key, encoded in Big Endian bytes,
 /// in the form of a tuple (`key`, `value`).
-pub fn parse_u64_key_record<T: Decodable>(record: (IVec, IVec)) -> Result<(u64, T)> {
-    let key_bytes: [u8; 8] = record.0.as_ref().try_into().unwrap();
+pub fn parse_u64_key_record<T: Decodable>(record: (Vec<u8>, Vec<u8>)) -> Result<(u64, T)> {
+    let key_bytes: [u8; 8] = record.0.try_into().unwrap();
     let key = u64::from_be_bytes(key_bytes);
     let value = deserialize(&record.1)?;
 
@@ -685,9 +658,9 @@ pub fn parse_u64_key_record<T: Decodable>(record: (IVec, IVec)) -> Result<(u64, 
 }
 
 #[cfg(feature = "async-serial")]
-/// Parse a sled record in the form of a tuple (`key`, `value`).
+/// Parse a kvdb record in the form of a tuple (`key`, `value`).
 pub async fn parse_record_async<T1: AsyncDecodable, T2: AsyncDecodable>(
-    record: (IVec, IVec),
+    record: (Vec<u8>, Vec<u8>),
 ) -> Result<(T1, T2)> {
     let key = deserialize_async(&record.0).await?;
     let value = deserialize_async(&record.1).await?;
@@ -696,12 +669,12 @@ pub async fn parse_record_async<T1: AsyncDecodable, T2: AsyncDecodable>(
 }
 
 #[cfg(feature = "async-serial")]
-/// Parse a sled record with a u32 key, encoded in Big Endian bytes,
+/// Parse a kvdb record with a u32 key, encoded in Big Endian bytes,
 /// in the form of a tuple (`key`, `value`).
 pub async fn parse_u32_key_record_async<T: AsyncDecodable>(
-    record: (IVec, IVec),
+    record: (Vec<u8>, Vec<u8>),
 ) -> Result<(u32, T)> {
-    let key_bytes: [u8; 4] = record.0.as_ref().try_into().unwrap();
+    let key_bytes: [u8; 4] = record.0.try_into().unwrap();
     let key = u32::from_be_bytes(key_bytes);
     let value = deserialize_async(&record.1).await?;
 
@@ -709,12 +682,12 @@ pub async fn parse_u32_key_record_async<T: AsyncDecodable>(
 }
 
 #[cfg(feature = "async-serial")]
-/// Parse a sled record with a u64 key, encoded in Big Endian bytes,
+/// Parse a kvdb record with a u64 key, encoded in Big Endian bytes,
 /// in the form of a tuple (`key`, `value`).
 pub async fn parse_u64_key_record_async<T: AsyncDecodable>(
-    record: (IVec, IVec),
+    record: (Vec<u8>, Vec<u8>),
 ) -> Result<(u64, T)> {
-    let key_bytes: [u8; 8] = record.0.as_ref().try_into().unwrap();
+    let key_bytes: [u8; 8] = record.0.try_into().unwrap();
     let key = u64::from_be_bytes(key_bytes);
     let value = deserialize_async(&record.1).await?;
 

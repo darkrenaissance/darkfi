@@ -196,7 +196,7 @@ fn db_set_internal(
         .overlay
         .lock()
         .unwrap()
-        .insert(&db_handle.tree, &key, &value)
+        .insert(&db_handle.tree_str(), &key, &value)
         .is_err()
     {
         error!(

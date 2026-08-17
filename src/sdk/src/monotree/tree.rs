@@ -18,7 +18,7 @@
  */
 
 use hashbrown::{HashMap, HashSet};
-use sled_overlay::{sled::Tree, SledDbOverlay};
+use kvdb_overlay::{DatabaseOverlay, Tree};
 
 use super::{
     bits::{merge_owned_and_bits, Bits, BitsOwned},
@@ -148,25 +148,25 @@ impl MonotreeStorageAdapter for MemoryDb {
     }
 }
 
-/// sled-tree based storage for Monotree
+/// kvdb-tree based storage for Monotree
 #[derive(Clone)]
-pub struct SledTreeDb {
+pub struct KvdbTreeDb {
     tree: Tree,
     batch: MemCache,
     batch_on: bool,
 }
 
-impl SledTreeDb {
+impl KvdbTreeDb {
     pub fn new(tree: &Tree) -> Self {
         Self { tree: tree.clone(), batch: MemCache::new(), batch_on: false }
     }
 }
 
-impl MonotreeStorageAdapter for SledTreeDb {
+impl MonotreeStorageAdapter for KvdbTreeDb {
     fn put(&mut self, key: &Hash, value: Vec<u8>) -> GenericResult<()> {
         if self.batch_on {
             self.batch.put(key, value);
-        } else if let Err(e) = self.tree.insert(slice_to_hash(key), value) {
+        } else if let Err(e) = self.tree.insert(key, &value) {
             return Err(ContractError::IoError(e.to_string()))
         }
 
@@ -207,12 +207,12 @@ impl MonotreeStorageAdapter for SledTreeDb {
     fn finish_batch(&mut self) -> GenericResult<()> {
         if self.batch_on {
             for (key, value) in self.batch.map.drain() {
-                if let Err(e) = self.tree.insert(key, value) {
+                if let Err(e) = self.tree.insert(&key, &value) {
                     return Err(ContractError::IoError(e.to_string()))
                 }
             }
             for key in self.batch.set.drain() {
-                if let Err(e) = self.tree.remove(key) {
+                if let Err(e) = self.tree.remove(&key) {
                     return Err(ContractError::IoError(e.to_string()))
                 }
             }
@@ -223,27 +223,24 @@ impl MonotreeStorageAdapter for SledTreeDb {
     }
 }
 
-/// sled-overlay based storage for Monotree
-pub struct SledOverlayDb<'a> {
-    overlay: &'a mut SledDbOverlay,
-    tree: [u8; 32],
+/// kvdb-overlay based storage for Monotree
+pub struct KvdbOverlayDb<'a> {
+    overlay: &'a mut DatabaseOverlay,
+    tree: String,
     batch: MemCache,
     batch_on: bool,
 }
 
-impl<'a> SledOverlayDb<'a> {
-    pub fn new(
-        overlay: &'a mut SledDbOverlay,
-        tree: &[u8; 32],
-    ) -> GenericResult<SledOverlayDb<'a>> {
-        if let Err(e) = overlay.open_tree(tree, false) {
+impl<'a> KvdbOverlayDb<'a> {
+    pub fn new(overlay: &'a mut DatabaseOverlay, tree: &str) -> GenericResult<KvdbOverlayDb<'a>> {
+        if let Err(e) = overlay.open_tree_default(tree, false) {
             return Err(ContractError::IoError(e.to_string()))
         };
-        Ok(Self { overlay, tree: *tree, batch: MemCache::new(), batch_on: false })
+        Ok(Self { overlay, tree: tree.to_string(), batch: MemCache::new(), batch_on: false })
     }
 }
 
-impl MonotreeStorageAdapter for SledOverlayDb<'_> {
+impl MonotreeStorageAdapter for KvdbOverlayDb<'_> {
     fn put(&mut self, key: &Hash, value: Vec<u8>) -> GenericResult<()> {
         if self.batch_on {
             self.batch.put(key, value);

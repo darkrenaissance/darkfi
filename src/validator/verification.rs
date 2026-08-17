@@ -29,9 +29,9 @@ use darkfi_sdk::{
     pasta::pallas,
 };
 use darkfi_serial::{deserialize_async, serialize_async, AsyncDecodable, AsyncEncodable};
+use kvdb_overlay::DatabaseOverlayStateDiff;
 use num_bigint::BigUint;
 use parking_lot::Mutex;
-use sled_overlay::SledDbOverlayStateDiff;
 use smol::io::Cursor;
 use tracing::{debug, error, warn};
 
@@ -60,7 +60,7 @@ use crate::{
 /// needed.
 pub async fn verify_genesis_block(
     overlay: &BlockchainOverlayPtr,
-    diffs: &[SledDbOverlayStateDiff],
+    diffs: &[DatabaseOverlayStateDiff],
     block: &BlockInfo,
     block_target: u32,
 ) -> Result<()> {
@@ -231,7 +231,7 @@ pub fn validate_blockchain(
 /// needed.
 pub async fn verify_block(
     overlay: &BlockchainOverlayPtr,
-    diffs: &[SledDbOverlayStateDiff],
+    diffs: &[DatabaseOverlayStateDiff],
     module: &mut PoWModule,
     block: &BlockInfo,
     previous: &BlockInfo,
@@ -319,7 +319,7 @@ pub async fn verify_block(
 /// needed.
 pub async fn verify_checkpoint_block(
     overlay: &BlockchainOverlayPtr,
-    diffs: &[SledDbOverlayStateDiff],
+    diffs: &[DatabaseOverlayStateDiff],
     block: &BlockInfo,
     header: &HeaderHash,
     block_target: u32,
@@ -484,7 +484,7 @@ pub async fn verify_producer_transaction(
     debug!(target: "validator::verification::verify_producer_transaction", "Successfully executed \"metadata\" call");
 
     // Here we'll look up verifying keys and insert them into the map.
-    debug!(target: "validator::verification::verify_producer_transaction", "Performing VerifyingKey lookups from the sled db");
+    debug!(target: "validator::verification::verify_producer_transaction", "Performing VerifyingKey lookups from the kvdb");
     for (zkas_ns, _) in &zkp_pub {
         // TODO: verify this is correct behavior
         let inner_vk_map = verifying_keys.get_mut(&call.data.contract_id.to_bytes()).unwrap();
@@ -782,7 +782,7 @@ pub async fn verify_transaction(
         // per-contract map.
         // TODO: This vk map can potentially use a lot of RAM. Perhaps
         // load keys on-demand at verification time?
-        debug!(target: "validator::verification::verify_transaction", "Performing VerifyingKey lookups from the sled db");
+        debug!(target: "validator::verification::verify_transaction", "Performing VerifyingKey lookups from the kvdb");
         for (zkas_ns, _) in &zkp_pub {
             let inner_vk_map = verifying_keys.get_mut(&call.data.contract_id.to_bytes()).unwrap();
 

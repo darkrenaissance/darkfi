@@ -109,7 +109,7 @@ fn init_contract(cid: ContractId, _ix: &[u8]) -> ContractResult {
     // zkas circuits can simply be embedded in the wasm and set up by using
     // respective db functions. The special `zkas db` operations exist in
     // order to be able to verify the circuits being bundled and enforcing
-    // a specific tree inside sled, and also creation of VerifyingKey.
+    // a specific tree inside the kvdb, and also creation of VerifyingKey.
     let fee_v1_bincode = include_bytes!("../proof/fee_v1.zk.bin");
     let mint_v1_bincode = include_bytes!("../proof/mint_v1.zk.bin");
     let burn_v1_bincode = include_bytes!("../proof/burn_v1.zk.bin");

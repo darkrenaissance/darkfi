@@ -60,7 +60,7 @@ pub mod entrypoint;
 /// Client API for interaction with this smart contract
 pub mod client;
 
-// These are the different sled trees that will be created
+// These are the different kvdb trees that will be created
 pub const DAO_CONTRACT_INFO_TREE: &str = "info";
 pub const DAO_CONTRACT_BULLAS_TREE: &str = "bullas";
 pub const DAO_CONTRACT_MERKLE_ROOTS_TREE: &str = "roots";

@@ -186,12 +186,15 @@ pub fn inject(overlay: &BlockchainOverlayPtr, vks: &Vks) -> Result<()> {
     let mut overlay = lock.overlay.lock().unwrap();
 
     // Derive the database names for the specific contracts
-    let money_db_name = MONEY_CONTRACT_ID.hash_state_id(SMART_CONTRACT_ZKAS_DB_NAME);
-    let dao_db_name = DAO_CONTRACT_ID.hash_state_id(SMART_CONTRACT_ZKAS_DB_NAME);
+    let money_db_name =
+        blake3::Hash::from(MONEY_CONTRACT_ID.hash_state_id(SMART_CONTRACT_ZKAS_DB_NAME))
+            .to_string();
+    let dao_db_name =
+        blake3::Hash::from(DAO_CONTRACT_ID.hash_state_id(SMART_CONTRACT_ZKAS_DB_NAME)).to_string();
 
     // Ensure they are open in the overlay
-    overlay.open_tree(&money_db_name, false)?;
-    overlay.open_tree(&dao_db_name, false)?;
+    overlay.open_tree_default(&money_db_name, false)?;
+    overlay.open_tree_default(&dao_db_name, false)?;
 
     for (bincode, namespace, vk) in vks.iter() {
         match namespace.as_str() {

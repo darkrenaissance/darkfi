@@ -21,7 +21,6 @@ use std::{
     sync::Arc,
 };
 
-use sled_overlay::sled::IVec;
 use smol::lock::{Mutex, RwLock};
 use tinyjson::JsonValue;
 use tracing::{error, info};
@@ -327,7 +326,7 @@ impl DarkfiMinersRegistryState {
 
     /// Auxiliary function to retrieve all current block templates
     /// newly opened trees.
-    pub fn new_trees(&self) -> BTreeSet<IVec> {
+    pub fn new_trees(&self) -> BTreeSet<String> {
         let mut new_trees = BTreeSet::new();
         for block_template in self.block_templates.values() {
             for new_tree in &block_template.new_trees {

@@ -365,11 +365,9 @@ impl DarkfiNode {
         };
 
         let validator = self.validator.read().await;
-        let Ok(zkas_db) = validator.blockchain.contracts.lookup(
-            &validator.blockchain.sled_db,
-            &contract_id,
-            SMART_CONTRACT_ZKAS_DB_NAME,
-        ) else {
+        let Ok(zkas_db) =
+            validator.blockchain.contracts.lookup(&contract_id, SMART_CONTRACT_ZKAS_DB_NAME)
+        else {
             error!(target: "darkfid::rpc::blockchain_lookup_zkas", "Did not find zkas db for ContractId: {contract_id}");
             return server_error(RpcError::ContractZkasDbNotFound, id, None)
         };
@@ -380,7 +378,7 @@ impl DarkfiNode {
         for i in zkas_db.iter() {
             debug!(target: "darkfid::rpc::blockchain_lookup_zkas", "Iterating over zkas db");
             let Ok((zkas_ns, zkas_bytes)) = i else {
-                error!(target: "darkfid::rpc::blockchain_lookup_zkas", "Internal sled error iterating db");
+                error!(target: "darkfid::rpc::blockchain_lookup_zkas", "Internal kvdb error iterating db");
                 return JsonError::new(InternalError, None, id).into()
             };
 
@@ -469,11 +467,7 @@ impl DarkfiNode {
         let tree_name = params[1].get::<String>().unwrap();
 
         let validator = self.validator.read().await;
-        match validator.blockchain.contracts.get_state_tree_records(
-            &validator.blockchain.sled_db,
-            &contract_id,
-            tree_name,
-        ) {
+        match validator.blockchain.contracts.get_state_tree_records(&contract_id, tree_name) {
             Ok(records) => JsonResponse::new(
                 JsonValue::String(base64::encode(&serialize_async(&records).await)),
                 id,
@@ -534,12 +528,7 @@ impl DarkfiNode {
         };
 
         let validator = self.validator.read().await;
-        match validator.blockchain.contracts.get_state_tree_value(
-            &validator.blockchain.sled_db,
-            &contract_id,
-            tree_name,
-            &key,
-        ) {
+        match validator.blockchain.contracts.get_state_tree_value(&contract_id, tree_name, &key) {
             Ok(value) => JsonResponse::new(JsonValue::String(base64::encode(&value)), id).into(),
             Err(e) => {
                 error!(target: "darkfid::rpc::blockchain_get_contract_state_key", "Failed fetching contract state key value: {e}");

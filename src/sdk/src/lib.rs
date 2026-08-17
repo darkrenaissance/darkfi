@@ -28,6 +28,7 @@ pub mod blockchain;
 pub mod dark_tree;
 
 /// Native (non-wasm, non-ff) Sparse Merkle Tree
+#[cfg(feature = "monotree")]
 pub mod monotree;
 
 /// Contract deployment utilities

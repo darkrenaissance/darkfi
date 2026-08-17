@@ -59,10 +59,10 @@ use darkfi_sdk::{
     pasta::pallas,
 };
 use darkfi_serial::{serialize, Encodable};
+use kvdb_overlay::{Database, TempDir};
 use num_bigint::BigUint;
 use parking_lot::Mutex;
 use rand::rngs::OsRng;
-use sled_overlay::sled;
 use tracing::{debug, warn};
 
 /// Utility module for caching ZK proof PKs and VKs
@@ -105,7 +105,7 @@ pub fn init_logger() {
     // We check this error so we can execute same-file tests in parallel.
     // Otherwise subsequent calls fail to init the logger here.
     if setup_test_logger(
-        &["sled"],
+        &["fjall", "sled"],
         false,
         Level::Info,
         //Level::Verbose,
@@ -138,6 +138,8 @@ pub struct Wallet {
     pub contract_deploy_authority: Keypair,
     /// Holder's [`Validator`] instance
     pub validator: ValidatorPtr,
+    /// Holder's temp database folder
+    pub kvdb_folder: TempDir,
     /// Holder's instance of the Merkle tree for the `Money` contract
     pub money_merkle_tree: MerkleTree,
     /// Holder's instance of the nullifiers SMT tree for the `Money` contract
@@ -173,11 +175,11 @@ impl Wallet {
         vks: &vks::Vks,
         verify_fees: bool,
     ) -> Result<Self> {
-        // Create an in-memory sled db instance for this wallet
-        let sled_db = sled::Config::new().temporary(true).open()?;
+        // Create an in-memory kvdb instance for this wallet
+        let (kvdb, kvdb_folder) = Database::open_temp()?;
 
         // Inject the cached VKs into the database
-        let overlay = BlockchainOverlay::new(&Blockchain::new(&sled_db)?)?;
+        let overlay = BlockchainOverlay::new(&Blockchain::new(&kvdb)?)?;
         vks::inject(&overlay, vks)?;
 
         deploy_native_contracts(&overlay, POW_TARGET).await?;
@@ -194,7 +196,7 @@ impl Wallet {
             genesis_block,
             verify_fees,
         };
-        let validator = Validator::new(&sled_db, &validator_config).await?;
+        let validator = Validator::new(&kvdb, &validator_config).await?;
 
         // The Merkle tree for the Money contract is initialized with a
         // "null" leaf at position 0.
@@ -211,6 +213,7 @@ impl Wallet {
             token_mint_authority,
             contract_deploy_authority,
             validator,
+            kvdb_folder,
             money_merkle_tree,
             money_null_smt,
             money_null_smt_snapshot: None,
@@ -367,8 +370,8 @@ impl TestHarness {
         }
 
         // Compute genesis contracts states monotree root
-        let sled_db = sled::Config::new().temporary(true).open()?;
-        let overlay = BlockchainOverlay::new(&Blockchain::new(&sled_db)?)?;
+        let (kvdb, _kvdb_folder) = Database::open_temp()?;
+        let overlay = BlockchainOverlay::new(&Blockchain::new(&kvdb)?)?;
         vks::inject(&overlay, &vks)?;
         deploy_native_contracts(&overlay, POW_TARGET).await?;
         let diff = overlay.lock().unwrap().overlay.lock().unwrap().diff(&[])?;

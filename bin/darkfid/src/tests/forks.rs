@@ -21,7 +21,7 @@ use darkfi::{
     validator::{consensus::Fork, pow::PoWModule},
     Result,
 };
-use sled_overlay::sled;
+use kvdb_overlay::Database;
 
 #[test]
 fn forks() -> Result<()> {
@@ -31,7 +31,8 @@ fn forks() -> Result<()> {
         let record2 = HeaderHash::new(blake3::hash(b"Never skip brain day.").into());
 
         // Create a temporary blockchain
-        let blockchain = Blockchain::new(&sled::Config::new().temporary(true).open()?)?;
+        let (kvdb, _kvdb_folder) = Database::open_temp()?;
+        let blockchain = Blockchain::new(&kvdb)?;
 
         // Generate and insert default genesis block
         let genesis_block = BlockInfo::default();

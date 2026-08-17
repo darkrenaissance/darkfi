@@ -173,9 +173,9 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
     let bytes = base64::decode(genesis_block.trim()).unwrap();
     let genesis_block: BlockInfo = deserialize_async(&bytes).await?;
 
-    // Initialize or open sled database
+    // Initialize or open kvdb database
     let db_path = expand_path(&blockchain_config.database)?;
-    let sled_db = sled_overlay::sled::open(&db_path)?;
+    let kvdb = kvdb_overlay::Database::open_default(&db_path)?;
 
     // Initialize validator configuration
     let pow_fixed_difficulty = if let Some(diff) = blockchain_config.pow_fixed_difficulty {
@@ -197,7 +197,7 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
     // Check if reset was requested
     if let Some(height) = args.reset {
         info!(target: "darkfid", "Node will reset validator state to height: {height}");
-        let validator = Validator::new(&sled_db, &config).await?;
+        let validator = Validator::new(&kvdb, &config).await?;
         validator.write().await.reset_to_height(height).await?;
         info!(target: "darkfid", "Validator state reset successfully!");
         return Ok(())
@@ -206,7 +206,7 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
     // Check if sync headers purge was requested
     if args.purge_sync {
         info!(target: "darkfid", "Node will purge all pending sync headers.");
-        let validator = Validator::new(&sled_db, &config).await?;
+        let validator = Validator::new(&kvdb, &config).await?;
         validator.read().await.blockchain.headers.remove_all_sync()?;
         info!(target: "darkfid", "Validator pending sync headers purged successfully!");
         return Ok(())
@@ -215,7 +215,7 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
     // Check if validate was requested
     if args.validate {
         info!(target: "darkfid", "Node will validate existing blockchain state.");
-        let validator = Validator::new(&sled_db, &config).await?;
+        let validator = Validator::new(&kvdb, &config).await?;
         validator
             .read()
             .await
@@ -228,7 +228,7 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
     // Check if rebuild difficulties was requested
     if args.rebuild_difficulties {
         info!(target: "darkfid", "Node will rebuild difficulties of existing blockchain state.");
-        let validator = Validator::new(&sled_db, &config).await?;
+        let validator = Validator::new(&kvdb, &config).await?;
         validator
             .read()
             .await
@@ -242,7 +242,7 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
         (env!("CARGO_PKG_NAME"), env!("CARGO_PKG_VERSION"), blockchain_config.net).try_into()?;
 
     // Generate the daemon
-    let daemon = Darkfid::init(network, &sled_db, &config, &p2p_settings, &ex).await?;
+    let daemon = Darkfid::init(network, &kvdb, &config, &p2p_settings, &ex).await?;
 
     // Start the daemon
     let config = ConsensusInitTaskConfig {

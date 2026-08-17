@@ -117,6 +117,7 @@ wasmer-middlewares = {version = "6.1.0", optional = true}
 
 # Blockchain store
 sled-overlay = {version = "0.1.20", optional = true}
+kvdb-overlay = {git = "https://git.dark.fi/darkrenaissance/kvdb-overlay", version = "0.1.0", optional = true}
 
 # Miner
 randomx = {git = "https://codeberg.org/darkrenaissance/RandomX", rev = "0e31d5a", optional = true}
@@ -146,7 +147,7 @@ async-sdk = [
 ]
 
 blockchain = [
-    "sled-overlay",
+    "kvdb-overlay",
     "monero",
     "num-bigint",
     "primitive-types",
@@ -154,7 +155,8 @@ blockchain = [
     "tiny-keccak",
 
     "darkfi-serial/num-bigint",
-    "darkfi-serial/sled-overlay",
+    "darkfi-serial/kvdb-overlay",
+    "darkfi-sdk/monotree",
 
     "tx",
     "util",

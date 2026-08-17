@@ -27,17 +27,17 @@ use darkfi_sdk::{
 #[cfg(feature = "async-serial")]
 use darkfi_serial::async_trait;
 use darkfi_serial::{deserialize, serialize, SerialDecodable, SerialEncodable};
+use kvdb_overlay::{Batch, Database, DatabaseOverlayStateDiff, Tree};
 use num_bigint::BigUint;
-use sled_overlay::{sled, SledDbOverlayStateDiff};
 
 use crate::{tx::Transaction, util::time::Timestamp, Error, Result};
 
-use super::{parse_record, parse_u32_key_record, Header, HeaderHash, SledDbOverlayPtr};
+use super::{parse_record, parse_u32_key_record, Header, HeaderHash, KvdbOverlayPtr};
 
 /// This struct represents a tuple of the form (`header`, `txs`, `signature`).
 ///
 /// The header and transactions are stored as hashes, serving as pointers to the actual data
-/// in the sled database.
+/// in the kvdb database.
 /// NOTE: This struct fields are considered final, as it represents a blockchain block.
 #[derive(Debug, Clone, SerialEncodable, SerialDecodable)]
 pub struct Block {
@@ -234,46 +234,49 @@ impl BlockDifficulty {
     }
 }
 
-pub const SLED_BLOCK_TREE: &[u8] = b"_blocks";
-pub const SLED_BLOCK_ORDER_TREE: &[u8] = b"_block_order";
-pub const SLED_BLOCK_DIFFICULTY_TREE: &[u8] = b"_block_difficulty";
-pub const SLED_BLOCK_STATE_INVERSE_DIFF_TREE: &[u8] = b"_block_state_inverse_diff";
+pub const KVDB_BLOCK_TREE: &str = "_blocks";
+pub const KVDB_BLOCK_ORDER_TREE: &str = "_block_order";
+pub const KVDB_BLOCK_DIFFICULTY_TREE: &str = "_block_difficulty";
+pub const KVDB_BLOCK_STATE_INVERSE_DIFF_TREE: &str = "_block_state_inverse_diff";
 
-/// The `BlockStore` is a structure representing all `sled` trees related
+/// The `BlockStore` is a structure representing all kvdb trees related
 /// to storing the blockchain's blocks information.
 #[derive(Clone)]
 pub struct BlockStore {
-    /// Main `sled` tree, storing all the blockchain's blocks, where the
+    /// Main pointer to the kvdb connection
+    pub kvdb: Database,
+    /// Main kvdb tree, storing all the blockchain's blocks, where the
     /// key is the blocks' hash, and value is the serialized block.
-    pub main: sled::Tree,
-    /// The `sled` tree storing the order of the blockchain's blocks,
+    pub main: Tree,
+    /// The kvdb tree storing the order of the blockchain's blocks,
     /// where the key is the height number, and the value is the blocks'
     /// hash.
-    pub order: sled::Tree,
-    /// The `sled` tree storing the difficulty information of the
+    pub order: Tree,
+    /// The kvdb tree storing the difficulty information of the
     /// blockchain's blocks, where the key is the block height number,
     /// and the value is the blocks' hash.
-    pub difficulty: sled::Tree,
-    /// The `sled` tree storing each blocks' full database state inverse
+    pub difficulty: Tree,
+    /// The kvdb tree storing each blocks' full database state inverse
     /// changes, where the key is the block height number, and the value
     /// is the serialized database inverse diff.
-    pub state_inverse_diff: sled::Tree,
+    pub state_inverse_diff: Tree,
 }
 
 impl BlockStore {
-    /// Opens a new or existing `BlockStore` on the given sled database.
-    pub fn new(db: &sled::Db) -> Result<Self> {
-        let main = db.open_tree(SLED_BLOCK_TREE)?;
-        let order = db.open_tree(SLED_BLOCK_ORDER_TREE)?;
-        let difficulty = db.open_tree(SLED_BLOCK_DIFFICULTY_TREE)?;
-        let state_inverse_diff = db.open_tree(SLED_BLOCK_STATE_INVERSE_DIFF_TREE)?;
-        Ok(Self { main, order, difficulty, state_inverse_diff })
+    /// Opens a new or existing `BlockStore` on the given key-value
+    /// database.
+    pub fn new(kvdb: &Database) -> Result<Self> {
+        let main = kvdb.open_tree_default(KVDB_BLOCK_TREE)?;
+        let order = kvdb.open_tree_default(KVDB_BLOCK_ORDER_TREE)?;
+        let difficulty = kvdb.open_tree_default(KVDB_BLOCK_DIFFICULTY_TREE)?;
+        let state_inverse_diff = kvdb.open_tree_default(KVDB_BLOCK_STATE_INVERSE_DIFF_TREE)?;
+        Ok(Self { kvdb: kvdb.clone(), main, order, difficulty, state_inverse_diff })
     }
 
     /// Insert a slice of [`Block`] into the store's main tree.
     pub fn insert(&self, blocks: &[Block]) -> Result<Vec<HeaderHash>> {
         let (batch, ret) = self.insert_batch(blocks);
-        self.main.apply_batch(batch)?;
+        self.kvdb.atomic_write(&[(&self.main, &batch)])?;
         Ok(ret)
     }
 
@@ -281,7 +284,7 @@ impl BlockStore {
     /// order tree.
     pub fn insert_order(&self, heights: &[u32], hashes: &[HeaderHash]) -> Result<()> {
         let batch = self.insert_batch_order(heights, hashes);
-        self.order.apply_batch(batch)?;
+        self.kvdb.atomic_write(&[(&self.order, &batch)])?;
         Ok(())
     }
 
@@ -289,7 +292,7 @@ impl BlockStore {
     /// difficulty tree.
     pub fn insert_difficulty(&self, block_difficulties: &[BlockDifficulty]) -> Result<()> {
         let batch = self.insert_batch_difficulty(block_difficulties);
-        self.difficulty.apply_batch(batch)?;
+        self.kvdb.atomic_write(&[(&self.difficulty, &batch)])?;
         Ok(())
     }
 
@@ -298,36 +301,36 @@ impl BlockStore {
     pub fn insert_state_inverse_diff(
         &self,
         heights: &[u32],
-        diffs: &[SledDbOverlayStateDiff],
+        diffs: &[DatabaseOverlayStateDiff],
     ) -> Result<()> {
         let batch = self.insert_batch_state_inverse_diff(heights, diffs);
-        self.state_inverse_diff.apply_batch(batch)?;
+        self.kvdb.atomic_write(&[(&self.state_inverse_diff, &batch)])?;
         Ok(())
     }
 
-    /// Generate the sled batch corresponding to an insert to the main
+    /// Generate the kvdb batch corresponding to an insert to the main
     /// tree, so caller can handle the write operation.
     /// The block's hash() function output is used as the key,
     /// while value is the serialized [`Block`] itself.
     /// On success, the function returns the block hashes in the same order.
-    pub fn insert_batch(&self, blocks: &[Block]) -> (sled::Batch, Vec<HeaderHash>) {
+    pub fn insert_batch(&self, blocks: &[Block]) -> (Batch, Vec<HeaderHash>) {
         let mut ret = Vec::with_capacity(blocks.len());
-        let mut batch = sled::Batch::default();
+        let mut batch = Batch::new();
 
         for block in blocks {
             let blockhash = block.hash();
-            batch.insert(blockhash.inner(), serialize(block));
+            batch.insert(blockhash.inner(), &serialize(block));
             ret.push(blockhash);
         }
 
         (batch, ret)
     }
 
-    /// Generate the sled batch corresponding to an insert to the order
+    /// Generate the kvdb batch corresponding to an insert to the order
     /// tree, so caller can handle the write operation.
     /// The block height is used as the key, and the block hash is used as value.
-    pub fn insert_batch_order(&self, heights: &[u32], hashes: &[HeaderHash]) -> sled::Batch {
-        let mut batch = sled::Batch::default();
+    pub fn insert_batch_order(&self, heights: &[u32], hashes: &[HeaderHash]) -> Batch {
+        let mut batch = Batch::new();
 
         for (i, height) in heights.iter().enumerate() {
             batch.insert(&height.to_be_bytes(), hashes[i].inner());
@@ -336,33 +339,33 @@ impl BlockStore {
         batch
     }
 
-    /// Generate the sled batch corresponding to an insert to the difficulty
+    /// Generate the kvdb batch corresponding to an insert to the difficulty
     /// tree, so caller can handle the write operation.
     /// The block's height number is used as the key, while value is
     //  the serialized [`BlockDifficulty`] itself.
-    pub fn insert_batch_difficulty(&self, block_difficulties: &[BlockDifficulty]) -> sled::Batch {
-        let mut batch = sled::Batch::default();
+    pub fn insert_batch_difficulty(&self, block_difficulties: &[BlockDifficulty]) -> Batch {
+        let mut batch = Batch::new();
 
         for block_difficulty in block_difficulties {
-            batch.insert(&block_difficulty.height.to_be_bytes(), serialize(block_difficulty));
+            batch.insert(&block_difficulty.height.to_be_bytes(), &serialize(block_difficulty));
         }
 
         batch
     }
 
-    /// Generate the sled batch corresponding to an insert to the database
+    /// Generate the kvdb batch corresponding to an insert to the database
     /// inverse diffs tree, so caller can handle the write operation.
     /// The block height is used as the key, and the serialized database
     /// inverse diff is used as value.
     pub fn insert_batch_state_inverse_diff(
         &self,
         heights: &[u32],
-        diffs: &[SledDbOverlayStateDiff],
-    ) -> sled::Batch {
-        let mut batch = sled::Batch::default();
+        diffs: &[DatabaseOverlayStateDiff],
+    ) -> Batch {
+        let mut batch = Batch::default();
 
         for (i, height) in heights.iter().enumerate() {
-            batch.insert(&height.to_be_bytes(), serialize(&diffs[i]));
+            batch.insert(&height.to_be_bytes(), &serialize(&diffs[i]));
         }
 
         batch
@@ -375,7 +378,7 @@ impl BlockStore {
 
     /// Check if the store's order tree contains a given height.
     pub fn contains_order(&self, height: u32) -> Result<bool> {
-        Ok(self.order.contains_key(height.to_be_bytes())?)
+        Ok(self.order.contains_key(&height.to_be_bytes())?)
     }
 
     /// Fetch given block hashes from the store's main tree.
@@ -410,7 +413,7 @@ impl BlockStore {
         let mut ret = Vec::with_capacity(heights.len());
 
         for height in heights {
-            if let Some(found) = self.order.get(height.to_be_bytes())? {
+            if let Some(found) = self.order.get(&height.to_be_bytes())? {
                 let block_hash = deserialize(&found)?;
                 ret.push(Some(block_hash));
                 continue
@@ -438,7 +441,7 @@ impl BlockStore {
         let mut ret = Vec::with_capacity(heights.len());
 
         for height in heights {
-            if let Some(found) = self.difficulty.get(height.to_be_bytes())? {
+            if let Some(found) = self.difficulty.get(&height.to_be_bytes())? {
                 let block_difficulty = deserialize(&found)?;
                 ret.push(Some(block_difficulty));
                 continue
@@ -462,11 +465,11 @@ impl BlockStore {
         &self,
         heights: &[u32],
         strict: bool,
-    ) -> Result<Vec<Option<SledDbOverlayStateDiff>>> {
+    ) -> Result<Vec<Option<DatabaseOverlayStateDiff>>> {
         let mut ret = Vec::with_capacity(heights.len());
 
         for height in heights {
-            if let Some(found) = self.state_inverse_diff.get(height.to_be_bytes())? {
+            if let Some(found) = self.state_inverse_diff.get(&height.to_be_bytes())? {
                 let state_inverse_diff = deserialize(&found)?;
                 ret.push(Some(state_inverse_diff));
                 continue
@@ -547,7 +550,7 @@ impl BlockStore {
         let mut key = height;
         let mut counter = 0;
         while counter < n {
-            let record = self.order.get_lt(key.to_be_bytes())?;
+            let record = self.order.get_lt(&key.to_be_bytes())?;
             if record.is_none() {
                 break
             }
@@ -569,7 +572,7 @@ impl BlockStore {
         let mut ret = vec![];
 
         let mut key = height;
-        while let Some(found) = self.order.get_gt(key.to_be_bytes())? {
+        while let Some(found) = self.order.get_gt(&key.to_be_bytes())? {
             let (height, hash) = parse_u32_key_record(found)?;
             key = height;
             ret.push(hash);
@@ -644,7 +647,7 @@ impl BlockStore {
         let mut key = height;
         let mut counter = 0;
         while counter < n {
-            let record = self.difficulty.get_lt(key.to_be_bytes())?;
+            let record = self.difficulty.get_lt(&key.to_be_bytes())?;
             if record.is_none() {
                 break
             }
@@ -666,11 +669,11 @@ impl BlockStore {
     pub fn get_state_inverse_diffs_after(
         &self,
         height: u32,
-    ) -> Result<Vec<SledDbOverlayStateDiff>> {
+    ) -> Result<Vec<DatabaseOverlayStateDiff>> {
         let mut ret = vec![];
 
         let mut key = height;
-        while let Some(found) = self.state_inverse_diff.get_gt(key.to_be_bytes())? {
+        while let Some(found) = self.state_inverse_diff.get_gt(&key.to_be_bytes())? {
             let (height, state_inverse_diff) = parse_u32_key_record(found)?;
             key = height;
             ret.push(state_inverse_diff);
@@ -680,25 +683,25 @@ impl BlockStore {
     }
 
     /// Retrieve store's order tree records count.
-    pub fn len(&self) -> usize {
-        self.order.len()
+    pub fn len(&self) -> Result<usize> {
+        Ok(self.order.len()?)
     }
 
     /// Check if store's order tree contains any records.
-    pub fn is_empty(&self) -> bool {
-        self.order.is_empty()
+    pub fn is_empty(&self) -> Result<bool> {
+        Ok(self.order.is_empty()?)
     }
 }
 
 /// Overlay structure over a [`BlockStore`] instance.
-pub struct BlockStoreOverlay(SledDbOverlayPtr);
+pub struct BlockStoreOverlay(KvdbOverlayPtr);
 
 impl BlockStoreOverlay {
-    pub fn new(overlay: &SledDbOverlayPtr) -> Result<Self> {
-        overlay.lock().unwrap().open_tree(SLED_BLOCK_TREE, true)?;
-        overlay.lock().unwrap().open_tree(SLED_BLOCK_ORDER_TREE, true)?;
-        overlay.lock().unwrap().open_tree(SLED_BLOCK_DIFFICULTY_TREE, true)?;
-        overlay.lock().unwrap().open_tree(SLED_BLOCK_STATE_INVERSE_DIFF_TREE, true)?;
+    pub fn new(overlay: &KvdbOverlayPtr) -> Result<Self> {
+        overlay.lock().unwrap().open_tree_default(KVDB_BLOCK_TREE, true)?;
+        overlay.lock().unwrap().open_tree_default(KVDB_BLOCK_ORDER_TREE, true)?;
+        overlay.lock().unwrap().open_tree_default(KVDB_BLOCK_DIFFICULTY_TREE, true)?;
+        overlay.lock().unwrap().open_tree_default(KVDB_BLOCK_STATE_INVERSE_DIFF_TREE, true)?;
         Ok(Self(overlay.clone()))
     }
 
@@ -712,7 +715,7 @@ impl BlockStoreOverlay {
 
         for block in blocks {
             let blockhash = block.hash();
-            lock.insert(SLED_BLOCK_TREE, blockhash.inner(), &serialize(block))?;
+            lock.insert(KVDB_BLOCK_TREE, blockhash.inner(), &serialize(block))?;
             ret.push(blockhash);
         }
 
@@ -729,7 +732,7 @@ impl BlockStoreOverlay {
         let mut lock = self.0.lock().unwrap();
 
         for (i, height) in heights.iter().enumerate() {
-            lock.insert(SLED_BLOCK_ORDER_TREE, &height.to_be_bytes(), hashes[i].inner())?;
+            lock.insert(KVDB_BLOCK_ORDER_TREE, &height.to_be_bytes(), hashes[i].inner())?;
         }
 
         Ok(())
@@ -741,7 +744,7 @@ impl BlockStoreOverlay {
 
         for block_difficulty in block_difficulties {
             lock.insert(
-                SLED_BLOCK_DIFFICULTY_TREE,
+                KVDB_BLOCK_DIFFICULTY_TREE,
                 &block_difficulty.height.to_be_bytes(),
                 &serialize(block_difficulty),
             )?;
@@ -760,7 +763,7 @@ impl BlockStoreOverlay {
         let lock = self.0.lock().unwrap();
 
         for hash in block_hashes {
-            if let Some(found) = lock.get(SLED_BLOCK_TREE, hash.inner())? {
+            if let Some(found) = lock.get(KVDB_BLOCK_TREE, hash.inner())? {
                 let block = deserialize(&found)?;
                 ret.push(Some(block));
                 continue
@@ -784,7 +787,7 @@ impl BlockStoreOverlay {
         let lock = self.0.lock().unwrap();
 
         for height in heights {
-            if let Some(found) = lock.get(SLED_BLOCK_ORDER_TREE, &height.to_be_bytes())? {
+            if let Some(found) = lock.get(KVDB_BLOCK_ORDER_TREE, &height.to_be_bytes())? {
                 let block_hash = deserialize(&found)?;
                 ret.push(Some(block_hash));
                 continue
@@ -801,7 +804,7 @@ impl BlockStoreOverlay {
     /// Fetch the last block hash in the overlay's order tree, based on the `Ord`
     /// implementation for `Vec<u8>`.
     pub fn get_last(&self) -> Result<(u32, HeaderHash)> {
-        let found = match self.0.lock().unwrap().last(SLED_BLOCK_ORDER_TREE)? {
+        let found = match self.0.lock().unwrap().last(KVDB_BLOCK_ORDER_TREE)? {
             Some(b) => b,
             None => return Err(Error::BlockHeightNotFound(0u32)),
         };
@@ -812,7 +815,7 @@ impl BlockStoreOverlay {
 
     /// Check if overlay's order tree contains any records.
     pub fn is_empty(&self) -> Result<bool> {
-        Ok(self.0.lock().unwrap().is_empty(SLED_BLOCK_ORDER_TREE)?)
+        Ok(self.0.lock().unwrap().is_empty(KVDB_BLOCK_ORDER_TREE)?)
     }
 }
 
