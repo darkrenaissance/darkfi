@@ -41,7 +41,7 @@ use crate::{
 
 // TODO: should be configurable at runtime
 //const DARKFID_ENDPOINT: &str = "tcp://127.0.0.1:18345";
-const DARKFID_ENDPOINT: &str = "tcp://node0.dark.fi:18340";
+const DARKFID_ENDPOINT: &str = "tcp+tls://node0.testnet.dark.fi:18345";
 const DARKFID_RETRY_TIME: u64 = 20;
 
 #[cfg(target_os = "android")]
