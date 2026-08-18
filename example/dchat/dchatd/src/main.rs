@@ -131,7 +131,7 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
 
     // ANCHOR: rpc
     let rpc_settings: RpcSettings = args.rpc.into();
-    info!("Starting JSON-RPC server on port {}", rpc_settings.listen);
+    info!("Starting JSON-RPC server on {:?}", rpc_settings.listen);
     let msgs: DchatMsgsBuffer = Arc::new(Mutex::new(vec![DchatMsg { msg: String::new() }]));
     let rpc_connections = Mutex::new(HashSet::new());
     let dchat = Arc::new(Dchat::new(p2p.clone(), msgs.clone(), rpc_connections, dnet_sub));

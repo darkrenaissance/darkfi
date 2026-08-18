@@ -102,7 +102,7 @@ fn jsonrpc_reqrep() -> Result<()> {
         let listener = TcpListener::bind("127.0.0.1:0").await?;
         let sockaddr = listener.local_addr()?;
         let rpc_settings = RpcSettings {
-            listen: Url::parse(&format!("tcp://127.0.0.1:{}", sockaddr.port()))?,
+            listen: vec![Url::parse(&format!("tcp://127.0.0.1:{}", sockaddr.port()))?],
             ..RpcSettings::default()
         };
         drop(listener);
@@ -128,7 +128,7 @@ fn jsonrpc_reqrep() -> Result<()> {
 
         msleep(500).await;
 
-        let client = RpcClient::new(rpc_settings.listen, executor.clone()).await?;
+        let client = RpcClient::new(rpc_settings.listen[0].clone(), executor.clone()).await?;
         let req = JsonRequest::new("ping", vec![].into());
         let rep = client.request(req).await?;
 
@@ -155,7 +155,7 @@ fn http_jsonrpc_reqrep() -> Result<()> {
         let listener = TcpListener::bind("127.0.0.1:0").await?;
         let sockaddr = listener.local_addr()?;
         let rpc_settings = RpcSettings {
-            listen: Url::parse(&format!("http+tcp://127.0.0.1:{}", sockaddr.port()))?,
+            listen: vec![Url::parse(&format!("http+tcp://127.0.0.1:{}", sockaddr.port()))?],
             ..RpcSettings::default()
         };
         drop(listener);
@@ -181,7 +181,7 @@ fn http_jsonrpc_reqrep() -> Result<()> {
 
         msleep(500).await;
 
-        let client = RpcClient::new(rpc_settings.listen, executor.clone()).await?;
+        let client = RpcClient::new(rpc_settings.listen[0].clone(), executor.clone()).await?;
         let req = JsonRequest::new("ping", vec![].into());
         let rep = client.request(req).await?;
 

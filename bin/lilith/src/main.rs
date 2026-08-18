@@ -495,7 +495,7 @@ async fn realmain(args: Args, ex: Arc<Executor<'static>>) -> Result<()> {
 
     // JSON-RPC server
     let rpc_settings: RpcSettings = args.rpc.into();
-    info!(target: "lilith", "Starting JSON-RPC server on {}", rpc_settings.listen);
+    info!(target: "lilith", "Starting JSON-RPC server on {:?}", rpc_settings.listen);
     let lilith_ = lilith.clone();
     let rpc_task = StoppableTask::new();
     rpc_task.clone().start(

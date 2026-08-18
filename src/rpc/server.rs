@@ -19,6 +19,7 @@
 use std::{collections::HashSet, future::Future, io::ErrorKind, sync::Arc};
 
 use async_trait::async_trait;
+use futures::future::try_join_all;
 use parking_lot::Mutex as SyncMutex;
 use smol::{
     io::{BufReader, ReadHalf, WriteHalf},
@@ -432,10 +433,14 @@ async fn run_accept_loop<'a, T: 'a>(
                 let rh_ = rh.clone();
                 verbose!(target: "rpc::server", "[RPC] Server accepted conn from {url}");
 
-                // Enforce the connection limit here, before mark_connection,
-                // so the active count never crosses the limit.
+                // Check and reserve a connection slot under the same lock so
+                // simultaneous accepts on different listeners cannot exceed
+                // the server-wide limit.
+                let task = StoppableTask::new();
+                let mut connections = rh.connections_mut().await;
                 if let Some(limit) = conn_limit {
-                    if rh.active_connections().await >= limit {
+                    if connections.len() >= limit {
+                        drop(connections);
                         debug!(
                             target: "rpc::server::run_accept_loop",
                             "[RPC] Connection limit ({limit}) reached, rejecting {url}",
@@ -465,7 +470,6 @@ async fn run_accept_loop<'a, T: 'a>(
                 let reader = Arc::new(Mutex::new(BufReader::new(reader)));
                 let writer = Arc::new(Mutex::new(writer));
 
-                let task = StoppableTask::new();
                 let task_ = task.clone();
                 let ex_ = ex.clone();
                 let tasks = Arc::new(ConnectionTasks::default());
@@ -473,7 +477,6 @@ async fn run_accept_loop<'a, T: 'a>(
 
                 // Register before starting so a connection that closes
                 // immediately cannot finish before it is tracked.
-                let mut connections = rh.connections_mut().await;
                 connections.insert(task.clone());
                 task.clone().start(
                     accept_with_tasks(
@@ -563,7 +566,7 @@ async fn run_accept_loop<'a, T: 'a>(
     }
 }
 
-/// Start a JSON-RPC server bound to the givven accept URL and use the
+/// Start a JSON-RPC server bound to the given accept URLs and use the
 /// given [`RequestHandler`] to handle incoming requests.
 ///
 /// The supported network schemes can be prefixed with `http+` to serve
@@ -574,17 +577,32 @@ pub async fn listen_and_serve<'a, T: 'a>(
     conn_limit: Option<usize>,
     ex: Arc<smol::Executor<'a>>,
 ) -> Result<()> {
-    // Figure out if we're using HTTP and rewrite the URL accordingly.
-    let mut listen_url = settings.listen.clone();
-    if settings.listen.scheme().starts_with("http+") {
-        let scheme = settings.listen.scheme().strip_prefix("http+").unwrap();
-        let url_str = settings.listen.as_str().replace(settings.listen.scheme(), scheme);
-        listen_url = url_str.parse()?;
+    let mut listen_urls = Vec::with_capacity(settings.listen.len());
+    let mut listener_settings = Vec::with_capacity(settings.listen.len());
+
+    for endpoint in &settings.listen {
+        let use_http = endpoint.scheme().starts_with("http+");
+        let mut listen_url = endpoint.clone();
+        if use_http {
+            let scheme = endpoint.scheme().strip_prefix("http+").unwrap();
+            listen_url.set_scheme(scheme).map_err(|_| Error::UrlParse(endpoint.to_string()))?;
+        }
+
+        listen_urls.push(listen_url);
+        let mut endpoint_settings = settings.clone();
+        endpoint_settings.listen = vec![endpoint.clone()];
+        listener_settings.push(endpoint_settings);
     }
 
-    let listener = Listener::new(listen_url, None, false).await?.listen().await?;
+    // Bind every socket before starting any accept loop. If one address is
+    // invalid or unavailable, no partially-running RPC server is left behind.
+    let listeners = Listener::listen_all(listen_urls, None, false).await?;
+    let accept_loops =
+        listeners.into_iter().zip(listener_settings).map(|(listener, endpoint_settings)| {
+            run_accept_loop(listener, rh.clone(), conn_limit, endpoint_settings, ex.clone())
+        });
 
-    run_accept_loop(listener, rh, conn_limit, settings, ex.clone()).await
+    try_join_all(accept_loops).await.map(|_| ())
 }
 
 #[cfg(test)]
@@ -630,7 +648,7 @@ mod tests {
             let listener = TcpListener::bind("127.0.0.1:0").await?;
             let sockaddr = listener.local_addr()?;
             let settings = RpcSettings {
-                listen: Url::parse(&format!("tcp://127.0.0.1:{}", sockaddr.port()))?,
+                listen: vec![Url::parse(&format!("tcp://127.0.0.1:{}", sockaddr.port()))?],
                 disabled_methods: vec![],
             };
             drop(listener);
@@ -660,17 +678,17 @@ mod tests {
             msleep(500).await;
 
             // Connect a client
-            let rpc_client0 = RpcClient::new(settings.listen.clone(), executor.clone()).await?;
+            let rpc_client0 = RpcClient::new(settings.listen[0].clone(), executor.clone()).await?;
             msleep(500).await;
             assert!(rpc_server.active_connections().await == 1);
 
             // Connect another client
-            let rpc_client1 = RpcClient::new(settings.listen.clone(), executor.clone()).await?;
+            let rpc_client1 = RpcClient::new(settings.listen[0].clone(), executor.clone()).await?;
             msleep(500).await;
             assert!(rpc_server.active_connections().await == 2);
 
             // And another one
-            let _rpc_client2 = RpcClient::new(settings.listen.clone(), executor.clone()).await?;
+            let _rpc_client2 = RpcClient::new(settings.listen[0].clone(), executor.clone()).await?;
             msleep(500).await;
             assert!(rpc_server.active_connections().await == 3);
 
@@ -686,7 +704,7 @@ mod tests {
 
             // The Listener should be stopped when we stop the server task.
             server_task.stop().await;
-            assert!(RpcClient::new(settings.listen, executor.clone()).await.is_err());
+            assert!(RpcClient::new(settings.listen[0].clone(), executor.clone()).await.is_err());
 
             // After the server is stopped, the connections tasks should also be stopped
             assert!(rpc_server.active_connections().await == 0);
@@ -703,7 +721,7 @@ mod tests {
             let listener = TcpListener::bind("127.0.0.1:0").await?;
             let sockaddr = listener.local_addr()?;
             let settings = RpcSettings {
-                listen: Url::parse(&format!("tcp://127.0.0.1:{}", sockaddr.port()))?,
+                listen: vec![Url::parse(&format!("tcp://127.0.0.1:{}", sockaddr.port()))?],
                 disabled_methods: vec![],
             };
             drop(listener);
@@ -733,7 +751,7 @@ mod tests {
 
             for _ in 0..32 {
                 let client =
-                    Arc::new(RpcClient::new(settings.listen.clone(), executor.clone()).await?);
+                    Arc::new(RpcClient::new(settings.listen[0].clone(), executor.clone()).await?);
                 let client_ = client.clone();
                 let subscriber_task = executor.spawn(async move {
                     client_

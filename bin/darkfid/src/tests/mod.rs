@@ -280,11 +280,11 @@ fn darkfid_programmatic_control() -> Result<()> {
                     checkpoint: None,
                 };
                 let rpc_settings = RpcSettings {
-                    listen: Url::parse("tcp://127.0.0.1:18245").unwrap(),
+                    listen: vec![Url::parse("tcp://127.0.0.1:18245").unwrap()],
                     ..RpcSettings::default()
                 };
                 let management_rpc_settings = RpcSettings {
-                    listen: Url::parse("tcp://127.0.0.1:18246").unwrap(),
+                    listen: vec![Url::parse("tcp://127.0.0.1:18246").unwrap()],
                     ..RpcSettings::default()
                 };
 

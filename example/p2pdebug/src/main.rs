@@ -27,7 +27,7 @@ use url::Url;
 
 use darkfi::{
     cli_desc, net,
-    rpc::server::listen_and_serve,
+    rpc::{server::listen_and_serve, settings::RpcSettings},
     util::cli::{get_log_config, get_log_level},
     Result,
 };
@@ -247,7 +247,13 @@ impl MockP2p {
         let rpc_interface =
             Arc::new(rpc::JsonRpcInterface { addr: rpc_addr.clone(), p2p: p2p.clone() });
         let _ex = executor.clone();
-        executor.spawn(async move { listen_and_serve(rpc_addr, rpc_interface, _ex).await }).detach();
+        let rpc_settings =
+            RpcSettings { listen: vec![rpc_addr], ..RpcSettings::default() };
+        executor
+            .spawn(async move {
+                listen_and_serve(rpc_settings, rpc_interface, None, _ex).await
+            })
+            .detach();
 
         p2p.clone().start(executor.clone()).await?;
         p2p.run(executor).await

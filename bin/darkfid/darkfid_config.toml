@@ -41,7 +41,7 @@ skip_fees = false
 ## Testnet JSON-RPC settings
 [network_config."testnet".rpc]
 # JSON-RPC listen URL
-rpc_listen = "tcp://127.0.0.1:18345"
+rpc_listen = ["tcp://127.0.0.1:18345"]
 
 # Disabled RPC methods
 #rpc_disabled_methods = []
@@ -49,7 +49,7 @@ rpc_listen = "tcp://127.0.0.1:18345"
 ## Testnet management JSON-RPC settings
 [network_config."testnet".management_rpc]
 # JSON-RPC listen URL
-rpc_listen = "tcp://127.0.0.1:18346"
+rpc_listen = ["tcp://127.0.0.1:18346"]
 
 # Disabled RPC methods
 #rpc_disabled_methods = []
@@ -57,7 +57,7 @@ rpc_listen = "tcp://127.0.0.1:18346"
 ## Testnet JSON-RPC settings for stratum mining requests (optional)
 #[network_config."testnet".stratum_rpc]
 # JSON-RPC listen URL (stratum mining)
-#rpc_listen = "tcp://127.0.0.1:18347"
+#rpc_listen = ["tcp://127.0.0.1:18347"]
 
 # Disabled RPC methods (stratum mining)
 #rpc_disabled_methods = []
@@ -65,7 +65,7 @@ rpc_listen = "tcp://127.0.0.1:18346"
 ## Testnet JSON-RPC settings for p2pool merge mining requests (optional)
 #[network_config."testnet".mm_rpc]
 # JSON-RPC listen URL (merge mining)
-#rpc_listen = "http+tcp://127.0.0.1:18348"
+#rpc_listen = ["http+tcp://127.0.0.1:18348"]
 
 # Disabled RPC methods (merge mining)
 #rpc_disabled_methods = []
@@ -236,7 +236,7 @@ skip_fees = false
 ## Mainnet JSON-RPC settings
 [network_config."mainnet".rpc]
 # JSON-RPC listen URL
-rpc_listen = "tcp://127.0.0.1:8345"
+rpc_listen = ["tcp://127.0.0.1:8345"]
 
 # Disabled RPC methods
 #rpc_disabled_methods = []
@@ -244,7 +244,7 @@ rpc_listen = "tcp://127.0.0.1:8345"
 ## Mainnet management JSON-RPC settings
 [network_config."mainnet".management_rpc]
 # JSON-RPC listen URL
-rpc_listen = "tcp://127.0.0.1:8346"
+rpc_listen = ["tcp://127.0.0.1:8346"]
 
 # Disabled RPC methods
 #rpc_disabled_methods = []
@@ -252,7 +252,7 @@ rpc_listen = "tcp://127.0.0.1:8346"
 ## Mainnet JSON-RPC settings for stratum mining requests (optional)
 #[network_config."mainnet".stratum_rpc]
 # JSON-RPC listen URL (stratum mining)
-#rpc_listen = "tcp://127.0.0.1:8347"
+#rpc_listen = ["tcp://127.0.0.1:8347"]
 
 # Disabled RPC methods (stratum mining)
 #rpc_disabled_methods = []
@@ -260,7 +260,7 @@ rpc_listen = "tcp://127.0.0.1:8346"
 ## Mainnet JSON-RPC settings for p2pool merge mining requests (optional)
 #[network_config."mainnet".mm_rpc]
 # JSON-RPC listen URL (merge mining)
-#rpc_listen = "http+tcp://127.0.0.1:8348"
+#rpc_listen = ["http+tcp://127.0.0.1:8348"]
 
 # Disabled RPC methods (merge mining)
 #rpc_disabled_methods = []
@@ -428,7 +428,7 @@ skip_fees = false
 ## Localnet JSON-RPC settings
 [network_config."localnet".rpc]
 # JSON-RPC listen URL
-rpc_listen = "tcp://127.0.0.1:28345"
+rpc_listen = ["tcp://127.0.0.1:28345"]
 
 # Disabled RPC methods
 #rpc_disabled_methods = []
@@ -436,7 +436,7 @@ rpc_listen = "tcp://127.0.0.1:28345"
 ## Localnet management JSON-RPC settings
 [network_config."localnet".management_rpc]
 # JSON-RPC listen URL
-rpc_listen = "tcp://127.0.0.1:28346"
+rpc_listen = ["tcp://127.0.0.1:28346"]
 
 # Disabled RPC methods
 #rpc_disabled_methods = []
@@ -444,7 +444,7 @@ rpc_listen = "tcp://127.0.0.1:28346"
 ## Localnet JSON-RPC settings for stratum mining requests (optional)
 #[network_config."localnet".stratum_rpc]
 # JSON-RPC listen URL (stratum mining)
-#rpc_listen = "tcp://127.0.0.1:28347"
+#rpc_listen = ["tcp://127.0.0.1:28347"]
 
 # Disabled RPC methods (stratum mining)
 #rpc_disabled_methods = []
@@ -452,7 +452,7 @@ rpc_listen = "tcp://127.0.0.1:28346"
 ## Localnet JSON-RPC settings for p2pool merge mining requests (optional)
 #[network_config."localnet".mm_rpc]
 # JSON-RPC listen URL (merge mining)
-#rpc_listen = "http+tcp://127.0.0.1:28348"
+#rpc_listen = ["http+tcp://127.0.0.1:28348"]
 
 # Disabled RPC methods (merge mining)
 #rpc_disabled_methods = []

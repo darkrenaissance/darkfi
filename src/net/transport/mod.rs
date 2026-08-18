@@ -374,6 +374,20 @@ pub struct Listener {
 }
 
 impl Listener {
+    /// Instantiate and bind listeners for every provided endpoint.
+    pub async fn listen_all(
+        endpoints: impl IntoIterator<Item = Url>,
+        datastore: Option<String>,
+        require_tls_client_cert: bool,
+    ) -> io::Result<Vec<Box<dyn PtListener>>> {
+        let mut listeners = Vec::new();
+        for endpoint in endpoints {
+            let listener = Self::new(endpoint, datastore.clone(), require_tls_client_cert).await?;
+            listeners.push(listener.listen().await?);
+        }
+        Ok(listeners)
+    }
+
     /// Instantiate a new [`Listener`] with the given [`Url`] and datastore path.
     /// Must contain a scheme, host string, and a port.
     pub async fn new(

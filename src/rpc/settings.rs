@@ -16,12 +16,39 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+use serde::{Deserialize, Deserializer};
 use structopt::StructOpt;
 use url::Url;
 
-#[derive(Clone)]
+fn default_listen_addrs() -> Vec<Url> {
+    vec![Url::parse("tcp://127.0.0.1:22222").unwrap()]
+}
+
+/// Deserialize both the historical single URL and the preferred URL array.
+///
+/// Keeping the single-URL form working avoids invalidating existing daemon
+/// configurations while allowing RPC to use the same array syntax as P2P.
+fn deserialize_listen_addrs<'de, D>(deserializer: D) -> Result<Vec<Url>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    #[derive(serde::Deserialize)]
+    #[serde(untagged)]
+    enum ListenAddrs {
+        One(Url),
+        Many(Vec<Url>),
+    }
+
+    Ok(match ListenAddrs::deserialize(deserializer)? {
+        ListenAddrs::One(url) => vec![url],
+        ListenAddrs::Many(urls) => urls,
+    })
+}
+
+#[derive(Clone, Debug)]
 pub struct RpcSettings {
-    pub listen: Url,
+    /// RPC server listen addresses.
+    pub listen: Vec<Url>,
     pub disabled_methods: Vec<String>,
 }
 
@@ -29,14 +56,15 @@ impl RpcSettings {
     pub fn is_method_disabled(&self, method: &String) -> bool {
         self.disabled_methods.contains(method)
     }
+
     pub fn use_http(&self) -> bool {
-        self.listen.scheme().starts_with("http+")
+        self.listen.first().is_some_and(|endpoint| endpoint.scheme().starts_with("http+"))
     }
 }
 
 impl Default for RpcSettings {
     fn default() -> Self {
-        Self { listen: Url::parse("tcp://127.0.0.1:22222").unwrap(), disabled_methods: vec![] }
+        Self { listen: default_listen_addrs(), disabled_methods: vec![] }
     }
 }
 
@@ -45,9 +73,10 @@ impl Default for RpcSettings {
 #[structopt()]
 #[serde(rename = "rpc")]
 pub struct RpcSettingsOpt {
-    /// RPC server listen address
-    #[structopt(long, default_value = "tcp://127.0.0.1:22222")]
-    pub rpc_listen: Url,
+    /// RPC server listen addresses
+    #[serde(default = "default_listen_addrs", deserialize_with = "deserialize_listen_addrs")]
+    #[structopt(long, default_value = "tcp://127.0.0.1:22222", use_delimiter = true)]
+    pub rpc_listen: Vec<Url>,
 
     /// Disabled JSON-RPC methods
     #[structopt(long, use_delimiter = true)]

@@ -46,7 +46,7 @@ write_public_key = "7iHFdGxe1DYyBtPLVFb7fXL3Kk495WtwRWaNxhYQTU9x"
 # JSON-RPC settings
 [rpc]
 # JSON-RPC listen URL
-rpc_listen = "tcp://127.0.0.1:9805"
+rpc_listen = ["tcp://127.0.0.1:9805"]
 
 # Disabled RPC methods
 rpc_disabled_methods = ["p2p.get_info"]

@@ -117,7 +117,7 @@ async fn realmain(args: Args, ex: Arc<Executor<'static>>) -> Result<()> {
     );
 
     let rpc_settings: RpcSettings = args.rpc.into();
-    info!(target: "fud", "Starting main JSON-RPC server on {}", rpc_settings.listen);
+    info!(target: "fud", "Starting main JSON-RPC server on {:?}", rpc_settings.listen);
     let rpc_interface = Arc::new(DefaultRpcInterface::new(fud.clone(), event_sub));
     let rpc_task = StoppableTask::new();
     let rpc_interface_ = rpc_interface.clone();
@@ -138,7 +138,7 @@ async fn realmain(args: Args, ex: Arc<Executor<'static>>) -> Result<()> {
         parse_management_rpc(&get_config_path(args.config.clone(), CONFIG_FILE)?)?;
     if let Some(management_rpc_settings) = management_rpc_settings {
         let management_rpc_settings: RpcSettings = management_rpc_settings.into();
-        info!(target: "fud", "Starting management JSON-RPC server on {}", management_rpc_settings.listen);
+        info!(target: "fud", "Starting management JSON-RPC server on {:?}", management_rpc_settings.listen);
         let management_rpc_interface = Arc::new(ManagementRpcInterface::new(fud.clone(), dnet_sub));
         management_rpc_task = Some(StoppableTask::new());
         let management_rpc_interface_ = management_rpc_interface.clone();
