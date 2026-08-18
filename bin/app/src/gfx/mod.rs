@@ -900,6 +900,11 @@ impl Stage {
         // Trigger a full screen redraw by sending a resize event
         let (width, height) = miniquad::window::screen_size();
         self.event_pub.notify_resize(Dimension::from([width, height]));
+
+        #[cfg(target_os = "android")]
+        {
+            crate::android::request_apply_insets();
+        }
     }
 }
 

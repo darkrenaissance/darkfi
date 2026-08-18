@@ -86,7 +86,8 @@ if (true) return main.inpcon;
 
 native static void onApplyInsets(
     int sys_left, int sys_top, int sys_right, int sys_bottom,
-    int ime_left, int ime_top, int ime_right, int ime_bottom
+    int ime_left, int ime_top, int ime_right, int ime_bottom,
+    boolean ime_visible
 );
 
 //% END
@@ -103,7 +104,8 @@ native static void onApplyInsets(
 
     onApplyInsets(
         sysInsets.left, sysInsets.top, sysInsets.right, sysInsets.bottom,
-        imeInsets.left, imeInsets.top, imeInsets.right, imeInsets.bottom
+        imeInsets.left, imeInsets.top, imeInsets.right, imeInsets.bottom,
+        insets.isVisible(WindowInsets.Type.ime())
     );
 }
 // Workaround for Java error due to remaining body.
@@ -150,6 +152,15 @@ public boolean isImeVisible() {
     if (imeInsets == null)
         return false;
     return insets.isVisible(Type.ime());
+}
+
+public void requestApplyInsets() {
+    runOnUiThread(new Runnable() {
+        @Override
+        public void run() {
+            view.requestApplyInsets();
+        }
+    });
 }
 
 public VideoDecoder createVideoDecoder() {

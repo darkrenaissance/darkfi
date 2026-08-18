@@ -85,6 +85,15 @@ pub fn is_ime_visible() -> bool {
     call_mainactivity_bool_method!("isImeVisible")
 }
 
+/// Ask Android to redispatch the current window insets to ResizingLayout,
+/// which triggers the onApplyInsets callback with fresh values.
+pub fn request_apply_insets() {
+    unsafe {
+        let env = get_jni_env();
+        ndk_utils::call_void_method!(env, android::ACTIVITY, "requestApplyInsets", "()V");
+    }
+}
+
 /// Open `url` in the platform's default handler (e.g. the browser) by calling the
 /// `openUrl` method on MainActivity, which fires an `ACTION_VIEW` intent. Android
 /// only. The URL string is converted to a Java `String` via `NewStringUTF` and the

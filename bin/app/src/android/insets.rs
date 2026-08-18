@@ -51,17 +51,20 @@ pub unsafe extern "C" fn Java_darkfi_darkfi_1app_ResizingLayout_onApplyInsets(
     ime_top: ndk_sys::jint,
     ime_right: ndk_sys::jint,
     ime_bottom: ndk_sys::jint,
+    ime_visible: ndk_sys::jboolean,
 ) {
     debug!(
         target: "android::insets",
         "onApplyInsets() \
             sys=({sys_left}, {sys_top}, {sys_right}, {sys_bottom}) \
             ime=({ime_left}, {ime_top}, {ime_right}, {ime_bottom}) \
-        )"
+            ime_visible={} \
+        )",
+        ime_visible != 0
     );
     let mut globals = GLOBALS.lock();
     globals.insets = [sys_left as f32, sys_top as f32, sys_right as f32, sys_bottom as f32];
-    if ime_bottom > 0 {
+    if ime_visible != 0 && ime_bottom > 0 {
         globals.insets[3] = ime_bottom as f32;
     }
     if let Some(sender) = &globals.sender {
