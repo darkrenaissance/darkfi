@@ -232,8 +232,8 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish) {
 
         // Disable visilibity of all relevant window nodes
         // This is needed since for example all chats have a different node name.
-        let windows = sg_root.lookup_node("/window/content").unwrap().get_children();
-        let target_substrings = vec!["_chat_layer", "menu_layer", "settings_layer"];
+        let windows = sg_root.lookup_node("/window/content/chat").unwrap().get_children();
+        let target_substrings = vec!["_chat_layer", "menu_layer"];
 
         for node in windows.iter() {
             // Check if the node's name contains any of the target substrings
@@ -245,7 +245,7 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish) {
         }
 
         // Go back to the dev channel
-        let menu_node = sg_root.lookup_node("/window/content/dev_chat_layer").unwrap();
+        let menu_node = sg_root.lookup_node("/window/content/chat/dev_chat_layer").unwrap();
         menu_node.set_property_bool(atom, Role::App, "is_visible", true).unwrap();
     };
 

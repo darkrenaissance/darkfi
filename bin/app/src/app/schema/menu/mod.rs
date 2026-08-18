@@ -152,7 +152,7 @@ pub async fn make(
     let contact_layer = contact_layer
         .setup(|me| Layer::new(me, app.renderer.clone(), app.redraw_trigger.clone()))
         .await;
-    content.link(contact_layer.clone());
+    chat_layer.link(contact_layer.clone());
     let contact_is_visible =
         PropertyBool::wrap(&contact_layer, Role::App, "is_visible", 0).unwrap();
 
@@ -168,7 +168,7 @@ pub async fn make(
     let channel_layer = channel_layer
         .setup(|me| Layer::new(me, app.renderer.clone(), app.redraw_trigger.clone()))
         .await;
-    content.link(channel_layer.clone());
+    chat_layer.link(channel_layer.clone());
     let channel_is_visible =
         PropertyBool::wrap(&channel_layer, Role::App, "is_visible", 0).unwrap();
 
@@ -196,7 +196,7 @@ pub async fn make(
     let layer_node = layer_node
         .setup(|me| Layer::new(me, app.renderer.clone(), app.redraw_trigger.clone()))
         .await;
-    content.link(layer_node.clone());
+    chat_layer.link(layer_node.clone());
 
     let menulayer_is_visible = PropertyBool::wrap(&layer_node, Role::App, "is_visible", 0).unwrap();
 
@@ -453,7 +453,7 @@ pub async fn make(
     let listen_click = app.ex.spawn(async move {
         while let Ok(data) = recvr.recv().await {
             let channel: String = deserialize(&data).unwrap();
-            let path = format!("/window/content/{}_chat_layer", channel);
+            let path = format!("/window/content/chat/{}_chat_layer", channel);
             if let Some(node) = sg_root.lookup_node(path) {
                 let atom = &mut renderer.make_guard(gfxtag!("channel_clicked"));
                 info!(target: "app::menu", "clicked: {channel}!");
@@ -488,14 +488,13 @@ pub async fn make(
     let edit_done_listen = app.ex.spawn(async move {
         while let Ok(data) = edit_done_recvr.recv().await {
             let deleted_items: Vec<String> = deserialize(&data).unwrap();
-
             // Persist the post-edit joined list (captures removals + reorders)
             let current: Vec<String> =
                 menu_node2.get_property("items").unwrap().get_str_vec().unwrap();
             write_joined_channels(&current);
 
             for item in &deleted_items {
-                let path = format!("/window/content/{}_chat_layer", item);
+                let path = format!("/window/content/chat/{}_chat_layer", item);
                 if let Some(node) = sg_root.lookup_node(&path) {
                     node.clear_tasks();
                     debug!(target: "app::menu", "deleted item: {item}");
@@ -537,7 +536,7 @@ pub async fn setup_wallet_button(app: &App, menu_layer: SceneNodePtr, i18n_fish:
 
     let menulayer_is_visible = PropertyBool::wrap(&menu_layer, Role::App, "is_visible", 0).unwrap();
     let mainlayer_node =
-        app.sg_root.lookup_node("/window/content/menu_layer/mainbtn_layer").unwrap();
+        app.sg_root.lookup_node("/window/content/chat/menu_layer/mainbtn_layer").unwrap();
 
     // Wallet button
     let node = create_vector_art("walletbtn_bg");

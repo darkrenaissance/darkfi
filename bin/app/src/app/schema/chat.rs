@@ -343,7 +343,7 @@ pub async fn make(
         let editz_node = layer_node2.lookup_node("/content/editz").unwrap();
         editz_node.call_method("unfocus", vec![]).await.unwrap();
 
-        let menu_node = sg_root2.lookup_node("/window/content/menu_layer").unwrap();
+        let menu_node = sg_root2.lookup_node("/window/content/chat/menu_layer").unwrap();
         menu_node.set_property_bool(atom, Role::App, "is_visible", true).unwrap();
 
         chatview_is_visible.set(atom, false);

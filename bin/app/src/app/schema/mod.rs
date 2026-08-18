@@ -634,8 +634,8 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish, db
         //  router currently points to view1 and we call router.goto("./view2")).
         //
         //  2. Support of wildcard in lookups in .get_children() or another method, like this "*_chat_layer".
-        let windows = sg_root.lookup_node("/window/content").unwrap().get_children();
-        let target_substrings = vec!["_chat_layer", "menu_layer", "settings_layer"];
+        let windows = sg_root.lookup_node("/window/content/chat").unwrap().get_children();
+        let target_substrings = vec!["_chat_layer", "menu_layer"];
         for node in windows.iter() {
             if target_substrings.iter().any(|&s| node.name.contains(s)) {
                 if let Err(e) = node.set_property_bool(atom, Role::App, "is_visible", false) {
@@ -700,6 +700,19 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish, db
     // Seed the joined-channels file with defaults on first run.
     ensure_joined_channels_seeded();
 
+    menu::make(
+        app,
+        content.clone(),
+        i18n_fish,
+        channels_tree.clone(),
+        contacts_tree.clone(),
+        &db,
+        emoji_meshes.clone(),
+        is_first_time,
+    )
+    .await;
+    let chat_layer = app.sg_root.lookup_node("/window/content/chat").unwrap();
+
     // Create chat layers only for joined channels/contacts, in joined order.
     for name in read_joined_channels() {
         let bare = if name.starts_with('#') || name.starts_with('@') { &name[1..] } else { &name };
@@ -717,7 +730,7 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish, db
             &app.sg_root,
             &app.renderer,
             &app.ex,
-            content.clone(),
+            chat_layer.clone(),
             &name,
             &db,
             i18n_fish,
@@ -727,26 +740,15 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish, db
         )
         .await;
     }
-    menu::make(
-        app,
-        content.clone(),
-        i18n_fish,
-        channels_tree,
-        contacts_tree,
-        &db,
-        emoji_meshes.clone(),
-        is_first_time,
-    )
-    .await;
     wallet::make(app, content.clone(), i18n_fish).await;
 
     // Setup wallet button after wallet layer is created
-    let menu_layer = app.sg_root.lookup_node("/window/content/menu_layer").unwrap();
+    let menu_layer = app.sg_root.lookup_node("/window/content/chat/menu_layer").unwrap();
     menu::setup_wallet_button(app, menu_layer, i18n_fish).await;
 
     // @@@ Debug stuff @@@
-    //let chatview_node = app.sg_root.lookup_node("/window/content/dev_chat_layer").unwrap();
+    //let chatview_node = app.sg_root.lookup_node("/window/content/chat/dev_chat_layer").unwrap();
     //chatview_node.set_property_bool(atom, Role::App, "is_visible", true).unwrap();
-    //let menu_node = app.sg_root.lookup_node("/window/content/menu_layer").unwrap();
+    //let menu_node = app.sg_root.lookup_node("/window/content/chat/menu_layer").unwrap();
     //menu_node.set_property_bool(atom, Role::App, "is_visible", false).unwrap();
 }

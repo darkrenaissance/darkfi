@@ -285,7 +285,7 @@ pub async fn make(
     let contact_vis = contact_is_visible.clone();
     let channel_vis = channel_is_visible.clone();
     let renderer = app.renderer.clone();
-    let menu_node = sg_root.lookup_node("/window/content/menu_layer").unwrap();
+    let menu_node = sg_root.lookup_node("/window/content/chat/menu_layer").unwrap();
     let netstatus_layer = sg_root.lookup_node("/window/content/netstatus_layer").unwrap();
     let content_go = content.clone();
     let goback = async move || {

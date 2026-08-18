@@ -317,7 +317,7 @@ async fn load_plugins(
             let nick = String::decode(&mut cur).unwrap();
             let msg = String::decode(&mut cur).unwrap();
 
-            let node_path = format!("/window/content/{channel}_chat_layer/content/chatty");
+            let node_path = format!("/window/content/chat/{channel}_chat_layer/content/chatty");
             t!("Attempting to relay message to {node_path}");
             let Some(chatview) = sg_root2.lookup_node(&node_path) else {
                 d!("Ignoring message since {node_path} doesn't exist");
@@ -338,13 +338,14 @@ async fn load_plugins(
             }
 
             // Apply coloring when you get a message
-            let chat_path = format!("/window/content/{channel}_chat_layer");
+            let chat_path = format!("/window/content/chat/{channel}_chat_layer");
             let chat_layer = sg_root2.lookup_node(chat_path).unwrap();
             if chat_layer.get_property_bool("is_visible").unwrap() {
                 continue
             }
 
-            let menu_node = sg_root2.lookup_node("/window/content/menu_layer/main_menu").unwrap();
+            let menu_node =
+                sg_root2.lookup_node("/window/content/chat/menu_layer/main_menu").unwrap();
             let group_name = if msg.contains(&darkirc_nick.get()) { "role2_group" } else { "role1_group" };
             let group = menu_node.get_property(group_name).unwrap();
             if !group.get_str_vec().unwrap().contains(&channel) {
