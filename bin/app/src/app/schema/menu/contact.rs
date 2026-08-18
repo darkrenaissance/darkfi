@@ -335,21 +335,6 @@ pub async fn make(
         .await;
     content.link(content_area.clone());
 
-    // Red bottom glow below outline
-    let node = create_vector_art("bottom_glow");
-    let prop = node.get_property("rect").unwrap();
-    prop.set_f32(atom, Role::App, 0, CONTENT_MARGIN).unwrap();
-    prop.set_expr(atom, Role::App, 1, cc.compile("h - 15").unwrap()).unwrap();
-    prop.set_expr(atom, Role::App, 2, cc.compile("w - 2. * CONTENT_MARGIN").unwrap()).unwrap();
-    prop.set_f32(atom, Role::App, 3, 15.).unwrap();
-    node.set_property_u32(atom, Role::App, "z_index", 0).unwrap();
-    let mut shape = VectorShape::new();
-
-    let node = node
-        .setup(|me| VectorArt::new(me, shape, app.renderer.clone(), app.redraw_trigger.clone()))
-        .await;
-    content.link(node);
-
     // Contacts label bg
     let node = create_vector_art("contacts_label_bg");
     let prop = node.get_property("rect").unwrap();
@@ -1365,7 +1350,7 @@ pub async fn make(
     let btns =
         edit_buttons::create_edit_buttons(app, content.clone(), &window_scale, i18n_fish).await;
 
-    let node = create_menu("nick_menu");
+    let node = create_menu("contact_menu");
     let prop = node.get_property("rect").unwrap();
     prop.set_f32(atom, Role::App, 0, 0.).unwrap();
     prop.set_f32(atom, Role::App, 1, LABEL_LINESPACE + 8. * CHATEDIT_PAD + 4. * CHATEDIT_HEIGHT)

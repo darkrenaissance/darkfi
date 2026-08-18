@@ -173,7 +173,7 @@ pub async fn create_edit_buttons(
     editlayer_node.link(cancel_btn.clone());
 
     // Text for cancel button
-    let node = create_text("cancel");
+    let node = create_text("cancel_text");
     let prop = node.get_property("rect").unwrap();
     prop.set_f32(atom, Role::App, 0, 0.).unwrap();
     prop.set_f32(atom, Role::App, 1, BTN_TEXT_Y).unwrap();
