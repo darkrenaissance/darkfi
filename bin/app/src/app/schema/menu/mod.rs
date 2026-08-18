@@ -53,6 +53,7 @@ mod android_ui_consts {
     pub const VERBLOCK_SCALE: f32 = 150.;
     pub const VERBLOCK_X: f32 = 140.;
     pub const VERBLOCK_Y: f32 = 130.;
+    pub const NETLOGO_SCALE: f32 = 16.;
     // Button constants
     pub const MENU_BTN_W_L: f32 = 250.;
     pub const MENU_BTN_W_R: f32 = 200.;
@@ -91,6 +92,7 @@ mod ui_consts {
     pub const VERBLOCK_X: f32 = 80.;
     pub const OUTLINE_MINT: [f32; 4] = [0.467, 1.0, 0.745, 1.0];
     pub const VERBLOCK_Y: f32 = 75.;
+    pub const NETLOGO_SCALE: f32 = 7.;
     // Button constants
     pub const MENU_BTN_W_L: f32 = 110.;
     pub const MENU_BTN_W_R: f32 = 85.;
@@ -528,8 +530,11 @@ pub async fn make(
 pub async fn setup_wallet_button(app: &App, menu_layer: SceneNodePtr, i18n_fish: &I18nBabelFish) {
     let atom = &mut PropertyAtomicGuard::none();
     let mut cc = expr::Compiler::new();
+    cc.add_const_f32("MENU_BTN_W_R", MENU_BTN_W_R);
+    cc.add_const_f32("MENU_BTN_H", MENU_BTN_H);
+    cc.add_const_f32("CHANNEL_LABEL_X", CHANNEL_LABEL_X);
 
-    let window_scale = PropertyFloat32::wrap(
+    let _window_scale = PropertyFloat32::wrap(
         &app.sg_root.lookup_node("/window").unwrap(),
         Role::Internal,
         "scale",
@@ -538,51 +543,39 @@ pub async fn setup_wallet_button(app: &App, menu_layer: SceneNodePtr, i18n_fish:
     .unwrap();
 
     let menulayer_is_visible = PropertyBool::wrap(&menu_layer, Role::App, "is_visible", 0).unwrap();
-    let mainlayer_node =
-        app.sg_root.lookup_node("/window/content/chat/menu_layer/mainbtn_layer").unwrap();
 
-    // Wallet button
-    let node = create_vector_art("walletbtn_bg");
+    // Wallet status icon (blockchain netlogo, all cyan = fully connected)
+    // Positioned at center of wallet button area, above write_btn
+    let node = create_vector_art("wallet_icon");
     let prop = node.get_property("rect").unwrap();
-    let code = cc.compile("w - 260").unwrap();
+    let code = cc.compile("w - MENU_BTN_W_R / 2 - CHANNEL_LABEL_X").unwrap();
     prop.set_expr(atom, Role::App, 0, code).unwrap();
-    let code = cc.compile("h - 150").unwrap();
+    let code = cc.compile("h - MENU_BTN_H - MENU_BTN_W_R / 2 - CHANNEL_LABEL_X").unwrap();
     prop.set_expr(atom, Role::App, 1, code).unwrap();
-    prop.set_f32(atom, Role::App, 2, 100.).unwrap();
-    prop.set_f32(atom, Role::App, 3, 100.).unwrap();
-    node.set_property_u32(atom, Role::App, "z_index", 0).unwrap();
-
-    let mut shape = VectorShape::new();
-    shape.add_gradient_box(
-        expr::const_f32(0.),
-        expr::const_f32(0.),
-        expr::load_var("w"),
-        expr::load_var("h"),
-        [[0., 0.1, 0.15, 1.], [0., 0.1, 0.15, 1.], [0., 0., 0., 1.], [0., 0., 0., 1.]],
-    );
-    shape.add_outline(
-        expr::const_f32(0.),
-        expr::const_f32(0.),
-        expr::load_var("w"),
-        expr::load_var("h"),
-        1.,
-        [0., 0.94, 1., 1.],
-    );
-
+    prop.set_f32(atom, Role::App, 2, 1.).unwrap();
+    prop.set_f32(atom, Role::App, 3, 1.).unwrap();
+    node.set_property_u32(atom, Role::App, "z_index", 3).unwrap();
+    node.set_property_f32(atom, Role::App, "scale", NETLOGO_SCALE).unwrap();
+    let mut shape = shape::create_blockchain_netlogo1(COLOR_CYAN);
+    shape.join(shape::create_blockchain_netlogo2(COLOR_CYAN));
+    shape.join(shape::create_blockchain_netlogo3(COLOR_CYAN));
+    shape.join(shape::create_blockchain_netlogo4(COLOR_CYAN));
     let node = node
         .setup(|me| VectorArt::new(me, shape, app.renderer.clone(), app.redraw_trigger.clone()))
         .await;
-    mainlayer_node.link(node);
+    menu_layer.link(node);
 
+    // Wallet button (above write_btn, square: w = h = MENU_BTN_W_R)
     let node = create_button("wallet_btn");
     node.set_property_bool(atom, Role::App, "is_active", true).unwrap();
     let prop = node.get_property("rect").unwrap();
-    let code = cc.compile("w - 260").unwrap();
+    let code = cc.compile("w - MENU_BTN_W_R - CHANNEL_LABEL_X").unwrap();
     prop.set_expr(atom, Role::App, 0, code).unwrap();
-    let code = cc.compile("h - 150").unwrap();
+    let code = cc.compile("h - MENU_BTN_H - MENU_BTN_W_R - CHANNEL_LABEL_X").unwrap();
     prop.set_expr(atom, Role::App, 1, code).unwrap();
-    prop.set_f32(atom, Role::App, 2, 100.).unwrap();
-    prop.set_f32(atom, Role::App, 3, 100.).unwrap();
+    prop.set_f32(atom, Role::App, 2, MENU_BTN_W_R).unwrap();
+    prop.set_f32(atom, Role::App, 3, MENU_BTN_W_R).unwrap();
+    //node.set_property_bool(atom, Role::App, "debug", true).unwrap();
 
     let (slot, recvr) = Slot::new("wallet_clicked");
     node.register("click", slot).unwrap();
@@ -609,5 +602,5 @@ pub async fn setup_wallet_button(app: &App, menu_layer: SceneNodePtr, i18n_fish:
     let redraw = app.redraw_trigger.clone();
 
     let node = node.setup(|me| Button::new(me, renderer, redraw)).await;
-    mainlayer_node.link(node);
+    menu_layer.link(node);
 }
