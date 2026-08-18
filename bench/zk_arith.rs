@@ -32,7 +32,7 @@ use darkfi::{
 
 fn zk_arith(c: &mut Criterion) {
     let bincode = include_bytes!("../proof/arithmetic.zk.bin");
-    let zkbin = ZkBinary::decode(bincode).unwrap();
+    let zkbin = ZkBinary::decode(bincode, true).unwrap();
 
     let a = Fp::from(4);
     let b = Fp::from(110);
@@ -48,7 +48,14 @@ fn zk_arith(c: &mut Criterion) {
     for k in zkbin.k..20 {
         let proving_key = ProvingKey::build(k, &circuit.clone());
         prove_group.bench_with_input(BenchmarkId::from_parameter(k), &k, |b, &_k| {
-            b.iter(|| Proof::create(&proving_key, &[circuit.clone()], &public_inputs, &mut OsRng))
+            b.iter(|| {
+                Proof::create(
+                    &proving_key,
+                    std::slice::from_ref(&circuit),
+                    &public_inputs,
+                    &mut OsRng,
+                )
+            })
         });
     }
     prove_group.finish();
@@ -58,7 +65,8 @@ fn zk_arith(c: &mut Criterion) {
     for k in zkbin.k..20 {
         let proving_key = ProvingKey::build(k, &circuit.clone());
         let proof =
-            Proof::create(&proving_key, &[circuit.clone()], &public_inputs, &mut OsRng).unwrap();
+            Proof::create(&proving_key, std::slice::from_ref(&circuit), &public_inputs, &mut OsRng)
+                .unwrap();
         let verifier_witnesses = empty_witnesses(&zkbin).unwrap();
         let circuit = ZkCircuit::new(verifier_witnesses, &zkbin);
         let verifying_key = VerifyingKey::build(k, &circuit);

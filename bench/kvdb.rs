@@ -19,11 +19,12 @@
 use criterion::{criterion_group, criterion_main, BatchSize, BenchmarkId, Criterion};
 use darkfi_sdk::crypto::pasta_prelude::*;
 use halo2_proofs::pasta::Fp;
+use kvdb_overlay::Database;
 use rand::rngs::OsRng;
 
-fn sled(c: &mut Criterion) {
-    let db = sled::open("/tmp/db").unwrap();
-    let tree = db.open_tree(b"hello").unwrap();
+fn kvdb(c: &mut Criterion) {
+    let (kvdb, _kvdb_folder) = Database::open_temp().unwrap();
+    let tree = kvdb.open_tree_default("hello").unwrap();
 
     let mut group = c.benchmark_group("inserts");
     for i in 0..10 {
@@ -42,8 +43,8 @@ fn sled(c: &mut Criterion) {
         });
     }
     tree.clear().unwrap();
-    let _ = db.drop_tree(b"hello");
+    let _ = kvdb.drop_tree("hello");
 }
 
-criterion_group!(bench, sled);
+criterion_group!(bench, kvdb);
 criterion_main!(bench);

@@ -133,18 +133,21 @@ fn run_benchmark(c: &mut Criterion, name: &str, proof: &str, witness: &str) {
     let mut bincode = Vec::new();
     let mut f = File::open(proof).unwrap();
     f.read_to_end(&mut bincode).unwrap();
-    let zkbin = ZkBinary::decode(&bincode).unwrap();
+    let zkbin = ZkBinary::decode(&bincode, true).unwrap();
 
     let (prover_witnesses, public_inputs) = darkfi::zk::import_witness_json(witness);
     let circuit = ZkCircuit::new(prover_witnesses.clone(), &zkbin);
 
     let proving_key = ProvingKey::build(zkbin.k, &circuit.clone());
     c.bench_function(&format!("prove {}", name), |b| {
-        b.iter(|| Proof::create(&proving_key, &[circuit.clone()], &public_inputs, &mut OsRng))
+        b.iter(|| {
+            Proof::create(&proving_key, std::slice::from_ref(&circuit), &public_inputs, &mut OsRng)
+        })
     });
 
     let proof =
-        Proof::create(&proving_key, &[circuit.clone()], &public_inputs, &mut OsRng).unwrap();
+        Proof::create(&proving_key, std::slice::from_ref(&circuit), &public_inputs, &mut OsRng)
+            .unwrap();
     let verifier_witnesses = empty_witnesses(&zkbin).unwrap();
     let circuit = ZkCircuit::new(verifier_witnesses, &zkbin);
     let verifying_key = VerifyingKey::build(zkbin.k, &circuit);

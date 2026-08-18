@@ -342,9 +342,9 @@ name = "zk_from_json"
 harness = false
 path = "bench/zk_from_json.rs"
 [[bench]]
-name = "sled"
+name = "kvdb"
 harness = false
-path = "bench/sled.rs"
+path = "bench/kvdb.rs"
 
 # Crossbeam SkipMap vs Mutex protected HashMap.
 # Uncomment to enable, and add the following to dev-dependencies:

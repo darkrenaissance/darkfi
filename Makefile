@@ -125,7 +125,7 @@ check: $(PROOFS_BIN) contracts
 
 clippy: $(PROOFS_BIN) contracts
 	RUSTFLAGS="$(RUSTFLAGS)" $(CARGO) clippy --target=$(RUST_TARGET) \
-		--release --all-features --workspace --tests
+		--release --all-features --workspace --tests --benches
 
 fix: $(PROOFS_BIN) contracts
 	RUSTFLAGS="$(RUSTFLAGS)" $(CARGO) clippy --target=$(RUST_TARGET) \
