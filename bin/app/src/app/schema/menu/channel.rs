@@ -18,6 +18,8 @@
 
 use bs58;
 use darkfi_serial::{async_trait, deserialize, Encodable, SerialDecodable, SerialEncodable};
+use rand::rngs::OsRng;
+use rand::Rng;
 use sled_overlay::sled;
 use ui_consts::*;
 
@@ -1457,7 +1459,15 @@ pub async fn make(
     prop.set_f32(atom, Role::App, 3, COLOR_CYAN[3]).unwrap();
 
     let node = node
-        .setup(|me| Text::new(me, window_scale.clone(), app.renderer.clone(), i18n_fish.clone(), app.redraw_trigger.clone()))
+        .setup(|me| {
+            Text::new(
+                me,
+                window_scale.clone(),
+                app.renderer.clone(),
+                i18n_fish.clone(),
+                app.redraw_trigger.clone(),
+            )
+        })
         .await;
     editlayer_node.link(node);
 
