@@ -29,7 +29,7 @@ use crate::{
     },
     expr,
     gfx::gfxtag,
-    mesh::{CANCEL_MENU_BTN_GRADIENT, COLOR_CYAN, DONE_MENU_BTN_GRADIENT},
+    mesh::COLOR_CYAN,
     prop::{PropertyAtomicGuard, PropertyBool, PropertyFloat32, Role},
     scene::{SceneNodePtr, Slot},
     shape,
@@ -56,11 +56,12 @@ mod android_ui_consts {
     // Button constants
     pub const MENU_BTN_W_L: f32 = 250.;
     pub const MENU_BTN_W_R: f32 = 200.;
-    pub const MENU_BTN_H: f32 = 130.;
+    pub const MENU_BTN_H: f32 = 180.;
     pub const EDIT_BTN_OUTLINE_T: f32 = 2.;
     pub const BTN_TEXT_FONTSIZE: f32 = 50.;
     pub const BTN_TEXT_Y: f32 = 30.;
     pub const LABEL_LINESPACE: f32 = 60.;
+    pub const MENU_ICON_SCALE: f32 = 220.;
 }
 
 #[cfg(target_os = "android")]
@@ -93,11 +94,12 @@ mod ui_consts {
     // Button constants
     pub const MENU_BTN_W_L: f32 = 110.;
     pub const MENU_BTN_W_R: f32 = 85.;
-    pub const MENU_BTN_H: f32 = 60.;
+    pub const MENU_BTN_H: f32 = 100.;
     pub const EDIT_BTN_OUTLINE_T: f32 = 1.;
     pub const BTN_TEXT_FONTSIZE: f32 = 20.;
     pub const BTN_TEXT_Y: f32 = 14.;
     pub const LABEL_LINESPACE: f32 = 140.;
+    pub const MENU_ICON_SCALE: f32 = 100.;
 }
 
 pub mod channel;
@@ -125,6 +127,18 @@ pub async fn make(
 
     let renderer = app.renderer.clone();
     let atom = &mut renderer.make_guard(gfxtag!("setup"));
+
+    // Create chat container layer
+    let chat_layer = create_layer("chat");
+    let prop = chat_layer.get_property("rect").unwrap();
+    prop.set_f32(atom, Role::App, 0, 0.).unwrap();
+    prop.set_f32(atom, Role::App, 1, 0.).unwrap();
+    prop.set_expr(atom, Role::App, 2, expr::load_var("w")).unwrap();
+    prop.set_expr(atom, Role::App, 3, expr::load_var("h")).unwrap();
+    chat_layer.set_property_bool(atom, Role::App, "is_visible", true).unwrap();
+    chat_layer.set_property_u32(atom, Role::App, "z_index", 1).unwrap();
+    let chat_layer = chat_layer.setup(|me| Layer::new(me, app.renderer.clone(), app.redraw_trigger.clone())).await;
+    content.link(chat_layer.clone());
 
     // Create contact screen
     let contact_layer = create_layer("contact_screen_layer");
@@ -166,6 +180,7 @@ pub async fn make(
     cc.add_const_f32("MENU_BTN_W_L", MENU_BTN_W_L);
     cc.add_const_f32("MENU_BTN_W_R", MENU_BTN_W_R);
     cc.add_const_f32("MENU_BTN_H", MENU_BTN_H);
+    cc.add_const_f32("MENU_ICON_SCALE", MENU_ICON_SCALE);
 
     let atom = &mut PropertyAtomicGuard::none();
 
@@ -330,36 +345,6 @@ pub async fn make(
     mainlayer_node.link(node);
 
     // Write / Menu button
-    let node = create_vector_art("writebtn_bg");
-    let prop = node.get_property("rect").unwrap();
-    prop.set_f32(atom, Role::App, 0, 0.).unwrap();
-    prop.set_f32(atom, Role::App, 1, 0.).unwrap();
-    prop.set_expr(atom, Role::App, 2, expr::load_var("w")).unwrap();
-    prop.set_expr(atom, Role::App, 3, expr::load_var("h")).unwrap();
-    node.set_property_u32(atom, Role::App, "z_index", 0).unwrap();
-
-    let mut shape = VectorShape::new();
-    shape.add_gradient_box(
-        cc.compile("w - MENU_BTN_W_R").unwrap(),
-        expr::const_f32(0.),
-        expr::load_var("w"),
-        expr::load_var("h"),
-        DONE_MENU_BTN_GRADIENT,
-    );
-    shape.add_outline(
-        cc.compile("w - MENU_BTN_W_R").unwrap(),
-        expr::const_f32(0.),
-        expr::load_var("w"),
-        expr::load_var("h"),
-        EDIT_BTN_OUTLINE_T,
-        COLOR_CYAN,
-    );
-
-    let node = node
-        .setup(|me| VectorArt::new(me, shape, app.renderer.clone(), app.redraw_trigger.clone()))
-        .await;
-    mainlayer_node.link(node);
-
     let node = create_button("write_btn");
     node.set_property_bool(atom, Role::App, "is_active", true).unwrap();
     let prop = node.get_property("rect").unwrap();
@@ -391,36 +376,17 @@ pub async fn make(
         node.setup(|me| Button::new(me, app.renderer.clone(), app.redraw_trigger.clone())).await;
     mainlayer_node.link(node);
 
-    let node = create_text("write_text");
+    let node = create_vector_art("write_icon");
     let prop = node.get_property("rect").unwrap();
-    let code = cc.compile("w - MENU_BTN_W_R").unwrap();
+    let code = cc.compile("w - MENU_BTN_W_R / 2 - MENU_ICON_SCALE * 0.45").unwrap();
     prop.set_expr(atom, Role::App, 0, code).unwrap();
-    prop.set_f32(atom, Role::App, 1, BTN_TEXT_Y).unwrap();
-    prop.set_f32(atom, Role::App, 2, MENU_BTN_W_R).unwrap();
-    prop.set_f32(atom, Role::App, 3, MENU_BTN_H).unwrap();
+    prop.set_f32(atom, Role::App, 1, MENU_BTN_H / 2. + MENU_ICON_SCALE * 0.36).unwrap();
+    prop.set_f32(atom, Role::App, 2, MENU_ICON_SCALE).unwrap();
+    prop.set_f32(atom, Role::App, 3, MENU_ICON_SCALE).unwrap();
     node.set_property_u32(atom, Role::App, "z_index", 3).unwrap();
-    node.set_property_f32(atom, Role::App, "font_size", BTN_TEXT_FONTSIZE).unwrap();
-    node.set_property_str(atom, Role::App, "text", "menu").unwrap();
-    let prop = node.get_property("text_align").unwrap();
-    prop.set_enum(atom, Role::App, 0, "center").unwrap();
-    node.set_property_bool(atom, Role::App, "use_i18n", false).unwrap();
-
-    let prop = node.get_property("text_color").unwrap();
-    prop.set_f32(atom, Role::App, 0, COLOR_CYAN[0]).unwrap();
-    prop.set_f32(atom, Role::App, 1, COLOR_CYAN[1]).unwrap();
-    prop.set_f32(atom, Role::App, 2, COLOR_CYAN[2]).unwrap();
-    prop.set_f32(atom, Role::App, 3, COLOR_CYAN[3]).unwrap();
-
+    let shape = shape::create_menu_icon(COLOR_CYAN).scaled(MENU_ICON_SCALE);
     let node = node
-        .setup(|me| {
-            Text::new(
-                me,
-                window_scale.clone(),
-                app.renderer.clone(),
-                i18n_fish.clone(),
-                app.redraw_trigger.clone(),
-            )
-        })
+        .setup(|me| VectorArt::new(me, shape, app.renderer.clone(), app.redraw_trigger.clone()))
         .await;
     mainlayer_node.link(node);
 
