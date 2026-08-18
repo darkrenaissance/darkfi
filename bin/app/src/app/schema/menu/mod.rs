@@ -51,8 +51,8 @@ mod android_ui_consts {
     pub const MENU_HANDLE_PAD: f32 = 200.;
     pub const MENU_FADE: f32 = 1200.;
     pub const VERBLOCK_SCALE: f32 = 150.;
-    pub const VERBLOCK_X: f32 = 180.;
-    pub const VERBLOCK_Y: f32 = 80.;
+    pub const VERBLOCK_X: f32 = 140.;
+    pub const VERBLOCK_Y: f32 = 130.;
     // Button constants
     pub const MENU_BTN_W_L: f32 = 250.;
     pub const MENU_BTN_W_R: f32 = 200.;
@@ -88,9 +88,9 @@ mod ui_consts {
     pub const MENU_HANDLE_PAD: f32 = 100.;
     pub const MENU_FADE: f32 = 600.;
     pub const VERBLOCK_SCALE: f32 = 80.;
-    pub const VERBLOCK_X: f32 = 110.;
+    pub const VERBLOCK_X: f32 = 80.;
     pub const OUTLINE_MINT: [f32; 4] = [0.467, 1.0, 0.745, 1.0];
-    pub const VERBLOCK_Y: f32 = 50.;
+    pub const VERBLOCK_Y: f32 = 75.;
     // Button constants
     pub const MENU_BTN_W_L: f32 = 110.;
     pub const MENU_BTN_W_R: f32 = 85.;
@@ -173,6 +173,7 @@ pub async fn make(
         PropertyBool::wrap(&channel_layer, Role::App, "is_visible", 0).unwrap();
 
     let mut cc = expr::Compiler::new();
+    cc.add_const_f32("VERBLOCK_X", VERBLOCK_X);
     cc.add_const_f32("VERBLOCK_Y", VERBLOCK_Y);
     cc.add_const_f32("CHANNEL_HEADER_HEIGHT", CHANNEL_HEADER_HEIGHT);
     cc.add_const_f32("CHANNEL_ITEM_HEIGHT", CHANNEL_ITEM_HEIGHT);
@@ -336,19 +337,21 @@ pub async fn make(
 
     let node = create_vector_art("version_block");
     let prop = node.get_property("rect").unwrap();
-    prop.set_f32(atom, Role::App, 0, VERBLOCK_X).unwrap();
-    prop.set_f32(atom, Role::App, 1, VERBLOCK_Y).unwrap();
+    let code = cc.compile("CHANNEL_LABEL_X + VERBLOCK_X").unwrap();
+    prop.set_expr(atom, Role::App, 0, code).unwrap();
+    let code = cc.compile("h - MENU_BTN_H - CHANNEL_LABEL_X + VERBLOCK_Y").unwrap();
+    prop.set_expr(atom, Role::App, 1, code).unwrap();
     prop.set_expr(atom, Role::App, 2, expr::load_var("w")).unwrap();
     prop.set_expr(atom, Role::App, 3, expr::load_var("h")).unwrap();
     node.set_property_bool(atom, Role::App, "is_visible", true).unwrap();
-    node.set_property_u32(atom, Role::App, "z_index", 1).unwrap();
+    node.set_property_u32(atom, Role::App, "z_index", 3).unwrap();
     node.set_property_f32(atom, Role::App, "scale", VERBLOCK_SCALE).unwrap();
     let shape = shape::create_version_block([1., 0., 0.25, 1.]);
 
     let node = node
         .setup(|me| VectorArt::new(me, shape, app.renderer.clone(), app.redraw_trigger.clone()))
         .await;
-    mainlayer_node.link(node);
+    layer_node.link(node);
 
     // Write / Menu button
     let node = create_button("write_btn");
