@@ -240,29 +240,35 @@ pub async fn make(
     node.set_property_u32(atom, Role::App, "z_index", 0).unwrap();
 
     let mut shape = VectorShape::new();
-    let x1 = expr::const_f32(0.);
-    let y1 = expr::const_f32(0.);
-    let x2 = expr::load_var("w");
-    let y2 = expr::const_f32(CHANNEL_HEADER_HEIGHT);
-    let (color1, color2) = match COLOR_SCHEME {
-        ColorScheme::DarkMode => ([0., 0.11, 0.11, 1.], [0., 0., 0., 1.]),
-        ColorScheme::PaperLight => ([1., 1., 1., 1.], [1., 1., 1., 1.]),
+    let (bg_color, sep_color) = match COLOR_SCHEME {
+        ColorScheme::DarkMode => ([0., 0., 0., 1.], [0.41, 0.6, 0.65, 1.]),
+        ColorScheme::PaperLight => ([1., 1., 1., 1.], [0., 0.6, 0.65, 1.]),
     };
-    let mut verts = vec![
-        ShapeVertex::new(x1.clone(), y1.clone(), color1),
-        ShapeVertex::new(x2.clone(), y1.clone(), color1),
-        ShapeVertex::new(x1.clone(), y2.clone(), color2),
-        ShapeVertex::new(x2, y2, color2),
-    ];
-    let mut indices = vec![0, 2, 1, 1, 2, 3];
-    shape.verts.append(&mut verts);
-    shape.indices.append(&mut indices);
     shape.add_filled_box(
         expr::const_f32(0.),
-        expr::const_f32(CHANNEL_HEADER_HEIGHT - 1.),
+        expr::const_f32(0.),
         expr::load_var("w"),
-        expr::const_f32(CHANNEL_HEADER_HEIGHT),
-        [0.15, 0.2, 0.19, 1.],
+        expr::load_var("h"),
+        bg_color,
+    );
+    shape.add_filled_box(
+        expr::const_f32(0.),
+        expr::load_var("h"),
+        expr::load_var("w"),
+        cc.compile("h + 0.5").unwrap(),
+        sep_color,
+    );
+    let color1 = [0., 0.17, 0.18, 0.5];
+    let color2 = [0., 0.88, 1., 0.];
+    shape.add_smooth_vertical_gradient(
+        expr::const_f32(0.),
+        expr::const_f32(0.),
+        expr::load_var("w"),
+        cc.compile("h / 2").unwrap(),
+        color1,
+        color2,
+        8,
+        0.2,
     );
 
     let node = node

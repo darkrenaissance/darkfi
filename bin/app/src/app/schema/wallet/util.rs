@@ -281,24 +281,51 @@ pub async fn create_header_bg(
     node.set_property_u32(atom, Role::App, "z_index", 1).unwrap();
 
     let (bg_color, sep_color) = match COLOR_SCHEME {
-        ColorScheme::DarkMode => ([0., 0.11, 0.11, 1.], [0.2, 0.2745, 0.2784, 1.]),
+        ColorScheme::DarkMode => ([0., 0., 0., 1.], [0.41, 0.6, 0.65, 1.]),
         ColorScheme::PaperLight => ([1., 1., 1., 1.], [0., 0.6, 0.65, 1.]),
     };
 
+    let cc = Compiler::new();
     let mut shape = VectorShape::new();
     shape.add_filled_box(
         expr::const_f32(0.),
         expr::const_f32(0.),
         expr::load_var("w"),
-        expr::const_f32(HEADER_HEIGHT),
+        expr::load_var("h"),
         bg_color,
     );
     shape.add_filled_box(
         expr::const_f32(0.),
-        expr::const_f32(HEADER_HEIGHT - 1.),
-        expr::load_var("w"),
-        expr::const_f32(HEADER_HEIGHT),
+        expr::const_f32(0.),
+        expr::const_f32(BACKARROW_BG_W),
+        expr::load_var("h"),
+        [0.0, 0.106, 0.114, 1.0],
+    );
+    shape.add_filled_box(
+        expr::const_f32(BACKARROW_BG_W),
+        expr::const_f32(0.),
+        expr::const_f32(BACKARROW_BG_W + BACK_SEP_W),
+        expr::load_var("h"),
         sep_color,
+    );
+    shape.add_filled_box(
+        expr::const_f32(0.),
+        expr::load_var("h"),
+        expr::load_var("w"),
+        cc.compile("h + 0.5").unwrap(),
+        sep_color,
+    );
+    let color1 = [0., 0.17, 0.18, 0.5];
+    let color2 = [0., 0.88, 1., 0.];
+    shape.add_smooth_vertical_gradient(
+        expr::const_f32(BACKARROW_BG_W + 1.),
+        expr::const_f32(0.),
+        expr::load_var("w"),
+        cc.compile("h / 2").unwrap(),
+        color1,
+        color2,
+        8,
+        0.2,
     );
     let node = node
         .setup(|me| VectorArt::new(me, shape, app.renderer.clone(), app.redraw_trigger.clone()))

@@ -54,8 +54,9 @@ use super::{ColorScheme, COLOR_SCHEME};
 mod android_ui_consts {
     pub const CHANNEL_LABEL_Y: f32 = 30.;
     pub const BACKARROW_SCALE: f32 = 30.;
-    pub const BACKARROW_X: f32 = 50.;
+    pub const BACKARROW_X: f32 = 70.;
     pub const BACKARROW_Y: f32 = 70.;
+    pub const BACKARROW_BG_W: f32 = 140.;
     pub const CHATEDIT_MIN_HEIGHT: f32 = 160.;
     pub const CHATEDIT_MAX_HEIGHT: f32 = 500.;
     pub const CHATEDIT_HEIGHT: f32 = 140.;
@@ -97,6 +98,7 @@ mod android_ui_consts {
     // Action menu
     pub const ACTION_PADDING: f32 = 32.;
     pub const ACTION_SPACING: f32 = 8.;
+    pub const BACK_SEP_W: f32 = 1.;
 }
 
 #[cfg(target_os = "android")]
@@ -118,7 +120,8 @@ mod ui_consts {
     pub const CHANNEL_LABEL_Y: f32 = 12.;
     pub const BACKARROW_SCALE: f32 = 15.;
     pub const BACKARROW_X: f32 = 38.;
-    pub const BACKARROW_Y: f32 = 26.;
+    pub const BACKARROW_Y: f32 = 30.;
+    pub const BACKARROW_BG_W: f32 = 80.;
     pub const CHATEDIT_MIN_HEIGHT: f32 = 60.;
     pub const CHATEDIT_MAX_HEIGHT: f32 = 600.;
     pub const CHATEDIT_HEIGHT: f32 = 60.;
@@ -160,6 +163,7 @@ mod ui_consts {
     // Action menu
     pub const ACTION_PADDING: f32 = 8.;
     pub const ACTION_SPACING: f32 = 4.;
+    pub const BACK_SEP_W: f32 = 0.5;
 }
 
 use super::EMOJI_PICKER_ICON_SIZE;
@@ -255,21 +259,28 @@ pub async fn make(
     node.set_property_u32(atom, Role::App, "z_index", 2).unwrap();
 
     let (bg_color, sep_color) = match COLOR_SCHEME {
-        ColorScheme::DarkMode => ([0., 0.11, 0.11, 1.], [0.41, 0.6, 0.65, 1.]),
+        ColorScheme::DarkMode => ([0., 0., 0., 1.], [0.41, 0.6, 0.65, 1.]),
         ColorScheme::PaperLight => ([1., 1., 1., 1.], [0., 0.6, 0.65, 1.]),
     };
     let mut shape = VectorShape::new();
     shape.add_filled_box(
         expr::const_f32(0.),
         expr::const_f32(0.),
-        expr::const_f32(EMOJI_BG_W),
+        expr::load_var("w"),
         expr::load_var("h"),
         bg_color,
     );
     shape.add_filled_box(
-        expr::const_f32(EMOJI_BG_W),
         expr::const_f32(0.),
-        expr::const_f32(EMOJI_BG_W + 1.),
+        expr::const_f32(0.),
+        expr::const_f32(BACKARROW_BG_W),
+        expr::load_var("h"),
+        [0.0, 0.106, 0.114, 1.0],
+    );
+    shape.add_filled_box(
+        expr::const_f32(BACKARROW_BG_W),
+        expr::const_f32(0.),
+        expr::const_f32(BACKARROW_BG_W + BACK_SEP_W),
         expr::load_var("h"),
         sep_color,
     );
@@ -277,13 +288,13 @@ pub async fn make(
         expr::const_f32(0.),
         expr::load_var("h"),
         expr::load_var("w"),
-        cc.compile("h + 1").unwrap(),
+        cc.compile("h + 0.5").unwrap(),
         sep_color,
     );
-    let color1 = [0., 0.17, 0.18, 0.3];
+    let color1 = [0., 0.17, 0.18, 0.5];
     let color2 = [0., 0.88, 1., 0.];
     shape.add_smooth_vertical_gradient(
-        expr::const_f32(EMOJI_BG_W + 1.),
+        expr::const_f32(BACKARROW_BG_W + 1.),
         expr::const_f32(0.),
         expr::load_var("w"),
         cc.compile("h / 2").unwrap(),
@@ -301,8 +312,8 @@ pub async fn make(
     let prop = node.get_property("rect").unwrap();
     prop.set_f32(atom, Role::App, 0, BACKARROW_X).unwrap();
     prop.set_f32(atom, Role::App, 1, BACKARROW_Y).unwrap();
-    prop.set_f32(atom, Role::App, 2, 500.).unwrap();
-    prop.set_f32(atom, Role::App, 3, 500.).unwrap();
+    prop.set_f32(atom, Role::App, 2, BACKARROW_SCALE).unwrap();
+    prop.set_f32(atom, Role::App, 3, BACKARROW_SCALE).unwrap();
     node.set_property_u32(atom, Role::App, "z_index", 3).unwrap();
 
     let shape = shape::create_back_arrow().scaled(BACKARROW_SCALE);
@@ -316,7 +327,7 @@ pub async fn make(
     let prop = node.get_property("rect").unwrap();
     prop.set_f32(atom, Role::App, 0, 0.).unwrap();
     prop.set_f32(atom, Role::App, 1, 0.).unwrap();
-    prop.set_f32(atom, Role::App, 2, EMOJI_BG_W).unwrap();
+    prop.set_f32(atom, Role::App, 2, BACKARROW_BG_W).unwrap();
     prop.set_f32(atom, Role::App, 3, CHATEDIT_HEIGHT).unwrap();
 
     // Menu doesn't exist yet ;)

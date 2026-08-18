@@ -93,6 +93,7 @@ mod android_ui_consts {
     pub const COPY_SCALE: f32 = 35.;
     pub const COPY_BTN_SIZE: f32 = CHATEDIT_HEIGHT;
     pub const CONTENT_OUTLINE_SIZE: f32 = 0.5;
+    pub const BACK_SEP_W: f32 = 1.;
     pub const TAB_LABEL_X: f32 = 90.;
     pub const CHANNELS_TAB_ICON_GAP: f32 = 12.;
     pub const CONTACTS_TAB_ICON_GAP: f32 = 8.5;
@@ -140,12 +141,13 @@ mod ui_consts {
     pub const CONTENT_MARGIN: f32 = 15.;
     pub const BACKARROW_SCALE: f32 = 15.;
     pub const BACKARROW_X: f32 = 38.;
-    pub const BACKARROW_Y: f32 = 26.;
+    pub const BACKARROW_Y: f32 = 30.;
     pub const BACKARROW_BG_W: f32 = 80.;
     pub const COPY_WIDTH: f32 = 100.;
     pub const COPY_SCALE: f32 = 15.;
     pub const COPY_BTN_SIZE: f32 = CHATEDIT_HEIGHT;
     pub const CONTENT_OUTLINE_SIZE: f32 = 0.3;
+    pub const BACK_SEP_W: f32 = 0.5;
     pub const TAB_LABEL_X: f32 = 45.;
     pub const CHANNELS_TAB_ICON_GAP: f32 = 6.;
     pub const CONTACTS_TAB_ICON_GAP: f32 = 4.25;
@@ -224,19 +226,18 @@ pub async fn make(
     shape.add_filled_box(
         expr::const_f32(BACKARROW_BG_W),
         expr::const_f32(0.),
-        expr::const_f32(BACKARROW_BG_W + 1.),
+        expr::const_f32(BACKARROW_BG_W + BACK_SEP_W),
         expr::load_var("h"),
         sep_color,
     );
-    shape.add_outline(
+    shape.add_filled_box(
         expr::const_f32(0.),
         expr::load_var("h"),
         expr::load_var("w"),
-        cc.compile("h + 1").unwrap(),
-        CONTENT_OUTLINE_SIZE,
+        cc.compile("h + 0.5").unwrap(),
         sep_color,
     );
-    let color1 = [0., 0.17, 0.18, 0.3];
+    let color1 = [0., 0.17, 0.18, 0.5];
     let color2 = [0., 0.88, 1., 0.];
     shape.add_smooth_vertical_gradient(
         expr::const_f32(BACKARROW_BG_W + 1.),
