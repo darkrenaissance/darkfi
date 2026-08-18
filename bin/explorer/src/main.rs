@@ -41,6 +41,7 @@ use darkfi::{
     verbose, Error, Result, ANSI_LOGO,
 };
 use darkfi_serial::deserialize_async;
+use kvdb_overlay::{Database, Tree};
 use smol::{
     future,
     lock::{Mutex, MutexGuard},
@@ -77,11 +78,11 @@ fn usage() {
 pub struct Explorer {
     synced: AtomicBool,
     synced_notifier: Arc<CondVar>,
-    _sled_db: sled::Db,
-    header_indices: sled::Tree,
-    tx_indices: sled::Tree,
-    contracts: sled::Tree,
-    stats: sled::Tree,
+    kvdb: Database,
+    header_indices: Tree,
+    tx_indices: Tree,
+    contracts: Tree,
+    stats: Tree,
 
     tapes_db: Tapes,
     _tapes_options: TapeOpenOptions,
@@ -123,13 +124,13 @@ impl RequestHandler<RpcHandler> for Explorer {
 }
 
 impl Explorer {
-    fn new(sled_path: &Path, tapes_db_path: &Path, tapes_path: &Path) -> Result<Self> {
-        info!(target: "explorer::new", "Opening sled trees");
-        let sled_db = sled::open(sled_path)?;
-        let header_indices = sled_db.open_tree("header_indices")?;
-        let tx_indices = sled_db.open_tree("tx_indices")?;
-        let contracts = sled_db.open_tree("contracts")?;
-        let stats = sled_db.open_tree("stats")?;
+    fn new(db_path: &Path, tapes_db_path: &Path, tapes_path: &Path) -> Result<Self> {
+        info!(target: "explorer::new", "Opening kvdb trees");
+        let kvdb = Database::open_default(db_path)?;
+        let header_indices = kvdb.open_tree_default("header_indices")?;
+        let tx_indices = kvdb.open_tree_default("tx_indices")?;
+        let contracts = kvdb.open_tree_default("contracts")?;
+        let stats = kvdb.open_tree_default("stats")?;
 
         info!(target: "explorer::new", "Opening tapes");
         std::fs::create_dir_all(tapes_db_path)?;
@@ -143,7 +144,7 @@ impl Explorer {
         Ok(Self {
             synced: AtomicBool::new(false),
             synced_notifier: Arc::new(CondVar::new()),
-            _sled_db: sled_db,
+            kvdb,
             header_indices,
             tx_indices,
             contracts,
@@ -314,7 +315,7 @@ async fn realmain(
     ex: Arc<Executor<'static>>,
 ) -> Result<()> {
     let explorer = Arc::new(Explorer::new(
-        &db_path.join("sled_db"),
+        &db_path.join("kvdb"),
         &db_path.join("tapes_metadata"),
         &db_path.join("tapes"),
     )?);

@@ -32,7 +32,7 @@ use darkfi_serial::{
     async_trait, deserialize, deserialize_async, serialize, serialize_async, SerialDecodable,
     SerialEncodable,
 };
-use sled::{transaction::TransactionError, Transactional};
+use kvdb_overlay::Batch;
 use tapes::{
     BlobTape, FixedSizedTape, Persistence, TapeOpenOptions, Tapes, TapesAppend, TapesRead,
     TapesTruncate,
@@ -41,7 +41,7 @@ use tracing::info;
 
 use super::Explorer;
 
-/// Contract information stored in sled
+/// Contract information stored in kvdb
 #[derive(Debug, Clone, SerialEncodable, SerialDecodable)]
 pub struct ContractData {
     pub contract_id: ContractId,
@@ -142,7 +142,7 @@ impl Explorer {
         // Commit Tapes first
         tx.commit(Persistence::SyncData)?;
 
-        // Prepare data for atomic sled transaction
+        // Prepare data for atomic kvdb transaction
         let header_hash = serialize_async(&block.header.hash()).await;
         // Store height as u64 (8 bytes) to match lookup format
         let height_bytes = (block.header.height as u64).to_le_bytes();
@@ -159,35 +159,37 @@ impl Explorer {
         let (new_contracts, locked_contracts) =
             self.scan_contract_calls(block, block.header.height as u64).await;
 
-        // Atomic sled transaction for tx_indices, header_indices, and contracts
-        (&self.tx_indices, &self.header_indices, &self.contracts)
-            .transaction(|(tx_tree, header_tree, contracts_tree)| {
-                // Insert all transaction indices
-                for (hash, idx) in &tx_entries {
-                    tx_tree.insert(hash.as_slice(), idx.as_slice())?;
-                }
-                // Insert header hash -> height mapping
-                header_tree.insert(header_hash.as_slice(), height_bytes.as_slice())?;
+        // Atomic kvdb write for tx_indices, header_indices, and contracts
+        let mut tx_indices_batch = Batch::new();
+        let mut header_indices_batch = Batch::new();
+        let mut contracts_batch = Batch::new();
 
-                // Insert new contracts
-                for contract in &new_contracts {
-                    contracts_tree
-                        .insert(serialize(&contract.contract_id.inner()), serialize(contract))?;
-                }
+        // Insert all transaction indices
+        for (hash, idx) in &tx_entries {
+            tx_indices_batch.insert(hash.as_slice(), idx.as_slice());
+        }
 
-                // Update locked contracts
-                for contract_id in &locked_contracts {
-                    let data = contracts_tree.get(serialize(&contract_id.inner()))?.unwrap();
-                    let mut contract: ContractData = deserialize(&data).unwrap();
-                    contract.locked = true;
-                    contracts_tree.insert(serialize(&contract_id.inner()), serialize(&contract))?;
-                }
+        // Insert header hash -> height mapping
+        header_indices_batch.insert(header_hash.as_slice(), height_bytes.as_slice());
 
-                Ok(())
-            })
-            .map_err(|e: TransactionError<sled::Error>| {
-                io::Error::other(format!("sled transaction error: {e}"))
-            })?;
+        // Insert new contracts
+        for contract in &new_contracts {
+            contracts_batch.insert(&serialize(&contract.contract_id.inner()), &serialize(contract));
+        }
+
+        // Update locked contracts
+        for contract_id in &locked_contracts {
+            let data = self.contracts.get(&serialize(&contract_id.inner()))?.unwrap();
+            let mut contract: ContractData = deserialize(&data).unwrap();
+            contract.locked = true;
+            contracts_batch.insert(&serialize(&contract_id.inner()), &serialize(&contract));
+        }
+
+        self.kvdb.atomic_write(&[
+            (&self.tx_indices, &tx_indices_batch),
+            (&self.header_indices, &header_indices_batch),
+            (&self.contracts, &contracts_batch),
+        ])?;
 
         info!(
             target: "explorer::append_block",
@@ -228,7 +230,7 @@ impl Explorer {
         let new_block_count = current_len - count;
         let current_tx_idx_len = reader.fixed_sized_tape_len(&self.database.tx_index).unwrap_or(0);
 
-        // Collect data to remove from sled
+        // Collect data to remove from kvdb
         let mut header_hashes_to_remove: Vec<Vec<u8>> = Vec::new();
         let mut tx_hashes_to_remove: Vec<Vec<u8>> = Vec::new();
         let mut contracts_to_remove: Vec<ContractId> = Vec::new();
@@ -307,30 +309,27 @@ impl Explorer {
 
         truncate_tx.commit(Persistence::SyncData)?;
 
-        // Atomic sled transaction for removing tx, header indices, and contracts
-        (&self.tx_indices, &self.header_indices, &self.contracts)
-            .transaction(|(tx_tree, header_tree, contracts_tree)| {
-                for tx_hash in &tx_hashes_to_remove {
-                    tx_tree.remove(tx_hash.as_slice())?;
-                }
-                for header_hash in &header_hashes_to_remove {
-                    header_tree.remove(header_hash.as_slice())?;
-                }
-                for contract_id in &contracts_to_remove {
-                    contracts_tree.remove(serialize(&contract_id.inner()))?;
-                }
-                Ok(())
-            })
-            .map_err(|e: TransactionError<sled::Error>| {
-                io::Error::other(format!("sled transaction error: {e}"))
-            })?;
+        // Atomic kvdb write for removing tx, header indices, and contracts
+        let mut tx_indices_batch = Batch::new();
+        for tx_hash in &tx_hashes_to_remove {
+            tx_indices_batch.remove(tx_hash.as_slice());
+        }
 
-        info!(
-            target: "explorer::revert_blocks",
-            "Reverted {} blocks (new height: {})",
-            count,
-            if new_block_count == 0 { 0 } else { new_block_count - 1 }
-        );
+        let mut header_indices_batch = Batch::new();
+        for header_hash in &header_hashes_to_remove {
+            header_indices_batch.remove(header_hash.as_slice());
+        }
+
+        let mut contracts_batch = Batch::new();
+        for contract_id in &contracts_to_remove {
+            contracts_batch.remove(&serialize(&contract_id.inner()));
+        }
+
+        self.kvdb.atomic_write(&[
+            (&self.tx_indices, &tx_indices_batch),
+            (&self.header_indices, &header_indices_batch),
+            (&self.contracts, &contracts_batch),
+        ])?;
 
         // Rebuild stats from scratch after reorg
         self.rebuild_stats().await?;
@@ -474,10 +473,10 @@ impl Explorer {
         &self,
         tx_hash: &[u8; 32],
     ) -> io::Result<Option<(Transaction, u64)>> {
-        // Look up the tx_index position from sled
+        // Look up the tx_index position from kvdb
         let tx_idx_pos = match self.tx_indices.get(tx_hash)? {
             Some(pos_bytes) => {
-                let bytes: [u8; 8] = pos_bytes.as_ref().try_into().map_err(|_| {
+                let bytes: [u8; 8] = pos_bytes.try_into().map_err(|_| {
                     io::Error::new(io::ErrorKind::InvalidData, "invalid tx index position")
                 })?;
                 u64::from_le_bytes(bytes)
@@ -580,7 +579,7 @@ impl Explorer {
             return Err(io::Error::new(io::ErrorKind::InvalidInput, "Invalid contract ID"))
         };
 
-        match self.contracts.get(serialize_async(&contract_id.inner()).await)? {
+        match self.contracts.get(&serialize_async(&contract_id.inner()).await)? {
             Some(data) => Ok(Some(deserialize_async(&data).await?)),
             None => Ok(None),
         }
@@ -610,7 +609,7 @@ impl Explorer {
 
     /// Get the total number of contracts.
     pub fn get_contract_count(&self) -> io::Result<u64> {
-        Ok(self.contracts.len() as u64)
+        Ok(self.contracts.len()? as u64)
     }
 }
 
@@ -651,7 +650,7 @@ impl Explorer {
         daily.block_count += 1;
         daily.user_tx_count += user_tx;
         daily.total_size += block_size;
-        self.stats.insert(daily_key.as_bytes(), serialize_async(&daily).await)?;
+        self.stats.insert(daily_key.as_bytes(), &serialize_async(&daily).await)?;
 
         // Update monthly stats
         let monthly_key = format!("monthly:{}:{:02}", year, month);
@@ -661,7 +660,7 @@ impl Explorer {
             .unwrap_or(MonthlyStats { block_count: 0, total_size: 0 });
         monthly.block_count += 1;
         monthly.total_size += block_size;
-        self.stats.insert(monthly_key.as_bytes(), serialize_async(&monthly).await)?;
+        self.stats.insert(monthly_key.as_bytes(), &serialize_async(&monthly).await)?;
 
         Ok(())
     }
@@ -693,7 +692,7 @@ impl Explorer {
         let mut result = Vec::new();
         let prefix = b"daily:";
 
-        for item in self.stats.scan_prefix(prefix) {
+        for item in self.stats.prefix_iter(prefix) {
             let (key, value) = item?;
             let key_str = String::from_utf8_lossy(&key);
             if let Some(day_str) = key_str.strip_prefix("daily:") {
@@ -713,7 +712,7 @@ impl Explorer {
         let mut result = Vec::new();
         let prefix = b"monthly:";
 
-        for item in self.stats.scan_prefix(prefix) {
+        for item in self.stats.prefix_iter(prefix) {
             let (key, value) = item?;
             let key_str = String::from_utf8_lossy(&key);
             if let Some(ym_str) = key_str.strip_prefix("monthly:") {
@@ -737,14 +736,14 @@ impl Explorer {
     pub fn clear_stats(&self) -> io::Result<()> {
         // Clear daily stats
         let daily_keys: Vec<_> =
-            self.stats.scan_prefix(b"daily:").filter_map(|r| r.ok().map(|(k, _)| k)).collect();
+            self.stats.prefix_iter(b"daily:").filter_map(|r| r.ok().map(|(k, _)| k)).collect();
         for key in daily_keys {
             self.stats.remove(&key)?;
         }
 
         // Clear monthly stats
         let monthly_keys: Vec<_> =
-            self.stats.scan_prefix(b"monthly:").filter_map(|r| r.ok().map(|(k, _)| k)).collect();
+            self.stats.prefix_iter(b"monthly:").filter_map(|r| r.ok().map(|(k, _)| k)).collect();
         for key in monthly_keys {
             self.stats.remove(&key)?;
         }

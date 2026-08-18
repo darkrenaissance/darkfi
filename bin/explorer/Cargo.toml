@@ -25,7 +25,7 @@ url = "2.5.8"
 tinyjson = "2.5.1"
 hex = "0.4.3"
 
-sled = "0.34.7"
+kvdb-overlay = {git = "https://git.dark.fi/darkrenaissance/kvdb-overlay", version = "0.1.0"}
 tapes = {git = "https://github.com/Cuprate/Tapes"}
 bytemuck = {version = "1.25.0", features = ["derive"]}
 

@@ -3161,8 +3161,8 @@ dependencies = [
  "darkfi_money_contract",
  "easy-parallel",
  "hex",
+ "kvdb-overlay",
  "monero",
- "sled",
  "smol",
  "tapes",
  "tiny-keccak",
@@ -4678,7 +4678,7 @@ dependencies = [
 [[package]]
 name = "kvdb-overlay"
 version = "0.1.0"
-source = "git+https://git.dark.fi/darkrenaissance/kvdb-overlay#7fdf312f9cc13d0a1cdd430b2ed07baf1c847882"
+source = "git+https://git.dark.fi/darkrenaissance/kvdb-overlay#b59057e55ffa8c8e54d578f6a5b4c169f2c1f7ef"
 dependencies = [
  "fjall",
  "tempfile",

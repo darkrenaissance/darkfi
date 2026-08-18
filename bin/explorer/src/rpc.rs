@@ -382,7 +382,7 @@ impl Explorer {
                 return JsonError::new(InvalidParams, None, id).into()
             };
 
-            let Ok(Some(height_bytes)) = self.header_indices.get(hash) else {
+            let Ok(Some(height_bytes)) = self.header_indices.get(&hash) else {
                 return JsonError::new(InternalError, None, id).into()
             };
 
@@ -449,7 +449,7 @@ impl Explorer {
 
         // Try block hash first (serialized blake3 hash)
         if let Ok(Some(height_bytes)) = self.header_indices.get(&hash_bytes) {
-            let height = u64::from_le_bytes(height_bytes.as_ref().try_into().unwrap_or([0u8; 8]));
+            let height = u64::from_le_bytes(height_bytes.try_into().unwrap_or([0u8; 8]));
             return JsonResponse::new(
                 JsonValue::Object(HashMap::from([
                     ("type".to_string(), JsonValue::String("block".to_string())),
@@ -464,7 +464,7 @@ impl Explorer {
         if hash_bytes.len() == 32 {
             let mut tx_hash = [0u8; 32];
             tx_hash.copy_from_slice(&hash_bytes);
-            if self.tx_indices.get(tx_hash).ok().flatten().is_some() {
+            if self.tx_indices.get(&tx_hash).ok().flatten().is_some() {
                 return JsonResponse::new(
                     JsonValue::Object(HashMap::from([(
                         "type".to_string(),
@@ -603,13 +603,13 @@ impl Explorer {
     /// Get blockchain statistics from stored data.
     /// Returns daily stats, monthly growth, and tx per block stats.
     pub async fn rpc_get_stats(&self, id: i64, _params: JsonValue) -> JsonResult {
-        // Get daily stats from sled
+        // Get daily stats from kvdb
         let daily_stats = match self.get_all_daily_stats().await {
             Ok(stats) => stats,
             Err(_) => return JsonError::new(InternalError, None, id).into(),
         };
 
-        // Get monthly stats from sled
+        // Get monthly stats from kvdb
         let monthly_stats = match self.get_all_monthly_stats().await {
             Ok(stats) => stats,
             Err(_) => return JsonError::new(InternalError, None, id).into(),
