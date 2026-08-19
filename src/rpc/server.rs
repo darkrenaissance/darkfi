@@ -585,7 +585,8 @@ pub async fn listen_and_serve<'a, T: 'a>(
         let mut listen_url = endpoint.clone();
         if use_http {
             let scheme = endpoint.scheme().strip_prefix("http+").unwrap();
-            listen_url.set_scheme(scheme).map_err(|_| Error::UrlParse(endpoint.to_string()))?;
+            let url = endpoint.as_str().replacen(endpoint.scheme(), scheme, 1);
+            listen_url = url.parse()?;
         }
 
         listen_urls.push(listen_url);
