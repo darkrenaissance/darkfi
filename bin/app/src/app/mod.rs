@@ -229,7 +229,7 @@ impl App {
     pub fn stop(&self) {
         let window_node = self.sg_root.lookup_node("/window").unwrap();
         match window_node.pimpl() {
-            Pimpl::Window(win) => win.stop(),
+            Pimpl::Window(win) => win.stop(self.ex.clone()),
             _ => panic!("wrong pimpl"),
         }
     }
@@ -240,19 +240,5 @@ impl App {
             Pimpl::Window(win) => win.clone().start(event_pub, self.ex.clone()).await,
             _ => panic!("wrong pimpl"),
         }
-    }
-
-    pub fn notify_start(&self) {
-        let window = self.sg_root.lookup_node("/window").unwrap();
-        smol::block_on(async {
-            window.trigger("start", vec![]).await.unwrap();
-        });
-    }
-
-    pub fn notify_stop(&self) {
-        let window = self.sg_root.lookup_node("/window").unwrap();
-        smol::block_on(async {
-            window.trigger("stop", vec![]).await.unwrap();
-        });
     }
 }

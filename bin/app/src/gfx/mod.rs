@@ -953,6 +953,16 @@ impl EventHandler for Stage {
         self.screen_state.update(self.egl_ctx_is_disabled());
         if self.screen_state != old_screen_state {
             d!("Switching screen state {old_screen_state:?} => {:?}", self.screen_state);
+
+            match self.screen_state {
+                ScreenState::SwitchOff => {
+                    self.event_pub.notify_screen_changed(false);
+                }
+                ScreenState::ReadyOn => {
+                    self.event_pub.notify_screen_changed(true);
+                }
+                _ => {}
+            }
         }
 
         match self.screen_state {

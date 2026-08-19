@@ -253,13 +253,10 @@ impl God {
             cv.wait().await;
             app.start(event_pub, epoch).await;
         });
-
-        self.app.notify_start();
     }
 
     /// Put the app to sleep until the next restart.
     pub fn stop_app(&self) {
-        self.app.notify_stop();
         self.fg_runtime.stop();
         self.app.stop();
         info!(target: "main", "App stopped");

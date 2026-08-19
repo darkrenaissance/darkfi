@@ -145,6 +145,24 @@ impl Window {
             }
         });
 
+        let screen_sub = event_pub.subscribe_screen_changed();
+        let me2 = me.clone();
+        let screen_task = ex.spawn(async move {
+            while let Ok(screen_on) = screen_sub.recv().await {
+                let Some(self_) = me2.upgrade() else {
+                    break
+                };
+
+                self_
+                    .node
+                    .upgrade()
+                    .unwrap()
+                    .trigger("screen_changed", darkfi_serial::serialize(&screen_on))
+                    .await
+                    .unwrap();
+            }
+        });
+
         // The serialized draw pass. Single consumer: one pass runs at a
         // time. Triggers arriving during (or pending at the end of) a pass
         // are coalesced by the bounded(1) queue into one trailing pass.
@@ -240,6 +258,7 @@ impl Window {
 
         let mut tasks = vec![
             resize_task,
+            screen_task,
             redraw_task,
             char_task,
             key_down_task,
@@ -255,18 +274,32 @@ impl Window {
         tasks.push(insets_task);
         *self.tasks.lock() = tasks;
 
+        self.node.upgrade().unwrap().trigger("start", vec![]).await.unwrap();
+
         for child in self.get_children() {
             let obj = get_ui_object_ptr(&child);
             obj.start(ex.clone()).await;
         }
     }
 
-    pub fn stop(&self) {
+    pub fn stop(&self, ex: ExecutorPtr) {
+        let node = self.node.clone();
+        let stop_task = ex.spawn(async move {
+            node.upgrade()
+                .unwrap()
+                .trigger("stop", vec![])
+                .await
+                .unwrap();
+        });
+
         self.tasks.lock().clear();
+
         for child in self.get_children() {
             let obj = get_ui_object3(&child);
             obj.stop();
         }
+
+        smol::block_on(stop_task);
     }
 
     async fn process_char(me: &Weak<Self>, ev_sub: &GraphicsEventCharSub) -> bool {

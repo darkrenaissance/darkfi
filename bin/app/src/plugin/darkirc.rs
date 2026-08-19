@@ -79,7 +79,7 @@ const DAGS_COUNT: u64 = 24;
 /// Milliseconds in one rotation period (1 hour).
 const HOUR_MS: u64 = 3_600_000;
 
-pub(crate) const P2P_OUTBOUND_ACTIVE: usize = 6;
+pub(crate) const P2P_OUTBOUND_ACTIVE: usize = 3;
 const P2P_OUTBOUND_SLEEP: usize = 1;
 
 /// Update `outbound_peers` property useful for diagnostics
@@ -334,6 +334,8 @@ impl DarkIrc {
             settings,
             ex: ex.clone(),
         });
+
+        self_.p2p.settings().write().await.outbound_connections = P2P_OUTBOUND_ACTIVE;
 
         ensure_joined_channels_seeded();
         self_.load_channels_from_db().await;
@@ -926,7 +928,32 @@ impl DarkIrc {
         i!("P2P reconnection completed");
     }
 
-    async fn start(self: Arc<Self>, sg_root: SceneNodePtr, ex: ExecutorPtr) {
+    async fn set_outbound_connections(&self, count: usize) {
+        let p2p_settings = self.p2p.settings();
+
+        if p2p_settings.read().await.outbound_connections == count {
+            return;
+        }
+
+        p2p_settings.write().await.outbound_connections = count;
+        self.p2p.clone().reload().await;
+
+        let setting = self.settings.get_setting("net.outbound_connections").unwrap();
+        setting
+            .set_property_u32(
+                &mut PropertyAtomicGuard::none(),
+                Role::Internal,
+                "value",
+                count as u32,
+            )
+            .unwrap();
+    }
+
+    async fn start(
+        self: Arc<Self>,
+        sg_root: SceneNodePtr,
+        ex: ExecutorPtr,
+    ) {
         i!("Registering EventGraph P2P protocol");
         let event_graph_ = Arc::clone(&self.event_graph);
         let registry = self.p2p.protocol_registry();
@@ -982,28 +1009,50 @@ impl DarkIrc {
         let channel_sub = self.p2p.hosts().subscribe_channel().await;
         let dag_task = ex.spawn(self.clone().dag_sync(channel_sub));
 
-        // Subscribe to window start/stop signals for dynamic outbound connections
         let window_node = sg_root.lookup_node("/window").unwrap();
 
-        let (start_slot, start_recv) = Slot::new("app_start");
+        let (start_slot, start_recv) = Slot::new("darkirc_start");
         window_node.register("start", start_slot).unwrap();
-        let p2p = self.p2p.clone();
+
+        let me2 = Arc::downgrade(&self);
         let start_task = ex.spawn(async move {
             while let Ok(_) = start_recv.recv().await {
-                i!("App started: set outbound connections to {P2P_OUTBOUND_ACTIVE}");
-                p2p.settings().write().await.outbound_connections = P2P_OUTBOUND_ACTIVE;
-                p2p.clone().reload().await;
+                let Some(self_) = me2.upgrade() else { break };
+
+                self_.set_outbound_connections(P2P_OUTBOUND_ACTIVE).await;
             }
         });
 
-        let (stop_slot, stop_recv) = Slot::new("app_stop");
+        let (stop_slot, stop_recv) = Slot::new("darkirc_stop");
         window_node.register("stop", stop_slot).unwrap();
-        let p2p = self.p2p.clone();
+
+        let me2 = Arc::downgrade(&self);
         let stop_task = ex.spawn(async move {
             while let Ok(_) = stop_recv.recv().await {
-                i!("App stopped: set outbound connections to {P2P_OUTBOUND_SLEEP}");
-                p2p.settings().write().await.outbound_connections = P2P_OUTBOUND_SLEEP;
-                p2p.clone().reload().await;
+                let Some(self_) = me2.upgrade() else { break };
+
+                self_.set_outbound_connections(P2P_OUTBOUND_SLEEP).await;
+            }
+        });
+
+        let (screen_changed_slot, screen_changed_recv) = Slot::new("darkirc_screen_changed");
+        window_node.register("screen_changed", screen_changed_slot).unwrap();
+
+        let me2 = Arc::downgrade(&self);
+        let screen_changed_task = ex.spawn(async move {
+            while let Ok(data) = screen_changed_recv.recv().await {
+                let Some(self_) = me2.upgrade() else { break };
+
+                let mut cursor = Cursor::new(&data);
+                let Ok(screen_on) = bool::decode(&mut cursor) else {
+                    continue
+                };
+
+                if screen_on {
+                    self_.set_outbound_connections(P2P_OUTBOUND_ACTIVE).await;
+                } else {
+                    self_.set_outbound_connections(P2P_OUTBOUND_SLEEP).await;
+                }
             }
         });
 
@@ -1015,6 +1064,7 @@ impl DarkIrc {
             dag_task,
             start_task,
             stop_task,
+            screen_changed_task,
         ];
 
         if DNET_ENABLED {

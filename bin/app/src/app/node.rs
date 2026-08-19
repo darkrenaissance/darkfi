@@ -51,6 +51,12 @@ pub fn create_window(name: &str) -> SceneNode {
 
     node.add_signal("start", "App UI started", vec![]).unwrap();
     node.add_signal("stop", "App UI stopped", vec![]).unwrap();
+    node.add_signal(
+        "screen_changed",
+        "Screen state changed",
+        vec![("on", "Whether the screen is on", CallArgType::Bool)],
+    )
+    .unwrap();
 
     node
 }
