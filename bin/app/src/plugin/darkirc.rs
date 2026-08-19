@@ -19,7 +19,7 @@
 use std::{
     collections::{HashMap, HashSet},
     io::Cursor,
-    sync::{Arc, OnceLock, Weak},
+    sync::{atomic::Ordering, Arc, OnceLock, Weak},
     time::UNIX_EPOCH,
 };
 
@@ -73,6 +73,11 @@ const P2P_RETRY_TIME: u64 = 20;
 const COOLOFF_SLEEP_TIME: u64 = 20;
 const COOLOFF_SYNC_ATTEMPTS: usize = 6;
 const SYNC_MIN_PEERS: usize = 2;
+
+/// Event graph rotation: `max_dags` hourly slots (`hours_rotation: 1`).
+const DAGS_COUNT: u64 = 24;
+/// Milliseconds in one rotation period (1 hour).
+const HOUR_MS: u64 = 3_600_000;
 
 pub(crate) const P2P_OUTBOUND_ACTIVE: usize = 6;
 const P2P_OUTBOUND_SLEEP: usize = 1;
@@ -366,7 +371,7 @@ impl DarkIrc {
         let mut sync_attempt = 0;
         // TODO: these should be configurable
         let fast_mode = false;
-        let dags_count = 24;
+        let mut newest_synced = false;
         loop {
             if self.p2p.is_connected() {
                 let peers_count = self.p2p.peers_count();
@@ -399,35 +404,45 @@ impl DarkIrc {
                         break
                     }
                 }
-                i!("Syncing event DAG (attempt #{sync_attempt})");
-                // Sync mode is now per-call: full sync replays
-                // every event (heavy, used by archival nodes), fast
-                // sync only fetches headers (light, used by clients
-                // that don't need to re-verify history).
-                let sync_result = if fast_mode {
-                    self.event_graph.sync_selected_headers(dags_count).await
-                } else {
-                    self.event_graph.sync_selected(dags_count).await
-                };
+                // Sync only the newest DAG first. Older DAGs are caught up in
+                // the background by `catch_up_sync`, so the `synced` flag (and
+                // the `connect` notification) is reached after the first DAG
+                // instead of after all `DAGS_COUNT` of them.
+                let latest_ts = self.event_graph.current_genesis.read().await.header.timestamp;
+                i!("Syncing newest event DAG ({latest_ts}) (attempt #{sync_attempt})");
+                let sync_result = self.sync_dag_slot(latest_ts, fast_mode).await;
                 match sync_result {
                     Ok(()) => {
                         i!(
-                            "Event DAG synced successfully ({} mode, {} dag(s))",
+                            "Newest event DAG synced successfully ({} mode)",
                             if fast_mode { "fast" } else { "full" },
-                            dags_count,
                         );
+                        newest_synced = true;
                         break
                     }
                     Err(e) => {
                         // TODO: Maybe at this point we should prune or something?
                         // TODO: Or maybe just tell the user to delete the DAG from FS.
-                        e!("Failed syncing DAG ({e}), retrying...");
+                        e!("Failed syncing newest DAG ({e}), retrying...");
                     }
                 }
             } else {
                 i!("Waiting for some P2P connections...");
                 sleep(COOLOFF_SLEEP_TIME).await;
             }
+        }
+
+        // The newest DAG is synced: flip the `synced` flag so live `EventPut`
+        // ingestion and the netstatus UI unblock, then let the remaining older
+        // DAGs catch up in the background.
+        if newest_synced {
+            self.event_graph.synced.store(true, Ordering::Release);
+            i!("Marked event graph as synced (newest DAG done)");
+
+            let self_ = self.clone();
+            let catch_up_task =
+                self.ex.clone().spawn(async move { self_.catch_up_sync(fast_mode).await });
+            self.tasks.lock().push(catch_up_task);
         }
 
         let peers_count = self.p2p.peers_count();
@@ -443,6 +458,87 @@ impl DarkIrc {
 
             let peers_count = self.p2p.peers_count();
             self.notify_connect(peers_count, self.event_graph.is_synced()).await;
+        }
+    }
+
+    /// Sync a single DAG slot, choosing `dag_sync_headers` (fast) or `dag_sync`
+    /// (full) per the per-call `fast_mode` flag. Shared by the foreground
+    /// newest-DAG phase and the background catch-up phase.
+    async fn sync_dag_slot(&self, dag_ts: u64, fast_mode: bool) -> DarkFiResult<()> {
+        if fast_mode {
+            self.event_graph.dag_sync_headers(dag_ts).await
+        } else {
+            self.event_graph.dag_sync(dag_ts).await
+        }
+    }
+
+    /// Background catch-up phase: after the newest DAG has synced (phase 1),
+    /// walk the remaining DAG slots newest-to-oldest and sync each one.
+    ///
+    /// Per-slot failures are retried across rounds with `COOLOFF_SLEEP_TIME`
+    /// pauses (no give-up), while the walk keeps making progress on the other
+    /// pending slots. `current_genesis` is re-read before every retry round so
+    /// rotation mid-catch-up is handled: a newer slot that rotates in is synced
+    /// first, and a pending slot that rotates out of the retention window is
+    /// dropped from the walk.
+    async fn catch_up_sync(self: Arc<Self>, fast_mode: bool) {
+        i!("Starting background catch-up of older DAGs (newest-to-oldest)");
+
+        // The newest slot is already synced by phase 1; collect the rest of the
+        // retention window below it.
+        let mut last_newest = self.event_graph.current_genesis.read().await.header.timestamp;
+        let mut pending: Vec<u64> =
+            (1..DAGS_COUNT).map(|i| last_newest.saturating_sub(i * HOUR_MS)).collect();
+
+        loop {
+            // Re-read `current_genesis` before each retry round: rotation may
+            // have shifted the newest slot or dropped a pending slot.
+            let latest_ts = self.event_graph.current_genesis.read().await.header.timestamp;
+
+            // A newer DAG rotated in: it is the new newest slot and must sync
+            // before the remaining older pending DAGs.
+            if latest_ts > last_newest {
+                i!("Syncing newly rotated-in DAG ({latest_ts})");
+                loop {
+                    match self.sync_dag_slot(latest_ts, fast_mode).await {
+                        Ok(()) => break,
+                        Err(e) => {
+                            e!("Failed syncing newly rotated-in DAG ({latest_ts}): {e}, cooling off");
+                            sleep(COOLOFF_SLEEP_TIME).await;
+                        }
+                    }
+                }
+                last_newest = latest_ts;
+                pending = (1..DAGS_COUNT).map(|i| latest_ts.saturating_sub(i * HOUR_MS)).collect();
+            }
+
+            // Clamp the walk to the retention window: slots rotated out fall
+            // below the horizon and are skipped rather than retried forever.
+            let horizon = latest_ts.saturating_sub((DAGS_COUNT - 1) * HOUR_MS);
+            let mut still_pending = Vec::new();
+            for dag_ts in pending.iter().copied() {
+                if dag_ts < horizon {
+                    i!("Skipping rotated-out DAG ({dag_ts})");
+                    continue
+                }
+
+                match self.sync_dag_slot(dag_ts, fast_mode).await {
+                    Ok(()) => {
+                        i!("Synced older DAG ({dag_ts})");
+                    }
+                    Err(e) => {
+                        e!("Failed syncing older DAG ({dag_ts}): {e}, will retry after cooldown");
+                        still_pending.push(dag_ts);
+                        sleep(COOLOFF_SLEEP_TIME).await;
+                    }
+                }
+            }
+
+            pending = still_pending;
+            if pending.is_empty() {
+                i!("Background catch-up complete; all older DAGs synced");
+                break
+            }
         }
     }
 
