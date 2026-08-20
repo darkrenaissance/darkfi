@@ -17,7 +17,7 @@ name = "fud"
 path = "src/main.rs"
 
 [dependencies]
-darkfi = {path = "../../../", features = ["async-daemonize", "geode", "rpc", "dht", "sled-overlay"]}
+darkfi = {path = "../../../", features = ["async-daemonize", "geode", "rpc", "dht", "kvdb-overlay"]}
 darkfi-sdk = {path = "../../../src/sdk"}
 darkfi-serial = {path = "../../../src/serial", features = ["hash"]}
 
@@ -48,7 +48,7 @@ blake2 = "0.10.6"
 equix = "0.6.1"
 
 # Database
-sled-overlay = "0.1.20"
+kvdb-overlay = {git = "https://git.dark.fi/darkrenaissance/kvdb-overlay", version = "0.1.0"}
 
 # Argument parsing
 serde = {version = "1.0.228", features = ["derive"]}

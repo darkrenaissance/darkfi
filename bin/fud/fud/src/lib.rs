@@ -23,7 +23,7 @@ use std::{
     sync::Arc,
 };
 
-use sled_overlay::sled;
+use kvdb_overlay::{Database, Tree};
 use smol::{
     channel,
     fs::{self, OpenOptions},
@@ -93,9 +93,9 @@ use dht::FudSeeder;
 
 use crate::{dht::FudNode, pow::PowSettings};
 
-const SLED_PATH_TREE: &[u8] = b"_fud_paths";
-const SLED_FILE_SELECTION_TREE: &[u8] = b"_fud_file_selections";
-const SLED_SCRAP_TREE: &[u8] = b"_fud_scraps";
+const KVDB_PATH_TREE: &str = "_fud_paths";
+const KVDB_FILE_SELECTION_TREE: &str = "_fud_file_selections";
+const KVDB_SCRAP_TREE: &str = "_fud_scraps";
 
 #[derive(Clone, Debug)]
 pub struct FudState {
@@ -121,19 +121,19 @@ pub struct Fud {
     resources: Arc<RwLock<HashMap<blake3::Hash, Resource>>>,
     /// Chunked storages (represent files/directories)
     chunked_storages: Arc<RwLock<HashMap<blake3::Hash, ChunkedStorage>>>,
-    /// Sled tree containing "resource hash -> path on the filesystem"
-    path_tree: sled::Tree,
-    /// Sled tree containing "resource hash -> file selection". If the file
+    /// Kvdb tree containing "resource hash -> path on the filesystem"
+    path_tree: Tree,
+    /// Kvdb tree containing "resource hash -> file selection". If the file
     /// selection is all files of the resource (or if the resource is not a
     /// directory), the resource does not store its file selection in the tree.
-    file_selection_tree: sled::Tree,
-    /// Sled tree containing scraps which are chunks containing data the user
+    file_selection_tree: Tree,
+    /// Kvdb tree containing scraps which are chunks containing data the user
     /// did not want to save to files. They also contain data the user wanted
     /// otherwise we would not have downloaded the chunk at all.
     /// We save scraps to be able to verify integrity even if part of the chunk
     /// is not saved to the filesystem in the downloaded files.
     /// "chunk/scrap hash -> chunk content"
-    scrap_tree: sled::Tree,
+    scrap_tree: Tree,
     /// Get requests sender
     get_tx: channel::Sender<(blake3::Hash, PathBuf, FileSelection)>,
     /// Get requests receiver
@@ -170,7 +170,7 @@ impl Fud {
     pub async fn new(
         settings: Args,
         p2p: P2pPtr,
-        sled_db: &sled::Db,
+        kvdb: &Database,
         event_publisher: PublisherPtr<FudEvent>,
         executor: ExecutorPtr,
     ) -> Result<Arc<Self>> {
@@ -212,9 +212,9 @@ impl Fud {
             chunk_timeout: settings.chunk_timeout,
             pow: Arc::new(RwLock::new(pow)),
             dht: dht.clone(),
-            path_tree: sled_db.open_tree(SLED_PATH_TREE)?,
-            file_selection_tree: sled_db.open_tree(SLED_FILE_SELECTION_TREE)?,
-            scrap_tree: sled_db.open_tree(SLED_SCRAP_TREE)?,
+            path_tree: kvdb.open_tree_default(KVDB_PATH_TREE)?,
+            file_selection_tree: kvdb.open_tree_default(KVDB_FILE_SELECTION_TREE)?,
+            scrap_tree: kvdb.open_tree_default(KVDB_SCRAP_TREE)?,
             resources: Arc::new(RwLock::new(HashMap::new())),
             chunked_storages: Arc::new(RwLock::new(HashMap::new())),
             get_tx,
@@ -307,7 +307,7 @@ impl Fud {
                 Err(_) => continue,
             };
 
-            // Get the file selection from sled, fallback on FileSelection::All
+            // Get the file selection from kvdb, fallback on FileSelection::All
             let mut file_selection = FileSelection::All;
             if let Ok(Some(fs)) = self.file_selection_tree.get(hash.as_bytes()) {
                 if let Ok(path_list) = deserialize_async::<Vec<Vec<u8>>>(&fs).await {
@@ -380,7 +380,7 @@ impl Fud {
         resources.clone()
     }
 
-    /// Get resource path from hash using the sled db
+    /// Get resource path from hash using the kvdb
     pub fn hash_to_path(&self, hash: &blake3::Hash) -> Result<Option<PathBuf>> {
         if let Some(value) = self.path_tree.get(hash.as_bytes())? {
             let path: PathBuf = expand_path(std::str::from_utf8(&value)?)?;
@@ -390,7 +390,7 @@ impl Fud {
         Ok(None)
     }
 
-    /// Get resource hash from path using the sled db
+    /// Get resource hash from path using the kvdb
     pub fn path_to_hash(&self, path: &Path) -> Result<Option<blake3::Hash>> {
         let path_string = path.to_string_lossy().to_string();
         let path_bytes = path_string.as_bytes();
@@ -710,7 +710,7 @@ impl Fud {
             }
         }
 
-        // Add path to the sled db
+        // Add path to the kvdb
         self.path_tree.insert(hash_bytes, path_bytes)?;
 
         let mut resources_write = self.resources.write().await;
@@ -720,21 +720,22 @@ impl Fud {
             files.clone()
         };
 
-        // Add merged file selection to the sled db
+        // Add merged file selection to the kvdb
         if let FileSelection::Set(selected_files) = &merged_files {
             let paths: Vec<Vec<u8>> = selected_files
                 .iter()
                 .map(|f| f.to_string_lossy().to_string().as_bytes().to_vec())
                 .collect();
-            let serialized_paths = serialize_async(&paths).await;
-            // Abort if the file selection cannot be inserted into sled
-            if let Err(e) = self.file_selection_tree.insert(hash_bytes, serialized_paths) {
-                return Err(Error::SledError(e))
+            // Abort if the file selection cannot be inserted into the kvdb
+            if let Err(e) =
+                self.file_selection_tree.insert(hash_bytes, &serialize_async(&paths).await)
+            {
+                return Err(Error::KvdbError(e))
             }
         } else {
-            // Abort if the file selection cannot be removed from sled
+            // Abort if the file selection cannot be removed from the kvdb
             if let Err(e) = self.file_selection_tree.remove(hash_bytes) {
-                return Err(Error::SledError(e))
+                return Err(Error::KvdbError(e))
             }
         }
 
@@ -990,12 +991,12 @@ impl Fud {
             }
             let (_, chunk_bytes_written) = write_res.unwrap();
 
-            // If the whole scrap was written, we can remove it from sled
+            // If the whole scrap was written, we can remove it from the kvdb
             if chunk_bytes_written == len {
                 self.scrap_tree.remove(scrap_hash.as_bytes())?;
                 continue;
             }
-            // Otherwise update the scrap in sled
+            // Otherwise update the scrap in the kvdb
             let chunk_res = self.geode.get_chunk(chunked, scrap_hash).await;
             if let Err(e) = chunk_res {
                 error!(target: "fud::write_scraps()", "Failed to get scrap {}: {e}", hash_to_string(scrap_hash));
@@ -1003,7 +1004,7 @@ impl Fud {
             }
             scrap.hash_written = blake3::hash(&chunk_res.unwrap());
             if let Err(e) =
-                self.scrap_tree.insert(scrap_hash.as_bytes(), serialize_async(&scrap).await)
+                self.scrap_tree.insert(scrap_hash.as_bytes(), &serialize_async(&scrap).await)
             {
                 error!(target: "fud::write_scraps()", "Failed to save chunk {} as a scrap after rewrite: {e}", hash_to_string(scrap_hash));
             }
@@ -1201,11 +1202,11 @@ impl Fud {
             return Err(e)
         }
 
-        // Add path to the sled db
+        // Add path to the kvdb
         if let Err(e) =
             self.path_tree.insert(hash.as_bytes(), path.to_string_lossy().to_string().as_bytes())
         {
-            error!(target: "fud::put()", "Failed inserting new resource into sled: {e}");
+            error!(target: "fud::put()", "Failed inserting new resource into kvdb: {e}");
             return Err(e.into())
         }
 
@@ -1252,9 +1253,9 @@ impl Fud {
     /// Removes:
     /// - a resource
     /// - its metadata in geode
-    /// - its path in the sled path tree
-    /// - its file selection in the sled file selection tree
-    /// - and any related scrap in the sled scrap tree,
+    /// - its path in the kvdb path tree
+    /// - its file selection in the kvdb file selection tree
+    /// - and any related scrap in the kvdb scrap tree,
     ///
     /// then sends a `ResourceRemoved` fud event.
     pub async fn remove(&self, hash: &blake3::Hash) {
@@ -1263,7 +1264,7 @@ impl Fud {
         resources_write.remove(hash);
         drop(resources_write);
 
-        // Remove the scraps in sled
+        // Remove the scraps in the kvdb
         if let Ok(Some(path)) = self.hash_to_path(hash) {
             let chunked = self.geode.get(hash, &path).await;
 
@@ -1279,10 +1280,10 @@ impl Fud {
         let _ = fs::remove_file(self.geode.files_path.join(&hash_str)).await;
         let _ = fs::remove_file(self.geode.dirs_path.join(&hash_str)).await;
 
-        // Remove the path in sled
+        // Remove the path in the kvdb
         let _ = self.path_tree.remove(hash.as_bytes());
 
-        // Remove the file selection in sled
+        // Remove the file selection in the kvdb
         let _ = self.file_selection_tree.remove(hash.as_bytes());
 
         // Send a `ResourceRemoved` event

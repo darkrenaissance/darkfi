@@ -269,7 +269,7 @@ async fn handle_chunk_reply(
             hash_written: blake3::hash(&chunk_written.unwrap()),
         };
         if let Err(e) =
-            ctx.fud.scrap_tree.insert(chunk_hash.as_bytes(), serialize_async(&scrap).await)
+            ctx.fud.scrap_tree.insert(chunk_hash.as_bytes(), &serialize_async(&scrap).await)
         {
             error!(target: "fud::download::handle_chunk_reply()", "Failed to save chunk {} as a scrap: {e}", hash_to_string(chunk_hash));
             return ChunkFetchControl::NextChunk;

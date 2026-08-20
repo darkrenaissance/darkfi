@@ -16,9 +16,10 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use sled_overlay::sled;
-use smol::{stream::StreamExt, Executor};
 use std::sync::Arc;
+
+use kvdb_overlay::Database;
+use smol::{stream::StreamExt, Executor};
 use structopt_toml::StructOptToml;
 use tracing::{debug, error, info, warn};
 
@@ -52,9 +53,9 @@ async fn realmain(args: Args, ex: Arc<Executor<'static>>) -> Result<()> {
     // Cloned args
     let args_ = args.clone();
 
-    // Sled database init
+    // Key value database init
     info!(target: "fud", "Instantiating database");
-    let sled_db = sled::open(basedir.join("db"))?;
+    let kvdb = Database::open_default(&basedir.join("db"))?;
 
     info!(target: "fud", "Instantiating P2P network");
     // We will use the peers defined in the settings as direct connections (instead of manual)
@@ -90,8 +91,7 @@ async fn realmain(args: Args, ex: Arc<Executor<'static>>) -> Result<()> {
 
     // Daemon instantiation
     let event_pub = Publisher::new();
-    let fud: Arc<Fud> =
-        Fud::new(args_, p2p.clone(), &sled_db, event_pub.clone(), ex.clone()).await?;
+    let fud: Arc<Fud> = Fud::new(args_, p2p.clone(), &kvdb, event_pub.clone(), ex.clone()).await?;
 
     info!(target: "fud", "Starting event subs task");
     let event_sub = JsonSubscriber::new("event");
@@ -201,9 +201,8 @@ async fn realmain(args: Args, ex: Arc<Executor<'static>>) -> Result<()> {
     info!(target: "fud", "Stopping P2P network...");
     p2p.stop().await;
 
-    info!(target: "fud", "Flushing sled database...");
-    let flushed_bytes = sled_db.flush_async().await?;
-    info!(target: "fud", "Flushed {flushed_bytes} bytes");
+    info!(target: "fud", "Flushing kvdb database...");
+    kvdb.flush_default_mode_async().await?;
 
     info!(target: "fud", "Shut down successfully");
     Ok(())
