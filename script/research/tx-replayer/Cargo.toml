@@ -13,7 +13,8 @@ edition = "2024"
 darkfi = {path = "../../../", features = ["validator"]}
 darkfi-sdk = {path = "../../../src/sdk"}
 darkfi-serial = {path = "../../../src/serial"}
-sled-overlay = {version = "0.1.20"}
+kvdb-overlay = {git = "https://git.dark.fi/darkrenaissance/kvdb-overlay", version = "0.1.0"}
+parking_lot = {version = "0.12.5"}
 smol = {version = "2.0.2"}
 clap = {version = "4.4.11", features = ["derive"]}
 

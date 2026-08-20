@@ -16,7 +16,7 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::collections::HashMap;
+use std::{collections::HashMap, sync::Arc};
 
 use clap::Parser;
 use darkfi::{
@@ -25,7 +25,7 @@ use darkfi::{
     },
     cli_desc,
     error::TxVerifyFailed,
-    runtime::vm_runtime::Runtime,
+    runtime::vm_runtime::{Runtime, TxLocalState},
     tx::{MAX_TX_CALLS, MIN_TX_CALLS, Transaction},
     util::path::expand_path,
     validator::{
@@ -43,6 +43,7 @@ use darkfi_sdk::{
     tx::TransactionHash,
 };
 use darkfi_serial::{AsyncDecodable, AsyncEncodable, deserialize_async, serialize_async};
+use parking_lot::Mutex;
 use smol::io::Cursor;
 
 #[derive(Parser)]
@@ -69,9 +70,9 @@ fn main() {
 
 async fn replay_tx(args: Args) {
     let db_path = expand_path(&args.database_path).unwrap();
-    let sled_db = sled_overlay::sled::open(&db_path).unwrap();
+    let kvdb = kvdb_overlay::Database::open_default(&db_path).unwrap();
 
-    let blockchain = Blockchain::new(&sled_db).unwrap();
+    let blockchain = Blockchain::new(&kvdb).unwrap();
     let txh: TransactionHash = args.tx_hash.parse().unwrap();
 
     let (tx_height, _) =
@@ -220,6 +221,10 @@ async fn verify_transaction_wasm(
     // Define a buffer in case we want to use a different payload in a specific call
     let mut _call_payload = vec![];
 
+    // Create the transaction-local state instance
+    // This state exists only during the single transaction verification.
+    let tx_local_state = Arc::new(Mutex::new(TxLocalState::new()));
+
     // Iterate over all calls to get the metadata
     for (idx, call) in tx.calls.iter().enumerate() {
         // Transaction must not contain a Pow reward call
@@ -240,6 +245,7 @@ async fn verify_transaction_wasm(
         let mut runtime = Runtime::new(
             &wasm,
             overlay.clone(),
+            tx_local_state.clone(),
             call.data.contract_id,
             verifying_block_height,
             block_target,
@@ -269,6 +275,7 @@ async fn verify_transaction_wasm(
             let mut deploy_runtime = Runtime::new(
                 &deploy_params.wasm_bincode,
                 overlay.clone(),
+                tx_local_state.clone(),
                 deploy_cid,
                 verifying_block_height,
                 block_target,
@@ -382,6 +389,10 @@ async fn verify_transaction_zkps(
     // We'll also take note of all the circuits in a Vec so we can calculate their verification cost.
     let mut circuits_to_verify = vec![];
 
+    // Create the transaction-local state instance
+    // This state exists only during the single transaction verification.
+    let tx_local_state = Arc::new(Mutex::new(TxLocalState::new()));
+
     // Iterate over all calls to get the metadata
     for (idx, call) in tx.calls.iter().enumerate() {
         // Transaction must not contain a Pow reward call
@@ -402,6 +413,7 @@ async fn verify_transaction_zkps(
         let mut runtime = Runtime::new(
             &wasm,
             overlay.clone(),
+            tx_local_state.clone(),
             call.data.contract_id,
             verifying_block_height,
             block_target,
@@ -553,6 +565,10 @@ async fn verify_transaction_signatures(
     // Define a buffer in case we want to use a different payload in a specific call
     let mut _call_payload = vec![];
 
+    // Create the transaction-local state instance
+    // This state exists only during the single transaction verification.
+    let tx_local_state = Arc::new(Mutex::new(TxLocalState::new()));
+
     // Iterate over all calls to get the metadata
     for (idx, call) in tx.calls.iter().enumerate() {
         // Transaction must not contain a Pow reward call
@@ -573,6 +589,7 @@ async fn verify_transaction_signatures(
         let mut runtime = Runtime::new(
             &wasm,
             overlay.clone(),
+            tx_local_state.clone(),
             call.data.contract_id,
             verifying_block_height,
             block_target,
