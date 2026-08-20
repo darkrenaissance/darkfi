@@ -48,14 +48,6 @@ macro_rules! call_mainactivity_str_method {
         }
     }};
 }
-macro_rules! call_mainactivity_float_method {
-    ($method:expr) => {{
-        unsafe {
-            let env = get_jni_env();
-            ndk_utils::call_method!(CallFloatMethod, env, android::ACTIVITY, $method, "()F")
-        }
-    }};
-}
 macro_rules! call_mainactivity_bool_method {
     ($method:expr) => {{
         unsafe {
@@ -75,10 +67,6 @@ pub fn get_external_storage_path() -> PathBuf {
 
 pub fn get_keyboard_height() -> usize {
     call_mainactivity_int_method!("getKeyboardHeight", "()I") as usize
-}
-
-pub fn get_screen_density() -> f32 {
-    call_mainactivity_float_method!("getScreenDensity")
 }
 
 pub fn is_ime_visible() -> bool {

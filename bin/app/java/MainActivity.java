@@ -141,10 +141,6 @@ public int getKeyboardHeight() {
     return Math.max(0, imeInsets.bottom - navInsets.bottom);
 }
 
-public float getScreenDensity() {
-    return getResources().getDisplayMetrics().density;
-}
-
 public boolean isImeVisible() {
     View decorView = getWindow().getDecorView();
     WindowInsets insets = decorView.getRootWindowInsets();
