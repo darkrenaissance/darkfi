@@ -23,7 +23,7 @@ darkfi-serial = {path = "../../../src/serial"}
 # Misc
 bs58 = "0.5.1"
 clap = {version = "4.4.11", features = ["derive"]}
-sled-overlay = "0.1.20"
+kvdb-overlay = {git = "https://git.dark.fi/darkrenaissance/kvdb-overlay", version = "0.1.0"}
 smol = "2.0.2"
 
 [patch.crates-io]

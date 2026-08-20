@@ -52,7 +52,6 @@ use darkfi_sdk::{
     ContractCall,
 };
 use darkfi_serial::{deserialize_async, serialize_async, AsyncEncodable};
-use sled_overlay::sled;
 use smol::Executor;
 
 #[derive(Parser)]
@@ -137,11 +136,11 @@ fn main() -> Result<()> {
                 // Retrieve genesis producer transaction
                 let producer_tx = genesis_block.txs.pop().unwrap();
 
-                // Initialize a temporary sled database
-                let sled_db = sled::Config::new().temporary(true).open()?;
+                // Initialize a temporary database
+                let (kvdb, _kvdb_folder) = kvdb_overlay::Database::open_temp()?;
 
                 // Create an overlay over whole blockchain
-                let blockchain = Blockchain::new(&sled_db)?;
+                let blockchain = Blockchain::new(&kvdb)?;
                 let overlay = BlockchainOverlay::new(&blockchain)?;
                 let (_, vks) = vks::get_cached_pks_and_vks()?;
                 vks::inject(&overlay, &vks)?;
@@ -189,11 +188,11 @@ fn main() -> Result<()> {
 
                 println!("Verifying genesis block: {hash}");
 
-                // Initialize a temporary sled database
-                let sled_db = sled::Config::new().temporary(true).open()?;
+                // Initialize a temporary database
+                let (kvdb, _kvdb_folder) = kvdb_overlay::Database::open_temp()?;
 
                 // Create an overlay over whole blockchain
-                let blockchain = Blockchain::new(&sled_db)?;
+                let blockchain = Blockchain::new(&kvdb)?;
                 let overlay = BlockchainOverlay::new(&blockchain)?;
                 let (_, vks) = vks::get_cached_pks_and_vks()?;
                 vks::inject(&overlay, &vks)?;
