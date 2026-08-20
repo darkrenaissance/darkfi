@@ -47,14 +47,14 @@ async def add_task(task_args, server_name, port):
 
     title = " ".join(title_words)
     if len(title) == 0:
-        print("Error: Title is required")
+        print("Error: Title is required", file=sys.stderr)
         exit(-1)
     task["title"] = title
     if task["desc"] is None:
         task["desc"] = prompt_description_text(task)
     
     if task["desc"].strip() == '':
-        print("Abort adding the task due to empty description.")
+        print("Abort adding the task due to empty description.", file=sys.stderr)
         exit(-1)
     
     if task["rank"] is not None:
@@ -630,6 +630,7 @@ SUBCOMMANDS:
     show       List filtered tasks.
     export     Save current workspace tasks to a path.
     import     Load current workspace tasks from a path.
+    rln        Manage local RLN identities (account).
     help       Show this help text.
 
 Examples:
@@ -670,7 +671,7 @@ Examples:
                 month = sys.argv[2]
                 month_ts = lib.util.month_to_unix(month)
             else:
-                print("error: usage format is: tau archive [MONTH] [ID]")
+                print("error: usage format is: tau archive [MONTH] [ID]", file=sys.stderr)
                 return -1
                 
             archive_refids = await api.get_archive_ref_ids(month_ts, server_name, port)
@@ -724,7 +725,7 @@ Examples:
                 if (errc := await show_archive_task(arefid, month_ts, server_name, port)) < 0:
                     return errc
             else:
-                print("error: month must be of format MMYY")
+                print("error: month must be of format MMYY", file=sys.stderr)
                 return -1
         else:
             month_ts = lib.util.month_to_unix()
@@ -740,10 +741,10 @@ Examples:
         return 0
     elif sys.argv[1] == "switch":
         if not len(sys.argv) == 3:
-            print("Error: you must provide workspace name")
+            print("Error: you must provide workspace name", file=sys.stderr)
             return 0
         if not await api.switch_workspace(sys.argv[2], server_name, port):
-            print(f"Error: Workspace \"{sys.argv[2]}\" is not configured.")
+            print(f"Error: Workspace \"{sys.argv[2]}\" is not configured.", file=sys.stderr)
         else:
             print(f"You are now on \"{sys.argv[2]}\" workspace.")
         return 0
@@ -762,6 +763,54 @@ Examples:
             path = sys.argv[2]
         if await api.import_from(path, server_name, port):
             print(f"Imported tasks successfuly from {path}")
+        return 0
+    elif sys.argv[1] == "rln":
+        if len(sys.argv) == 2:
+            print("""USAGE:
+    tau rln register <account_name> <nullifier> <trapdoor> <user_msg_limit>
+    tau rln info [account_name]
+    tau rln set <account_name>
+    tau rln deregister <account_name>
+    tau rln slash <account_name>
+
+Run `taud --gen-rln-identity` to mint fresh secrets for REGISTER.""")
+            return 0
+
+        subcmd = sys.argv[2]
+        args = sys.argv[3:]
+        if subcmd == "register":
+            if len(args) != 4:
+                print("error: usage format is: tau rln register <account_name> <nullifier> <trapdoor> <user_msg_limit>", file=sys.stderr)
+                sys.exit(-1)
+            lines = await api.rln_register(args[0], args[1], args[2], args[3], server_name, port)
+        elif subcmd == "info":
+            account_name = args[0] if args else None
+            lines = await api.rln_info(account_name, server_name, port)
+        elif subcmd == "set":
+            if len(args) != 1:
+                print("error: usage format is: tau rln set <account_name>", file=sys.stderr)
+                sys.exit(-1)
+            lines = await api.rln_set(args[0], server_name, port)
+        elif subcmd == "deregister":
+            if len(args) != 1:
+                print("error: usage format is: tau rln deregister <account_name>", file=sys.stderr)
+                sys.exit(-1)
+            lines = await api.rln_deregister(args[0], server_name, port)
+        elif subcmd == "slash":
+            if len(args) != 2 or args[1] != "CONFIRM":
+                print("error: usage format is: tau rln slash <account_name> CONFIRM", file=sys.stderr)
+                print("WARNING: rln slash is permanent and network-wide.", file=sys.stderr)
+                sys.exit(-1)
+            lines = await api.rln_slash(args[0], server_name, port)
+        else:
+            print(f"error: unknown rln subcommand '{subcmd}'", file=sys.stderr)
+            sys.exit(-1)
+
+        if isinstance(lines, list):
+            for line in lines:
+                print(line)
+        else:
+            print(lines)
         return 0
 
     try:
@@ -812,7 +861,7 @@ Examples:
 
     if subcmd == "modify":
         if not args:
-            print("Error: modify subcommand must have at least one argument.")
+            print("Error: modify subcommand must have at least one argument.", file=sys.stderr)
             exit(-1)
         for rid in refid:
             if (errc := await modify_task(rid, args, server_name, port)) < 0:

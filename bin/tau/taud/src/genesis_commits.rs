@@ -16,9 +16,18 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-pub mod error;
-pub mod genesis_commits;
-pub mod month_tasks;
-pub mod rln;
-pub mod task_info;
-pub mod util;
+use darkfi_sdk::{crypto::pasta_prelude::PrimeField, pasta::pallas};
+
+/// Return Taud's configured pregenerated RLN commitment set.
+pub fn pregenerated_identity_commitments() -> Vec<[u8; 32]> {
+    TAUD_GENESIS_COMMITMENTS_REPR.to_vec()
+}
+
+/// Check whether an RLN commitment belongs to Taud's pregenerated set.
+pub fn is_pregenerated_commitment(commitment: &pallas::Base) -> bool {
+    TAUD_GENESIS_COMMITMENTS_REPR.contains(&commitment.to_repr())
+}
+
+/// Taud's pregenerated RLN commitment set, represented as an array of 32-byte arrays.
+/// TODO: Populate this with the actual pregenerated commitments once they are available.
+pub const TAUD_GENESIS_COMMITMENTS_REPR: &[[u8; 32]] = &[];

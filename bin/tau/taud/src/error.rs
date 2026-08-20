@@ -17,6 +17,7 @@
  */
 
 use darkfi::rpc::jsonrpc::{ErrorCode, JsonError, JsonResponse, JsonResult};
+use sled_overlay::sled;
 use tinyjson::JsonValue;
 
 #[derive(Debug, thiserror::Error)]
@@ -37,6 +38,8 @@ pub enum TaudError {
     DecryptionError(String),
     #[error("IO Error: `{0}`")]
     IoError(String),
+    #[error("Sled error: `{0}`")]
+    Sled(#[from] sled::Error),
 }
 
 pub type TaudResult<T> = std::result::Result<T, TaudError>;
@@ -76,6 +79,7 @@ pub fn to_json_result(res: TaudResult<JsonValue>, id: i64) -> JsonResult {
                 JsonError::new(ErrorCode::InternalError, Some(e.to_string()), id).into()
             }
             TaudError::IoError(e) => JsonError::new(ErrorCode::InternalError, Some(e), id).into(),
+            TaudError::Sled(e) => JsonError::new(ErrorCode::InternalError, Some(e.to_string()), id).into(),
         },
     }
 }

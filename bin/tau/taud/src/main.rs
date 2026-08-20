@@ -17,10 +17,10 @@
  */
 
 use std::{
-    collections::BTreeMap,
+    collections::{BTreeMap, HashMap},
     env,
     ffi::CString,
-    fs::{create_dir_all, remove_dir_all},
+    fs::{create_dir_all, remove_dir_all, File},
     io::{stdin, Write},
     str::FromStr,
     sync::{atomic::Ordering, Arc, OnceLock},
@@ -41,7 +41,7 @@ use sled_overlay::sled;
 use smol::{fs, stream::StreamExt};
 use structopt_toml::StructOptToml;
 use tinyjson::JsonValue;
-use tracing::{debug, error, info};
+use tracing::{debug, error, info, warn};
 
 use darkfi::{
     async_daemonize,
@@ -60,6 +60,7 @@ use darkfi::{
 };
 
 use darkfi_sdk::crypto::{
+    pasta_prelude::PrimeField,
     schnorr::{SchnorrPublic, SchnorrSecret, Signature},
     Keypair, PublicKey,
 };
@@ -89,11 +90,33 @@ const TAUD_GENESIS_CONTENTS: &[u8] = b"taud-v1";
 /// 24-hour history window. Older events are evicted from sled.
 const TAUD_MAX_DAGS: usize = 1;
 
+/// Sled cache capacity multiplier.
+const BYTES_PER_MIB: u64 = 1024 * 1024;
+
+/// Per-epoch limit printed by `--gen-rln-identity`.
+fn generated_rln_identity_user_msg_limit() -> u64 {
+    darkfi::event_graph::rln::GENESIS_USER_MSG_LIMIT
+}
+
+fn sled_cache_capacity_bytes(name: &str, cache_mb: u64) -> Result<u64> {
+    if cache_mb == 0 {
+        return Err(Error::Custom(format!("{name} must be greater than 0")))
+    }
+
+    cache_mb
+        .checked_mul(BYTES_PER_MIB)
+        .ok_or_else(|| Error::Custom(format!("{name} overflows bytes")))
+}
+
 mod jsonrpc;
 mod settings;
 
 use taud::{
     error::{TaudError, TaudResult},
+    rln::{
+        load_default_rln_identity, reserve_rln_message_id_in_store, RlnIdentity,
+        RlnMessageReservation,
+    },
     task_info::{TaskEvent, TaskInfo},
     util::pipe_write,
 };
@@ -325,6 +348,7 @@ async fn start_sync_loop(
     settings: Args,
     p2p: P2pPtr,
     seen: OnceLock<sled::Tree>,
+    rln_identity: Arc<smol::lock::RwLock<Option<RlnIdentity>>>,
 ) -> TaudResult<()> {
     let incoming = event_graph.event_pub.clone().subscribe().await;
 
@@ -350,12 +374,49 @@ async fn start_sync_loop(
                     let dag_name = current_genesis.header.timestamp.to_string();
                     drop(current_genesis);
 
-                    if let Err(e) = event_graph.insert_signal_with_blob(&event, &[], &dag_name).await {
+                    // Build the RLN signal blob before touching the local DAG when RLN
+                    // is enabled. With RLN disabled, outbound events deliberately carry
+                    // no proof blob.
+                    let blob = if event_graph.rln_enabled() {
+                        let (rln_identity, mid) = {
+                            let mut active = rln_identity.write().await;
+                            match reserve_rln_message_id_in_store(
+                                &sled_db,
+                                &mut active,
+                                event.header.timestamp,
+                            )
+                            .await?
+                            {
+                                RlnMessageReservation::Reserved { identity, message_id } => {
+                                    (identity, message_id)
+                                }
+                                RlnMessageReservation::MissingIdentity => {
+                                    warn!(target: "taud", "No RLN identity registered; refusing to send. Run `tau rln register ...` to register.");
+                                    continue
+                                }
+                                RlnMessageReservation::BudgetExhausted => {
+                                    warn!(target: "taud", "RLN message budget exhausted for this epoch; dropping message to avoid slash");
+                                    continue
+                                }
+                            }
+                        };
+                        match rln_identity.create_signal(&event, mid, &event_graph).await {
+                            Ok(blob) => serialize_async(&blob).await,
+                            Err(e) => {
+                                error!(target: "taud", "Failed creating RLN signal proof: {e}");
+                                continue
+                            }
+                        }
+                    } else {
+                        Vec::new()
+                    };
+
+                    if let Err(e) = event_graph.insert_signal_with_blob(&event, &blob, &dag_name).await {
                         error!(target: "taud", "Failed inserting new event to DAG: {e}");
                     } else {
-                        // Otherwise, broadcast it. Taud runs EventGraph with RLN disabled,
-                        // so the blob is intentionally empty.
-                        if let Err(e) = p2p.broadcast(&EventPut(event, vec![])).await {
+                        // Otherwise, broadcast it. Taud runs EventGraph with RLN disabled
+                        // by default, so the blob is empty unless RLN was enabled.
+                        if let Err(e) = p2p.broadcast(&EventPut(event, blob)).await {
                             error!(target: "taud", "Event broadcast was not admitted: {e}");
                         }
                     }
@@ -448,6 +509,8 @@ async fn on_receive_task(
         }
 
         task.save(&datastore_path)?;
+
+        break
     }
     Ok(())
 }
@@ -458,6 +521,87 @@ async fn realmain(settings: Args, executor: Arc<smol::Executor<'static>>) -> Res
 
     let nickname =
         if settings.nickname.is_some() { settings.nickname.clone() } else { env::var("USER").ok() };
+
+    if settings.gen_rln_identity {
+        let identity = RlnIdentity::new(&mut OsRng);
+        let nullifier = bs58::encode(identity.nullifier.to_repr()).into_string();
+        let trapdoor = bs58::encode(identity.trapdoor.to_repr()).into_string();
+        // This value is part of the RLN commitment. It must match
+        // the genesis budget used for pregenerated identities.
+        let user_msg_limit = generated_rln_identity_user_msg_limit();
+
+        println!("Generated a fresh RLN identity.\n");
+        println!(
+            "Current Taud registration accepts only identities whose commitments are in \
+             the configured pregenerated set. Use this output for a genesis bundle or future \
+             staked-registration testing; it will not register unless its commitment is \
+             pregenerated.\n"
+        );
+        println!("Local account import command:\n");
+        println!("  tau rln register <account_name> {nullifier} {trapdoor} {user_msg_limit}\n");
+        println!(
+            "Replace <account_name> with any local label you like (\"alice\", \"throwaway\", etc)."
+        );
+        println!(
+            "Do not change user_msg_limit: it is part of the RLN commitment and must be \
+             GENESIS_USER_MSG_LIMIT ({user_msg_limit}) for pregenerated genesis identities."
+        );
+        println!(
+            "Keep the nullifier and trapdoor secret - they ARE the identity. \
+             A `taud --gen-rln-identity` run is NOT idempotent; treat the \
+             output like a freshly-minted password."
+        );
+        return Ok(())
+    }
+
+    if let Some(n_identities) = settings.gen_genesis_rln_identities {
+        // We'll generate n_identities and hold them in a map
+        // `k=commitment, v=(nullifier, trapdoor, used)`
+        // We'll export the commitments to be used in the genesis event,
+        // and the rest as a JSON file.
+        let mut identities_map = HashMap::new();
+        for _ in 0..n_identities {
+            let identity = RlnIdentity::new(&mut OsRng);
+            let commitment = identity.commitment();
+            identities_map.insert(
+                commitment.to_repr(),
+                (identity.nullifier.to_repr(), identity.trapdoor.to_repr(), false),
+            );
+        }
+
+        let mut commits = String::from(
+            r#"
+use darkfi_sdk::{crypto::pasta_prelude::PrimeField, pasta::pallas};
+
+/// Return Taud's configured pregenerated RLN commitment set.
+pub fn pregenerated_identity_commitments() -> Vec<[u8; 32]> {
+    TAUD_GENESIS_COMMITMENTS_REPR.to_vec()
+}
+
+/// Check whether an RLN commitment belongs to Taud's pregenerated set.
+pub fn is_pregenerated_commitment(commitment: &pallas::Base) -> bool {
+    TAUD_GENESIS_COMMITMENTS_REPR.contains(&commitment.to_repr())
+}
+
+pub const TAUD_GENESIS_COMMITMENTS_REPR: &[[u8; 32]] = &[
+"#,
+        );
+
+        for commitment in identities_map.keys() {
+            commits.push_str(&format!("{:?},\n", commitment));
+        }
+
+        commits.push_str("];\n");
+
+        let mut file = File::create("genesis_commits.rs")?;
+        file.write_all(commits.as_bytes())?;
+
+        let mut file = File::create("taud_rln_commits.bin")?;
+        let buf = serialize(&identities_map);
+        file.write_all(&buf)?;
+
+        return Ok(())
+    }
 
     if settings.refresh {
         println!("Removing local data in: {datastore_path:?} (yes/no)? ");
@@ -542,9 +686,20 @@ async fn realmain(settings: Args, executor: Arc<smol::Executor<'static>>) -> Res
 
     info!(target: "taud", "Initializing taud node");
 
+    let rln_enabled = settings.rln_enabled.unwrap_or(false);
+
     // Create datastore path if not there already.
     let datastore = expand_path(&settings.datastore)?;
     fs::create_dir_all(&datastore).await?;
+
+    let zk_key_datastore = if rln_enabled {
+        let zk_key_datastore = expand_path(&settings.zk_key_datastore)?;
+        fs::create_dir_all(&zk_key_datastore).await?;
+        Some(zk_key_datastore)
+    } else {
+        info!(target: "taud", "RLN disabled; skipping RLN key datastore setup");
+        None
+    };
 
     let replay_datastore = expand_path(&settings.replay_datastore)?;
     let replay_mode = settings.replay_mode;
@@ -552,6 +707,27 @@ async fn realmain(settings: Args, executor: Arc<smol::Executor<'static>>) -> Res
 
     info!(target: "taud", "Instantiating event DAG");
     let sled_db = sled::open(datastore)?;
+
+    let zk_key_db = if let Some(zk_key_datastore) = zk_key_datastore.as_ref() {
+        let zk_key_sled_cache_capacity =
+            sled_cache_capacity_bytes("zk_key_sled_cache_mb", settings.zk_key_sled_cache_mb)?;
+        info!(target: "taud", "Opening RLN key datastore with {} MiB sled cache", settings.zk_key_sled_cache_mb);
+        Some(
+            match sled::Config::new()
+                .path(zk_key_datastore.clone())
+                .cache_capacity(zk_key_sled_cache_capacity)
+                .open()
+            {
+                Ok(v) => v,
+                Err(e) => {
+                    error!(target: "taud", "Failed to open RLN key datastore `{zk_key_datastore:?}`: {e}");
+                    return Err(e.into());
+                }
+            },
+        )
+    } else {
+        None
+    };
 
     let p2p_settings: darkfi::net::Settings =
         (env!("CARGO_PKG_NAME"), env!("CARGO_PKG_VERSION"), settings.net.clone()).try_into()?;
@@ -568,26 +744,56 @@ async fn realmain(settings: Args, executor: Arc<smol::Executor<'static>>) -> Res
         initial_genesis: TAUD_INITIAL_GENESIS,
         hours_rotation: TAUD_HOURS_ROTATION,
         genesis_contents: TAUD_GENESIS_CONTENTS.to_vec(),
-        rln_enabled: false,
-        pregenerated_identity_commitments: Vec::new(),
+        rln_enabled,
+        pregenerated_identity_commitments: if rln_enabled {
+            taud::genesis_commits::pregenerated_identity_commitments()
+        } else {
+            Vec::new()
+        },
         max_dags: Some(TAUD_MAX_DAGS),
     };
-    let event_graph = match EventGraph::new(
-        p2p.clone(),
-        sled_db.clone(),
-        replay_datastore.clone(),
-        replay_mode,
-        eg_config,
-        executor.clone(),
-    )
-    .await
-    {
+    let event_graph = match if let Some(zk_key_db) = zk_key_db.clone() {
+        EventGraph::new_with_zk_key_db(
+            p2p.clone(),
+            sled_db.clone(),
+            zk_key_db,
+            replay_datastore.clone(),
+            replay_mode,
+            eg_config,
+            executor.clone(),
+        )
+        .await
+    } else {
+        EventGraph::new(
+            p2p.clone(),
+            sled_db.clone(),
+            replay_datastore.clone(),
+            replay_mode,
+            eg_config,
+            executor.clone(),
+        )
+        .await
+    } {
         Ok(v) => v,
         Err(e) => {
             error!("Event graph failed to start: {e}");
             return Err(e);
         }
     };
+
+    // Set the active RLN account if any. When RLN is disabled, avoid
+    // loading account state that cannot affect outbound messages.
+    let rln_identity: Arc<smol::lock::RwLock<Option<RlnIdentity>>> =
+        Arc::new(smol::lock::RwLock::new(if event_graph.rln_enabled() {
+            let rln_identity = load_default_rln_identity(&sled_db).await?;
+            if rln_identity.is_some() {
+                info!(target: "taud", "Default RLN account set");
+            }
+            rln_identity
+        } else {
+            info!(target: "taud", "RLN disabled; skipping default RLN account load");
+            None
+        }));
 
     info!(target: "taud", "Registering EventGraph P2P protocol");
     let event_graph_ = Arc::clone(&event_graph);
@@ -609,9 +815,21 @@ async fn realmain(settings: Args, executor: Arc<smol::Executor<'static>>) -> Res
             info!(target: "taud", "Got peer connection");
             // We'll attempt to sync for ever
             if !settings.skip_dag_sync {
+                info!(target: "taud", "Syncing static DAG");
+                match event_graph.static_sync().await {
+                    Ok(()) => info!(target: "taud", "Static synced successfully"),
+                    Err(e) => {
+                        error!(target: "taud", "Failed syncing static graph: {e}");
+                        sleep(comms_timeout).await;
+                        continue
+                    }
+                }
                 info!(target: "taud", "Syncing event DAG");
                 match event_graph.sync_selected(1).await {
-                    Ok(()) => break,
+                    Ok(()) => {
+                        info!(target: "taud", "Event DAG synced successfully!");
+                        break
+                    }
                     Err(e) => {
                         // TODO: Maybe at this point we should prune or something?
                         // TODO: Or maybe just tell the user to delete the DAG from FS.
@@ -667,6 +885,7 @@ async fn realmain(settings: Args, executor: Arc<smol::Executor<'static>>) -> Res
             settings.clone(),
             p2p.clone(),
             seen.clone(),
+            rln_identity.clone(),
         ),
         |res| async {
             match res {
@@ -744,6 +963,8 @@ async fn realmain(settings: Args, executor: Arc<smol::Executor<'static>>) -> Res
         event_graph.clone(),
         json_sub,
         deg_sub,
+        sled_db.clone(),
+        rln_identity.clone(),
     ));
     let rpc_task = StoppableTask::new();
     rpc_task.clone().start(
@@ -778,6 +999,87 @@ async fn realmain(settings: Args, executor: Arc<smol::Executor<'static>>) -> Res
     let flushed_bytes = sled_db.flush_async().await?;
     info!(target: "taud", "Flushed {flushed_bytes} bytes");
 
+    if let Some(zk_key_db) = zk_key_db {
+        info!(target: "taud", "Flushing RLN key sled database...");
+        let flushed_key_bytes = zk_key_db.flush_async().await?;
+        info!(target: "taud", "Flushed {flushed_key_bytes} RLN key bytes");
+    }
+
     info!(target: "taud", "Shut down successfully");
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use std::path::Path;
+
+    use structopt::StructOpt;
+
+    use darkfi::util::time::Timestamp;
+    use taud::task_info::TaskInfo;
+
+    use super::*;
+
+    const TEST_DATA_PATH: &str = "/tmp/test_tau_ws_claim";
+
+    /// Two workspaces that share the same read/write key, as is common in
+    /// localnet testing where one workspace block is duplicated.
+    fn shared_key_workspaces() -> BTreeMap<String, Workspace> {
+        let read_key = SecretKey::generate(&mut OsRng);
+        let chacha = ChaChaBox::new(&read_key.public_key(), &read_key);
+
+        let write_key = darkfi_sdk::crypto::SecretKey::random(&mut OsRng);
+        let write_pubkey = PublicKey::from_secret(write_key);
+
+        let mut map = BTreeMap::new();
+        map.insert(
+            "darkfi-dev".to_string(),
+            Workspace {
+                read_key: ChaChaBox::new(&read_key.public_key(), &read_key),
+                write_key: Some(write_key),
+                write_pubkey,
+            },
+        );
+        map.insert(
+            "test".to_string(),
+            Workspace { read_key: chacha, write_key: Some(write_key), write_pubkey },
+        );
+        map
+    }
+
+    #[test]
+    fn shared_keys_task_is_claimed_by_first_workspace() -> TaudResult<()> {
+        remove_dir_all(TEST_DATA_PATH).ok();
+        create_dir_all(TEST_DATA_PATH).unwrap();
+        create_dir_all(Path::new(TEST_DATA_PATH).join("task")).unwrap();
+        create_dir_all(Path::new(TEST_DATA_PATH).join("month")).unwrap();
+
+        let workspaces = shared_key_workspaces();
+
+        let mut args = Args::from_iter_safe(vec!["taud".to_string()]).unwrap();
+        args.datastore = TEST_DATA_PATH.to_string();
+
+        let task = TaskInfo::new(
+            "darkfi-dev".to_string(),
+            "test_title",
+            "test_desc",
+            "NICK",
+            None,
+            None,
+            Timestamp::current_time(),
+            None,
+        )?;
+
+        let enc = encrypt_sign_task(&task, workspaces.get("darkfi-dev").unwrap())?;
+
+        smol::block_on(async { on_receive_task(&enc, &workspaces, &args).await })?;
+
+        // Even though both workspaces can decrypt the task, it must be
+        // claimed exactly once and keep the originating workspace label,
+        // not be overwritten by the later `test` workspace.
+        let loaded = TaskInfo::load(&task.ref_id, Path::new(TEST_DATA_PATH))?;
+        assert_eq!(loaded.workspace, "darkfi-dev");
+
+        Ok(())
+    }
 }

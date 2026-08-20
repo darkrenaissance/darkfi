@@ -42,6 +42,26 @@ pub struct Args {
     pub replay_datastore: String,
 
     #[structopt(long)]
+    /// Enable RLN proof generation and verification
+    pub rln_enabled: Option<bool>,
+
+    #[structopt(long, default_value = "~/.local/share/darkfi/taud/zk_keys")]
+    /// Datastore path for RLN proving and verifying keys
+    pub zk_key_datastore: String,
+
+    #[structopt(long, default_value = "16")]
+    /// Sled cache capacity for the RLN key datastore, in MiB
+    pub zk_key_sled_cache_mb: u64,
+
+    #[structopt(long)]
+    /// Generate a new RLN identity
+    pub gen_rln_identity: bool,
+
+    #[structopt(long)]
+    /// Generate N genesis RLN identities
+    pub gen_genesis_rln_identities: Option<u64>,
+
+    #[structopt(long)]
     /// Flag to store Sled DB instructions
     pub replay_mode: bool,
 

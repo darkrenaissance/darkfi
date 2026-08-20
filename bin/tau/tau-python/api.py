@@ -85,3 +85,24 @@ async def export_to(path, server_name, port):
 
 async def import_from(path, server_name, port):
     return await query("import", [path], server_name, int(port))
+
+async def rln_register(account_name, nullifier, trapdoor, user_msg_limit, server_name, port):
+    return await query(
+        "rln_register",
+        [account_name, nullifier, trapdoor, user_msg_limit],
+        server_name,
+        int(port),
+    )
+
+async def rln_info(account_name, server_name, port):
+    params = [account_name] if account_name else []
+    return await query("rln_info", params, server_name, int(port))
+
+async def rln_set(account_name, server_name, port):
+    return await query("rln_set", [account_name], server_name, int(port))
+
+async def rln_deregister(account_name, server_name, port):
+    return await query("rln_deregister", [account_name], server_name, int(port))
+
+async def rln_slash(account_name, server_name, port):
+    return await query("rln_slash", [account_name], server_name, int(port))
