@@ -1,5 +1,6 @@
 //% IMPORTS
 
+import android.view.ViewConfiguration;
 import android.view.ViewGroup;
 import android.view.WindowInsets.Type;
 import android.view.inputmethod.EditorInfo;
@@ -163,6 +164,10 @@ public VideoDecoder createVideoDecoder() {
     VideoDecoder decoder = new VideoDecoder();
     decoder.setContext(this);
     return decoder;
+}
+
+public int getLongPressTimeout() {
+    return ViewConfiguration.getLongPressTimeout();
 }
 
 public void openUrl(String url) {

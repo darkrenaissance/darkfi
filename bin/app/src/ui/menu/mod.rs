@@ -16,6 +16,7 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+use super::long_press_timeout;
 use async_trait::async_trait;
 use atomic_float::AtomicF32;
 use darkfi::system::CondVar;
@@ -290,7 +291,7 @@ impl Menu {
         is_long_press_tap: bool,
         elapsed_ms: u128,
     ) {
-        let is_long_press = is_long_press_tap && elapsed_ms >= 500;
+        let is_long_press = is_long_press_tap && elapsed_ms >= long_press_timeout() as u128;
 
         if is_long_press {
             if !self.is_edit_mode.load(Ordering::Relaxed) {
@@ -774,7 +775,7 @@ impl UIObject for Menu {
 
         let ex = self.ex.clone();
         let long_press_task = ex.spawn(async move {
-            darkfi::system::msleep(500).await;
+            darkfi::system::msleep(long_press_timeout() as u64).await;
 
             let Some(arc_self) = me.upgrade() else { return };
             let current_mouse_pos = arc_self.mouse_pos.lock().clone();

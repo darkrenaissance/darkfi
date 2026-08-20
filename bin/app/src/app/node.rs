@@ -614,11 +614,6 @@ pub fn create_chatview(name: &str) -> SceneNode {
     prop.set_defaults_f32(vec![0.9]).unwrap();
     node.add_property(prop).unwrap();
 
-    let mut prop = Property::new("select_hold_time", PropertyType::Float32, PropertySubType::Pixel);
-    prop.set_ui_text("Select Holding Time", "How long to hard press for selecting lines (ms)");
-    prop.set_defaults_f32(vec![1000.]).unwrap();
-    node.add_property(prop).unwrap();
-
     let mut prop = Property::new("key_scroll_speed", PropertyType::Float32, PropertySubType::Pixel);
     prop.set_ui_text("Page Up/Down Scroll Speed", "Scroll speed when pressing page up/down");
     prop.set_defaults_f32(vec![6.]).unwrap();

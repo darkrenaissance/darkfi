@@ -69,6 +69,10 @@ pub fn get_keyboard_height() -> usize {
     call_mainactivity_int_method!("getKeyboardHeight", "()I") as usize
 }
 
+pub fn get_long_press_timeout() -> u32 {
+    call_mainactivity_int_method!("getLongPressTimeout", "()I") as u32
+}
+
 pub fn is_ime_visible() -> bool {
     call_mainactivity_bool_method!("isImeVisible")
 }

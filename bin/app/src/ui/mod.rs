@@ -19,7 +19,7 @@
 use async_trait::async_trait;
 use futures::stream::{FuturesUnordered, StreamExt};
 use miniquad::{KeyCode, KeyMods, MouseButton, TouchPhase};
-use std::sync::{Arc, Weak};
+use std::sync::{Arc, OnceLock, Weak};
 
 use crate::{
     gfx::{DrawCall, Point, Rectangle},
@@ -28,6 +28,24 @@ use crate::{
     util::i18n::I18nBabelFish,
     ExecutorPtr,
 };
+
+static LONG_PRESS_TIMEOUT: OnceLock<u32> = OnceLock::new();
+
+/// The system long-press timeout in milliseconds. Queried once from
+/// `ViewConfiguration.getLongPressTimeout()` on Android, defaults to 400
+/// on other platforms.
+pub fn long_press_timeout() -> u32 {
+    *LONG_PRESS_TIMEOUT.get_or_init(|| {
+        #[cfg(target_os = "android")]
+        {
+            crate::android::get_long_press_timeout()
+        }
+        #[cfg(not(target_os = "android"))]
+        {
+            400
+        }
+    })
+}
 
 mod button;
 pub use button::{Button, ButtonPtr};

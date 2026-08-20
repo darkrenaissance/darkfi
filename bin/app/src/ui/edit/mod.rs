@@ -16,6 +16,7 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+use super::long_press_timeout;
 use async_trait::async_trait;
 use atomic_float::AtomicF32;
 use darkfi::system::msleep;
@@ -69,8 +70,6 @@ use repeat::{PressedKey, PressedKeysSmoothRepeat};
 
 /// The travel threshold on long hold select before activating select.
 const HOLD_TRAVEL_THRESHOLD_SQ: f32 = 100.;
-/// How long to hold before select is enabled in ms.
-const HOLD_ENABLE_TIME: u128 = 500;
 
 /// Minimum dist to update scroll when finger scrolling.
 /// Avoid updating too much makes scrolling smoother.
@@ -139,7 +138,7 @@ impl TouchInfo {
                 //debug!(target: "ui::chatedit::touch", "TouchInfo::update() [travel_dist_sq={travel_dist_sq}, grad={grad}]");
 
                 if travel_dist_sq < HOLD_TRAVEL_THRESHOLD_SQ {
-                    if elapsed > HOLD_ENABLE_TIME {
+                    if elapsed > long_press_timeout() as u128 {
                         debug!(target: "ui::chatedit::touch", "update touch state: Started -> StartSelect");
                         self.state = TouchStateAction::StartSelect;
                     }

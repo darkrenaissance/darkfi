@@ -16,6 +16,8 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+use super::long_press_timeout;
+
 use async_lock::Mutex as AsyncMutex;
 use async_trait::async_trait;
 use atomic_float::AtomicF32;
@@ -238,7 +240,6 @@ pub struct ChatView {
 
     scroll_start_accel: PropertyFloat32,
     scroll_resist: PropertyFloat32,
-    select_hold_time: PropertyFloat32,
     key_scroll_speed: PropertyFloat32,
 
     /// Scroll accel
@@ -344,8 +345,6 @@ impl ChatView {
             PropertyFloat32::wrap(node_ref, Role::Internal, "scroll_start_accel", 0).unwrap();
         let scroll_resist =
             PropertyFloat32::wrap(node_ref, Role::Internal, "scroll_resist", 0).unwrap();
-        let select_hold_time =
-            PropertyFloat32::wrap(node_ref, Role::Internal, "select_hold_time", 0).unwrap();
         let key_scroll_speed =
             PropertyFloat32::wrap(node_ref, Role::Internal, "key_scroll_speed", 0).unwrap();
 
@@ -391,7 +390,6 @@ impl ChatView {
 
             scroll_start_accel,
             scroll_resist,
-            select_hold_time,
             key_scroll_speed,
 
             motion_cv,
@@ -1453,7 +1451,7 @@ impl UIObject for ChatView {
             return false
         }
 
-        let select_hold_time = self.select_hold_time.get();
+        let hold_ms = long_press_timeout() as u64;
 
         // Simulate mouse events
         match phase {
@@ -1464,7 +1462,6 @@ impl UIObject for ChatView {
 
                 // Arm the long-press timer for text selection.
                 let version = self.touch_hold_version.fetch_add(1, Ordering::SeqCst) + 1;
-                let hold_ms = select_hold_time as u64;
                 let me = self.me.clone();
                 let ex = self.ex.clone();
                 let start_pos = touch_pos;
