@@ -122,7 +122,7 @@ apk:
 
 compile-apk: $(SRC) $(PROOFS_BIN) fonts assets/forest_720x1280.mp4
 	cargo quad-apk build --no-default-features --release $(DEV_FEATURES)
-	-mv $(DEBUG_APK) .
+	-mv $(RELEASE_APK) .
 
 install-apk:
 	-adb $(ADB_DEVICE_INST) uninstall darkfi.darkfi_app
