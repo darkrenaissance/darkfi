@@ -517,89 +517,77 @@ async fn load_plugins(
             use darkfi_money_contract::model::TokenId;
             use darkfi_serial::Encodable;
 
-            let update = async || {
+            let update = async |data: Vec<u8>| {
                 d!("drk balances_updated signal received");
 
-                // Fetch and update main wallet tokens table
-                if let Ok(Some(response_data)) = drk_node2.call_method("get_balances", vec![]).await
-                {
+                let mut cur = std::io::Cursor::new(data);
+                if let Ok(balances) = Vec::<(String, TokenId, u64)>::decode(&mut cur) {
                     let atom = &mut renderer2.make_guard(gfxtag!("wallet - refresh tokens"));
 
-                    let mut cur = std::io::Cursor::new(response_data);
-                    if let Ok(balances) = Vec::<(String, TokenId, u64)>::decode(&mut cur) {
-                        let token_rows: Vec<TokenRow> = balances
-                            .iter()
-                            .map(|(symbol, token_id, balance)| TokenRow {
-                                id: *token_id,
-                                symbol: symbol.clone(),
-                                balance: encode_base10(*balance, 8),
-                            })
-                            .collect();
+                    let token_rows: Vec<TokenRow> = balances
+                        .iter()
+                        .map(|(symbol, token_id, balance)| TokenRow {
+                            id: *token_id,
+                            symbol: symbol.clone(),
+                            balance: encode_base10(*balance, 8),
+                        })
+                        .collect();
 
-                        let mut data: Vec<u8> = vec![];
-                        for row in &token_rows {
-                            let _ = TokenRow::encode(row, &mut data);
-                        }
+                    let mut rows_data: Vec<u8> = vec![];
+                    for row in &token_rows {
+                        let _ = TokenRow::encode(row, &mut rows_data);
+                    }
 
-                        if let Some(tokens_table) =
-                            sg_root2.lookup_node("/window/content/wallet/main_layer/tokens_table")
-                        {
-                            let _ = tokens_table.call_method("set_tokens", data.clone()).await;
-                        }
+                    let tokens_table = sg_root2
+                        .lookup_node("/window/content/wallet/main_layer/tokens_table")
+                        .unwrap();
+                    let send_tokens_table = sg_root2
+                        .lookup_node("/window/content/wallet/send_step1_layer/tokens_table")
+                        .unwrap();
 
-                        if let Some(send_tokens_table) = sg_root2
-                            .lookup_node("/window/content/wallet/send_step1_layer/tokens_table")
-                        {
-                            let _ = send_tokens_table.call_method("set_tokens", data).await;
-                        }
+                    tokens_table.call_method("set_tokens", rows_data.clone()).await.unwrap();
+                    send_tokens_table.call_method("set_tokens", rows_data).await.unwrap();
 
-                        // Update main wallet balance
-                        if let Some(drk_row) =
-                            token_rows.iter().find(|row| row.id == *DARK_TOKEN_ID)
-                        {
-                            if let Some(balance_node) = sg_root2
-                                .lookup_node("/window/content/wallet/main_layer/wallet_balance")
-                            {
-                                balance_node
-                                    .set_property_str(
-                                        atom,
-                                        Role::App,
-                                        "text",
-                                        format!("DRK {}", drk_row.balance),
-                                    )
-                                    .unwrap();
-                            }
-                        }
+                    // Update main wallet balance
+                    if let Some(drk_row) = token_rows.iter().find(|row| row.id == *DARK_TOKEN_ID) {
+                        let balance_node = sg_root2
+                            .lookup_node("/window/content/wallet/main_layer/wallet_balance")
+                            .unwrap();
+                        balance_node
+                            .set_property_str(
+                                atom,
+                                Role::App,
+                                "text",
+                                format!("DRK {}", drk_row.balance),
+                            )
+                            .unwrap();
+                    }
 
-                        if let Some(tx_status_layer) =
-                            sg_root2.lookup_node("/window/content/wallet/tx_status_layer")
-                        {
-                            let tx_id = tx_status_layer.get_property_str("tx_id").unwrap();
-                            if !tx_id.is_empty() {
-                                let mut tx_id_data = vec![];
-                                tx_id.encode(&mut tx_id_data).unwrap();
-                                if let Ok(Some(data)) =
-                                    drk_node2.call_method("get_tx_status", tx_id_data).await
-                                {
-                                    let mut cur = std::io::Cursor::new(data);
-                                    let status_text = String::decode(&mut cur).unwrap();
-                                    if let Some(status_node) =
-                                        tx_status_layer.lookup_node("/status")
-                                    {
-                                        status_node
-                                            .set_property_str(atom, Role::App, "text", status_text)
-                                            .unwrap();
-                                    }
-                                }
-                            }
-                        }
+                    let tx_status_layer =
+                        sg_root2.lookup_node("/window/content/wallet/tx_status_layer").unwrap();
+                    let tx_id = tx_status_layer.get_property_str("tx_id").unwrap();
+                    if !tx_id.is_empty() {
+                        let mut tx_id_data = vec![];
+                        tx_id.encode(&mut tx_id_data).unwrap();
+                        let status_data = drk_node2
+                            .call_method("get_tx_status", tx_id_data)
+                            .await
+                            .unwrap()
+                            .unwrap();
+
+                        let mut cur = std::io::Cursor::new(status_data);
+                        let status_text = String::decode(&mut cur).unwrap();
+                        let status_node = tx_status_layer.lookup_node("/status").unwrap();
+                        status_node.set_property_str(atom, Role::App, "text", status_text).unwrap();
                     }
                 }
             };
 
-            update().await;
-            while let Ok(_) = recv.recv().await {
-                update().await;
+            let response_data =
+                drk_node2.call_method("get_balances", vec![]).await.unwrap().unwrap();
+            update(response_data).await;
+            while let Ok(data) = recv.recv().await {
+                update(data).await;
             }
         });
 
@@ -872,7 +860,16 @@ pub fn create_drk(name: &str) -> SceneNode {
     )
     .unwrap();
 
-    node.add_signal("balances_updated", "Balances changed", vec![]).unwrap();
+    node.add_signal(
+        "balances_updated",
+        "Balances changed",
+        vec![
+            ("symbol", "Token symbol", CallArgType::Str),
+            ("token_id", "Token ID", CallArgType::Hash),
+            ("balance", "Token balance", CallArgType::Uint64),
+        ],
+    )
+    .unwrap();
 
     node.add_signal(
         "tx_updated",

@@ -25,11 +25,11 @@ use darkfi_money_contract::model::TokenId;
 use darkfi_sdk::crypto::keypair::{Address, Network, PublicKey, StandardAddress};
 use darkfi_serial::{serialize, Decodable, Encodable};
 use drk::{rpc::subscribe_blocks, Drk};
+use parking_lot::Mutex as SyncMutex;
 use smol::{channel::unbounded, lock::RwLock};
 use std::{
     io::Cursor,
     sync::{Arc, OnceLock, Weak},
-    time::Instant,
 };
 use url::Url;
 
@@ -42,8 +42,7 @@ use crate::{
 
 // TODO: should be configurable at runtime
 //const DARKFID_ENDPOINT: &str = "tcp://127.0.0.1:18345";
-const DARKFID_ENDPOINT: &str = "tcp://192.168.1.38:18345";
-//const DARKFID_ENDPOINT: &str = "tcp+tls://node0.testnet.dark.fi:18345";
+const DARKFID_ENDPOINT: &str = "tcp+tls://node0.testnet.dark.fi:18345";
 const DARKFID_RETRY_TIME: u64 = 20;
 
 #[cfg(target_os = "android")]
@@ -127,6 +126,7 @@ pub struct DrkPlugin {
 
     drk: Arc<RwLock<Drk>>,
     build_tx_channel: smol::channel::Sender<BuildTxRequest>,
+    last_balances: SyncMutex<Option<Vec<(String, TokenId, u64)>>>,
 }
 
 impl DrkPlugin {
@@ -209,6 +209,7 @@ impl DrkPlugin {
             drk: drk.into_ptr(),
             build_tx_channel: build_tx_tx,
             scan_progress_pub: Publisher::new(),
+            last_balances: SyncMutex::new(None),
         });
 
         // Start background task to process build_tx requests from channel
@@ -324,11 +325,34 @@ impl DrkPlugin {
         Ok(result)
     }
 
-    /// Emit balances_updated signal
+    /// Emit balances_updated signal with the balances encoded in the payload.
+    /// Only emits when the encoded balances differ from the last emitted ones.
     async fn emit_balances_updated(&self) {
-        if let Some(node) = self.node.upgrade() {
-            let _ = node.trigger("balances_updated", vec![]).await;
+        let Some(node) = self.node.upgrade() else { return };
+
+        let balances = match self.get_balances().await {
+            Ok(b) => b,
+            Err(e) => {
+                e!("Failed to get balances for balances_updated signal: {e}");
+                return
+            }
+        };
+
+        let mut data = vec![];
+        if let Err(e) = balances.encode(&mut data) {
+            e!("Failed to encode balances for balances_updated signal: {e}");
+            return
         }
+
+        let mut last = self.last_balances.lock();
+        if let Some(last) = &*last {
+            if *last == balances {
+                return
+            }
+        }
+        *last = Some(balances);
+
+        let _ = node.trigger("balances_updated", data).await;
     }
 
     /// Emit tx_updated signal
@@ -747,19 +771,11 @@ impl DrkPlugin {
 
         let self2 = self.clone();
         let subscribe_recv_task = ex.spawn(async move {
-            let mut last_emit: Option<Instant> = None;
             loop {
                 let recv = shell_receiver.recv().await;
 
                 if let Ok(lines) = recv {
-                    let should_emit = match last_emit {
-                        None => true,
-                        Some(last) => last.elapsed().as_millis() >= 500,
-                    };
-                    if should_emit {
-                        last_emit = Some(Instant::now());
-                        self2.emit_balances_updated().await;
-                    }
+                    self2.emit_balances_updated().await;
 
                     for line in lines.iter() {
                         i!(line);
