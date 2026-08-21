@@ -29,6 +29,7 @@ use smol::{channel::unbounded, lock::RwLock};
 use std::{
     io::Cursor,
     sync::{Arc, OnceLock, Weak},
+    time::Instant,
 };
 use url::Url;
 
@@ -716,6 +717,8 @@ impl DrkPlugin {
 
                 let _ = self2.node.upgrade().unwrap().trigger("connect", serialize(&3u8)).await;
 
+                self2.emit_balances_updated().await;
+
                 match subscribe_blocks(
                     &drk,
                     subscribe_rpc_task,
@@ -743,11 +746,19 @@ impl DrkPlugin {
 
         let self2 = self.clone();
         let subscribe_recv_task = ex.spawn(async move {
+            let mut last_emit: Option<Instant> = None;
             loop {
                 let recv = shell_receiver.recv().await;
 
                 if let Ok(lines) = recv {
-                    self2.emit_balances_updated().await;
+                    let should_emit = match last_emit {
+                        None => true,
+                        Some(last) => last.elapsed().as_millis() >= 500,
+                    };
+                    if should_emit {
+                        last_emit = Some(Instant::now());
+                        self2.emit_balances_updated().await;
+                    }
 
                     for line in lines.iter() {
                         i!(line);
