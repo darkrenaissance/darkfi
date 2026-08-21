@@ -139,7 +139,9 @@ pub async fn make(
     prop.set_expr(atom, Role::App, 3, expr::load_var("h")).unwrap();
     chat_layer.set_property_bool(atom, Role::App, "is_visible", true).unwrap();
     chat_layer.set_property_u32(atom, Role::App, "z_index", 1).unwrap();
-    let chat_layer = chat_layer.setup(|me| Layer::new(me, app.renderer.clone(), app.redraw_trigger.clone())).await;
+    let chat_layer = chat_layer
+        .setup(|me| Layer::new(me, app.renderer.clone(), app.redraw_trigger.clone()))
+        .await;
     content.link(chat_layer.clone());
 
     // Create contact screen

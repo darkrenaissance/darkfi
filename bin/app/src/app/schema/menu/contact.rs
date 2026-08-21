@@ -98,10 +98,8 @@ mod android_ui_consts {
     pub const TAB_LABEL_X: f32 = 90.;
     pub const CHANNELS_TAB_ICON_GAP: f32 = 12.;
     pub const CONTACTS_TAB_ICON_GAP: f32 = 8.5;
-    pub const CHANNELS_TAB_ICON_X: f32 =
-        TAB_LABEL_X - CHANNELS_ICON_SCALE - CHANNELS_TAB_ICON_GAP;
-    pub const CONTACTS_TAB_ICON_X: f32 =
-        TAB_LABEL_X - CONTACTS_ICON_SCALE - CONTACTS_TAB_ICON_GAP;
+    pub const CHANNELS_TAB_ICON_X: f32 = TAB_LABEL_X - CHANNELS_ICON_SCALE - CHANNELS_TAB_ICON_GAP;
+    pub const CONTACTS_TAB_ICON_X: f32 = TAB_LABEL_X - CONTACTS_ICON_SCALE - CONTACTS_TAB_ICON_GAP;
 }
 
 #[cfg(target_os = "android")]
@@ -152,10 +150,8 @@ mod ui_consts {
     pub const TAB_LABEL_X: f32 = 45.;
     pub const CHANNELS_TAB_ICON_GAP: f32 = 6.;
     pub const CONTACTS_TAB_ICON_GAP: f32 = 4.25;
-    pub const CHANNELS_TAB_ICON_X: f32 =
-        TAB_LABEL_X - CHANNELS_ICON_SCALE - CHANNELS_TAB_ICON_GAP;
-    pub const CONTACTS_TAB_ICON_X: f32 =
-        TAB_LABEL_X - CONTACTS_ICON_SCALE - CONTACTS_TAB_ICON_GAP;
+    pub const CHANNELS_TAB_ICON_X: f32 = TAB_LABEL_X - CHANNELS_ICON_SCALE - CHANNELS_TAB_ICON_GAP;
+    pub const CONTACTS_TAB_ICON_X: f32 = TAB_LABEL_X - CONTACTS_ICON_SCALE - CONTACTS_TAB_ICON_GAP;
 }
 
 async fn unfocus_editors(content: &SceneNodePtr) {
@@ -638,7 +634,9 @@ pub async fn make(
     prop.set_f32(atom, Role::App, 3, CONTACTS_ICON_SCALE).unwrap();
     node.set_property_u32(atom, Role::App, "z_index", 2).unwrap();
     let shape = shape::create_contacts_icon(COLOR_MINT).scaled(CONTACTS_ICON_SCALE);
-    let node = node.setup(|me| VectorArt::new(me, shape, app.renderer.clone(), app.redraw_trigger.clone())).await;
+    let node = node
+        .setup(|me| VectorArt::new(me, shape, app.renderer.clone(), app.redraw_trigger.clone()))
+        .await;
     content_area.link(node);
 
     let node = create_text("contacts_tab_text");
@@ -728,7 +726,9 @@ pub async fn make(
     prop.set_f32(atom, Role::App, 3, CHANNELS_ICON_SCALE).unwrap();
     node.set_property_u32(atom, Role::App, "z_index", 2).unwrap();
     let shape = shape::create_channels_icon(COLOR_INACTIVE).scaled(CHANNELS_ICON_SCALE);
-    let node = node.setup(|me| VectorArt::new(me, shape, app.renderer.clone(), app.redraw_trigger.clone())).await;
+    let node = node
+        .setup(|me| VectorArt::new(me, shape, app.renderer.clone(), app.redraw_trigger.clone()))
+        .await;
     content_area.link(node);
 
     let node = create_text("channels_tab_text");

@@ -84,7 +84,11 @@ pub async fn make(
     prop.set_f32(atom, Role::App, 3, BACKARROW_SCALE).unwrap();
     node.set_property_u32(atom, Role::App, "z_index", 3).unwrap();
     let arrow_shape = shape::create_back_arrow().scaled(BACKARROW_SCALE);
-    let node = node.setup(|me| VectorArt::new(me, arrow_shape, app.renderer.clone(), app.redraw_trigger.clone())).await;
+    let node = node
+        .setup(|me| {
+            VectorArt::new(me, arrow_shape, app.renderer.clone(), app.redraw_trigger.clone())
+        })
+        .await;
     main_layer.link(node);
 
     // Back button
@@ -97,7 +101,8 @@ pub async fn make(
     prop.set_f32(atom, Role::App, 1, 0.).unwrap();
     prop.set_f32(atom, Role::App, 2, BACKARROW_BG_W).unwrap();
     prop.set_f32(atom, Role::App, 3, HEADER_HEIGHT).unwrap();
-    let node = node.setup(|me| Button::new(me, app.renderer.clone(), app.redraw_trigger.clone())).await;
+    let node =
+        node.setup(|me| Button::new(me, app.renderer.clone(), app.redraw_trigger.clone())).await;
     main_layer.link(node);
 
     create_chat_btn(app, atom, &cc, &main_layer).await;
