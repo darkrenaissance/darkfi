@@ -53,6 +53,10 @@ static MUTED_TARGETS: &[&'static str] = &[
     "event_graph::dag_sync()",
     "event_graph::dag_insert()",
     "event_graph::protocol",
+    "turso_core",
+    "turso_sqlite",
+    "walletdb",
+    "rpc::client",
 ];
 #[cfg(not(target_os = "android"))]
 static ALLOW_TRACE: &[&'static str] = &["ui", "app", "gfx", "plugin", "app", "main"];
@@ -112,7 +116,16 @@ pub fn setup_logging() -> Option<WorkerGuard> {
             .with_writer(non_blocking_file_rotate)
             .with_filter(
                 TargetFilter::default()
-                    .ignore_targets(["sled", "rustls", "async_io", "polling"])
+                    .ignore_targets([
+                        "sled",
+                        "rustls",
+                        "async_io",
+                        "polling",
+                        "turso_core",
+                        "turso_sqlite",
+                        "walletdb",
+                        "rpc::client",
+                    ])
                     .default_level(Level::Trace),
             );
 
