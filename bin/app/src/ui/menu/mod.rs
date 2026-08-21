@@ -34,7 +34,7 @@ use std::{
 };
 
 use crate::{
-    gfx::{gfxtag, DrawCall, DrawInstruction, Point, Rectangle, Renderer},
+    gfx::{gfxtag, DrawCall, DrawInstruction, DrawMesh, Point, Rectangle, Renderer, Vertex},
     mesh::MeshBuilder,
     prop::{
         PropertyAtomicGuard, PropertyBool, PropertyColor, PropertyFloat32, PropertyPtr,
@@ -123,6 +123,7 @@ pub struct Menu {
     tasks: SyncMutex<Vec<smol::Task<()>>>,
     root_dc_key: u64,
     content_dc_key: u64,
+    bg_dc_key: u64,
 
     is_visible: PropertyBool,
     rect: PropertyRect,
@@ -159,8 +160,14 @@ pub struct Menu {
     parent_rect: SyncMutex<Option<Rectangle>>,
     saved_items: SyncMutex<Option<Vec<String>>>,
 
-    /// Cached content draw instructions. `None` means stale.
-    draw_cache: SyncMutex<Option<Vec<DrawInstruction>>>,
+    /// Opaque per-item text instructions, indexed by item position.
+    item_instrs: SyncMutex<Vec<Option<Vec<DrawInstruction>>>>,
+    /// Content instructions tagged with the scroll offset they were
+    /// assembled for. `None` means stale.
+    content_cache: SyncMutex<Option<(f32, Vec<DrawInstruction>)>>,
+    /// Viewport-anchored background meshes: opaque part plus fade
+    /// gradient. `None` means stale.
+    bg_meshes: SyncMutex<Option<(DrawMesh, Option<DrawMesh>)>>,
 }
 
 impl Menu {
@@ -209,6 +216,7 @@ impl Menu {
             tasks: SyncMutex::new(vec![]),
             root_dc_key: OsRng.gen(),
             content_dc_key: OsRng.gen(),
+            bg_dc_key: OsRng.gen(),
             is_visible,
             rect,
             scroll: AtomicF32::new(0.),
@@ -240,10 +248,20 @@ impl Menu {
             is_edit_mode: AtomicBool::new(false),
             parent_rect: SyncMutex::new(None),
             saved_items: SyncMutex::new(None),
-            draw_cache: SyncMutex::new(None),
+            item_instrs: SyncMutex::new(vec![]),
+            content_cache: SyncMutex::new(None),
+            bg_meshes: SyncMutex::new(None),
         });
 
         Pimpl::Menu(self_)
+    }
+
+    /// Invalidate all cached draw artifacts. Locks are taken one at a
+    /// time, never nested, so this cannot deadlock against `draw()`.
+    fn invalidate_draw(&self) {
+        *self.item_instrs.lock() = vec![];
+        *self.content_cache.lock() = None;
+        *self.bg_meshes.lock() = None;
     }
 
     /// Height of a single item
@@ -299,7 +317,7 @@ impl Menu {
                 self.is_edit_mode.store(true, Ordering::Release);
                 let node = self.node.upgrade().unwrap();
                 node.trigger("edit_active", vec![]).await.unwrap();
-                *self.draw_cache.lock() = None;
+                self.invalidate_draw();
                 self.redraw.trigger();
             }
         } else if is_tap {
@@ -330,13 +348,56 @@ impl Menu {
         }
     }
 
-    /// Build the content draw instructions. Called only when the draw
-    /// cache is stale or the rect changed; the root shell is re-emitted
-    /// cheaply by the draw pass on every pass.
-    fn make_content_instrs(&self, rect: &Rectangle) -> Vec<DrawInstruction> {
+    /// Fade alpha for a content-space y position at the given scroll:
+    /// 1 above the fade zone, decreasing linearly to 0 at the bottom
+    /// edge of the viewport.
+    fn fade_factor(&self, rect: &Rectangle, content_y: f32, scroll: f32) -> f32 {
+        let fade_distance = self.fade_zone.get();
+        if fade_distance <= EPSILON {
+            return 1.0
+        }
+
+        let viewport_y = content_y - scroll;
+        let fade_zone_start = rect.h - fade_distance;
+        if viewport_y <= fade_zone_start {
+            return 1.0
+        }
+
+        1.0 - ((viewport_y - fade_zone_start) / fade_distance).clamp(0.0, 1.0)
+    }
+
+    /// Render a single item's text as draw instructions with the given
+    /// color.
+    fn make_text_instrs(
+        &self,
+        item_text: &str,
+        color: crate::mesh::Color,
+        rect: &Rectangle,
+        font_size: f32,
+        window_scale: f32,
+        padding_x: f32,
+    ) -> Vec<DrawInstruction> {
+        let layout = text::make_layout(
+            item_text,
+            color,
+            font_size,
+            1.0,
+            window_scale,
+            Some(rect.w - padding_x * 2.),
+            &[],
+        );
+
+        text::render_layout(&layout, &self.renderer, gfxtag!("menu_text"))
+    }
+
+    /// Assemble the content draw instructions for the given scroll
+    /// offset. Items away from the fade zone reuse cached opaque text
+    /// instructions; items intersecting it are rebuilt with faded
+    /// colors. Separators are baked into one mesh with per-separator
+    /// alpha at absolute content positions.
+    fn assemble_content(&self, rect: &Rectangle, scroll: f32) -> Vec<DrawInstruction> {
         let mut instrs = vec![];
 
-        let scroll = self.scroll.load(Ordering::Relaxed);
         let item_height = self.get_item_height();
         let font_size = self.font_size.get();
         let padding_x = self.padding.get_f32(0).unwrap();
@@ -345,10 +406,8 @@ impl Menu {
         let text_color = self.text_color.get();
         let role1_color = self.role1_color.get();
         let role2_color = self.role2_color.get();
-        let bg_color = self.bg_color.get();
         let sep_size = self.sep_size.get();
         let sep_color = self.sep_color.get();
-        let fade_distance = self.fade_zone.get();
         let window_scale = self.window_scale.get();
 
         let role1_set: HashSet<String> =
@@ -359,41 +418,53 @@ impl Menu {
         let num_items = self.items.get_len();
 
         // Get items and reorder if dragging
-        let mut items_list = {
+        let items_list = {
             let mut items = vec![];
             for idx in 0..num_items {
                 items.push(self.items.get_str(idx).unwrap());
             }
+
+            if let Some(ref drag_info) = self.drag_info.lock().as_ref() {
+                if drag_info.item_idx != drag_info.insert_idx {
+                    let item = items.remove(drag_info.item_idx);
+                    items.insert(drag_info.insert_idx, item);
+                }
+            }
             items
         };
 
-        if let Some(ref drag_info) = self.drag_info.lock().as_ref() {
-            if drag_info.item_idx != drag_info.insert_idx {
-                let item = items_list.remove(drag_info.item_idx);
-                items_list.insert(drag_info.insert_idx, item);
+        // Single separator mesh covering all separators, each faded by
+        // its on-screen position. Drawn first while the cursor sits at
+        // the content origin, so baked positions map directly.
+        if num_items > 1 {
+            let mut sep_builder = MeshBuilder::new(gfxtag!("menu_sep"));
+            let uv = [0., 0.];
+
+            for idx in 0..num_items - 1 {
+                let y = (idx + 1) as f32 * item_height;
+                let factor = self.fade_factor(rect, y, scroll);
+                if factor <= 0.0 {
+                    continue
+                }
+
+                let color = [sep_color[0], sep_color[1], sep_color[2], sep_color[3] * factor];
+                sep_builder.append(
+                    vec![
+                        Vertex { pos: [0., y], color, uv },
+                        Vertex { pos: [rect.w, y], color, uv },
+                        Vertex { pos: [0., y + sep_size], color, uv },
+                        Vertex { pos: [rect.w, y + sep_size], color, uv },
+                    ],
+                    vec![0, 2, 1, 1, 2, 3],
+                );
             }
+
+            let sep_mesh = sep_builder.alloc(&self.renderer).draw_untextured();
+            instrs.push(DrawInstruction::Draw(sep_mesh));
         }
-
-        // Draw single background mesh for the entire menu
-        let content_height = num_items as f32 * item_height;
-
-        let mut bg_mesh = MeshBuilder::new(gfxtag!("menu_bg"));
-        bg_mesh.draw_filled_box(&Rectangle::new(0., 0., rect.w, content_height), bg_color);
-        let bg_mesh = bg_mesh.alloc(&self.renderer).draw_untextured();
-
-        instrs.push(DrawInstruction::Draw(bg_mesh));
-
-        // Separator line mesh
-        let mut sep_mesh = MeshBuilder::new(gfxtag!("menu_sep"));
-        sep_mesh.draw_filled_box(&Rectangle::new(0., 0., rect.w, sep_size), sep_color);
-        let sep_mesh = sep_mesh.alloc(&self.renderer).draw_untextured();
 
         let is_edit_mode = self.is_edit_mode.load(Ordering::Relaxed);
         let edit_offset = if is_edit_mode { handle_padding } else { 0.0 };
-
-        // Create X mesh for edit mode
-        let x_mesh =
-            if is_edit_mode { Some(shape::make_x(&self.renderer, font_size)) } else { None };
 
         let mut edit_instrs = vec![];
         if is_edit_mode {
@@ -410,6 +481,12 @@ impl Menu {
             edit_instrs.push(DrawInstruction::Move(Point::new(-rhs, -item_center_y)));
         }
 
+        let mut item_instrs = self.item_instrs.lock();
+        if item_instrs.len() != num_items {
+            item_instrs.clear();
+            item_instrs.resize(num_items, None);
+        }
+
         for idx in 0..num_items {
             let item_text = items_list[idx].clone();
 
@@ -421,51 +498,78 @@ impl Menu {
                 text_color
             };
 
-            // Apply fade effect in the configured fade zone
-            let item_y = idx as f32 * item_height - scroll;
-            let fade_zone_start = rect.h - fade_distance;
-            let color = if item_y >= fade_zone_start {
-                let fade_factor =
-                    1.0 - ((item_y - fade_zone_start) / fade_distance).clamp(0.0, 1.0);
-                let mut faded = base_color;
-                faded[3] *= fade_factor;
-                faded
-            } else {
-                base_color
-            };
+            let factor = self.fade_factor(rect, idx as f32 * item_height, scroll);
+            if factor <= 0.0 {
+                continue
+            }
 
             instrs.append(&mut edit_instrs.clone());
-
-            // Draw text
-            let layout = text::make_layout(
-                &item_text,
-                color,
-                font_size,
-                1.0,
-                window_scale,
-                Some(rect.w - padding_x * 2.),
-                &[],
-            );
-
-            let text_instr = text::render_layout(&layout, &self.renderer, gfxtag!("menu_text"));
 
             // Use a fraction of edit_offset for the label position to reduce gap from X icon
             let label_edit_offset = edit_offset * 0.62;
             instrs
                 .push(DrawInstruction::Move(Point::new(padding_x + label_edit_offset, padding_y)));
-            instrs.extend(text_instr);
+
+            if factor >= 1.0 {
+                if item_instrs[idx].is_none() {
+                    item_instrs[idx] = Some(self.make_text_instrs(
+                        &item_text,
+                        base_color,
+                        rect,
+                        font_size,
+                        window_scale,
+                        padding_x,
+                    ));
+                }
+                instrs.extend(item_instrs[idx].clone().unwrap());
+            } else {
+                let mut faded = base_color;
+                faded[3] *= factor;
+                instrs.extend(self.make_text_instrs(
+                    &item_text,
+                    faded,
+                    rect,
+                    font_size,
+                    window_scale,
+                    padding_x,
+                ));
+            }
+
             instrs.push(DrawInstruction::Move(Point::new(
                 -padding_x - label_edit_offset,
                 font_size + padding_y,
             )));
-
-            // Draw separator (except for last item)
-            if idx < num_items - 1 {
-                instrs.push(DrawInstruction::Draw(sep_mesh.clone()));
-            }
         }
 
         instrs
+    }
+
+    /// Build the viewport-anchored background meshes: an opaque quad
+    /// above the fade zone and a gradient quad fading to fully
+    /// transparent at the bottom edge, so the parent background shows
+    /// through.
+    fn make_bg_meshes(&self, rect: &Rectangle) -> (DrawMesh, Option<DrawMesh>) {
+        let fade_distance = self.fade_zone.get();
+        let content_height = self.content_height();
+        let bg_color = self.bg_color.get();
+
+        let fade_top = if fade_distance > EPSILON { rect.h - fade_distance } else { rect.h };
+        let main_bottom = fade_top.min(content_height).min(rect.h);
+
+        let mut main_builder = MeshBuilder::new(gfxtag!("menu_bg"));
+        if main_bottom > 0. {
+            main_builder.draw_filled_box(&Rectangle::new(0., 0., rect.w, main_bottom), bg_color);
+        }
+        let main_mesh = main_builder.alloc(&self.renderer).draw_untextured();
+
+        let fade_mesh = if fade_distance > EPSILON && content_height > fade_top {
+            let fade_bottom = rect.h.min(content_height);
+            Some(shape::make_fade_mesh(&self.renderer, rect.w, fade_top, fade_bottom, bg_color))
+        } else {
+            None
+        };
+
+        (main_mesh, fade_mesh)
     }
 
     fn scrollview(&self, scroll: f32) {
@@ -545,7 +649,7 @@ impl Menu {
 
         // Exit edit mode
         self_.is_edit_mode.store(false, Ordering::Release);
-        *self_.draw_cache.lock() = None;
+        self_.invalidate_draw();
         self_.redraw.trigger();
 
         true
@@ -579,7 +683,7 @@ impl Menu {
         node.trigger("edit_done", data).await.unwrap();
 
         self_.is_edit_mode.store(false, Ordering::Release);
-        *self_.draw_cache.lock() = None;
+        self_.invalidate_draw();
         self_.redraw.trigger();
 
         true
@@ -623,55 +727,59 @@ impl UIObject for Menu {
         let mut on_modify = OnModify::new(ex, self.node.clone(), me.clone());
 
         on_modify.when_change_external(self.items.clone(), |self_, _| async move {
-            *self_.draw_cache.lock() = None;
+            self_.invalidate_draw();
             self_.redraw.trigger();
         });
         on_modify.when_change_external(self.rect.prop(), |self_, _| async move {
-            *self_.draw_cache.lock() = None;
+            self_.invalidate_draw();
             self_.redraw.trigger();
         });
         on_modify.when_change_external(self.font_size.prop(), |self_, _| async move {
-            *self_.draw_cache.lock() = None;
+            self_.invalidate_draw();
             self_.redraw.trigger();
         });
         on_modify.when_change_external(self.padding.clone(), |self_, _| async move {
-            *self_.draw_cache.lock() = None;
+            self_.invalidate_draw();
             self_.redraw.trigger();
         });
         on_modify.when_change_external(self.text_color.prop(), |self_, _| async move {
-            *self_.draw_cache.lock() = None;
+            self_.invalidate_draw();
             self_.redraw.trigger();
         });
         on_modify.when_change_external(self.bg_color.prop(), |self_, _| async move {
-            *self_.draw_cache.lock() = None;
+            self_.invalidate_draw();
             self_.redraw.trigger();
         });
         on_modify.when_change_external(self.sep_size.prop(), |self_, _| async move {
-            *self_.draw_cache.lock() = None;
+            self_.invalidate_draw();
             self_.redraw.trigger();
         });
         on_modify.when_change_external(self.sep_color.prop(), |self_, _| async move {
-            *self_.draw_cache.lock() = None;
+            self_.invalidate_draw();
+            self_.redraw.trigger();
+        });
+        on_modify.when_change_external(self.fade_zone.prop(), |self_, _| async move {
+            self_.invalidate_draw();
             self_.redraw.trigger();
         });
         on_modify.when_change_external(self.role1_color.prop(), |self_, _| async move {
-            *self_.draw_cache.lock() = None;
+            self_.invalidate_draw();
             self_.redraw.trigger();
         });
         on_modify.when_change_external(self.role1_group.clone(), |self_, _| async move {
-            *self_.draw_cache.lock() = None;
+            self_.invalidate_draw();
             self_.redraw.trigger();
         });
         on_modify.when_change_external(self.role2_color.prop(), |self_, _| async move {
-            *self_.draw_cache.lock() = None;
+            self_.invalidate_draw();
             self_.redraw.trigger();
         });
         on_modify.when_change_external(self.role2_group.clone(), |self_, _| async move {
-            *self_.draw_cache.lock() = None;
+            self_.invalidate_draw();
             self_.redraw.trigger();
         });
         on_modify.when_change_external(self.window_scale.prop(), |self_, _| async move {
-            *self_.draw_cache.lock() = None;
+            self_.invalidate_draw();
             self_.redraw.trigger();
         });
 
@@ -682,7 +790,7 @@ impl UIObject for Menu {
 
     fn stop(&self) {
         *self.tasks.lock() = vec![];
-        *self.draw_cache.lock() = None;
+        self.invalidate_draw();
     }
 
     async fn draw(
@@ -698,45 +806,70 @@ impl UIObject for Menu {
         let rect = self.rect.get();
         let rect_changed = rect != prev_rect;
 
-        // Compute under the lock so a concurrent invalidation lands
-        // before or after, never between.
-        let mut cache = self.draw_cache.lock();
-        if cache.is_none() || rect_changed {
-            *cache = Some(self.make_content_instrs(&rect));
-        }
-        let instrs = cache.clone().unwrap();
-        drop(cache);
-
         // The root shell is cheap: re-emit it every pass with the
         // current scroll so scroll pokes don't invalidate content.
         let scroll = self.scroll.load(Ordering::Relaxed);
 
-        Some(DrawUpdate {
-            key: self.root_dc_key,
-            draw_calls: vec![
-                (
-                    self.root_dc_key,
-                    DrawCall {
-                        instrs: vec![
-                            DrawInstruction::ApplyView(rect),
-                            DrawInstruction::Move(Point::new(0., -scroll)),
-                        ],
-                        dcs: vec![self.content_dc_key],
-                        z_index: self.z_index.get(),
-                        debug_str: "menu_root",
-                    },
-                ),
-                (
-                    self.content_dc_key,
-                    DrawCall {
-                        instrs,
-                        dcs: vec![],
-                        z_index: self.z_index.get(),
-                        debug_str: "menu_content",
-                    },
-                ),
-            ],
-        })
+        // Background meshes are viewport-anchored, so they only depend
+        // on the rect and content height, never on scroll.
+        let mut bg = self.bg_meshes.lock();
+        if bg.is_none() || rect_changed {
+            *bg = Some(self.make_bg_meshes(&rect));
+        }
+        let bg_meshes = bg.clone();
+        drop(bg);
+
+        // Content is reassembled when stale or when the scroll moved:
+        // only fade-zone items and the separator mesh are rebuilt, the
+        // rest reuse cached instructions.
+        let mut cache = self.content_cache.lock();
+        let stale = match cache.as_ref() {
+            Some((cached_scroll, _)) => *cached_scroll != scroll,
+            None => true,
+        };
+        if stale || rect_changed {
+            *cache = Some((scroll, self.assemble_content(&rect, scroll)));
+        }
+        let instrs = cache.as_ref().unwrap().1.clone();
+        drop(cache);
+
+        let mut root_dcs = vec![];
+        let mut draw_calls = vec![(
+            self.root_dc_key,
+            DrawCall {
+                instrs: vec![
+                    DrawInstruction::ApplyView(rect),
+                    DrawInstruction::Move(Point::new(0., -scroll)),
+                ],
+                dcs: vec![],
+                z_index: self.z_index.get(),
+                debug_str: "menu_root",
+            },
+        )];
+
+        if let Some((main_mesh, fade_mesh)) = bg_meshes {
+            root_dcs.push(self.bg_dc_key);
+            let mut bg_instrs = vec![
+                DrawInstruction::Move(Point::new(0., scroll)),
+                DrawInstruction::Draw(main_mesh),
+            ];
+            if let Some(fade_mesh) = fade_mesh {
+                bg_instrs.push(DrawInstruction::Draw(fade_mesh));
+            }
+            draw_calls.push((
+                self.bg_dc_key,
+                DrawCall { instrs: bg_instrs, dcs: vec![], z_index: 0, debug_str: "menu_bg" },
+            ));
+        }
+
+        root_dcs.push(self.content_dc_key);
+        draw_calls[0].1.dcs = root_dcs;
+        draw_calls.push((
+            self.content_dc_key,
+            DrawCall { instrs, dcs: vec![], z_index: 1, debug_str: "menu_content" },
+        ));
+
+        Some(DrawUpdate { key: self.root_dc_key, draw_calls })
     }
 
     async fn handle_mouse_btn_down(&self, btn: MouseButton, mouse_pos: Point) -> bool {
@@ -793,7 +926,7 @@ impl UIObject for Menu {
                     arc_self.is_edit_mode.store(true, Ordering::Release);
                     let node = arc_self.node.upgrade().unwrap();
                     node.trigger("edit_active", vec![]).await.unwrap();
-                    *arc_self.draw_cache.lock() = None;
+                    arc_self.invalidate_draw();
                     arc_self.redraw.trigger();
                 }
             }
@@ -875,7 +1008,7 @@ impl UIObject for Menu {
         }
 
         if should_redraw {
-            *self.draw_cache.lock() = None;
+            self.invalidate_draw();
             self.redraw.trigger();
         }
 
@@ -915,6 +1048,38 @@ impl UIObject for Menu {
 
                 *self.touch_info.lock() =
                     Some(TouchInfo::new(self.scroll.load(Ordering::Relaxed), touch_pos));
+
+                // Spawn a task to detect long press while the touch is
+                // still held, mirroring the mouse path.
+                let me = self.me.clone();
+                let start_pos = touch_pos;
+                let ex = self.ex.clone();
+                let long_press_task = ex.spawn(async move {
+                    darkfi::system::msleep(long_press_timeout() as u64).await;
+
+                    let Some(arc_self) = me.upgrade() else { return };
+
+                    let touch_info = arc_self.touch_info.lock().clone();
+                    let Some(info) = touch_info else { return };
+
+                    let movement_dist = ((info.last_pos.x - start_pos.x).powi(2) +
+                        (info.last_pos.y - start_pos.y).powi(2))
+                    .sqrt();
+
+                    if movement_dist < LONG_PRESS_EPSILON &&
+                        !arc_self.is_edit_mode.load(Ordering::Relaxed)
+                    {
+                        arc_self.save_items_layout();
+                        arc_self.is_edit_mode.store(true, Ordering::Release);
+                        let node = arc_self.node.upgrade().unwrap();
+                        node.trigger("edit_active", vec![]).await.unwrap();
+                        arc_self.invalidate_draw();
+                        arc_self.redraw.trigger();
+                    }
+                });
+
+                *self.long_press_task.lock() = Some(long_press_task);
+
                 true
             }
 
@@ -935,7 +1100,7 @@ impl UIObject for Menu {
                 }
 
                 if should_redraw {
-                    *self.draw_cache.lock() = None;
+                    self.invalidate_draw();
                     self.redraw.trigger();
                 }
 
@@ -980,6 +1145,12 @@ impl UIObject for Menu {
             TouchPhase::Started | TouchPhase::Moved => false,
 
             TouchPhase::Ended | TouchPhase::Cancelled => {
+                // Cancel the long press detection task
+                let task = self.long_press_task.lock().take();
+                if let Some(task) = task {
+                    task.cancel().await;
+                }
+
                 let drag = self.drag_info.lock().take();
                 if let Some(drag_info) = drag {
                     if drag_info.item_idx != drag_info.insert_idx {

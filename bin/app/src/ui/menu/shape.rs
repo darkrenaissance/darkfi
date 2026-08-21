@@ -49,6 +49,31 @@ pub fn make_x(renderer: &Renderer, font_size: f32) -> DrawMesh {
     mesh.alloc(renderer).draw_untextured()
 }
 
+pub fn make_fade_mesh(
+    renderer: &Renderer,
+    width: f32,
+    fade_top: f32,
+    fade_bottom: f32,
+    color: Color,
+) -> DrawMesh {
+    let mut mesh = MeshBuilder::new(gfxtag!("menu_fade"));
+
+    let bottom_color = [color[0], color[1], color[2], 0.];
+    let uv = [0., 0.];
+
+    mesh.append(
+        vec![
+            Vertex { pos: [0., fade_top], color, uv },
+            Vertex { pos: [width, fade_top], color, uv },
+            Vertex { pos: [0., fade_bottom], color: bottom_color, uv },
+            Vertex { pos: [width, fade_bottom], color: bottom_color, uv },
+        ],
+        vec![0, 2, 1, 1, 2, 3],
+    );
+
+    mesh.alloc(renderer).draw_untextured()
+}
+
 pub fn make_hammy(renderer: &Renderer, font_size: f32) -> DrawMesh {
     let ham_size = font_size * 0.14;
     let gap_size = font_size * 0.42;
