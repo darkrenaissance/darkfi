@@ -79,7 +79,9 @@ pub fn to_json_result(res: TaudResult<JsonValue>, id: i64) -> JsonResult {
                 JsonError::new(ErrorCode::InternalError, Some(e.to_string()), id).into()
             }
             TaudError::IoError(e) => JsonError::new(ErrorCode::InternalError, Some(e), id).into(),
-            TaudError::Sled(e) => JsonError::new(ErrorCode::InternalError, Some(e.to_string()), id).into(),
+            TaudError::Sled(e) => {
+                JsonError::new(ErrorCode::InternalError, Some(e.to_string()), id).into()
+            }
         },
     }
 }
