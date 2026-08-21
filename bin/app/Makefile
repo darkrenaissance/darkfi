@@ -24,12 +24,12 @@ SRC = \
 	$(shell find assets -type f) \
 	$(shell find src -type f)
 
-RELEASE_FEATURES = --features=enable-plugins
-DEBUG_FEATURES = --features=enable-filelog,enable-plugins
+RELEASE_FEATURES = --features=schema-app,enable-filelog,enable-plugin-darkirc,enable-plugin-drk
+DEBUG_FEATURES = --features=schema-app,enable-filelog,enable-plugin-darkirc,enable-plugin-drk
 
 #DEV_FEATURES = --features=enable-filelog,enable-netdebug,emulate-android
 #DEV_FEATURES = --features=enable-filelog,enable-netdebug,enable-plugins
-DEV_FEATURES = --features=schema-app,enable-netdebug
+DEV_FEATURES = --features=schema-app,enable-filelog,enable-plugin-darkirc,enable-plugin-drk
 
 default: build-release
 	./darkfi-app
@@ -46,16 +46,16 @@ linux-release: build-release
 	-mv darkfi-app darkfi-app.linux
 linux-debug: build-debug
 	-mv darkfi-app darkfi-app_debug.linux
-win-release: $(SRC) fonts
+win-release: $(SRC) $(PROOFS_BIN) fonts
 	$(CARGO) build --release $(RELEASE_FEATURES)
 	-mv target/release/darkfi-app.exe .
-win-debug: $(SRC) fonts
+win-debug: $(SRC) $(PROOFS_BIN) fonts
 	$(CARGO) build $(DEBUG_FEATURES)
 	-mv target/debug/darkfi-app.exe .
-android-release: $(SRC) fonts assets/forest_720x1280.mp4
+android-release: $(SRC) $(PROOFS_BIN) fonts assets/forest_720x1280.mp4
 	podman run -v $(shell pwd)/../../:/root/darkfi -w /root/darkfi/bin/app/ -t apk cargo quad-apk build --release $(RELEASE_FEATURES)
 	-mv $(RELEASE_APK) darkfi-app.apk
-android-debug: $(SRC) fonts assets/forest_720x1280.mp4
+android-debug: $(SRC) $(PROOFS_BIN) fonts assets/forest_720x1280.mp4
 	podman run -v $(shell pwd)/../../:/root/darkfi -w /root/darkfi/bin/app/ -t apk cargo quad-apk build $(DEBUG_FEATURES)
 	-mv $(DEBUG_APK) darkfi-app_debug.apk
 
@@ -69,10 +69,10 @@ win-docker-debug: $(SRC)
 		cargo build --target x86_64-pc-windows-gnu $(DEBUG_FEATURES)
 	./release/win/package.sh debug
 
-build-release: $(SRC) fonts assets/forest_1920x1080.ivf
+build-release: $(SRC) $(PROOFS_BIN) fonts assets/forest_1920x1080.ivf
 	$(CARGO) build --release $(RELEASE_FEATURES)
 	-mv target/release/darkfi-app .
-build-debug: $(SRC) fonts assets/forest_1920x1080.ivf
+build-debug: $(SRC) $(PROOFS_BIN) fonts assets/forest_1920x1080.ivf
 	$(CARGO) build $(DEBUG_FEATURES)
 	-mv target/debug/darkfi-app .
 
@@ -96,9 +96,17 @@ assets/forest_720x1280.mp4:
 	rm -f assets/forest_1920x1080.ivf
 	wget -P assets/ -c https://dark.fi/assets/forest_720x1280.mp4
 
+# zkas circuits (needed for darkirc plugin crate)
+
+zkas:
+	$(MAKE) -C ../../bin/zkas
+
+$(PROOFS_BIN): zkas $(PROOFS_SRC)
+	$(ZKAS) $(basename $@) -o $@
+
 # Developer targets
 
-compile-dev: $(SRC) fonts assets/forest_1920x1080.ivf
+compile-dev: $(SRC) $(PROOFS_BIN) fonts assets/forest_1920x1080.ivf
 	$(CARGO) lbuild --no-default-features $(DEV_FEATURES)
 	-mv target/debug/darkfi-app .
 
@@ -112,8 +120,8 @@ apk:
 	$(MAKE) install-apk
 	$(MAKE) log-apk
 
-compile-apk: $(SRC) fonts assets/forest_720x1280.mp4
-	cargo quad-apk build --no-default-features $(DEV_FEATURES)
+compile-apk: $(SRC) $(PROOFS_BIN) fonts assets/forest_720x1280.mp4
+	cargo quad-apk build --no-default-features --release $(DEV_FEATURES)
 	-mv $(DEBUG_APK) .
 
 install-apk:
@@ -137,4 +145,4 @@ clean:
 	podman run -v $(shell pwd):/root/dw -w /root/dw -t apk rm -fr target/
 	rm -f darkfi-app.apk
 
-.PHONY: all android cli clean
+.PHONY: all android cli clean zkas
