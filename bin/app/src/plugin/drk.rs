@@ -704,9 +704,17 @@ impl DrkPlugin {
                     }
                 };
                 let status: u8 = if progress > 0.5 { 2 } else { 1 };
-                if let Some(node) = self2.node.upgrade() {
-                    let _ = node.trigger("connect", serialize(&status)).await;
-                }
+                let Some(node) = self2.node.upgrade() else { continue };
+                let start_height = first_height.unwrap();
+                let blocks_scanned = height - start_height;
+                let total_blocks = final_height - start_height;
+                let percentage = if total_blocks > 0 {
+                    (blocks_scanned as f32 / total_blocks as f32 * 100.0) as u32
+                } else {
+                    0
+                };
+                let desc = format!("{}/{} [{}%]", blocks_scanned, total_blocks, percentage);
+                let _ = node.trigger("connect", serialize(&(status, desc))).await;
             }
         });
 
@@ -723,7 +731,12 @@ impl DrkPlugin {
                 let ex = ex_.clone();
                 let progress_pub = self2.scan_progress_pub.clone();
 
-                let _ = self2.node.upgrade().unwrap().trigger("connect", serialize(&0u8)).await;
+                let _ = self2
+                    .node
+                    .upgrade()
+                    .unwrap()
+                    .trigger("connect", serialize(&(0u8, String::new())))
+                    .await;
 
                 if let Err(e) = drk
                     .read()
@@ -732,7 +745,12 @@ impl DrkPlugin {
                     .await
                 {
                     e!("Failed during drk scanning: {e}");
-                    let _ = self2.node.upgrade().unwrap().trigger("connect", serialize(&0u8)).await;
+                    let _ = self2
+                        .node
+                        .upgrade()
+                        .unwrap()
+                        .trigger("connect", serialize(&(0u8, String::new())))
+                        .await;
 
                     // Wait before retrying
                     i!("Retrying connection to darkfid in {} seconds...", DARKFID_RETRY_TIME);
@@ -740,7 +758,12 @@ impl DrkPlugin {
                     continue
                 }
 
-                let _ = self2.node.upgrade().unwrap().trigger("connect", serialize(&3u8)).await;
+                let _ = self2
+                    .node
+                    .upgrade()
+                    .unwrap()
+                    .trigger("connect", serialize(&(3u8, String::new())))
+                    .await;
 
                 self2.emit_balances_updated().await;
 
@@ -761,7 +784,12 @@ impl DrkPlugin {
                     }
                 }
 
-                let _ = self2.node.upgrade().unwrap().trigger("connect", serialize(&0u8)).await;
+                let _ = self2
+                    .node
+                    .upgrade()
+                    .unwrap()
+                    .trigger("connect", serialize(&(0u8, String::new())))
+                    .await;
 
                 // Wait before retrying
                 i!("Retrying connection to darkfid in {} seconds...", DARKFID_RETRY_TIME);

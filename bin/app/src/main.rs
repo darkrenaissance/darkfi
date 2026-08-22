@@ -473,8 +473,14 @@ async fn load_plugins(
             let net3_is_visible = PropertyBool::wrap(&net3, Role::App, "is_visible", 0).unwrap();
 
             while let Ok(data) = recvr.recv().await {
-                let status: u8 = deserialize(&data).unwrap();
+                let (status, desc): (u8, String) = deserialize(&data).unwrap();
                 let atom = &mut redraw2.make_guard(gfxtag!("blockchain netstatus change"));
+
+                if let Some(progress_node) =
+                    sg_root2.lookup_node("/window/content/wallet/netstatus_layer/progress")
+                {
+                    progress_node.set_property_str(atom, Role::App, "text", &desc).unwrap();
+                }
 
                 match status {
                     1 => {

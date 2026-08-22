@@ -18,9 +18,12 @@
 
 use crate::{
     app::{
+        node::create_text,
         schema::{
             create_layer, create_vector_art,
-            wallet::data::{NETLOGO_SCALE, NETSTATUS_ICON_SIZE},
+            wallet::data::{
+                NETLOGO_SCALE, NETSTATUS_ICON_SIZE, PROGRESS_FONTSIZE, PROGRESS_MARGIN,
+            },
         },
         App,
     },
@@ -28,27 +31,28 @@ use crate::{
     prop::{PropertyAtomicGuard, PropertyFloat32, Role},
     scene::SceneNodePtr,
     shape,
-    ui::{Layer, VectorArt},
+    ui::{Layer, Text, VectorArt},
     util::i18n::I18nBabelFish,
 };
 
 pub async fn make(
     app: &App,
     wallet_layer: SceneNodePtr,
-    _i18n_fish: &I18nBabelFish,
-    _window_scale: PropertyFloat32,
+    i18n_fish: &I18nBabelFish,
+    window_scale: PropertyFloat32,
 ) -> SceneNodePtr {
     let atom = &mut PropertyAtomicGuard::none();
 
     let mut cc = expr::Compiler::new();
     cc.add_const_f32("NETSTATUS_ICON_SIZE", NETSTATUS_ICON_SIZE);
+    cc.add_const_f32("PROGRESS_MARGIN", PROGRESS_MARGIN);
 
     let netlayer_node = create_layer("netstatus_layer");
     let prop = netlayer_node.get_property("rect").unwrap();
-    let code = cc.compile("w - NETSTATUS_ICON_SIZE").unwrap();
-    prop.set_expr(atom, Role::App, 0, code).unwrap();
+    prop.set_f32(atom, Role::App, 0, 0.).unwrap();
     prop.set_f32(atom, Role::App, 1, 0.).unwrap();
-    prop.set_f32(atom, Role::App, 2, 1000.).unwrap();
+    let code = cc.compile("w").unwrap();
+    prop.set_expr(atom, Role::App, 2, code).unwrap();
     prop.set_f32(atom, Role::App, 3, 1000.).unwrap();
     netlayer_node.set_property_bool(atom, Role::App, "is_visible", true).unwrap();
     netlayer_node.set_property_u32(atom, Role::App, "z_index", 3).unwrap();
@@ -57,9 +61,40 @@ pub async fn make(
         .await;
     wallet_layer.link(netlayer_node.clone());
 
+    // Scan progress text
+    let node = create_text("progress");
+    let prop = node.get_property("rect").unwrap();
+    prop.set_f32(atom, Role::App, 0, 0.).unwrap();
+    prop.set_f32(atom, Role::App, 1, NETSTATUS_ICON_SIZE / 2. - PROGRESS_FONTSIZE / 2.).unwrap();
+    let code = cc.compile("w - NETSTATUS_ICON_SIZE - PROGRESS_MARGIN").unwrap();
+    prop.set_expr(atom, Role::App, 2, code).unwrap();
+    prop.set_f32(atom, Role::App, 3, PROGRESS_FONTSIZE).unwrap();
+    node.set_property_u32(atom, Role::App, "z_index", 3).unwrap();
+    node.set_property_f32(atom, Role::App, "font_size", PROGRESS_FONTSIZE).unwrap();
+    node.set_property_enum(atom, Role::App, "text_align", "end").unwrap();
+    let prop = node.get_property("text_color").unwrap();
+    prop.set_f32(atom, Role::App, 0, 1.).unwrap();
+    prop.set_f32(atom, Role::App, 1, 1.).unwrap();
+    prop.set_f32(atom, Role::App, 2, 1.).unwrap();
+    prop.set_f32(atom, Role::App, 3, 1.).unwrap();
+    node.set_property_u32(atom, Role::App, "z_index", 3).unwrap();
+    let node = node
+        .setup(|me| {
+            Text::new(
+                me,
+                window_scale.clone(),
+                app.renderer.clone(),
+                i18n_fish.clone(),
+                app.redraw_trigger.clone(),
+            )
+        })
+        .await;
+    netlayer_node.link(node);
+
     let node = create_vector_art("net0");
     let prop = node.get_property("rect").unwrap();
-    prop.set_f32(atom, Role::App, 0, NETSTATUS_ICON_SIZE / 2.).unwrap();
+    let code = cc.compile("w - NETSTATUS_ICON_SIZE / 2").unwrap();
+    prop.set_expr(atom, Role::App, 0, code).unwrap();
     prop.set_f32(atom, Role::App, 1, NETSTATUS_ICON_SIZE / 2.).unwrap();
     prop.set_expr(atom, Role::App, 2, expr::load_var("w")).unwrap();
     prop.set_expr(atom, Role::App, 3, expr::load_var("h")).unwrap();
@@ -77,7 +112,8 @@ pub async fn make(
 
     let node = create_vector_art("net1");
     let prop = node.get_property("rect").unwrap();
-    prop.set_f32(atom, Role::App, 0, NETSTATUS_ICON_SIZE / 2.).unwrap();
+    let code = cc.compile("w - NETSTATUS_ICON_SIZE / 2").unwrap();
+    prop.set_expr(atom, Role::App, 0, code).unwrap();
     prop.set_f32(atom, Role::App, 1, NETSTATUS_ICON_SIZE / 2.).unwrap();
     prop.set_expr(atom, Role::App, 2, expr::load_var("w")).unwrap();
     prop.set_expr(atom, Role::App, 3, expr::load_var("h")).unwrap();
@@ -95,7 +131,8 @@ pub async fn make(
 
     let node = create_vector_art("net2");
     let prop = node.get_property("rect").unwrap();
-    prop.set_f32(atom, Role::App, 0, NETSTATUS_ICON_SIZE / 2.).unwrap();
+    let code = cc.compile("w - NETSTATUS_ICON_SIZE / 2").unwrap();
+    prop.set_expr(atom, Role::App, 0, code).unwrap();
     prop.set_f32(atom, Role::App, 1, NETSTATUS_ICON_SIZE / 2.).unwrap();
     prop.set_expr(atom, Role::App, 2, expr::load_var("w")).unwrap();
     prop.set_expr(atom, Role::App, 3, expr::load_var("h")).unwrap();
@@ -113,7 +150,8 @@ pub async fn make(
 
     let node = create_vector_art("net3");
     let prop = node.get_property("rect").unwrap();
-    prop.set_f32(atom, Role::App, 0, NETSTATUS_ICON_SIZE / 2.).unwrap();
+    let code = cc.compile("w - NETSTATUS_ICON_SIZE / 2").unwrap();
+    prop.set_expr(atom, Role::App, 0, code).unwrap();
     prop.set_f32(atom, Role::App, 1, NETSTATUS_ICON_SIZE / 2.).unwrap();
     prop.set_expr(atom, Role::App, 2, expr::load_var("w")).unwrap();
     prop.set_expr(atom, Role::App, 3, expr::load_var("h")).unwrap();
