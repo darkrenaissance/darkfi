@@ -16,9 +16,10 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use sled_overlay::sled;
-use smol::lock::Mutex;
 use std::{collections::HashSet, path::PathBuf};
+
+use kvdb_overlay::Database;
+use smol::lock::Mutex;
 
 use darkfi::{
     event_graph::EventGraphPtr, net::P2pPtr, rpc::jsonrpc::JsonSubscriber, system::StoppableTaskPtr,
@@ -56,8 +57,8 @@ pub struct Privmsg {
 pub struct DarkIrc {
     /// P2P network pointer
     p2p: P2pPtr,
-    /// Sled DB (also used in event_graph and for RLN)
-    sled: sled::Db,
+    /// KVDB (also used in event_graph and for RLN)
+    kvdb: Database,
     /// Event Graph instance
     event_graph: EventGraphPtr,
     /// JSON-RPC connection tracker
@@ -75,7 +76,7 @@ pub struct DarkIrc {
 impl DarkIrc {
     pub fn new(
         p2p: P2pPtr,
-        sled: sled::Db,
+        kvdb: Database,
         event_graph: EventGraphPtr,
         dnet_sub: JsonSubscriber,
         deg_sub: JsonSubscriber,
@@ -84,7 +85,7 @@ impl DarkIrc {
     ) -> Self {
         Self {
             p2p,
-            sled,
+            kvdb,
             event_graph,
             rpc_connections: Mutex::new(HashSet::new()),
             dnet_sub,
@@ -132,7 +133,7 @@ mod tests {
     };
     use darkfi_serial::{deserialize_async_partial, serialize_async};
     use easy_parallel::Parallel;
-    use sled_overlay::sled;
+    use kvdb_overlay::Database;
     use smol::{channel, future, Executor};
     use url::Url;
 
@@ -190,9 +191,9 @@ mod tests {
         };
 
         let p2p = P2p::new(settings, ex.clone()).await.unwrap();
-        let sled_db = sled::Config::new().temporary(true).open().unwrap();
+        let (kvdb, _kvdb_folder) = Database::open_temp().unwrap();
         let event_graph =
-            EventGraph::new(p2p.clone(), sled_db, "/tmp".into(), false, history_test_config(), ex)
+            EventGraph::new(p2p.clone(), kvdb, "/tmp".into(), false, history_test_config(), ex)
                 .await
                 .unwrap();
         event_graph.synced.store(true, Ordering::Release);

@@ -55,8 +55,8 @@ use irc2::{
     DarkIrc,
 };
 
+use kvdb_overlay::Database;
 use rand::rngs::OsRng;
-use sled_overlay::sled;
 use smol::{fs, stream::StreamExt, Executor};
 use structopt_toml::{serde::Deserialize, structopt::StructOpt, StructOptToml};
 use tracing::{debug, error, info};
@@ -85,21 +85,9 @@ const DARKIRC_HOURS_ROTATION: u64 = 1;
 /// deployment never appear valid on another.
 const DARKIRC_GENESIS_CONTENTS: &[u8] = b"darkirc-v1";
 
-const BYTES_PER_MIB: u64 = 1024 * 1024;
-
 /// Per-epoch limit printed by `--gen-rln-identity`.
 fn generated_rln_identity_user_msg_limit() -> u64 {
     GENESIS_USER_MSG_LIMIT
-}
-
-fn sled_cache_capacity_bytes(name: &str, cache_mb: u64) -> Result<u64> {
-    if cache_mb == 0 {
-        return Err(Error::Custom(format!("{name} must be greater than 0")))
-    }
-
-    cache_mb
-        .checked_mul(BYTES_PER_MIB)
-        .ok_or_else(|| Error::Custom(format!("{name} overflows bytes")))
 }
 
 fn history_retention_limit(
@@ -181,17 +169,9 @@ struct Args {
     /// Datastore (DB) path
     datastore: String,
 
-    #[structopt(long, default_value = "64")]
-    /// Sled cache capacity for the datastore, in MiB
-    sled_cache_mb: u64,
-
     #[structopt(long, default_value = "~/.local/share/darkfi/darkirc/zk_keys")]
     /// Datastore path for RLN proving and verifying keys
     zk_key_datastore: String,
-
-    #[structopt(long, default_value = "16")]
-    /// Sled cache capacity for the RLN key datastore, in MiB
-    zk_key_sled_cache_mb: u64,
 
     #[structopt(long)]
     /// Enable RLN proof generation and verification
@@ -202,7 +182,7 @@ struct Args {
     replay_datastore: String,
 
     #[structopt(long)]
-    /// Flag to store Sled DB instructions
+    /// Flag to store KVDB instructions
     replay_mode: bool,
 
     #[structopt(long)]
@@ -515,38 +495,25 @@ pub const DARKIRC_GENESIS_COMMITMENTS_REPR: &[[u8; 32]] = &[
         );
     }
 
-    let sled_cache_capacity = sled_cache_capacity_bytes("sled_cache_mb", args.sled_cache_mb)?;
-    info!("Instantiating event DAG with {} MiB sled cache", args.sled_cache_mb);
-    let sled_db = match sled::Config::new()
-        .path(datastore.clone())
-        .cache_capacity(sled_cache_capacity)
-        .open()
-    {
+    info!("Instantiating event DAG");
+    let kvdb = match Database::open_default(&datastore) {
         Ok(v) => v,
         Err(e) => {
             error!("Failed to open datastore database `{datastore:?}`: {e}");
             return Err(e.into());
         }
     };
-    log_memory("after sled open");
+    log_memory("after kvdb open");
 
     let zk_key_db = if let Some(zk_key_datastore) = zk_key_datastore.as_ref() {
-        let zk_key_sled_cache_capacity =
-            sled_cache_capacity_bytes("zk_key_sled_cache_mb", args.zk_key_sled_cache_mb)?;
-        info!("Opening RLN key datastore with {} MiB sled cache", args.zk_key_sled_cache_mb);
-        Some(
-            match sled::Config::new()
-                .path(zk_key_datastore.clone())
-                .cache_capacity(zk_key_sled_cache_capacity)
-                .open()
-            {
-                Ok(v) => v,
-                Err(e) => {
-                    error!("Failed to open RLN key datastore `{zk_key_datastore:?}`: {e}");
-                    return Err(e.into());
-                }
-            },
-        )
+        info!("Opening RLN key datastore");
+        Some(match Database::open_default(zk_key_datastore) {
+            Ok(v) => v,
+            Err(e) => {
+                error!("Failed to open RLN key datastore `{zk_key_datastore:?}`: {e}");
+                return Err(e.into());
+            }
+        })
     } else {
         None
     };
@@ -576,7 +543,7 @@ pub const DARKIRC_GENESIS_COMMITMENTS_REPR: &[[u8; 32]] = &[
     let event_graph = match if let Some(zk_key_db) = zk_key_db.clone() {
         EventGraph::new_with_zk_key_db(
             p2p.clone(),
-            sled_db.clone(),
+            kvdb.clone(),
             zk_key_db,
             replay_datastore.clone(),
             replay_mode,
@@ -587,7 +554,7 @@ pub const DARKIRC_GENESIS_COMMITMENTS_REPR: &[[u8; 32]] = &[
     } else {
         EventGraph::new(
             p2p.clone(),
-            sled_db.clone(),
+            kvdb.clone(),
             replay_datastore.clone(),
             replay_mode,
             eg_config,
@@ -695,7 +662,7 @@ pub const DARKIRC_GENESIS_COMMITMENTS_REPR: &[[u8; 32]] = &[
     let rpc_settings: RpcSettings = args.rpc.into();
     let darkirc = Arc::new(DarkIrc::new(
         p2p.clone(),
-        sled_db.clone(),
+        kvdb.clone(),
         event_graph.clone(),
         dnet_sub,
         deg_sub,
@@ -863,14 +830,12 @@ pub const DARKIRC_GENESIS_COMMITMENTS_REPR: &[[u8; 32]] = &[
     drain_task.stop().await;
     prune_task.stop().await;
 
-    info!("Flushing sled database...");
-    let flushed_bytes = sled_db.flush_async().await?;
-    info!("Flushed {flushed_bytes} bytes");
+    info!("Flushing kvdb database...");
+    kvdb.flush_default_mode_async().await?;
 
     if let Some(zk_key_db) = zk_key_db {
-        info!("Flushing RLN key sled database...");
-        let flushed_key_bytes = zk_key_db.flush_async().await?;
-        info!("Flushed {flushed_key_bytes} RLN key bytes");
+        info!("Flushing RLN key kvdb database...");
+        zk_key_db.flush_default_mode_async().await?;
     }
 
     info!("Shut down successfully");
@@ -1010,7 +975,7 @@ mod tests {
     use darkfi::event_graph::rln::MAX_MSG_LIMIT;
     use rand::rngs::OsRng;
 
-    use super::{history_retention_limit, sled_cache_capacity_bytes, RlnIdentity, BYTES_PER_MIB};
+    use super::{history_retention_limit, RlnIdentity};
 
     #[test]
     fn generated_rln_identity_limit_matches_genesis_budget() {
@@ -1019,16 +984,6 @@ mod tests {
         assert_eq!(super::generated_rln_identity_user_msg_limit(), super::GENESIS_USER_MSG_LIMIT);
         assert_eq!(super::generated_rln_identity_user_msg_limit(), MAX_MSG_LIMIT);
         assert_eq!(identity.user_message_limit, super::generated_rln_identity_user_msg_limit());
-    }
-
-    #[test]
-    fn sled_cache_capacity_rejects_zero() {
-        assert!(sled_cache_capacity_bytes("test_cache_mb", 0).is_err());
-    }
-
-    #[test]
-    fn sled_cache_capacity_converts_mib() {
-        assert_eq!(sled_cache_capacity_bytes("test_cache_mb", 64).unwrap(), 64 * BYTES_PER_MIB);
     }
 
     #[test]

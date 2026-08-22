@@ -24,7 +24,6 @@ use std::{
 };
 
 use darkfi_serial::{deserialize_async, serialize_async};
-use sled_overlay::sled;
 use smol::Executor;
 
 use crate::{
@@ -259,14 +258,14 @@ fn evgr_config_rejects_invalid_rotation_settings() {
 #[test]
 fn evgr_invalid_config_does_not_open_dag_trees() {
     smol::block_on(async {
-        let sled_db = sled::Config::new().temporary(true).open().unwrap();
-        let before = sled_db.tree_names();
+        let (kvdb, _kvdb_folder) = kvdb_overlay::Database::open_temp().unwrap();
+        let before = kvdb.tree_names().unwrap();
         let config = EventGraphConfig { hours_rotation: 1, max_dags: Some(0), ..test_config() };
 
-        let result = DagStore::new(sled_db.clone(), &config).await;
+        let result = DagStore::new(kvdb.clone(), &config).await;
 
         assert!(matches!(result, Err(crate::Error::Custom(_))));
-        assert_eq!(sled_db.tree_names(), before);
+        assert_eq!(kvdb.tree_names().unwrap(), before);
     })
 }
 
@@ -312,11 +311,6 @@ fn evgr_time_index_queries_and_saturating_cursor() {
     assert_eq!(idx2.after(u64::MAX, 10).len(), 0);
 }
 
-async fn make_dag_store() -> Result<DagStore> {
-    let sled_db = sled::Config::new().temporary(true).open().unwrap();
-    DagStore::new(sled_db, &bounded_dag_store_config()).await
-}
-
 #[test]
 fn evgr_dag_store_eviction_policy() {
     // Bounded vs archive mode in one test:
@@ -324,7 +318,8 @@ fn evgr_dag_store_eviction_policy() {
     //   (b) archive: adding 30 DAGs leaves all 30 plus the originals.
     smol::block_on(async {
         // (a) bounded
-        let mut store = make_dag_store().await.unwrap();
+        let (kvdb, _kvdb_folder) = kvdb_overlay::Database::open_temp().unwrap();
+        let mut store = DagStore::new(kvdb, &bounded_dag_store_config()).await.unwrap();
         let oldest_ts = store.dag_timestamps()[0];
         let new_ts = next_hour_timestamp(1).unwrap();
         let hdr = Header {
@@ -340,8 +335,8 @@ fn evgr_dag_store_eviction_policy() {
         assert!(store.get_slot(&oldest_ts).is_none());
 
         // (b) archive
-        let sled_db = sled::Config::new().temporary(true).open().unwrap();
-        let mut archive = DagStore::new(sled_db, &archive_config()).await.unwrap();
+        let (kvdb, _kvdb_folder) = kvdb_overlay::Database::open_temp().unwrap();
+        let mut archive = DagStore::new(kvdb, &archive_config()).await.unwrap();
         let initial = archive.dag_timestamps().len();
         for i in 1..=30i64 {
             let ts = next_hour_timestamp(i).unwrap();
@@ -364,8 +359,8 @@ fn evgr_dag_store_window_matches_generated_config_limits() {
         for limit in 1..=6_usize {
             let config =
                 EventGraphConfig { hours_rotation: 1, max_dags: Some(limit), ..test_config() };
-            let sled_db = sled::Config::new().temporary(true).open().unwrap();
-            let mut store = DagStore::new(sled_db, &config).await.unwrap();
+            let (kvdb, _kvdb_folder) = kvdb_overlay::Database::open_temp().unwrap();
+            let mut store = DagStore::new(kvdb, &config).await.unwrap();
             assert_eq!(store.dag_timestamps().len(), limit);
 
             let mut expected = store.dag_timestamps();
@@ -393,10 +388,10 @@ fn evgr_dag_store_window_matches_generated_config_limits() {
 #[test]
 fn evgr_dag_store_archive_mode_discovers_existing_trees() {
     smol::block_on(async {
-        let sled_db = sled::Config::new().temporary(true).open().unwrap();
+        let (kvdb, _kvdb_folder) = kvdb_overlay::Database::open_temp().unwrap();
         let historical_ts = next_hour_timestamp(-100).unwrap();
         {
-            let mut store = DagStore::new(sled_db.clone(), &archive_config()).await.unwrap();
+            let mut store = DagStore::new(kvdb.clone(), &archive_config()).await.unwrap();
             let hdr = Header {
                 timestamp: historical_ts,
                 parents: NULL_PARENTS,
@@ -408,7 +403,7 @@ fn evgr_dag_store_archive_mode_discovers_existing_trees() {
             drop(store);
         }
 
-        let store = DagStore::new(sled_db, &archive_config()).await.unwrap();
+        let store = DagStore::new(kvdb, &archive_config()).await.unwrap();
         assert!(
             store.get_slot(&historical_ts).is_some(),
             "Archive mode should discover historical DAGs on restart"
@@ -419,17 +414,17 @@ fn evgr_dag_store_archive_mode_discovers_existing_trees() {
 #[test]
 fn evgr_dag_store_rejects_corrupt_header_index_on_open() {
     smol::block_on(async {
-        let sled_db = sled::Config::new().temporary(true).open().unwrap();
+        let (kvdb, _kvdb_folder) = kvdb_overlay::Database::open_temp().unwrap();
         let config = bounded_dag_store_config();
-        let store = DagStore::new(sled_db.clone(), &config).await.unwrap();
+        let store = DagStore::new(kvdb.clone(), &config).await.unwrap();
         let ts = *store.dag_timestamps().last().unwrap();
         drop(store);
 
         let bad_id = [0u8; 32];
-        let headers = sled_db.open_tree(format!("headers_{ts}")).unwrap();
+        let headers = kvdb.open_tree_default(&format!("headers_{ts}")).unwrap();
         headers.insert(bad_id.as_slice(), b"not-a-header".as_slice()).unwrap();
 
-        let result = DagStore::new(sled_db, &config).await;
+        let result = DagStore::new(kvdb, &config).await;
         assert!(result.is_err(), "corrupt header bytes should fail DAG startup");
     })
 }
@@ -437,17 +432,17 @@ fn evgr_dag_store_rejects_corrupt_header_index_on_open() {
 #[test]
 fn evgr_dag_store_rejects_corrupt_event_tree_on_open() {
     smol::block_on(async {
-        let sled_db = sled::Config::new().temporary(true).open().unwrap();
+        let (kvdb, _kvdb_folder) = kvdb_overlay::Database::open_temp().unwrap();
         let config = bounded_dag_store_config();
-        let store = DagStore::new(sled_db.clone(), &config).await.unwrap();
+        let store = DagStore::new(kvdb.clone(), &config).await.unwrap();
         let ts = *store.dag_timestamps().last().unwrap();
         drop(store);
 
         let bad_id = [0u8; 32];
-        let events = sled_db.open_tree(ts.to_string()).unwrap();
+        let events = kvdb.open_tree_default(&ts.to_string()).unwrap();
         events.insert(bad_id.as_slice(), b"not-an-event".as_slice()).unwrap();
 
-        let result = DagStore::new(sled_db, &config).await;
+        let result = DagStore::new(kvdb, &config).await;
         assert!(result.is_err(), "corrupt event bytes should fail DAG startup");
     })
 }
@@ -455,7 +450,7 @@ fn evgr_dag_store_rejects_corrupt_event_tree_on_open() {
 #[test]
 fn evgr_rotating_event_creation_rejects_missing_current_dag_slot() {
     smol::block_on(async {
-        let eg = make_eg().await;
+        let (eg, _kvdb_folder) = make_eg().await;
         let dag_ts = eg.current_genesis.read().await.header.timestamp;
         eg.dag_store.write().await.dags.remove(&dag_ts);
 
@@ -467,7 +462,7 @@ fn evgr_rotating_event_creation_rejects_missing_current_dag_slot() {
 #[test]
 fn evgr_static_event_creation_rejects_corrupt_static_dag() {
     smol::block_on(async {
-        let eg = make_eg().await;
+        let (eg, _kvdb_folder) = make_eg().await;
         let bad_id = [0u8; 32];
         eg.static_dag.insert(bad_id.as_slice(), b"not-an-event".as_slice()).unwrap();
 
@@ -479,7 +474,8 @@ fn evgr_static_event_creation_rejects_corrupt_static_dag() {
 #[test]
 fn evgr_compute_unreferenced_tips_single_pass() {
     smol::block_on(async {
-        let store = make_dag_store().await.unwrap();
+        let (kvdb, _kvdb_folder) = kvdb_overlay::Database::open_temp().unwrap();
+        let store = DagStore::new(kvdb, &bounded_dag_store_config()).await.unwrap();
         let ts = *store.dag_timestamps().last().unwrap();
         let slot = store.get_slot(&ts).unwrap();
         let genesis_hash = *slot.tips.get(&0).unwrap().iter().next().unwrap();
@@ -497,7 +493,7 @@ fn evgr_compute_unreferenced_tips_single_pass() {
             },
             content: b"e2".to_vec(),
         };
-        slot.main_tree.insert(e2.id().as_bytes(), serialize_async(&e2).await).unwrap();
+        slot.main_tree.insert(e2.id().as_bytes(), &serialize_async(&e2).await).unwrap();
 
         let mut p = [NULL_ID; N_EVENT_PARENTS];
         p[0] = e2.id();
@@ -510,7 +506,7 @@ fn evgr_compute_unreferenced_tips_single_pass() {
             },
             content: b"e3".to_vec(),
         };
-        slot.main_tree.insert(e3.id().as_bytes(), serialize_async(&e3).await).unwrap();
+        slot.main_tree.insert(e3.id().as_bytes(), &serialize_async(&e3).await).unwrap();
 
         let mut p = [NULL_ID; N_EVENT_PARENTS];
         p[0] = genesis_hash;
@@ -523,7 +519,7 @@ fn evgr_compute_unreferenced_tips_single_pass() {
             },
             content: b"e4".to_vec(),
         };
-        slot.main_tree.insert(e4.id().as_bytes(), serialize_async(&e4).await).unwrap();
+        slot.main_tree.insert(e4.id().as_bytes(), &serialize_async(&e4).await).unwrap();
 
         assert_ne!(e2.id(), e4.id(), "e2 and e4 must have distinct IDs");
 
@@ -694,7 +690,7 @@ async fn assert_rotating_dag_storage_invariants(eg: &EventGraphPtr, dag_ts: u64,
 fn evgr_generated_dags_preserve_storage_invariants() {
     smol::block_on(async {
         for (seed, event_count) in [(1_u64, 18_usize), (7, 27), (19, 36)] {
-            let eg = make_eg().await;
+            let (eg, _kvdb_folder) = make_eg().await;
             let (dag_ts, _) = insert_generated_dag_shape(&eg, seed, event_count).await;
             assert_rotating_dag_storage_invariants(&eg, dag_ts, seed).await;
         }
@@ -707,7 +703,7 @@ fn evgr_dag_insert_valid_and_duplicate() {
     // subscriber. Second (duplicate) insert: returns an empty list,
     // doesn't re-fire.
     smol::block_on(async {
-        let eg = make_eg().await;
+        let (eg, _kvdb_folder) = make_eg().await;
         let dag_ts = eg.current_genesis.read().await.header.timestamp;
         let dag_name = dag_ts.to_string();
         let sub = eg.event_pub.clone().subscribe().await;
@@ -735,7 +731,7 @@ fn evgr_dag_insert_valid_and_duplicate() {
 #[test]
 fn evgr_duplicate_header_insert_does_not_duplicate_time_index() {
     smol::block_on(async {
-        let eg = make_eg().await;
+        let (eg, _kvdb_folder) = make_eg().await;
         let dag_ts = eg.current_genesis.read().await.header.timestamp;
         let dag_name = dag_ts.to_string();
         let event = Event::new(b"time-index-dedup".to_vec(), &eg).await.unwrap();
@@ -765,7 +761,7 @@ fn evgr_duplicate_header_insert_does_not_duplicate_time_index() {
 #[test]
 fn evgr_dag_insert_without_header_skipped() {
     smol::block_on(async {
-        let eg = make_eg().await;
+        let (eg, _kvdb_folder) = make_eg().await;
         let dag_name = eg.current_genesis.read().await.header.timestamp.to_string();
         let event = Event::new(b"orphan".to_vec(), &eg).await.unwrap();
         let ids = eg.dag_insert(slice::from_ref(&event), &dag_name).await.unwrap();
@@ -776,7 +772,7 @@ fn evgr_dag_insert_without_header_skipped() {
 #[test]
 fn evgr_header_insert_rejects_layer_jump() {
     smol::block_on(async {
-        let eg = make_eg().await;
+        let (eg, _kvdb_folder) = make_eg().await;
         let genesis = eg.current_genesis.read().await.clone();
         let dag_name = genesis.header.timestamp.to_string();
         let mut parents = [NULL_ID; N_EVENT_PARENTS];
@@ -800,7 +796,7 @@ fn evgr_header_insert_rejects_layer_jump() {
 #[test]
 fn evgr_header_insert_rejects_duplicate_parents() {
     smol::block_on(async {
-        let eg = make_eg().await;
+        let (eg, _kvdb_folder) = make_eg().await;
         let genesis = eg.current_genesis.read().await.clone();
         let dag_name = genesis.header.timestamp.to_string();
         let mut parents = [NULL_ID; N_EVENT_PARENTS];
@@ -825,8 +821,8 @@ fn evgr_header_insert_rejects_duplicate_parents() {
 #[test]
 fn evgr_header_validate_rejects_layer_overflow_parent() {
     smol::block_on(async {
-        let db = sled::Config::new().temporary(true).open().unwrap();
-        let tree = db.open_tree("headers").unwrap();
+        let (kvdb, _kvdb_folder) = kvdb_overlay::Database::open_temp().unwrap();
+        let tree = kvdb.open_tree_default("headers").unwrap();
         let timestamp = UNIX_EPOCH.elapsed().unwrap().as_millis() as u64;
         let parent = Header {
             timestamp,
@@ -834,7 +830,7 @@ fn evgr_header_validate_rejects_layer_overflow_parent() {
             layer: u64::MAX,
             content_hash: blake3::hash(b"overflow-parent"),
         };
-        tree.insert(parent.id().as_bytes(), serialize_async(&parent).await).unwrap();
+        tree.insert(parent.id().as_bytes(), &serialize_async(&parent).await).unwrap();
 
         let mut parents = [NULL_ID; N_EVENT_PARENTS];
         parents[0] = parent.id();
@@ -854,8 +850,8 @@ fn evgr_header_validate_uses_target_slot_bounds() {
     smol::block_on(async {
         const HOUR_MS: u64 = 3_600_000;
 
-        let db = sled::Config::new().temporary(true).open().unwrap();
-        let tree = db.open_tree("headers").unwrap();
+        let (kvdb, _kvdb_folder) = kvdb_overlay::Database::open_temp().unwrap();
+        let tree = kvdb.open_tree_default("headers").unwrap();
         let dag_ts = 1_704_067_200_000;
         let drift = crate::event_graph::EVENT_TIME_DRIFT;
         let config = EventGraphConfig { hours_rotation: 6, ..test_config() };
@@ -865,7 +861,7 @@ fn evgr_header_validate_uses_target_slot_bounds() {
             layer: 0,
             content_hash: blake3::hash(&config.genesis_contents),
         };
-        tree.insert(genesis.id().as_bytes(), serialize_async(&genesis).await).unwrap();
+        tree.insert(genesis.id().as_bytes(), &serialize_async(&genesis).await).unwrap();
 
         let mut parents = [NULL_ID; N_EVENT_PARENTS];
         parents[0] = genesis.id();
@@ -895,8 +891,8 @@ fn evgr_header_validate_ignores_future_initial_genesis() {
     smol::block_on(async {
         const HOUR_MS: u64 = 3_600_000;
 
-        let db = sled::Config::new().temporary(true).open().unwrap();
-        let tree = db.open_tree("headers").unwrap();
+        let (kvdb, _kvdb_folder) = kvdb_overlay::Database::open_temp().unwrap();
+        let tree = kvdb.open_tree_default("headers").unwrap();
         let now = UNIX_EPOCH.elapsed().unwrap().as_millis() as u64;
         let dag_ts = now.saturating_sub(HOUR_MS);
         let config =
@@ -907,7 +903,7 @@ fn evgr_header_validate_ignores_future_initial_genesis() {
             layer: 0,
             content_hash: blake3::hash(&config.genesis_contents),
         };
-        tree.insert(genesis.id().as_bytes(), serialize_async(&genesis).await).unwrap();
+        tree.insert(genesis.id().as_bytes(), &serialize_async(&genesis).await).unwrap();
 
         let mut parents = [NULL_ID; N_EVENT_PARENTS];
         parents[0] = genesis.id();
@@ -925,8 +921,8 @@ fn evgr_header_validate_ignores_future_initial_genesis() {
 #[test]
 fn evgr_header_validate_no_rotation_rejects_far_future() {
     smol::block_on(async {
-        let db = sled::Config::new().temporary(true).open().unwrap();
-        let tree = db.open_tree("headers").unwrap();
+        let (kvdb, _kvdb_folder) = kvdb_overlay::Database::open_temp().unwrap();
+        let tree = kvdb.open_tree_default("headers").unwrap();
         let config = test_config();
         let dag_ts = config.initial_genesis;
         let genesis = Header {
@@ -935,7 +931,7 @@ fn evgr_header_validate_no_rotation_rejects_far_future() {
             layer: 0,
             content_hash: blake3::hash(&config.genesis_contents),
         };
-        tree.insert(genesis.id().as_bytes(), serialize_async(&genesis).await).unwrap();
+        tree.insert(genesis.id().as_bytes(), &serialize_async(&genesis).await).unwrap();
 
         let mut parents = [NULL_ID; N_EVENT_PARENTS];
         parents[0] = genesis.id();
@@ -963,7 +959,7 @@ fn evgr_header_validate_no_rotation_rejects_far_future() {
 fn evgr_header_insert_rejects_unloaded_dag_slot() {
     smol::block_on(async {
         let config = EventGraphConfig { hours_rotation: 1, max_dags: Some(2), ..test_config() };
-        let eg = make_eg_with_config(config).await;
+        let (eg, _kvdb_folder) = make_eg_with_config(config).await;
         let dag_ts = next_hour_timestamp(-100).unwrap();
         let dag_name = dag_ts.to_string();
         let genesis = Header {
@@ -989,7 +985,7 @@ fn evgr_header_insert_rejects_unloaded_dag_slot() {
 #[test]
 fn evgr_fetch_headers_with_tips_is_bounded_and_layer_ordered() {
     smol::block_on(async {
-        let eg = make_eg().await;
+        let (eg, _kvdb_folder) = make_eg().await;
         let dag_ts = eg.current_genesis.read().await.header.timestamp;
         let dag_name = dag_ts.to_string();
         let base = UNIX_EPOCH.elapsed().unwrap().as_millis() as u64;
@@ -1026,7 +1022,7 @@ fn evgr_fetch_headers_with_tips_is_bounded_and_layer_ordered() {
 #[test]
 fn evgr_fetch_page_both_directions() {
     smol::block_on(async {
-        let eg = make_eg().await;
+        let (eg, _kvdb_folder) = make_eg().await;
         let dag_name = eg.current_genesis.read().await.header.timestamp.to_string();
         let base = UNIX_EPOCH.elapsed().unwrap().as_millis() as u64;
         for i in 0..(MAX_RANGE_PAGE_SIZE as u64 + 10) {
@@ -1058,7 +1054,7 @@ fn evgr_fetch_page_both_directions() {
 #[test]
 fn evgr_fetch_page_with_blobs_is_dag_scoped_and_blob_aligned() {
     smol::block_on(async {
-        let eg = make_eg().await;
+        let (eg, _kvdb_folder) = make_eg().await;
         let dag_ts = eg.current_genesis.read().await.header.timestamp;
         let dag_name = dag_ts.to_string();
         let base = UNIX_EPOCH.elapsed().unwrap().as_millis() as u64;
@@ -1113,7 +1109,7 @@ fn evgr_fetch_page_with_blobs_is_dag_scoped_and_blob_aligned() {
 #[test]
 fn evgr_fetch_page_with_blobs_keeps_same_timestamp_cursor_position() {
     smol::block_on(async {
-        let eg = make_eg().await;
+        let (eg, _kvdb_folder) = make_eg().await;
         let dag_name = eg.current_genesis.read().await.header.timestamp.to_string();
         let ts = UNIX_EPOCH.elapsed().unwrap().as_millis() as u64;
         let mut events = vec![];
@@ -1156,11 +1152,11 @@ async fn range_req_returns_blob_aligned_backward_page(ex: Arc<Executor<'static>>
     let nodes = make_network(ex).await;
 
     let mut alice = TestIdentity::new();
-    for eg in &nodes {
+    for (eg, _) in &nodes {
         alice.register_directly(eg).await.unwrap();
     }
 
-    let dag_ts = nodes[0].current_genesis.read().await.header.timestamp;
+    let dag_ts = nodes[0].0.current_genesis.read().await.header.timestamp;
     let dag_name = dag_ts.to_string();
     let base = UNIX_EPOCH.elapsed().unwrap().as_millis() as u64;
     let mut events = vec![];
@@ -1170,15 +1166,15 @@ async fn range_req_returns_blob_aligned_backward_page(ex: Arc<Executor<'static>>
         let event = Event::with_timestamp(
             base + u64::from(i),
             vec![b'r', b'a', b'n', b'g', b'e', i],
-            &nodes[0],
+            &nodes[0].0,
         )
         .await
         .unwrap();
         let message_id = alice.next_message_id(event.header.timestamp).expect("budget");
-        let blob_struct = alice.create_signal(&event, message_id, &nodes[0]).await.unwrap();
+        let blob_struct = alice.create_signal(&event, message_id, &nodes[0].0).await.unwrap();
         let blob = serialize_async(&blob_struct).await;
 
-        for eg in nodes.iter().take(4) {
+        for (eg, _) in nodes.iter().take(4) {
             eg.insert_signal_with_blob(&event, &blob, &dag_name).await.unwrap();
         }
 
@@ -1187,11 +1183,12 @@ async fn range_req_returns_blob_aligned_backward_page(ex: Arc<Executor<'static>>
     }
 
     nodes[4]
+        .0
         .header_dag_insert(events.iter().map(|event| event.header.clone()).collect(), &dag_name)
         .await
         .unwrap();
 
-    let peer = nodes[4].p2p.hosts().peers().into_iter().next().expect("connected peer");
+    let peer = nodes[4].0.p2p.hosts().peers().into_iter().next().expect("connected peer");
     let sub = peer.subscribe_msg::<RangeRep>().await.unwrap();
     peer.send(&RangeReq {
         dag_name: dag_name.clone(),
@@ -1217,7 +1214,7 @@ async fn range_req_returns_blob_aligned_backward_page(ex: Arc<Executor<'static>>
     assert!(!rep.3);
     for (event, blob) in rep.0.iter().zip(rep.1.iter()) {
         assert!(matches!(
-            nodes[4].rln_verify_signal(event, blob).await,
+            nodes[4].0.rln_verify_signal(event, blob).await,
             crate::event_graph::rln::SignalCheck::Accepted
         ));
     }
@@ -1234,11 +1231,11 @@ async fn dag_sync_range_drains_pending_backward_page(ex: Arc<Executor<'static>>)
     let nodes = make_network(ex).await;
 
     let mut alice = TestIdentity::new();
-    for eg in &nodes {
+    for (eg, _) in &nodes {
         alice.register_directly(eg).await.unwrap();
     }
 
-    let dag_ts = nodes[0].current_genesis.read().await.header.timestamp;
+    let dag_ts = nodes[0].0.current_genesis.read().await.header.timestamp;
     let dag_name = dag_ts.to_string();
     let base = UNIX_EPOCH.elapsed().unwrap().as_millis() as u64;
     let mut events = vec![];
@@ -1247,15 +1244,15 @@ async fn dag_sync_range_drains_pending_backward_page(ex: Arc<Executor<'static>>)
         let event = Event::with_timestamp(
             base + u64::from(i),
             vec![b'l', b'a', b'z', b'y', b'-', i],
-            &nodes[0],
+            &nodes[0].0,
         )
         .await
         .unwrap();
         let message_id = alice.next_message_id(event.header.timestamp).expect("budget");
-        let blob_struct = alice.create_signal(&event, message_id, &nodes[0]).await.unwrap();
+        let blob_struct = alice.create_signal(&event, message_id, &nodes[0].0).await.unwrap();
         let blob = serialize_async(&blob_struct).await;
 
-        for eg in nodes.iter().take(4) {
+        for (eg, _) in nodes.iter().take(4) {
             eg.insert_signal_with_blob(&event, &blob, &dag_name).await.unwrap();
         }
 
@@ -1263,6 +1260,7 @@ async fn dag_sync_range_drains_pending_backward_page(ex: Arc<Executor<'static>>)
     }
 
     let first = nodes[4]
+        .0
         .dag_sync_range(dag_ts, RangeCursor::newest(), SyncDirection::Backward, 2)
         .await
         .unwrap();
@@ -1274,7 +1272,7 @@ async fn dag_sync_range_drains_pending_backward_page(ex: Arc<Executor<'static>>)
     assert!(!first.exhausted);
 
     {
-        let store = nodes[4].dag_store.read().await;
+        let store = nodes[4].0.dag_store.read().await;
         let slot = store.get_slot(&dag_ts).unwrap();
         for event in &events {
             assert!(!slot.main_tree.contains_key(event.id().as_bytes()).unwrap());
@@ -1282,6 +1280,7 @@ async fn dag_sync_range_drains_pending_backward_page(ex: Arc<Executor<'static>>)
     }
 
     let second = nodes[4]
+        .0
         .dag_sync_range(dag_ts, first.next_cursor, SyncDirection::Backward, 2)
         .await
         .unwrap();
@@ -1291,11 +1290,11 @@ async fn dag_sync_range_drains_pending_backward_page(ex: Arc<Executor<'static>>)
         assert!(second.committed.contains(&event.id()));
     }
 
-    let store = nodes[4].dag_store.read().await;
+    let store = nodes[4].0.dag_store.read().await;
     let slot = store.get_slot(&dag_ts).unwrap();
     for event in &events {
         assert!(slot.main_tree.contains_key(event.id().as_bytes()).unwrap());
-        assert!(nodes[4].dag_blob_fetch(&event.id()).unwrap().is_some());
+        assert!(nodes[4].0.dag_blob_fetch(&event.id()).unwrap().is_some());
     }
     drop(store);
 
@@ -1305,7 +1304,7 @@ async fn dag_sync_range_drains_pending_backward_page(ex: Arc<Executor<'static>>)
 #[test]
 fn evgr_order_events_rejects_corrupt_event_record() {
     smol::block_on(async {
-        let eg = make_eg().await;
+        let (eg, _kvdb_folder) = make_eg().await;
         let dag_ts = eg.current_genesis.read().await.header.timestamp;
         let bad_id = [0u8; 32];
         {
@@ -1320,7 +1319,7 @@ fn evgr_order_events_rejects_corrupt_event_record() {
 }
 
 async fn build_graph() -> Result<(EventGraphPtr, std::collections::HashMap<&'static str, Event>)> {
-    let eg = make_eg().await;
+    let (eg, _kvdb_folder) = make_eg().await;
     let dag_name = eg.current_genesis.read().await.header.timestamp.to_string();
     let genesis_hash = eg.current_genesis.read().await.id();
     let base = UNIX_EPOCH.elapsed().unwrap().as_millis() as u64;
@@ -1406,27 +1405,27 @@ async fn propagation_with_real_blob(ex: Arc<Executor<'static>>) {
     let nodes = make_network(ex).await;
 
     let mut alice = TestIdentity::new();
-    for eg in &nodes {
+    for (eg, _) in &nodes {
         alice.register_directly(eg).await.expect("register alice");
     }
 
-    let dag_ts = nodes[0].current_genesis.read().await.header.timestamp;
+    let dag_ts = nodes[0].0.current_genesis.read().await.header.timestamp;
     let dag_name = dag_ts.to_string();
-    let event = Event::new(b"hello-via-rln".to_vec(), &nodes[0]).await.unwrap();
+    let event = Event::new(b"hello-via-rln".to_vec(), &nodes[0].0).await.unwrap();
 
     let message_id =
         alice.next_message_id(event.header.timestamp).expect("budget available on first signal");
-    let blob_struct = alice.create_signal(&event, message_id, &nodes[0]).await.unwrap();
+    let blob_struct = alice.create_signal(&event, message_id, &nodes[0].0).await.unwrap();
     let blob = serialize_async(&blob_struct).await;
 
-    nodes[0].header_dag_insert(vec![event.header.clone()], &dag_name).await.unwrap();
-    nodes[0].dag_insert(slice::from_ref(&event), &dag_name).await.unwrap();
-    nodes[0].dag_blob_store(&event.id(), &blob).unwrap();
-    nodes[0].p2p.broadcast(&EventPut(event.clone(), blob.clone())).await.unwrap();
+    nodes[0].0.header_dag_insert(vec![event.header.clone()], &dag_name).await.unwrap();
+    nodes[0].0.dag_insert(slice::from_ref(&event), &dag_name).await.unwrap();
+    nodes[0].0.dag_blob_store(&event.id(), &blob).unwrap();
+    nodes[0].0.p2p.broadcast(&EventPut(event.clone(), blob.clone())).await.unwrap();
 
     sleep(5).await;
 
-    for (i, eg) in nodes.iter().enumerate() {
+    for (i, (eg, _)) in nodes.iter().enumerate() {
         let store = eg.dag_store.read().await;
         let slot = store.get_slot(&dag_ts).unwrap();
         assert!(
@@ -1452,37 +1451,37 @@ async fn event_put_ingests_body_after_header_only_sync(ex: Arc<Executor<'static>
     let nodes = make_network(ex).await;
 
     let mut alice = TestIdentity::new();
-    for eg in &nodes {
+    for (eg, _) in &nodes {
         alice.register_directly(eg).await.unwrap();
     }
 
-    let dag_ts = nodes[0].current_genesis.read().await.header.timestamp;
+    let dag_ts = nodes[0].0.current_genesis.read().await.header.timestamp;
     let dag_name = dag_ts.to_string();
-    let event = Event::new(b"header-only-then-live-body".to_vec(), &nodes[0]).await.unwrap();
+    let event = Event::new(b"header-only-then-live-body".to_vec(), &nodes[0].0).await.unwrap();
     let message_id = alice.next_message_id(event.header.timestamp).expect("budget");
-    let blob_struct = alice.create_signal(&event, message_id, &nodes[0]).await.unwrap();
+    let blob_struct = alice.create_signal(&event, message_id, &nodes[0].0).await.unwrap();
     let blob = serialize_async(&blob_struct).await;
 
-    nodes[4].header_dag_insert(vec![event.header.clone()], &dag_name).await.unwrap();
+    nodes[4].0.header_dag_insert(vec![event.header.clone()], &dag_name).await.unwrap();
     {
-        let store = nodes[4].dag_store.read().await;
+        let store = nodes[4].0.dag_store.read().await;
         let slot = store.get_slot(&dag_ts).unwrap();
         assert!(slot.header_tree.contains_key(event.id().as_bytes()).unwrap());
         assert!(!slot.main_tree.contains_key(event.id().as_bytes()).unwrap());
     }
-    assert!(nodes[4].dag_blob_fetch(&event.id()).unwrap().is_none());
+    assert!(nodes[4].0.dag_blob_fetch(&event.id()).unwrap().is_none());
 
-    nodes[0].p2p.broadcast(&EventPut(event.clone(), blob.clone())).await.unwrap();
+    nodes[0].0.p2p.broadcast(&EventPut(event.clone(), blob.clone())).await.unwrap();
     sleep(5).await;
 
-    let store = nodes[4].dag_store.read().await;
+    let store = nodes[4].0.dag_store.read().await;
     let slot = store.get_slot(&dag_ts).unwrap();
     assert!(
         slot.main_tree.contains_key(event.id().as_bytes()).unwrap(),
         "EventPut should fill a body when only the header was known",
     );
     drop(store);
-    assert_eq!(nodes[4].dag_blob_fetch(&event.id()).unwrap().unwrap(), blob);
+    assert_eq!(nodes[4].0.dag_blob_fetch(&event.id()).unwrap().unwrap(), blob);
 
     shutdown_network(&nodes).await;
 }
@@ -1497,13 +1496,13 @@ async fn empty_blob_rejected(ex: Arc<Executor<'static>>) {
     // Every recipient must strike the sender and refuse to insert.
     let nodes = make_network(ex).await;
 
-    let dag_ts = nodes[0].current_genesis.read().await.header.timestamp;
-    let event = Event::new(b"unauthenticated".to_vec(), &nodes[0]).await.unwrap();
+    let dag_ts = nodes[0].0.current_genesis.read().await.header.timestamp;
+    let event = Event::new(b"unauthenticated".to_vec(), &nodes[0].0).await.unwrap();
 
-    nodes[0].p2p.broadcast(&EventPut(event.clone(), vec![])).await.unwrap();
+    nodes[0].0.p2p.broadcast(&EventPut(event.clone(), vec![])).await.unwrap();
     sleep(5).await;
 
-    for (i, eg) in nodes.iter().enumerate().skip(1) {
+    for (i, (eg, _)) in nodes.iter().enumerate().skip(1) {
         let store = eg.dag_store.read().await;
         let slot = store.get_slot(&dag_ts).unwrap();
         assert!(
@@ -1524,14 +1523,14 @@ async fn malformed_event_rejected_before_rln(ex: Arc<Executor<'static>>) {
     let nodes = make_network(ex).await;
 
     let mut alice = TestIdentity::new();
-    for eg in &nodes {
+    for (eg, _) in &nodes {
         alice.register_directly(eg).await.unwrap();
     }
 
-    let dag_ts = nodes[0].current_genesis.read().await.header.timestamp;
-    let event = Event::new(b"preflight-live".to_vec(), &nodes[0]).await.unwrap();
+    let dag_ts = nodes[0].0.current_genesis.read().await.header.timestamp;
+    let event = Event::new(b"preflight-live".to_vec(), &nodes[0].0).await.unwrap();
     let message_id = alice.next_message_id(event.header.timestamp).expect("budget");
-    let blob = alice.create_signal(&event, message_id, &nodes[0]).await.unwrap();
+    let blob = alice.create_signal(&event, message_id, &nodes[0].0).await.unwrap();
     let internal_nullifier = blob.internal_nullifier;
     let blob = serialize_async(&blob).await;
 
@@ -1539,11 +1538,11 @@ async fn malformed_event_rejected_before_rln(ex: Arc<Executor<'static>>) {
     malformed.content.extend_from_slice(b"-tampered");
     assert!(!malformed.content_matches_header());
 
-    nodes[0].p2p.broadcast(&EventPut(malformed.clone(), blob)).await.unwrap();
+    nodes[0].0.p2p.broadcast(&EventPut(malformed.clone(), blob)).await.unwrap();
     sleep(5).await;
 
     let epoch = epoch_of(malformed.header.timestamp);
-    for (i, eg) in nodes.iter().enumerate().skip(1) {
+    for (i, (eg, _)) in nodes.iter().enumerate().skip(1) {
         let store = eg.dag_store.read().await;
         let slot = store.get_slot(&dag_ts).unwrap();
         assert!(
@@ -1573,7 +1572,7 @@ async fn genesis_with_blob_rejected(ex: Arc<Executor<'static>>) {
     // deterministic and don't carry signals.
     let nodes = make_network(ex).await;
 
-    let dag_ts = nodes[0].current_genesis.read().await.header.timestamp;
+    let dag_ts = nodes[0].0.current_genesis.read().await.header.timestamp;
 
     let header = Header {
         timestamp: dag_ts,
@@ -1584,10 +1583,10 @@ async fn genesis_with_blob_rejected(ex: Arc<Executor<'static>>) {
     let event = Event { header, content: b"forged-genesis".to_vec() };
     let fake_blob = b"this-should-not-be-here".to_vec();
 
-    nodes[0].p2p.broadcast(&EventPut(event.clone(), fake_blob)).await.unwrap();
+    nodes[0].0.p2p.broadcast(&EventPut(event.clone(), fake_blob)).await.unwrap();
     sleep(5).await;
 
-    for (i, eg) in nodes.iter().enumerate().skip(1) {
+    for (i, (eg, _)) in nodes.iter().enumerate().skip(1) {
         let store = eg.dag_store.read().await;
         let slot = store.get_slot(&dag_ts).unwrap();
         assert!(
@@ -1602,7 +1601,7 @@ async fn genesis_with_blob_rejected(ex: Arc<Executor<'static>>) {
 #[test]
 fn evgr_fetch_missing_events_rejects_corrupt_header_record() {
     smol::block_on(async {
-        let eg = make_eg().await;
+        let (eg, _kvdb_folder) = make_eg().await;
         let dag_ts = eg.current_genesis.read().await.header.timestamp;
         let dag_name = dag_ts.to_string();
         let bad_id = [0u8; 32];
@@ -1653,8 +1652,8 @@ async fn seed_rotating_event_unchecked(
 #[test]
 fn evgr_dag_insert_rejects_child_when_parent_body_rejected() {
     smol::block_on(async {
-        let source = make_eg().await;
-        let recipient = make_eg().await;
+        let (source, _source_kvdb_folder) = make_eg().await;
+        let (recipient, _recipient_kvdb_folder) = make_eg().await;
         let mut alice = TestIdentity::new();
         alice.register_directly(&source).await.unwrap();
         alice.register_directly(&recipient).await.unwrap();
@@ -1707,34 +1706,34 @@ async fn dag_sync_with_blob(ex: Arc<Executor<'static>>) {
     let nodes = make_network(ex).await;
 
     let mut alice = TestIdentity::new();
-    for eg in &nodes {
+    for (eg, _) in &nodes {
         alice.register_directly(eg).await.unwrap();
     }
 
-    let dag_ts = nodes[0].current_genesis.read().await.header.timestamp;
+    let dag_ts = nodes[0].0.current_genesis.read().await.header.timestamp;
     let dag_name = dag_ts.to_string();
 
-    let event = Event::new(b"synced-message".to_vec(), &nodes[0]).await.unwrap();
+    let event = Event::new(b"synced-message".to_vec(), &nodes[0].0).await.unwrap();
     let message_id = alice.next_message_id(event.header.timestamp).expect("budget");
-    let blob_struct = alice.create_signal(&event, message_id, &nodes[0]).await.unwrap();
+    let blob_struct = alice.create_signal(&event, message_id, &nodes[0].0).await.unwrap();
     let blob = serialize_async(&blob_struct).await;
 
-    for eg in nodes.iter().take(4) {
+    for (eg, _) in nodes.iter().take(4) {
         eg.header_dag_insert(vec![event.header.clone()], &dag_name).await.unwrap();
         eg.dag_insert(slice::from_ref(&event), &dag_name).await.unwrap();
         eg.dag_blob_store(&event.id(), &blob).unwrap();
     }
 
     {
-        let store = nodes[4].dag_store.read().await;
+        let store = nodes[4].0.dag_store.read().await;
         let slot = store.get_slot(&dag_ts).unwrap();
         assert!(!slot.main_tree.contains_key(event.id().as_bytes()).unwrap());
     }
 
-    nodes[4].dag_sync(dag_ts).await.expect("dag_sync should succeed");
+    nodes[4].0.dag_sync(dag_ts).await.expect("dag_sync should succeed");
     sleep(2).await;
 
-    let store = nodes[4].dag_store.read().await;
+    let store = nodes[4].0.dag_store.read().await;
     let slot = store.get_slot(&dag_ts).unwrap();
     assert!(
         slot.main_tree.contains_key(event.id().as_bytes()).unwrap(),
@@ -1742,7 +1741,7 @@ async fn dag_sync_with_blob(ex: Arc<Executor<'static>>) {
     );
     drop(store);
     assert!(
-        nodes[4].dag_blob_fetch(&event.id()).unwrap().is_some(),
+        nodes[4].0.dag_blob_fetch(&event.id()).unwrap().is_some(),
         "sync should bring the blob over too - without it, node 4 can't serve future late-joiners",
     );
 
@@ -1758,14 +1757,14 @@ async fn dag_sync_rejects_child_when_parent_body_rejected(ex: Arc<Executor<'stat
     let nodes = make_network(ex).await;
 
     let mut alice = TestIdentity::new();
-    for eg in &nodes {
+    for (eg, _) in &nodes {
         alice.register_directly(eg).await.unwrap();
     }
 
-    let dag_ts = nodes[0].current_genesis.read().await.header.timestamp;
+    let dag_ts = nodes[0].0.current_genesis.read().await.header.timestamp;
     let dag_name = dag_ts.to_string();
     let (parent, child, child_blob) = make_parent_child_with_child_blob(
-        &nodes[0],
+        &nodes[0].0,
         &mut alice,
         b"parent-body-closure-sync",
         b"child-body-closure-sync",
@@ -1773,19 +1772,19 @@ async fn dag_sync_rejects_child_when_parent_body_rejected(ex: Arc<Executor<'stat
     .await;
     let bad_parent_blob = b"bad-parent-rln-blob-sync".to_vec();
 
-    for eg in nodes.iter().take(4) {
+    for (eg, _) in nodes.iter().take(4) {
         seed_rotating_event_unchecked(eg, &parent, &bad_parent_blob, &dag_name).await;
         seed_rotating_event_unchecked(eg, &child, &child_blob, &dag_name).await;
     }
 
-    let result = nodes[4].dag_sync(dag_ts).await;
+    let result = nodes[4].0.dag_sync(dag_ts).await;
     assert!(
         matches!(result, Err(crate::Error::DagSyncFailed)),
         "dag_sync should fail when a required parent body is rejected, got {result:?}",
     );
     sleep(2).await;
 
-    let store = nodes[4].dag_store.read().await;
+    let store = nodes[4].0.dag_store.read().await;
     let slot = store.get_slot(&dag_ts).unwrap();
     assert!(
         !slot.main_tree.contains_key(parent.id().as_bytes()).unwrap(),
@@ -1812,33 +1811,33 @@ async fn dag_sync_rejects_bad_blob(ex: Arc<Executor<'static>>) {
     let nodes = make_network(ex).await;
 
     let alice = TestIdentity::new();
-    for eg in &nodes {
+    for (eg, _) in &nodes {
         alice.register_directly(eg).await.unwrap();
     }
 
-    let dag_ts = nodes[0].current_genesis.read().await.header.timestamp;
+    let dag_ts = nodes[0].0.current_genesis.read().await.header.timestamp;
     let dag_name = dag_ts.to_string();
-    let event = Event::new(b"crafted-injection".to_vec(), &nodes[0]).await.unwrap();
+    let event = Event::new(b"crafted-injection".to_vec(), &nodes[0].0).await.unwrap();
 
     // Garbage bytes - won't deserialize as a real RLN signal, won't
     // verify. We don't need a real (failing) proof to exercise the
     // rejection path.
     let bad_blob = b"definitely-not-a-real-rln-blob".to_vec();
 
-    for eg in nodes.iter().take(4) {
+    for (eg, _) in nodes.iter().take(4) {
         eg.header_dag_insert(vec![event.header.clone()], &dag_name).await.unwrap();
         eg.dag_insert(slice::from_ref(&event), &dag_name).await.unwrap();
         eg.dag_blob_store(&event.id(), &bad_blob).unwrap();
     }
 
-    let result = nodes[4].dag_sync(dag_ts).await;
+    let result = nodes[4].0.dag_sync(dag_ts).await;
     assert!(
         matches!(result, Err(crate::Error::DagSyncFailed)),
         "dag_sync should fail when a requested body is rejected, got {result:?}",
     );
     sleep(2).await;
 
-    let store = nodes[4].dag_store.read().await;
+    let store = nodes[4].0.dag_store.read().await;
     let slot = store.get_slot(&dag_ts).unwrap();
     assert!(
         !slot.main_tree.contains_key(event.id().as_bytes()).unwrap(),
@@ -1857,14 +1856,14 @@ async fn fetch_parents_rejects_child_when_parent_body_rejected(ex: Arc<Executor<
     let nodes = make_network(ex).await;
 
     let mut alice = TestIdentity::new();
-    for eg in &nodes {
+    for (eg, _) in &nodes {
         alice.register_directly(eg).await.unwrap();
     }
 
-    let dag_ts = nodes[0].current_genesis.read().await.header.timestamp;
+    let dag_ts = nodes[0].0.current_genesis.read().await.header.timestamp;
     let dag_name = dag_ts.to_string();
     let (parent, child, child_blob) = make_parent_child_with_child_blob(
-        &nodes[0],
+        &nodes[0].0,
         &mut alice,
         b"parent-body-closure-fetch",
         b"child-body-closure-fetch",
@@ -1872,14 +1871,14 @@ async fn fetch_parents_rejects_child_when_parent_body_rejected(ex: Arc<Executor<
     .await;
     let bad_parent_blob = b"bad-parent-rln-blob-fetch".to_vec();
 
-    for eg in nodes.iter().take(4) {
+    for (eg, _) in nodes.iter().take(4) {
         seed_rotating_event_unchecked(eg, &parent, &bad_parent_blob, &dag_name).await;
     }
 
-    nodes[0].p2p.broadcast(&EventPut(child.clone(), child_blob)).await.unwrap();
+    nodes[0].0.p2p.broadcast(&EventPut(child.clone(), child_blob)).await.unwrap();
     sleep(5).await;
 
-    let store = nodes[4].dag_store.read().await;
+    let store = nodes[4].0.dag_store.read().await;
     let slot = store.get_slot(&dag_ts).unwrap();
     assert!(
         !slot.main_tree.contains_key(parent.id().as_bytes()).unwrap(),
@@ -1914,33 +1913,34 @@ async fn dormant_user_can_post_after_long_silence(ex: Arc<Executor<'static>>) {
     let nodes = make_network(ex).await;
 
     let mut alice = TestIdentity::new();
-    for eg in &nodes {
+    for (eg, _) in &nodes {
         alice.register_directly(eg).await.unwrap();
     }
 
     // Push the recent_roots window past Alice's registration.
     for seed in 100..117_u64 {
         let other = TestIdentity::with_seed(seed);
-        for eg in &nodes {
+        for (eg, _) in &nodes {
             other.register_directly(eg).await.unwrap();
         }
     }
 
-    let event = Event::new(b"long-silent-but-still-registered".to_vec(), &nodes[0]).await.unwrap();
+    let event =
+        Event::new(b"long-silent-but-still-registered".to_vec(), &nodes[0].0).await.unwrap();
     let message_id = alice.next_message_id(event.header.timestamp).expect("budget");
-    let blob_struct = alice.create_signal(&event, message_id, &nodes[0]).await.unwrap();
+    let blob_struct = alice.create_signal(&event, message_id, &nodes[0].0).await.unwrap();
     let blob = serialize_async(&blob_struct).await;
 
-    let dag_ts = nodes[0].current_genesis.read().await.header.timestamp;
+    let dag_ts = nodes[0].0.current_genesis.read().await.header.timestamp;
     let dag_name = dag_ts.to_string();
-    nodes[0].header_dag_insert(vec![event.header.clone()], &dag_name).await.unwrap();
-    nodes[0].dag_insert(slice::from_ref(&event), &dag_name).await.unwrap();
-    nodes[0].dag_blob_store(&event.id(), &blob).unwrap();
-    nodes[0].p2p.broadcast(&EventPut(event.clone(), blob)).await.unwrap();
+    nodes[0].0.header_dag_insert(vec![event.header.clone()], &dag_name).await.unwrap();
+    nodes[0].0.dag_insert(slice::from_ref(&event), &dag_name).await.unwrap();
+    nodes[0].0.dag_blob_store(&event.id(), &blob).unwrap();
+    nodes[0].0.p2p.broadcast(&EventPut(event.clone(), blob)).await.unwrap();
 
     sleep(5).await;
 
-    for (i, eg) in nodes.iter().enumerate() {
+    for (i, (eg, _)) in nodes.iter().enumerate() {
         let store = eg.dag_store.read().await;
         let slot = store.get_slot(&dag_ts).unwrap();
         assert!(

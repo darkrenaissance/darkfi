@@ -19,7 +19,7 @@
 //! NickServ - account management for DarkIRC.
 //!
 //! Each registered account is one RLN identity stored under its own
-//! sled tree, named `darkirc_account_<name>`. A separate sled tree
+//! kvdb tree, named `darkirc_account_<name>`. A separate kvdb tree
 //! `darkirc_account_default` mirrors whichever identity is currently
 //! active; on startup, `IrcServer::new` reads from that tree to
 //! populate `IrcServer::rln_identity`, which is the field every
@@ -39,7 +39,7 @@
 //! - `SET <name>` - swap the active identity to `<name>`. The
 //!   change is persisted (next restart will load the same one) and
 //!   takes effect for the next outbound message.
-//! - `DEREGISTER <name>` - drop the account's sled tree. Refuses
+//! - `DEREGISTER <name>` - drop the account's kvdb tree. Refuses
 //!   if `<name>` is currently active (the user must SET away first
 //!   so they don't accidentally orphan their session). Local-only:
 //!   the on-network registration is unaffected, so the same
@@ -77,7 +77,7 @@ pub const ACCOUNTS_DB_PREFIX: &str = "darkirc_account_";
 pub const ACCOUNTS_KEY_RLN_IDENTITY: &[u8] = b"rln_identity";
 const MAX_ACCOUNT_NAME_LEN: usize = MAX_NICK_LEN;
 
-/// Name of the sled tree that mirrors the currently-active identity.
+/// Name of the kvdb tree that mirrors the currently-active identity.
 /// `IrcServer::new` reads this on startup.
 pub const ACCOUNTS_DEFAULT_TREE: &str = "darkirc_account_default";
 
@@ -303,12 +303,7 @@ impl NickServ {
             self.server.rln_identity.read().await.as_ref().map(|id| id.commitment());
 
         let mut accounts: Vec<(String, RlnIdentity)> = Vec::new();
-        for raw in self.server.darkirc.sled.tree_names() {
-            // `raw` is a sled IVec; coerce to bytes via AsRef so
-            // this compiles regardless of which sled fork the
-            // workspace pulls in.
-            let bytes: &[u8] = raw.as_ref();
-            let Ok(name) = std::str::from_utf8(bytes) else { continue };
+        for name in self.server.darkirc.kvdb.tree_names()? {
             // Skip the `default` mirror tree and anything that
             // isn't an account tree. Note we strip the prefix once
             // and reject the literal "default" suffix - we do NOT
@@ -319,7 +314,7 @@ impl NickServ {
                 continue
             }
 
-            let tree = self.server.darkirc.sled.open_tree(name)?;
+            let tree = self.server.darkirc.kvdb.open_tree_default(&name)?;
             let Some(blob) = tree.get(ACCOUNTS_KEY_RLN_IDENTITY)? else { continue };
             // If a tree exists but the blob is malformed, skip
             // rather than failing the whole listing.
@@ -365,7 +360,7 @@ impl NickServ {
             return Ok(vec![notice(nick, "Invalid account name.")])
         }
 
-        let tree = self.server.darkirc.sled.open_tree(&tree_name)?;
+        let tree = self.server.darkirc.kvdb.open_tree_default(&tree_name)?;
         let Some(blob) = tree.get(ACCOUNTS_KEY_RLN_IDENTITY)? else {
             return Ok(vec![notice(nick, format!("No such account: \"{account_name}\""))])
         };
@@ -493,27 +488,30 @@ impl NickServ {
             )])
         }
 
-        // Open the per-account sled tree only after the identity has
+        // Open the per-account kvdb tree only after the identity has
         // passed the pregenerated-admission checks. Rejected identities
         // must not leave account state behind or become active locally.
-        let db =
-            self.server.darkirc.sled.open_tree(format!("{ACCOUNTS_DB_PREFIX}{account_name}"))?;
+        let db = self
+            .server
+            .darkirc
+            .kvdb
+            .open_tree_default(&format!("{ACCOUNTS_DB_PREFIX}{account_name}"))?;
 
-        if !db.is_empty() {
+        if !db.is_empty()? {
             return Ok(vec![notice(nick, "This account name is already registered.")])
         }
 
         // Store account.
-        db.insert(ACCOUNTS_KEY_RLN_IDENTITY, serialize_async(&new_rln_identity).await)?;
+        db.insert(ACCOUNTS_KEY_RLN_IDENTITY, &serialize_async(&new_rln_identity).await)?;
 
         // First-ever registration also becomes the active one. We
         // check the in-memory active identity (not the default
         // tree) because that's the source of truth at runtime.
         let became_active = self.server.rln_identity.read().await.is_none();
         if became_active {
-            let db_default = self.server.darkirc.sled.open_tree(ACCOUNTS_DEFAULT_TREE)?;
+            let db_default = self.server.darkirc.kvdb.open_tree_default(ACCOUNTS_DEFAULT_TREE)?;
             db_default
-                .insert(ACCOUNTS_KEY_RLN_IDENTITY, serialize_async(&new_rln_identity).await)?;
+                .insert(ACCOUNTS_KEY_RLN_IDENTITY, &serialize_async(&new_rln_identity).await)?;
             *self.server.rln_identity.write().await = Some(new_rln_identity);
         }
 
@@ -556,7 +554,7 @@ impl NickServ {
         // Look up the account's commitment so we can compare
         // against the in-memory active identity.
         let tree_name = format!("{ACCOUNTS_DB_PREFIX}{account_name}");
-        let tree = self.server.darkirc.sled.open_tree(&tree_name)?;
+        let tree = self.server.darkirc.kvdb.open_tree_default(&tree_name)?;
         let Some(blob) = tree.get(ACCOUNTS_KEY_RLN_IDENTITY)? else {
             return Ok(vec![notice(nick, format!("No such account: \"{account_name}\""))])
         };
@@ -567,7 +565,7 @@ impl NickServ {
                 // tree name. We can't tell whether it's active, so
                 // err on the safe side and refuse if there IS an
                 // active one. The only way out from a corrupted
-                // active account is to manually surgery sled.
+                // active account is to manually surgery kvdb.
                 if self.server.rln_identity.read().await.is_some() {
                     return Ok(vec![notice(
                         nick,
@@ -578,7 +576,7 @@ impl NickServ {
                         ),
                     )])
                 }
-                self.server.darkirc.sled.drop_tree(&tree_name)?;
+                self.server.darkirc.kvdb.drop_tree(&tree_name)?;
                 return Ok(vec![notice(
                     nick,
                     format!("Dropped corrupted account \"{account_name}\"."),
@@ -602,7 +600,7 @@ impl NickServ {
         }
 
         // Drop the tree.
-        self.server.darkirc.sled.drop_tree(&tree_name)?;
+        self.server.darkirc.kvdb.drop_tree(&tree_name)?;
 
         Ok(vec![notice(nick, format!("Successfully deregistered account \"{account_name}\""))])
     }
@@ -627,7 +625,7 @@ impl NickServ {
         }
 
         let tree_name = format!("{ACCOUNTS_DB_PREFIX}{account_name}");
-        let tree = self.server.darkirc.sled.open_tree(&tree_name)?;
+        let tree = self.server.darkirc.kvdb.open_tree_default(&tree_name)?;
         let Some(blob) = tree.get(ACCOUNTS_KEY_RLN_IDENTITY)? else {
             return Ok(notices(
                 nick,
@@ -666,7 +664,7 @@ impl NickServ {
         // counter state if it were the previously-active one)
         // because the default tree is meant to mirror an account
         // tree exactly.
-        let db_default = self.server.darkirc.sled.open_tree(ACCOUNTS_DEFAULT_TREE)?;
+        let db_default = self.server.darkirc.kvdb.open_tree_default(ACCOUNTS_DEFAULT_TREE)?;
         db_default.insert(ACCOUNTS_KEY_RLN_IDENTITY, blob.as_ref())?;
 
         // Swap in-memory. The loaded identity includes any persisted
@@ -754,7 +752,7 @@ impl NickServ {
 
         // Load the account.
         let tree_name = format!("{ACCOUNTS_DB_PREFIX}{account_name}");
-        let tree = self.server.darkirc.sled.open_tree(&tree_name)?;
+        let tree = self.server.darkirc.kvdb.open_tree_default(&tree_name)?;
         let Some(blob) = tree.get(ACCOUNTS_KEY_RLN_IDENTITY)? else {
             return Ok(vec![notice(nick, format!("No such account: \"{account_name}\""))])
         };
@@ -832,7 +830,7 @@ impl NickServ {
         // the account unusable anyway, so keeping the tree around
         // would be misleading (it would show up in INFO as if it
         // were still registered).
-        self.server.darkirc.sled.drop_tree(&tree_name)?;
+        self.server.darkirc.kvdb.drop_tree(&tree_name)?;
 
         Ok(notices(
             nick,
@@ -889,7 +887,7 @@ fn is_account_name_char(byte: u8) -> bool {
     byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_')
 }
 
-/// Return true when a local account name is safe as a sled tree suffix.
+/// Return true when a local account name is safe as a kvdb tree suffix.
 fn is_valid_account_name(account_name: &str) -> bool {
     account_name != "default" &&
         !account_name.is_empty() &&

@@ -26,9 +26,6 @@
 ## Sets Datastore Path
 #datastore = "~/.local/share/darkfi/darkirc/darkirc_db"
 
-## Sled cache capacity for the DarkIRC/EventGraph datastore, in MiB
-#sled_cache_mb = 64
-
 ## Enable RLN proof generation and verification. Disabled by default to skip
 ## RLN key loading, identity SMT state, proof generation, and proof verification.
 #rln_enabled = false
@@ -36,13 +33,10 @@
 ## Datastore path for RLN proving and verifying keys
 #zk_key_datastore = "~/.local/share/darkfi/darkirc/zk_keys"
 
-## Sled cache capacity for the RLN key datastore, in MiB
-#zk_key_sled_cache_mb = 16
-
 ## Sets DB logs replay datastore path
 #replay_datastore = "~/.local/share/darkfi/darkirc/replayed_darkirc_db"
 
-## Run in replay mode to store Sled DB instructions
+## Run in replay mode to store KVDB instructions
 ## (for eventgraph debugging tool)
 #replay_mode = false
 

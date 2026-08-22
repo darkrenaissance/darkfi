@@ -379,7 +379,7 @@ impl Client {
 
         let nick = self.nickname.read().await.to_string();
 
-        let tree = self.server.darkirc.sled.open_tree(SEEN_CHANNELS_TREE)?;
+        let tree = self.server.darkirc.kvdb.open_tree_default(SEEN_CHANNELS_TREE)?;
 
         let mut replies =
             vec![ReplyType::Server((RPL_LISTSTART, format!("{nick} Channel :Users  Name")))];

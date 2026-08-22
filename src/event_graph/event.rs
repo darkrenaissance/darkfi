@@ -19,7 +19,7 @@
 use std::{cmp::Ordering, collections::HashSet};
 
 use darkfi_serial::{async_trait, deserialize_async, Encodable, SerialDecodable, SerialEncodable};
-use sled_overlay::{sled, SledTreeOverlay};
+use kvdb_overlay::{Tree, TreeOverlay};
 
 use super::{
     util::{unix_timestamp_millis, HOUR_MS},
@@ -88,10 +88,10 @@ impl Header {
     /// `dag_genesis` is the timestamp/name of the target rotating DAG slot.
     pub async fn validate(
         &self,
-        header_dag: &sled::Tree,
+        header_dag: &Tree,
         config: &EventGraphConfig,
         dag_genesis: u64,
-        overlay: Option<&SledTreeOverlay>,
+        overlay: Option<&TreeOverlay>,
     ) -> Result<bool> {
         if !self.timestamp_fits_slot(config, dag_genesis) {
             return Ok(false)
@@ -189,7 +189,7 @@ impl Event {
     /// `dag_genesis` is the timestamp/name of the target rotating DAG slot.
     pub async fn dag_validate(
         &self,
-        hdr_dag: &sled::Tree,
+        hdr_dag: &Tree,
         config: &EventGraphConfig,
         dag_genesis: u64,
     ) -> Result<bool> {

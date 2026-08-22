@@ -41,9 +41,9 @@ use darkfi_sdk::{
 };
 use darkfi_serial::{async_trait, FutAsyncWriteExt, SerialDecodable, SerialEncodable};
 use halo2_proofs::{arithmetic::Field, circuit::Value};
+use kvdb_overlay::{Database, Tree};
 use num_bigint::BigUint;
 use rand::rngs::OsRng;
-use sled_overlay::sled;
 use tracing::{error, info};
 
 use super::Event;
@@ -269,40 +269,41 @@ const SLASH_PK_KEY: &str = "rlnv2-diff-slash-pk";
 const IDENTITY_LEAVES_TREE: &str = "rln-identity-leaves";
 const SLASHED_IDENTITY_LEAVES_TREE: &str = "rln-slashed-identity-leaves";
 const IDENTITY_SMT_NODES_TREE: &str = "rln-identity-smt-nodes";
+const STORAGE_TREE: &str = "rln-storage";
 
-type SmtSledFp = SparseMerkleTree<
+type SmtKvdbFp = SparseMerkleTree<
     'static,
     SMT_FP_DEPTH,
     { SMT_FP_DEPTH + 1 },
     pallas::Base,
     PoseidonFp,
-    SledStorageFp,
+    KvdbStorageFp,
 >;
 
-/// Sled-backed storage for RLN identity SMT nodes.
+/// Kvdb-backed storage for RLN identity SMT nodes.
 ///
 /// The leaf/tombstone trees remain the durable source of truth. This
 /// tree stores the SMT's internal node cache so membership proofs and
 /// root lookups do not require keeping the full sparse tree in heap.
 #[derive(Clone)]
-struct SledStorageFp {
-    tree: sled::Tree,
+struct KvdbStorageFp {
+    tree: Tree,
 }
 
-impl SledStorageFp {
-    fn new(tree: sled::Tree) -> Self {
+impl KvdbStorageFp {
+    fn new(tree: Tree) -> Self {
         Self { tree }
     }
 }
 
-impl StorageAdapter for SledStorageFp {
+impl StorageAdapter for KvdbStorageFp {
     type Value = pallas::Base;
 
     fn put(&mut self, key: BigUint, value: pallas::Base) -> ContractResult {
-        if let Err(e) = self.tree.insert(key.to_bytes_le(), value.to_repr().as_ref()) {
+        if let Err(e) = self.tree.insert(&key.to_bytes_le(), &value.to_repr()) {
             error!(
                 target: "event_graph::rln",
-                "[RLN] SMT sled put failed: {e}",
+                "[RLN] SMT kvdb put failed: {e}",
             );
             return Err(ContractError::SmtPutFailed)
         }
@@ -311,12 +312,12 @@ impl StorageAdapter for SledStorageFp {
     }
 
     fn get(&self, key: &BigUint) -> Option<pallas::Base> {
-        let value = match self.tree.get(key.to_bytes_le()) {
+        let value = match self.tree.get(&key.to_bytes_le()) {
             Ok(value) => value?,
             Err(e) => {
                 error!(
                     target: "event_graph::rln",
-                    "[RLN] SMT sled get failed: {e}",
+                    "[RLN] SMT kvdb get failed: {e}",
                 );
                 return None
             }
@@ -325,7 +326,7 @@ impl StorageAdapter for SledStorageFp {
         if value.len() != 32 {
             error!(
                 target: "event_graph::rln",
-                "[RLN] SMT sled node must be 32 bytes, got {}",
+                "[RLN] SMT kvdb node must be 32 bytes, got {}",
                 value.len(),
             );
             return None
@@ -337,10 +338,10 @@ impl StorageAdapter for SledStorageFp {
     }
 
     fn del(&mut self, key: &BigUint) -> ContractResult {
-        if let Err(e) = self.tree.remove(key.to_bytes_le()) {
+        if let Err(e) = self.tree.remove(&key.to_bytes_le()) {
             error!(
                 target: "event_graph::rln",
-                "[RLN] SMT sled del failed: {e}",
+                "[RLN] SMT kvdb del failed: {e}",
             );
             return Err(ContractError::SmtDelFailed)
         }
@@ -357,51 +358,53 @@ pub struct ZkKeys {
     pub signal_vk: VerifyingKey,
     /// Verifying key for slash proofs.
     pub slash_vk: VerifyingKey,
-    /// Reference to the sled DB for proving-key access during local proving.
-    sled_db: sled::Db,
+    /// Reference to the kvdb tree for proving-key access during local
+    /// proving.
+    tree: Tree,
 }
 
 impl ZkKeys {
     /// Ensure all required keys exist and load only verifying keys into memory.
-    pub fn build_and_load(sled_db: &sled::Db) -> Result<Self> {
-        Self::ensure_keys(sled_db)?;
-        Self::load_verifying_keys(sled_db)
+    pub fn build_and_load(kvdb: &Database) -> Result<Self> {
+        let tree = kvdb.open_tree_default(STORAGE_TREE)?;
+        Self::ensure_keys(&tree)?;
+        Self::load_verifying_keys(&tree)
     }
 
     /// Build missing proving and verifying keys into persistent storage.
-    fn ensure_keys(sled_db: &sled::Db) -> Result<()> {
-        ensure_key(sled_db, REGISTER_VK_KEY, RLN2_REGISTER_ZKBIN, KeyKind::Vk)?;
-        ensure_key(sled_db, REGISTER_PK_KEY, RLN2_REGISTER_ZKBIN, KeyKind::Pk)?;
-        ensure_key(sled_db, SIGNAL_VK_KEY, RLN2_SIGNAL_ZKBIN, KeyKind::Vk)?;
-        ensure_key(sled_db, SIGNAL_PK_KEY, RLN2_SIGNAL_ZKBIN, KeyKind::Pk)?;
-        ensure_key(sled_db, SLASH_PK_KEY, RLN2_SLASH_ZKBIN, KeyKind::Pk)?;
-        ensure_key(sled_db, SLASH_VK_KEY, RLN2_SLASH_ZKBIN, KeyKind::Vk)?;
+    fn ensure_keys(tree: &Tree) -> Result<()> {
+        ensure_key(tree, REGISTER_VK_KEY, RLN2_REGISTER_ZKBIN, KeyKind::Vk)?;
+        ensure_key(tree, REGISTER_PK_KEY, RLN2_REGISTER_ZKBIN, KeyKind::Pk)?;
+        ensure_key(tree, SIGNAL_VK_KEY, RLN2_SIGNAL_ZKBIN, KeyKind::Vk)?;
+        ensure_key(tree, SIGNAL_PK_KEY, RLN2_SIGNAL_ZKBIN, KeyKind::Pk)?;
+        ensure_key(tree, SLASH_PK_KEY, RLN2_SLASH_ZKBIN, KeyKind::Pk)?;
+        ensure_key(tree, SLASH_VK_KEY, RLN2_SLASH_ZKBIN, KeyKind::Vk)?;
         Ok(())
     }
 
     /// Load the verifying keys needed by validation paths.
-    fn load_verifying_keys(sled_db: &sled::Db) -> Result<Self> {
+    fn load_verifying_keys(tree: &Tree) -> Result<Self> {
         Ok(Self {
-            register_vk: read_vk(sled_db, REGISTER_VK_KEY, RLN2_REGISTER_ZKBIN)?,
-            signal_vk: read_vk(sled_db, SIGNAL_VK_KEY, RLN2_SIGNAL_ZKBIN)?,
-            slash_vk: read_vk(sled_db, SLASH_VK_KEY, RLN2_SLASH_ZKBIN)?,
-            sled_db: sled_db.clone(),
+            register_vk: read_vk(tree, REGISTER_VK_KEY, RLN2_REGISTER_ZKBIN)?,
+            signal_vk: read_vk(tree, SIGNAL_VK_KEY, RLN2_SIGNAL_ZKBIN)?,
+            slash_vk: read_vk(tree, SLASH_VK_KEY, RLN2_SLASH_ZKBIN)?,
+            tree: tree.clone(),
         })
     }
 
-    /// Load the slash proving key from sled.
+    /// Load the slash proving key from kvdb tree.
     pub fn load_slash_pk(&self) -> Result<ProvingKey> {
-        read_pk(&self.sled_db, SLASH_PK_KEY, RLN2_SLASH_ZKBIN)
+        read_pk(&self.tree, SLASH_PK_KEY, RLN2_SLASH_ZKBIN)
     }
 
-    /// Load the register proving key from sled.
+    /// Load the register proving key from kvdb tree.
     pub fn load_register_pk(&self) -> Result<ProvingKey> {
-        read_pk(&self.sled_db, REGISTER_PK_KEY, RLN2_REGISTER_ZKBIN)
+        read_pk(&self.tree, REGISTER_PK_KEY, RLN2_REGISTER_ZKBIN)
     }
 
-    /// Load the signal proving key from sled.
+    /// Load the signal proving key from kvdb tree.
     pub fn load_signal_pk(&self) -> Result<ProvingKey> {
-        read_pk(&self.sled_db, SIGNAL_PK_KEY, RLN2_SIGNAL_ZKBIN)
+        read_pk(&self.tree, SIGNAL_PK_KEY, RLN2_SIGNAL_ZKBIN)
     }
 }
 
@@ -562,22 +565,22 @@ pub enum StaticEventCheck {
 /// Merkle Tree (SMT).
 ///
 /// Persistence model: leaf commitments and slash tombstones are stored in
-/// dedicated sled trees. SMT internal nodes are also sled-backed, but are
+/// dedicated kvdb trees. SMT internal nodes are also kvdb-backed, but are
 /// treated as rebuildable derived state from the canonical static DAG and the
 /// leaf/tombstone side tables.
 pub struct IdentityState {
-    smt: SmtSledFp,
-    leaves: sled::Tree,
-    slashed: sled::Tree,
-    smt_nodes: sled::Tree,
+    smt: SmtKvdbFp,
+    leaves: Tree,
+    slashed: Tree,
+    smt_nodes: Tree,
     recent_roots: VecDeque<pallas::Base>,
 }
 
 impl IdentityState {
-    pub fn new(sled_db: &sled::Db) -> Result<Self> {
-        let leaves = sled_db.open_tree(IDENTITY_LEAVES_TREE)?;
-        let slashed = sled_db.open_tree(SLASHED_IDENTITY_LEAVES_TREE)?;
-        let smt_nodes = sled_db.open_tree(IDENTITY_SMT_NODES_TREE)?;
+    pub fn new(kvdb: &Database) -> Result<Self> {
+        let leaves = kvdb.open_tree_default(IDENTITY_LEAVES_TREE)?;
+        let slashed = kvdb.open_tree_default(SLASHED_IDENTITY_LEAVES_TREE)?;
+        let smt_nodes = kvdb.open_tree_default(IDENTITY_SMT_NODES_TREE)?;
         let smt = Self::new_smt(smt_nodes.clone());
 
         let mut state = Self {
@@ -588,7 +591,7 @@ impl IdentityState {
             recent_roots: VecDeque::with_capacity(ROOT_HISTORY_SIZE),
         };
 
-        if state.smt_nodes.is_empty() && !state.leaves.is_empty() {
+        if state.smt_nodes.is_empty()? && !state.leaves.is_empty()? {
             state.restore_smt_nodes_from_leaves()?;
         }
 
@@ -596,10 +599,10 @@ impl IdentityState {
         Ok(state)
     }
 
-    fn new_smt(smt_nodes: sled::Tree) -> SmtSledFp {
+    fn new_smt(smt_nodes: Tree) -> SmtKvdbFp {
         let hasher = PoseidonFp::new();
-        let store = SledStorageFp::new(smt_nodes);
-        SmtSledFp::new(store, hasher, &EMPTY_NODES_FP)
+        let store = KvdbStorageFp::new(smt_nodes);
+        SmtKvdbFp::new(store, hasher, &EMPTY_NODES_FP)
     }
 
     /// Return the root of an empty RLN identity SMT.
@@ -607,7 +610,7 @@ impl IdentityState {
         EMPTY_NODES_FP[0]
     }
 
-    /// Recreate the sled-backed SMT node tree from persisted leaves.
+    /// Recreate the kvdb-backed SMT node tree from persisted leaves.
     ///
     /// This is a migration and repair path for databases that have the old
     /// leaf side table but no `rln-identity-smt-nodes` tree yet. It restores
@@ -617,13 +620,13 @@ impl IdentityState {
 
         for item in self.leaves.iter() {
             let (key, val) = item?;
-            if key.len() != 32 || val.len() != 32 || key.as_ref() != val.as_ref() {
+            if key.len() != 32 || val.len() != 32 || key != val {
                 continue
             }
 
             let mut repr = [0u8; 32];
             repr.copy_from_slice(&val);
-            if self.slashed.contains_key(repr)? {
+            if self.slashed.contains_key(&repr)? {
                 continue
             }
 
@@ -636,7 +639,7 @@ impl IdentityState {
         if restored > 0 {
             info!(
                 target: "event_graph::rln",
-                "[RLN] Restored {} sled-backed identity SMT nodes from leaves",
+                "[RLN] Restored {} kvdb-backed identity SMT nodes from leaves",
                 restored,
             );
         }
@@ -646,12 +649,12 @@ impl IdentityState {
 
     /// Returns true if the commitment is already a leaf in the tree.
     pub fn contains(&self, commitment: &pallas::Base) -> bool {
-        self.leaves.contains_key(commitment.to_repr()).unwrap_or(false)
+        self.leaves.contains_key(&commitment.to_repr()).unwrap_or(false)
     }
 
     /// Returns true if the commitment has been permanently slashed.
     pub fn is_slashed(&self, commitment: &pallas::Base) -> bool {
-        self.slashed.contains_key(commitment.to_repr()).unwrap_or(false)
+        self.slashed.contains_key(&commitment.to_repr()).unwrap_or(false)
     }
 
     /// Register a new identity.
@@ -667,7 +670,7 @@ impl IdentityState {
         if self.contains(&commitment) {
             return Err(Error::Custom("RLN: duplicate identity commitment".into()))
         }
-        self.leaves.insert(commitment.to_repr(), commitment.to_repr().as_ref())?;
+        self.leaves.insert(&commitment.to_repr(), &commitment.to_repr())?;
         self.smt.insert_batch(vec![(commitment, commitment)])?;
         self.push_root();
         Ok(())
@@ -679,11 +682,11 @@ impl IdentityState {
     /// still recorded as a tombstone, but the SMT root is unchanged.
     pub fn slash(&mut self, commitment: pallas::Base) -> Result<()> {
         let repr = commitment.to_repr();
-        self.slashed.insert(repr, repr.as_ref())?;
+        self.slashed.insert(&repr, &repr)?;
         if !self.contains(&commitment) {
             return Ok(())
         }
-        self.leaves.remove(repr)?;
+        self.leaves.remove(&repr)?;
         self.smt.remove_leaves(vec![(commitment, commitment)])?;
         self.push_root();
         Ok(())
@@ -710,7 +713,7 @@ impl IdentityState {
                     val.len()
                 )))
             }
-            if key.as_ref() != val.as_ref() {
+            if key != val {
                 return Err(Error::Custom("RLN identity leaf key/value mismatch".into()))
             }
             let mut repr = [0u8; 32];
@@ -732,7 +735,7 @@ impl IdentityState {
                     val.len()
                 )))
             }
-            if key.as_ref() != val.as_ref() {
+            if key != val {
                 return Err(Error::Custom("RLN slashed identity key/value mismatch".into()))
             }
             let mut repr = [0u8; 32];
@@ -768,11 +771,11 @@ impl IdentityState {
         self.recent_roots.push_back(root);
     }
 
-    /// Reset the sled-backed SMT and the persistent leaves tree to an
+    /// Reset the kvdb-backed SMT and the persistent leaves tree to an
     /// empty state, in preparation for replaying the canonical
     /// static-DAG history.
     pub fn clear_for_rebuild(&mut self) -> Result<()> {
-        // Drop every derived identity state from sled.
+        // Drop every derived identity state from kvdb.
         self.leaves.clear()?;
         self.slashed.clear()?;
         self.smt_nodes.clear()?;
@@ -1005,9 +1008,9 @@ enum KeyKind {
     Vk,
 }
 
-/// Build a key into sled if it doesn't already exist.
-fn ensure_key(sled_db: &sled::Db, key: &str, zkbin_bytes: &[u8], kind: KeyKind) -> Result<()> {
-    if sled_db.contains_key(key)? {
+/// Build a key into kvdb tree if it doesn't already exist.
+fn ensure_key(tree: &Tree, key: &str, zkbin_bytes: &[u8], kind: KeyKind) -> Result<()> {
+    if tree.contains_key(key.as_bytes())? {
         return Ok(())
     }
 
@@ -1026,19 +1029,21 @@ fn ensure_key(sled_db: &sled::Db, key: &str, zkbin_bytes: &[u8], kind: KeyKind) 
             vk.write(&mut buf)?;
         }
     }
-    sled_db.insert(key, buf)?;
+    tree.insert(key.as_bytes(), &buf)?;
     Ok(())
 }
 
-fn read_vk(sled_db: &sled::Db, key: &str, zkbin_bytes: &[u8]) -> Result<VerifyingKey> {
-    let bytes = sled_db.get(key)?.ok_or_else(|| Error::Custom(format!("{key} not found")))?;
+fn read_vk(tree: &Tree, key: &str, zkbin_bytes: &[u8]) -> Result<VerifyingKey> {
+    let bytes =
+        tree.get(key.as_bytes())?.ok_or_else(|| Error::Custom(format!("{key} not found")))?;
     let zkbin = ZkBinary::decode(zkbin_bytes, false)?;
     let circuit = ZkCircuit::new(empty_witnesses(&zkbin)?, &zkbin);
     Ok(VerifyingKey::read(&mut Cursor::new(bytes), circuit)?)
 }
 
-fn read_pk(sled_db: &sled::Db, key: &str, zkbin_bytes: &[u8]) -> Result<ProvingKey> {
-    let bytes = sled_db.get(key)?.ok_or_else(|| Error::Custom(format!("{key} not found")))?;
+fn read_pk(tree: &Tree, key: &str, zkbin_bytes: &[u8]) -> Result<ProvingKey> {
+    let bytes =
+        tree.get(key.as_bytes())?.ok_or_else(|| Error::Custom(format!("{key} not found")))?;
     let zkbin = ZkBinary::decode(zkbin_bytes, false)?;
     let circuit = ZkCircuit::new(empty_witnesses(&zkbin)?, &zkbin);
     Ok(ProvingKey::read(&mut Cursor::new(bytes), circuit)?)

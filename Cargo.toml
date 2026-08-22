@@ -185,8 +185,8 @@ geode = [
 event-graph = [
     "async-std",
     "blake3",
+    "kvdb-overlay",
     "num-bigint",
-    "sled-overlay",
     "smol",
     "tinyjson",
     "bs58",

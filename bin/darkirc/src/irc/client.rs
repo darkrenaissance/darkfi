@@ -32,7 +32,7 @@ use darkfi::{
 };
 use darkfi_serial::{deserialize_async_partial, serialize_async};
 use futures::{FutureExt, StreamExt};
-use sled_overlay::sled;
+use kvdb_overlay::{Batch, Tree};
 use smol::{
     io::{self, AsyncBufRead, AsyncBufReadExt, AsyncWriteExt, BufReader},
     lock::{OnceCell, RwLock},
@@ -179,7 +179,7 @@ pub struct Client {
     pub caps: RwLock<HashMap<String, bool>>,
     /// Set of seen messages for the user
     /// TODO: It grows indefinitely, needs to be pruned.
-    pub seen: OnceCell<sled::Tree>,
+    pub seen: OnceCell<Tree>,
     /// NickServ instance
     pub nickserv: Arc<NickServ>,
 }
@@ -693,31 +693,31 @@ impl Client {
 
     /// Atomically mark a message as seen for this client.
     pub async fn mark_seen(&self, event_id: &blake3::Hash) -> Result<()> {
-        let db = self
+        let tree = self
             .seen
             .get_or_init(|| async {
                 let u = self.username.read().await.to_string();
-                self.server.darkirc.sled.open_tree(format!("darkirc_user_{u}")).unwrap()
+                self.server.darkirc.kvdb.open_tree_default(&format!("darkirc_user_{u}")).unwrap()
             })
             .await;
 
         debug!("Marking event {event_id} as seen");
-        let mut batch = sled::Batch::default();
+        let mut batch = Batch::default();
         batch.insert(event_id.as_bytes(), &[]);
-        Ok(db.apply_batch(batch)?)
+        Ok(self.server.darkirc.kvdb.atomic_write(&[(tree, &batch)])?)
     }
 
     /// Check if a message was already marked seen for this client.
     pub async fn is_seen(&self, event_id: &blake3::Hash) -> Result<bool> {
-        let db = self
+        let tree = self
             .seen
             .get_or_init(|| async {
                 let u = self.username.read().await.to_string();
-                self.server.darkirc.sled.open_tree(format!("darkirc_user_{u}")).unwrap()
+                self.server.darkirc.kvdb.open_tree_default(&format!("darkirc_user_{u}")).unwrap()
             })
             .await;
 
-        Ok(db.contains_key(event_id.as_bytes())?)
+        Ok(tree.contains_key(event_id.as_bytes())?)
     }
 }
 

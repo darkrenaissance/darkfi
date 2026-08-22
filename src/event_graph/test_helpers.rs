@@ -25,7 +25,7 @@ use std::{
 };
 
 use darkfi_sdk::{crypto::pasta_prelude::PrimeField, pasta::pallas};
-use sled_overlay::sled;
+use kvdb_overlay::{Database, TempDir};
 use smol::{channel, future, Executor};
 use url::Url;
 
@@ -62,7 +62,7 @@ pub fn bounded_dag_store_config() -> EventGraphConfig {
 }
 
 /// Archive-mode config: never evicts old DAGs and discovers
-/// existing trees from sled on construction. Like
+/// existing trees from kvdb on construction. Like
 /// [`bounded_dag_store_config`] this is for `DagStore`-direct
 /// tests only.
 pub fn archive_config() -> EventGraphConfig {
@@ -101,43 +101,40 @@ fn shared_zk_keys() -> Arc<crate::event_graph::rln::ZkKeys> {
             let cache_dir =
                 std::env::temp_dir().join(format!("darkfi-test-zk-cache-{}", &zkbin_hash[..16]));
 
-            let db = sled::Config::new().path(&cache_dir).open().unwrap_or_else(|e| {
+            let kvdb = Database::open_default(&cache_dir).unwrap_or_else(|e| {
                 panic!(
-                    "failed to open shared ZK key sled DB at {}: {e}\n\
+                    "failed to open shared ZK key KVDB at {}: {e}\n\
                          (if the cache is corrupted, run `rm -rf {}`)",
                     cache_dir.display(),
                     cache_dir.display(),
                 )
             });
-            let keys = ZkKeys::build_and_load(&db).expect("failed to build shared ZK keys");
+            let keys = ZkKeys::build_and_load(&kvdb).expect("failed to build shared ZK keys");
             Arc::new(keys)
         })
         .clone()
 }
 
-pub async fn make_eg() -> EventGraphPtr {
+pub async fn make_eg() -> (EventGraphPtr, TempDir) {
     make_eg_with_config(test_config()).await
 }
 
 /// Construct an [`EventGraph`] with a caller-provided test config.
-pub async fn make_eg_with_config(config: EventGraphConfig) -> EventGraphPtr {
-    let sled_db = sled::Config::new().temporary(true).open().unwrap();
-    make_eg_with_config_and_db(config, sled_db).await
+pub async fn make_eg_with_config(config: EventGraphConfig) -> (EventGraphPtr, TempDir) {
+    let (kvdb, kvdb_folder) = Database::open_temp().unwrap();
+    (make_eg_with_config_and_db(config, kvdb).await, kvdb_folder)
 }
 
-/// Construct an [`EventGraph`] with a caller-provided config and sled DB.
-pub async fn make_eg_with_config_and_db(
-    config: EventGraphConfig,
-    sled_db: sled::Db,
-) -> EventGraphPtr {
+/// Construct an [`EventGraph`] with a caller-provided config and KVDB.
+pub async fn make_eg_with_config_and_db(config: EventGraphConfig, kvdb: Database) -> EventGraphPtr {
     let ex = Arc::new(Executor::new());
     let p2p = P2p::new(Settings::default(), ex.clone()).await.unwrap();
     if config.rln_enabled {
-        EventGraph::with_zk_keys(p2p, sled_db, "/tmp".into(), false, config, shared_zk_keys(), ex)
+        EventGraph::with_zk_keys(p2p, kvdb, "/tmp".into(), false, config, shared_zk_keys(), ex)
             .await
             .unwrap()
     } else {
-        EventGraph::new(p2p, sled_db, "/tmp".into(), false, config, ex).await.unwrap()
+        EventGraph::new(p2p, kvdb, "/tmp".into(), false, config, ex).await.unwrap()
     }
 }
 
@@ -162,7 +159,7 @@ async fn spawn_node(
     port_offset: usize,
     peer_offsets: Vec<usize>,
     ex: Arc<Executor<'static>>,
-) -> EventGraphPtr {
+) -> (EventGraphPtr, TempDir) {
     let mut profiles = HashMap::new();
     profiles.insert(
         "tcp".to_string(),
@@ -187,10 +184,10 @@ async fn spawn_node(
     };
 
     let p2p = P2p::new(settings, ex.clone()).await.unwrap();
-    let sled_db = sled::Config::new().temporary(true).open().unwrap();
+    let (kvdb, kvdb_folder) = Database::open_temp().unwrap();
     let eg = EventGraph::with_zk_keys(
         p2p.clone(),
-        sled_db,
+        kvdb,
         "/tmp".into(),
         false,
         test_config(),
@@ -215,7 +212,7 @@ async fn spawn_node(
         })
         .await;
 
-    eg
+    (eg, kvdb_folder)
 }
 
 /// Bootstrap an N-node ring, start the P2P stacks, and wait 5
@@ -223,7 +220,7 @@ async fn spawn_node(
 ///
 /// Each call gets a fresh non-overlapping port range, so multiple
 /// `make_network` invocations can run in parallel.
-pub async fn make_network(ex: Arc<Executor<'static>>) -> Vec<EventGraphPtr> {
+pub async fn make_network(ex: Arc<Executor<'static>>) -> Vec<(EventGraphPtr, TempDir)> {
     use rand::{prelude::SliceRandom, rngs::ThreadRng};
 
     let port_base = alloc_port_base();
@@ -236,7 +233,7 @@ pub async fn make_network(ex: Arc<Executor<'static>>) -> Vec<EventGraphPtr> {
         let conns: Vec<usize> = others.choose_multiple(&mut rng, N_CONNS).copied().collect();
         nodes.push(spawn_node(port_base, i, conns, ex.clone()).await);
     }
-    for eg in &nodes {
+    for (eg, _) in &nodes {
         eg.p2p.clone().start().await.unwrap();
     }
     crate::system::sleep(5).await;
@@ -244,8 +241,8 @@ pub async fn make_network(ex: Arc<Executor<'static>>) -> Vec<EventGraphPtr> {
 }
 
 /// Stop every node's P2P stack. Call at end of multi-node tests.
-pub async fn shutdown_network(nodes: &[EventGraphPtr]) {
-    for eg in nodes {
+pub async fn shutdown_network(nodes: &[(EventGraphPtr, TempDir)]) {
+    for (eg, _) in nodes {
         eg.p2p.clone().stop().await;
     }
 }

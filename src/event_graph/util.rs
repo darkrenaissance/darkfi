@@ -27,7 +27,6 @@ use std::{
 };
 
 use darkfi_serial::{deserialize, deserialize_async, serialize};
-use sled_overlay::sled;
 use tinyjson::JsonValue;
 
 use super::{
@@ -164,11 +163,11 @@ pub async fn recreate_from_replayer_log(datastore: &Path) -> JsonResult {
         Ok(reader) => reader,
         Err(e) => return replay_error(e.to_string()),
     };
-    let sled_db = match sled::open(datastore.join("replayed_db")) {
+    let kvdb = match kvdb_overlay::Database::open_default(&datastore.join("replayed_db")) {
         Ok(db) => db,
         Err(e) => return replay_error(e.to_string()),
     };
-    let dag = match sled_db.open_tree("replayer") {
+    let dag = match kvdb.open_tree_default("replayer") {
         Ok(tree) => tree,
         Err(e) => return replay_error(e.to_string()),
     };
@@ -185,7 +184,7 @@ pub async fn recreate_from_replayer_log(datastore: &Path) -> JsonResult {
                 Ok(event) => event,
                 Err(e) => return replay_error(e.to_string()),
             };
-            if let Err(e) = dag.insert(v.header.id().as_bytes(), serialize(&v)) {
+            if let Err(e) = dag.insert(v.header.id().as_bytes(), &serialize(&v)) {
                 return replay_error(e.to_string())
             }
         }

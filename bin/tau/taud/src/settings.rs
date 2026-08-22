@@ -49,10 +49,6 @@ pub struct Args {
     /// Datastore path for RLN proving and verifying keys
     pub zk_key_datastore: String,
 
-    #[structopt(long, default_value = "16")]
-    /// Sled cache capacity for the RLN key datastore, in MiB
-    pub zk_key_sled_cache_mb: u64,
-
     #[structopt(long)]
     /// Generate a new RLN identity
     pub gen_rln_identity: bool,
@@ -62,7 +58,7 @@ pub struct Args {
     pub gen_genesis_rln_identities: Option<u64>,
 
     #[structopt(long)]
-    /// Flag to store Sled DB instructions
+    /// Flag to store KVDB instructions
     pub replay_mode: bool,
 
     #[structopt(flatten)]

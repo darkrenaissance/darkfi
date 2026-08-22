@@ -33,7 +33,7 @@ use std::{
 use darkfi_sdk::{crypto::pasta_prelude::PrimeField, pasta::pallas};
 use darkfi_serial::{deserialize_async, deserialize_async_partial, serialize_async};
 use futures::{stream::FuturesUnordered, StreamExt};
-use sled_overlay::{sled, SledTreeOverlay};
+use kvdb_overlay::{Database, Tree, TreeOverlay};
 use smol::{
     lock::{OnceCell, RwLock},
     Executor,
@@ -129,8 +129,8 @@ pub struct EventGraphConfig {
     ///
     /// * `Some(n)` - keep n rotation periods.
     ///   When the n+1 period is created, the oldest is permanently
-    ///   deleted from sled. This is the normal mode for end-user nodes.
-    /// * `None` - never prune. Every DAG ever created is kept in sled
+    ///   deleted from kvdb. This is the normal mode for end-user nodes.
+    /// * `None` - never prune. Every DAG ever created is kept in kvdb
     ///   and loaded at startup. This is archive mode for nodes that want
     ///   complete history.
     ///
@@ -225,7 +225,7 @@ impl TimeIndex {
         Self::default()
     }
 
-    pub async fn from_header_dag(tree: &sled::Tree) -> Result<Self> {
+    pub async fn from_header_dag(tree: &Tree) -> Result<Self> {
         let mut idx = Self::new();
         for item in tree.iter() {
             let (id, hdr) = item?;
@@ -333,8 +333,8 @@ impl TimeIndex {
 
 /// All per-DAG state: trees, tips, and the timestamp index.
 pub struct DagSlot {
-    pub header_tree: sled::Tree,
-    pub main_tree: sled::Tree,
+    pub header_tree: Tree,
+    pub main_tree: Tree,
     pub tips: LayerUTips,
     pub time_index: TimeIndex,
 }
@@ -342,7 +342,7 @@ pub struct DagSlot {
 /// Full-scan tip computation.
 /// Compute unreferenced tips - events that exist in the DAG but are
 /// not referenced as a parent by any other event - grouped by layer.
-pub(crate) async fn compute_unreferenced_tips(dag: &sled::Tree) -> Result<LayerUTips> {
+pub(crate) async fn compute_unreferenced_tips(dag: &Tree) -> Result<LayerUTips> {
     let mut candidates: HashMap<blake3::Hash, u64> = HashMap::new();
     let mut referenced: HashSet<blake3::Hash> = HashSet::new();
 
@@ -394,7 +394,7 @@ fn select_parents_from_tips(tips: &LayerUTips) -> (u64, [blake3::Hash; N_EVENT_P
 
 /// Storage layer for all rotating DAGs.
 pub struct DagStore {
-    db: sled::Db,
+    db: Database,
     dags: BTreeMap<u64, DagSlot>,
 }
 
@@ -403,46 +403,45 @@ impl DagStore {
     ///
     /// * **Bounded mode** (`max_dags = Some(n)`): create a rolling
     ///   window of the most recent `n` DAGs. Old trees already in
-    ///   sled outside this window are left untouched (they're just
+    ///   kvdb outside this window are left untouched (they're just
     ///   not loaded into memory).
     /// * **Archive mode** (`max_dags = None`): discover *all*
-    ///   existing DAG trees in sled and load them, plus ensure the
+    ///   existing DAG trees in kvdb and load them, plus ensure the
     ///   recent window exists. Nothing is ever dropped.
-    pub async fn new(sled_db: sled::Db, config: &EventGraphConfig) -> Result<Self> {
+    pub async fn new(kvdb: Database, config: &EventGraphConfig) -> Result<Self> {
         config.validate()?;
         let mut dags = BTreeMap::new();
 
         if config.hours_rotation == 0 {
             let genesis = generate_genesis(config)?;
-            dags.insert(genesis.header.timestamp, Self::create_slot(&sled_db, &genesis).await?);
-            return Ok(Self { db: sled_db, dags })
+            dags.insert(genesis.header.timestamp, Self::create_slot(&kvdb, &genesis).await?);
+            return Ok(Self { db: kvdb, dags })
         }
 
         // Determine how many recent DAGs to create/ensure exist.
         let window = config.max_dags.unwrap_or(24);
 
         // In archive mode, first discover and load any existing DAG
-        // trees that are already in sled from previous runs.
+        // trees that are already in kvdb from previous runs.
         //
         // A DAG is stored across two trees: `<timestamp>` for events
         // and `headers_<timestamp>` for headers. We walk every tree
-        // name in sled and pick out the ones whose name is a valid u64
+        // name in kvdb and pick out the ones whose name is a valid u64
         // timestamp.
         if config.max_dags.is_none() {
-            for name in sled_db.tree_names() {
-                let name_str = String::from_utf8_lossy(&name);
-                if let Ok(ts) = name_str.parse::<u64>() {
-                    // Reconstruct the genesis for this timestamp
-                    let hdr = Header {
-                        timestamp: ts,
-                        parents: NULL_PARENTS,
-                        layer: 0,
-                        content_hash: blake3::hash(&config.genesis_contents),
-                    };
-                    let genesis = Event { header: hdr, content: config.genesis_contents.clone() };
-                    let slot = Self::create_slot(&sled_db, &genesis).await?;
-                    dags.insert(ts, slot);
-                }
+            for name in kvdb.tree_names()? {
+                let Ok(ts) = name.parse::<u64>() else { continue };
+
+                // Reconstruct the genesis for this timestamp
+                let hdr = Header {
+                    timestamp: ts,
+                    parents: NULL_PARENTS,
+                    layer: 0,
+                    content_hash: blake3::hash(&config.genesis_contents),
+                };
+                let genesis = Event { header: hdr, content: config.genesis_contents.clone() };
+                let slot = Self::create_slot(&kvdb, &genesis).await?;
+                dags.insert(ts, slot);
             }
         }
 
@@ -451,7 +450,7 @@ impl DagStore {
         for i in 1..=window {
             let ts = next_hour_timestamp((i as i64) - (window as i64))?;
             if dags.contains_key(&ts) {
-                // Already loaded from sled discovery
+                // Already loaded from kvdb discovery
                 continue
             }
             let hdr = Header {
@@ -461,24 +460,24 @@ impl DagStore {
                 content_hash: blake3::hash(&config.genesis_contents),
             };
             let genesis = Event { header: hdr, content: config.genesis_contents.clone() };
-            dags.insert(ts, Self::create_slot(&sled_db, &genesis).await?);
+            dags.insert(ts, Self::create_slot(&kvdb, &genesis).await?);
         }
 
-        Ok(Self { db: sled_db, dags })
+        Ok(Self { db: kvdb, dags })
     }
 
-    async fn create_slot(db: &sled::Db, genesis: &Event) -> Result<DagSlot> {
+    async fn create_slot(kvdb: &Database, genesis: &Event) -> Result<DagSlot> {
         let name = genesis.header.timestamp.to_string();
-        let ht = db.open_tree(format!("headers_{name}"))?;
-        let mt = db.open_tree(&name)?;
+        let ht = kvdb.open_tree_default(&format!("headers_{name}"))?;
+        let mt = kvdb.open_tree_default(&name)?;
         for (tree, data) in
             [(&ht, serialize_async(&genesis.header).await), (&mt, serialize_async(genesis).await)]
         {
-            if tree.is_empty() {
-                let mut ov = SledTreeOverlay::new(tree);
+            if tree.is_empty()? {
+                let mut ov = TreeOverlay::new(tree);
                 ov.insert(genesis.id().as_bytes(), &data)?;
                 if let Some(b) = ov.aggregate() {
-                    tree.apply_batch(b)?;
+                    kvdb.atomic_write(&[(tree, &b)])?;
                 }
             }
         }
@@ -502,8 +501,8 @@ impl DagStore {
                 let Some((_, old)) = self.dags.pop_first() else {
                     return Err(Error::Custom("event graph DAG store is empty".into()))
                 };
-                self.db.drop_tree(old.header_tree.name())?;
-                self.db.drop_tree(old.main_tree.name())?;
+                self.db.drop_tree(&old.header_tree.name()?)?;
+                self.db.drop_tree(&old.main_tree.name()?)?;
             }
         }
         let slot = Self::create_slot(&self.db, genesis).await?;
@@ -519,8 +518,8 @@ impl DagStore {
         self.dags.get_mut(ts)
     }
 
-    pub fn get_header_tree(&self, dag_name: &str) -> Result<sled::Tree> {
-        Ok(self.db.open_tree(format!("headers_{dag_name}"))?)
+    pub fn get_header_tree(&self, dag_name: &str) -> Result<Tree> {
+        Ok(self.db.open_tree_default(&format!("headers_{dag_name}"))?)
     }
 
     pub fn dag_timestamps(&self) -> Vec<u64> {
@@ -687,7 +686,7 @@ pub struct EventGraph {
     /// by `handle_event_req` to forward blobs to syncing peers.
     /// Pruned by `dag_prune` when the corresponding rotating DAG
     /// rolls out of the retention window.
-    pub(crate) dag_blobs: sled::Tree,
+    pub(crate) dag_blobs: Tree,
     /// Verified range-sync bodies waiting for older parent bodies before they
     /// can be durably committed to the rotating DAG body tree.
     lazy_pending: RwLock<HashMap<u64, HashMap<blake3::Hash, PendingLazyEvent>>>,
@@ -705,7 +704,7 @@ pub struct EventGraph {
     /// See [`Self::apply_rln_static_event`] for the canonical-order
     /// rationale and [`Self::is_root_valid_at`] for how this is
     /// consulted during signal verification.
-    pub(crate) rln_historical_roots_ordered: sled::Tree,
+    pub(crate) rln_historical_roots_ordered: Tree,
     /// Reverse index: `(root:32, ordered_key:40) -> []`.
     ///
     /// A root can appear more than once when static events are no-ops
@@ -713,14 +712,14 @@ pub struct EventGraph {
     /// index stores every canonical occurrence rather than a single
     /// root-to-key mapping. [`Self::is_root_valid_at`] scans this
     /// prefix and accepts if any interval for the root matches.
-    pub(crate) rln_historical_roots_by_value: sled::Tree,
-    pub(crate) static_dag: sled::Tree,
+    pub(crate) rln_historical_roots_by_value: Tree,
+    pub(crate) static_dag: Tree,
     /// Side-table mapping `event_id -> original RLN blob` for static
     /// events. Used by [`Self::static_sync`] to re-verify the ZK
     /// proof of historical events at sync time. Every static-DAG
     /// event MUST have a corresponding entry - `static_sync` rejects
     /// events whose blob isn't available rather than falling through.
-    pub(crate) static_dag_blobs: sled::Tree,
+    pub(crate) static_dag_blobs: Tree,
     datastore: PathBuf,
     replay_mode: bool,
     pub(crate) broadcasted_ids: RwLock<HashSet<blake3::Hash>>,
@@ -736,7 +735,7 @@ pub struct EventGraph {
     pub synced: AtomicBool,
     pub deg_enabled: AtomicBool,
     deg_publisher: PublisherPtr<DegEvent>,
-    pub sled_db: sled::Db,
+    pub kvdb: Database,
     pub zk_keys: Option<Arc<ZkKeys>>,
     pub identity_state: Option<RwLock<IdentityState>>,
     pub rln_state: Option<RwLock<RlnState>>,
@@ -764,21 +763,21 @@ impl EventGraph {
     /// Create a new Event Graph.
     pub async fn new(
         p2p: P2pPtr,
-        sled_db: sled::Db,
+        kvdb: Database,
         datastore: PathBuf,
         replay_mode: bool,
         config: EventGraphConfig,
         ex: Arc<Executor<'_>>,
     ) -> Result<EventGraphPtr> {
-        let zk_key_db = sled_db.clone();
-        Self::new_with_zk_key_db(p2p, sled_db, zk_key_db, datastore, replay_mode, config, ex).await
+        let zk_key_db = kvdb.clone();
+        Self::new_with_zk_key_db(p2p, kvdb, zk_key_db, datastore, replay_mode, config, ex).await
     }
 
     /// Create a new Event Graph using a separate DB for RLN key material.
     pub async fn new_with_zk_key_db(
         p2p: P2pPtr,
-        sled_db: sled::Db,
-        zk_key_db: sled::Db,
+        kvdb: Database,
+        zk_key_db: Database,
         datastore: PathBuf,
         replay_mode: bool,
         config: EventGraphConfig,
@@ -793,7 +792,7 @@ impl EventGraph {
             info!(target: "event_graph::new", "[EVENTGRAPH] RLN disabled; skipping key initialization");
             None
         };
-        Self::with_optional_zk_keys(p2p, sled_db, datastore, replay_mode, config, zk_keys, ex).await
+        Self::with_optional_zk_keys(p2p, kvdb, datastore, replay_mode, config, zk_keys, ex).await
     }
 
     /// Same as [`Self::new`] but accepts a pre-built [`ZkKeys`].
@@ -805,20 +804,20 @@ impl EventGraph {
     /// them per-test would blow out RAM and `/dev/shm`.
     pub async fn with_zk_keys(
         p2p: P2pPtr,
-        sled_db: sled::Db,
+        kvdb: Database,
         datastore: PathBuf,
         replay_mode: bool,
         config: EventGraphConfig,
         zk_keys: Arc<ZkKeys>,
         ex: Arc<Executor<'_>>,
     ) -> Result<EventGraphPtr> {
-        Self::with_optional_zk_keys(p2p, sled_db, datastore, replay_mode, config, Some(zk_keys), ex)
+        Self::with_optional_zk_keys(p2p, kvdb, datastore, replay_mode, config, Some(zk_keys), ex)
             .await
     }
 
     async fn with_optional_zk_keys(
         p2p: P2pPtr,
-        sled_db: sled::Db,
+        kvdb: Database,
         datastore: PathBuf,
         replay_mode: bool,
         config: EventGraphConfig,
@@ -833,7 +832,7 @@ impl EventGraph {
             None
         };
         let identity_state = if rln_enabled {
-            let identity_state = IdentityState::new(&sled_db)?;
+            let identity_state = IdentityState::new(&kvdb)?;
             log_memory("after RLN identity state initialization");
             Some(identity_state)
         } else {
@@ -847,10 +846,10 @@ impl EventGraph {
             } else {
                 (Vec::new(), HashSet::new())
             };
-        let dag_store = DagStore::new(sled_db.clone(), &config).await?;
-        let static_dag = Self::static_new(&sled_db, &config).await?;
-        let static_dag_blobs = sled_db.open_tree("static-dag-blobs")?;
-        let dag_blobs = sled_db.open_tree("dag-blobs")?;
+        let dag_store = DagStore::new(kvdb.clone(), &config).await?;
+        let static_dag = Self::static_new(&kvdb, &config).await?;
+        let static_dag_blobs = kvdb.open_tree_default("static-dag-blobs")?;
+        let dag_blobs = kvdb.open_tree_default("dag-blobs")?;
 
         // Historical-roots side-tables. See the design comment on
         // `EventGraph::apply_rln_static_event` for the full rationale.
@@ -860,8 +859,10 @@ impl EventGraph {
         // `ordered` tree gives us canonical replay (and successor
         // lookup for the time-window check), the `by_value` tree
         // gives us O(log n) "is this root historical?" queries.
-        let rln_historical_roots_ordered = sled_db.open_tree("rln-historical-roots-ordered")?;
-        let rln_historical_roots_by_value = sled_db.open_tree("rln-historical-roots-by-value")?;
+        let rln_historical_roots_ordered =
+            kvdb.open_tree_default("rln-historical-roots-ordered")?;
+        let rln_historical_roots_by_value =
+            kvdb.open_tree_default("rln-historical-roots-by-value")?;
 
         // Check whether the current genesis event is already in the
         // store. If not, we need to prune (create a fresh slot).
@@ -873,7 +874,7 @@ impl EventGraph {
 
         let self_ = Arc::new(Self {
             p2p,
-            sled_db: sled_db.clone(),
+            kvdb: kvdb.clone(),
             dag_store: RwLock::new(dag_store),
             static_dag,
             static_dag_blobs,
@@ -1048,8 +1049,8 @@ impl EventGraph {
             Some(root) => actual_root == root,
             None => false,
         };
-        let recorded_count = self.rln_historical_roots_ordered.len();
-        let by_value_count = self.rln_historical_roots_by_value.len();
+        let recorded_count = self.rln_historical_roots_ordered.len()?;
+        let by_value_count = self.rln_historical_roots_by_value.len()?;
         let consistent = historical_roots_consistent &&
             leaves_consistent &&
             slashed_consistent &&
@@ -1105,10 +1106,10 @@ impl EventGraph {
     }
 
     fn historical_roots_index_consistent(&self, expected_count: usize) -> Result<bool> {
-        if self.rln_historical_roots_ordered.len() != expected_count {
+        if self.rln_historical_roots_ordered.len()? != expected_count {
             return Ok(false)
         }
-        if self.rln_historical_roots_by_value.len() != expected_count {
+        if self.rln_historical_roots_by_value.len()? != expected_count {
             return Ok(false)
         }
 
@@ -1124,7 +1125,7 @@ impl EventGraph {
             let mut ordered_key = [0u8; 40];
             ordered_key.copy_from_slice(&ordered_key_bytes);
             let by_value_key = encode_historical_root_by_value_key(&root, &ordered_key);
-            if !self.rln_historical_roots_by_value.contains_key(by_value_key)? {
+            if !self.rln_historical_roots_by_value.contains_key(&by_value_key)? {
                 return Ok(false)
             }
         }
@@ -1239,7 +1240,7 @@ impl EventGraph {
         for item in slot.header_tree.iter() {
             let (hb, val) = item?;
             let hdr: Header = deserialize_async(&val).await?;
-            if hdr.parents != NULL_PARENTS && !slot.main_tree.contains_key(hb)? {
+            if hdr.parents != NULL_PARENTS && !slot.main_tree.contains_key(&hb)? {
                 sorted.push(hdr);
             }
         }
@@ -2138,17 +2139,11 @@ impl EventGraph {
             let next =
                 next_rotation_timestamp(self.config.initial_genesis, self.config.hours_rotation)?;
 
-            loop {
-                match millis_until_next_rotation(next) {
-                    Ok(remaining_ms) => {
-                        if remaining_ms == 0 {
-                            break
-                        }
-                        msleep(remaining_ms.min(10_000)).await;
-                    }
-                    // we've already passed the boundary
-                    Err(_) => break,
+            while let Ok(remaining_ms) = millis_until_next_rotation(next) {
+                if remaining_ms == 0 {
+                    break
                 }
+                msleep(remaining_ms.min(10_000)).await;
             }
 
             let hdr = Header {
@@ -2439,7 +2434,7 @@ impl EventGraph {
 
         let mut ids = Vec::with_capacity(accepted.len());
         let mut committed_indices = Vec::with_capacity(accepted.len());
-        let mut overlay = SledTreeOverlay::new(&slot.main_tree);
+        let mut overlay = TreeOverlay::new(&slot.main_tree);
         let mut staged_body_ids = HashSet::with_capacity(accepted.len());
 
         'commit: for &i in &accepted {
@@ -2495,7 +2490,7 @@ impl EventGraph {
         }
 
         if let Some(b) = overlay.aggregate() {
-            slot.main_tree.apply_batch(b)?;
+            self.kvdb.atomic_write(&[(&slot.main_tree, &b)])?;
         } else {
             return Ok(vec![])
         }
@@ -2582,7 +2577,7 @@ impl EventGraph {
 
         let mut store = self.dag_store.write().await;
         let slot = store.get_slot_mut(&dag_ts).ok_or(Error::DagSyncFailed)?;
-        let mut overlay = SledTreeOverlay::new(&slot.header_tree);
+        let mut overlay = TreeOverlay::new(&slot.header_tree);
         let mut staged_headers = Vec::new();
         let mut hdrs = headers;
         hdrs.sort_by_key(|h| h.layer);
@@ -2622,7 +2617,7 @@ impl EventGraph {
         }
 
         if let Some(b) = overlay.aggregate() {
-            slot.header_tree.apply_batch(b)?;
+            self.kvdb.atomic_write(&[(&slot.header_tree, &b)])?;
             for (timestamp, hid) in staged_headers {
                 slot.time_index.insert(timestamp, hid);
             }
@@ -2741,7 +2736,7 @@ impl EventGraph {
         &self,
         visited: &mut HashSet<blake3::Hash>,
         hdr: Header,
-        tree: &sled::Tree,
+        tree: &Tree,
     ) -> Result<()> {
         let mut stack = VecDeque::new();
         stack.push_back(hdr);
@@ -2759,14 +2754,14 @@ impl EventGraph {
         Ok(())
     }
 
-    async fn static_new(sled_db: &sled::Db, config: &EventGraphConfig) -> Result<sled::Tree> {
-        let tree = sled_db.open_tree("static-dag")?;
+    async fn static_new(kvdb: &Database, config: &EventGraphConfig) -> Result<Tree> {
+        let tree = kvdb.open_tree_default("static-dag")?;
         let genesis = generate_static_genesis(config);
-        let mut ov = SledTreeOverlay::new(&tree);
+        let mut ov = TreeOverlay::new(&tree);
         ov.insert(genesis.id().as_bytes(), &serialize_async(&genesis).await)?;
 
         if let Some(b) = ov.aggregate() {
-            tree.apply_batch(b)?;
+            kvdb.atomic_write(&[(&tree, &b)])?;
         }
 
         Ok(tree)
@@ -2777,11 +2772,11 @@ impl EventGraph {
     }
 
     fn static_persist_serialized(&self, ev_id: &blake3::Hash, ev_bytes: &[u8]) -> Result<()> {
-        let mut ov = SledTreeOverlay::new(&self.static_dag);
+        let mut ov = TreeOverlay::new(&self.static_dag);
         ov.insert(ev_id.as_bytes(), ev_bytes)?;
 
         if let Some(b) = ov.aggregate() {
-            self.static_dag.apply_batch(b)?;
+            self.kvdb.atomic_write(&[(&self.static_dag, &b)])?;
         }
 
         Ok(())
@@ -3059,9 +3054,9 @@ impl EventGraph {
         // every event has exactly one entry, no conditional skips.
         let key = encode_historical_root_key(ev.header.layer, &ev.id());
         let value = encode_historical_root_value(&new_root, ev.header.timestamp);
-        self.rln_historical_roots_ordered.insert(key, value.as_slice())?;
+        self.rln_historical_roots_ordered.insert(&key, value.as_slice())?;
         let by_value_key = encode_historical_root_by_value_key(&new_root, &key);
-        self.rln_historical_roots_by_value.insert(by_value_key, &[])?;
+        self.rln_historical_roots_by_value.insert(&by_value_key, &[])?;
 
         Ok(new_root)
     }
@@ -3102,7 +3097,7 @@ impl EventGraph {
         let lo = signal_timestamp.saturating_sub(drift);
         let hi = signal_timestamp.saturating_add(drift);
 
-        for item in self.rln_historical_roots_by_value.scan_prefix(root.to_repr()) {
+        for item in self.rln_historical_roots_by_value.prefix_iter(&root.to_repr()) {
             let (by_value_key, _) = item?;
             if by_value_key.len() != 72 {
                 continue
@@ -3422,7 +3417,9 @@ impl EventGraph {
                             Ok(state) => state.read().await.root(),
                             Err(_) => return SignalCheck::Rejected,
                         };
-                        let historical_count = self.rln_historical_roots_ordered.len();
+                        let Ok(historical_count) = self.rln_historical_roots_ordered.len() else {
+                            return SignalCheck::Rejected
+                        };
                         warn!(
                             target: "event_graph::rln_verify_signal",
                             "[RLN] Signal rejected: merkle_root not valid at signal \

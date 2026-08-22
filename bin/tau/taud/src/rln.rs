@@ -31,19 +31,19 @@ use darkfi_sdk::{crypto::poseidon_hash, pasta::pallas};
 use darkfi_serial::{
     async_trait, deserialize_async, serialize_async, SerialDecodable, SerialEncodable,
 };
+use kvdb_overlay::Database;
 use rand::{CryptoRng, RngCore};
-use sled_overlay::sled;
 use tracing::{info, warn};
 
 /// Domain-separation tags for credential generation.
 pub const RLN_TRAPDOOR_DERIVATION_PATH: pallas::Base = pallas::Base::from_raw([4311, 0, 0, 0]);
 pub const RLN_NULLIFIER_DERIVATION_PATH: pallas::Base = pallas::Base::from_raw([4312, 0, 0, 0]);
 
-/// Name of the sled tree that mirrors the currently-active identity.
+/// Name of the kvdb tree that mirrors the currently-active identity.
 /// Read on startup to populate the active RLN identity.
 pub const ACCOUNTS_DEFAULT_TREE: &str = "tau_account_default";
 
-/// Prefix of the sled tree under which each registered account lives.
+/// Prefix of the kvdb tree under which each registered account lives.
 pub const ACCOUNTS_DB_PREFIX: &str = "tau_account_";
 
 /// Key inside each account tree holding the serialized [`RlnIdentity`].
@@ -216,15 +216,12 @@ pub enum RlnMessageReservation {
 }
 
 /// Persist the active RLN counter to the default mirror and matching account tree.
-pub async fn persist_rln_identity_counter(
-    sled_db: &sled::Db,
-    identity: &RlnIdentity,
-) -> Result<()> {
+pub async fn persist_rln_identity_counter(kvdb: &Database, identity: &RlnIdentity) -> Result<()> {
     let encoded = serialize_async(identity).await;
     let active_commitment = identity.commitment();
     let mut updated_account = false;
 
-    for raw in sled_db.tree_names() {
+    for raw in kvdb.tree_names()? {
         let bytes: &[u8] = raw.as_ref();
         let Ok(name) = std::str::from_utf8(bytes) else { continue };
         let Some(account_name) = name.strip_prefix(ACCOUNTS_DB_PREFIX) else { continue };
@@ -232,13 +229,13 @@ pub async fn persist_rln_identity_counter(
             continue
         }
 
-        let tree = sled_db.open_tree(name)?;
+        let tree = kvdb.open_tree_default(name)?;
         let Some(blob) = tree.get(ACCOUNTS_KEY_RLN_IDENTITY)? else { continue };
         let Ok(stored): std::result::Result<RlnIdentity, _> = deserialize_async(&blob).await else {
             continue
         };
         if stored.commitment() == active_commitment {
-            tree.insert(ACCOUNTS_KEY_RLN_IDENTITY, encoded.clone())?;
+            tree.insert(ACCOUNTS_KEY_RLN_IDENTITY, &encoded)?;
             updated_account = true;
         }
     }
@@ -250,15 +247,15 @@ pub async fn persist_rln_identity_counter(
         );
     }
 
-    let default_db = sled_db.open_tree(ACCOUNTS_DEFAULT_TREE)?;
-    default_db.insert(ACCOUNTS_KEY_RLN_IDENTITY, encoded)?;
-    sled_db.flush_async().await?;
+    let default_db = kvdb.open_tree_default(ACCOUNTS_DEFAULT_TREE)?;
+    default_db.insert(ACCOUNTS_KEY_RLN_IDENTITY, &encoded)?;
+    kvdb.flush_default_mode_async().await?;
     Ok(())
 }
 
 /// Reserve the next RLN message ID and persist it before proof creation.
 pub async fn reserve_rln_message_id_in_store(
-    sled_db: &sled::Db,
+    kvdb: &Database,
     active: &mut Option<RlnIdentity>,
     now_millis: u64,
 ) -> Result<RlnMessageReservation> {
@@ -269,17 +266,17 @@ pub async fn reserve_rln_message_id_in_store(
         return Ok(RlnMessageReservation::BudgetExhausted)
     };
 
-    persist_rln_identity_counter(sled_db, &updated).await?;
+    persist_rln_identity_counter(kvdb, &updated).await?;
     *current = updated;
 
     Ok(RlnMessageReservation::Reserved { identity: updated, message_id })
 }
 
 /// Load the active (default-mirror) RLN identity, if any.
-pub async fn load_default_rln_identity(sled_db: &sled::Db) -> Result<Option<RlnIdentity>> {
-    let default_db = sled_db.open_tree(ACCOUNTS_DEFAULT_TREE)?;
+pub async fn load_default_rln_identity(kvdb: &Database) -> Result<Option<RlnIdentity>> {
+    let default_db = kvdb.open_tree_default(ACCOUNTS_DEFAULT_TREE)?;
     let Some(blob) = default_db.get(ACCOUNTS_KEY_RLN_IDENTITY)? else {
-        if default_db.is_empty() {
+        if default_db.is_empty()? {
             return Ok(None)
         }
 
@@ -302,9 +299,9 @@ mod tests {
     #[test]
     fn load_default_rln_identity_returns_none_for_empty_tree() {
         smol::block_on(async {
-            let sled_db = sled::Config::new().temporary(true).open().unwrap();
+            let (kvdb, _kvdb_folder) = Database::open_temp().unwrap();
 
-            let identity = load_default_rln_identity(&sled_db).await.unwrap();
+            let identity = load_default_rln_identity(&kvdb).await.unwrap();
 
             assert!(identity.is_none());
         })
@@ -313,9 +310,9 @@ mod tests {
     #[test]
     fn rln_message_reservation_persists_default_and_account_counters() {
         smol::block_on(async {
-            let sled_db = sled::Config::new().temporary(true).open().unwrap();
-            let account = sled_db.open_tree(format!("{ACCOUNTS_DB_PREFIX}alice")).unwrap();
-            let default = sled_db.open_tree(ACCOUNTS_DEFAULT_TREE).unwrap();
+            let (kvdb, _kvdb_folder) = Database::open_temp().unwrap();
+            let account = kvdb.open_tree_default(&format!("{ACCOUNTS_DB_PREFIX}alice")).unwrap();
+            let default = kvdb.open_tree_default(ACCOUNTS_DEFAULT_TREE).unwrap();
             let identity = RlnIdentity {
                 nullifier: pallas::Base::from(0xabc_u64),
                 trapdoor: pallas::Base::from(0xdef_u64),
@@ -324,13 +321,13 @@ mod tests {
                 last_epoch: 0,
             };
             let encoded = serialize_async(&identity).await;
-            account.insert(ACCOUNTS_KEY_RLN_IDENTITY, encoded.clone()).unwrap();
-            default.insert(ACCOUNTS_KEY_RLN_IDENTITY, encoded).unwrap();
+            account.insert(ACCOUNTS_KEY_RLN_IDENTITY, &encoded).unwrap();
+            default.insert(ACCOUNTS_KEY_RLN_IDENTITY, &encoded).unwrap();
 
             let now = 1_704_067_800_000;
             let mut active = Some(identity);
             let reservation =
-                reserve_rln_message_id_in_store(&sled_db, &mut active, now).await.unwrap();
+                reserve_rln_message_id_in_store(&kvdb, &mut active, now).await.unwrap();
             let RlnMessageReservation::Reserved { identity: reserved, message_id } = reservation
             else {
                 panic!("expected reservation")
@@ -351,14 +348,13 @@ mod tests {
             assert_eq!(stored_account.message_id, 1);
 
             let reservation =
-                reserve_rln_message_id_in_store(&sled_db, &mut active, now).await.unwrap();
+                reserve_rln_message_id_in_store(&kvdb, &mut active, now).await.unwrap();
             let RlnMessageReservation::Reserved { message_id, .. } = reservation else {
                 panic!("expected second reservation")
             };
             assert_eq!(message_id, 1);
 
-            let exhausted =
-                reserve_rln_message_id_in_store(&sled_db, &mut active, now).await.unwrap();
+            let exhausted = reserve_rln_message_id_in_store(&kvdb, &mut active, now).await.unwrap();
             assert!(matches!(exhausted, RlnMessageReservation::BudgetExhausted));
         })
     }

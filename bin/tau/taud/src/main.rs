@@ -35,9 +35,9 @@ use darkfi_serial::{
     SerialDecodable, SerialEncodable,
 };
 use futures::{select, FutureExt};
+use kvdb_overlay::{Batch, Database, Tree};
 use libc::mkfifo;
 use rand::rngs::OsRng;
-use sled_overlay::sled;
 use smol::{fs, stream::StreamExt};
 use structopt_toml::StructOptToml;
 use tinyjson::JsonValue;
@@ -87,25 +87,12 @@ const TAUD_GENESIS_CONTENTS: &[u8] = b"taud-v1";
 
 /// How many rotation periods to keep in the rolling DAG window.
 /// With `hours_rotation = 1` and `max_dags = 24`, this gives a
-/// 24-hour history window. Older events are evicted from sled.
+/// 24-hour history window. Older events are evicted from kvdb.
 const TAUD_MAX_DAGS: usize = 1;
-
-/// Sled cache capacity multiplier.
-const BYTES_PER_MIB: u64 = 1024 * 1024;
 
 /// Per-epoch limit printed by `--gen-rln-identity`.
 fn generated_rln_identity_user_msg_limit() -> u64 {
     darkfi::event_graph::rln::GENESIS_USER_MSG_LIMIT
-}
-
-fn sled_cache_capacity_bytes(name: &str, cache_mb: u64) -> Result<u64> {
-    if cache_mb == 0 {
-        return Err(Error::Custom(format!("{name} must be greater than 0")))
-    }
-
-    cache_mb
-        .checked_mul(BYTES_PER_MIB)
-        .ok_or_else(|| Error::Custom(format!("{name} overflows bytes")))
 }
 
 mod jsonrpc;
@@ -316,27 +303,27 @@ async fn get_workspaces(settings: &Args) -> Result<BTreeMap<String, Workspace>> 
 
 /// Atomically mark a message as seen.
 pub async fn mark_seen(
-    sled_db: sled::Db,
-    seen: OnceLock<sled::Tree>,
+    kvdb: Database,
+    seen: OnceLock<Tree>,
     event_id: &blake3::Hash,
 ) -> Result<()> {
-    let db = seen.get_or_init(|| sled_db.open_tree("tau_seen").unwrap());
+    let tree = seen.get_or_init(|| kvdb.open_tree_default("tau_seen").unwrap());
 
     debug!(target: "taud", "Marking event {event_id} as seen");
-    let mut batch = sled::Batch::default();
+    let mut batch = Batch::new();
     batch.insert(event_id.as_bytes(), &[]);
-    Ok(db.apply_batch(batch)?)
+    Ok(kvdb.atomic_write(&[(tree, &batch)])?)
 }
 
 /// Check if a message was already marked seen.
 pub async fn is_seen(
-    sled_db: sled::Db,
-    seen: OnceLock<sled::Tree>,
+    kvdb: Database,
+    seen: OnceLock<Tree>,
     event_id: &blake3::Hash,
 ) -> Result<bool> {
-    let db = seen.get_or_init(|| sled_db.open_tree("tau_seen").unwrap());
+    let tree = seen.get_or_init(|| kvdb.open_tree_default("tau_seen").unwrap());
 
-    Ok(db.contains_key(event_id.as_bytes())?)
+    Ok(tree.contains_key(event_id.as_bytes())?)
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -344,10 +331,10 @@ async fn start_sync_loop(
     event_graph: EventGraphPtr,
     broadcast_rcv: smol::channel::Receiver<TaskInfo>,
     workspaces: Arc<BTreeMap<String, Workspace>>,
-    sled_db: sled::Db,
+    kvdb: Database,
     settings: Args,
     p2p: P2pPtr,
-    seen: OnceLock<sled::Tree>,
+    seen: OnceLock<Tree>,
     rln_identity: Arc<smol::lock::RwLock<Option<RlnIdentity>>>,
 ) -> TaudResult<()> {
     let incoming = event_graph.event_pub.clone().subscribe().await;
@@ -381,7 +368,7 @@ async fn start_sync_loop(
                         let (rln_identity, mid) = {
                             let mut active = rln_identity.write().await;
                             match reserve_rln_message_id_in_store(
-                                &sled_db,
+                                &kvdb,
                                 &mut active,
                                 event.header.timestamp,
                             )
@@ -425,10 +412,10 @@ async fn start_sync_loop(
             // Process message from the network. These should only be EncryptedTask.
             task_event = incoming.receive().fuse() => {
                 let event_id = task_event.header.id();
-                if is_seen(sled_db.clone(), seen.clone(), &event_id).await? {
+                if is_seen(kvdb.clone(), seen.clone(), &event_id).await? {
                     continue
                 }
-                mark_seen(sled_db.clone(), seen.clone(), &event_id).await?;
+                mark_seen(kvdb.clone(), seen.clone(), &event_id).await?;
 
                 // Try to deserialize the `Event`'s content into a `EncryptedTask`
                 let enc_task: EncryptedTask = match deserialize_async_partial(task_event.content()).await {
@@ -706,25 +693,17 @@ pub const TAUD_GENESIS_COMMITMENTS_REPR: &[[u8; 32]] = &[
     // let fast_mode = settings.fast_mode;
 
     info!(target: "taud", "Instantiating event DAG");
-    let sled_db = sled::open(datastore)?;
+    let kvdb = Database::open_default(&datastore)?;
 
     let zk_key_db = if let Some(zk_key_datastore) = zk_key_datastore.as_ref() {
-        let zk_key_sled_cache_capacity =
-            sled_cache_capacity_bytes("zk_key_sled_cache_mb", settings.zk_key_sled_cache_mb)?;
-        info!(target: "taud", "Opening RLN key datastore with {} MiB sled cache", settings.zk_key_sled_cache_mb);
-        Some(
-            match sled::Config::new()
-                .path(zk_key_datastore.clone())
-                .cache_capacity(zk_key_sled_cache_capacity)
-                .open()
-            {
-                Ok(v) => v,
-                Err(e) => {
-                    error!(target: "taud", "Failed to open RLN key datastore `{zk_key_datastore:?}`: {e}");
-                    return Err(e.into());
-                }
-            },
-        )
+        info!(target: "taud", "Opening RLN key datastore");
+        Some(match Database::open_default(zk_key_datastore) {
+            Ok(v) => v,
+            Err(e) => {
+                error!(target: "taud", "Failed to open RLN key datastore `{zk_key_datastore:?}`: {e}");
+                return Err(e.into());
+            }
+        })
     } else {
         None
     };
@@ -755,7 +734,7 @@ pub const TAUD_GENESIS_COMMITMENTS_REPR: &[[u8; 32]] = &[
     let event_graph = match if let Some(zk_key_db) = zk_key_db.clone() {
         EventGraph::new_with_zk_key_db(
             p2p.clone(),
-            sled_db.clone(),
+            kvdb.clone(),
             zk_key_db,
             replay_datastore.clone(),
             replay_mode,
@@ -766,7 +745,7 @@ pub const TAUD_GENESIS_COMMITMENTS_REPR: &[[u8; 32]] = &[
     } else {
         EventGraph::new(
             p2p.clone(),
-            sled_db.clone(),
+            kvdb.clone(),
             replay_datastore.clone(),
             replay_mode,
             eg_config,
@@ -785,7 +764,7 @@ pub const TAUD_GENESIS_COMMITMENTS_REPR: &[[u8; 32]] = &[
     // loading account state that cannot affect outbound messages.
     let rln_identity: Arc<smol::lock::RwLock<Option<RlnIdentity>>> =
         Arc::new(smol::lock::RwLock::new(if event_graph.rln_enabled() {
-            let rln_identity = load_default_rln_identity(&sled_db).await?;
+            let rln_identity = load_default_rln_identity(&kvdb).await?;
             if rln_identity.is_some() {
                 info!(target: "taud", "Default RLN account set");
             }
@@ -848,7 +827,7 @@ pub const TAUD_GENESIS_COMMITMENTS_REPR: &[[u8; 32]] = &[
     }
 
     let seen = OnceLock::new();
-    seen.set(sled_db.open_tree("tau_seen").unwrap()).unwrap();
+    seen.set(kvdb.open_tree_default("tau_seen").unwrap()).unwrap();
 
     ////////////////////
     // get history
@@ -858,10 +837,10 @@ pub const TAUD_GENESIS_COMMITMENTS_REPR: &[[u8; 32]] = &[
     for event in dag_events.iter() {
         let event_id = event.header.id();
         // If it was seen, skip
-        if is_seen(sled_db.clone(), seen.clone(), &event_id).await? {
+        if is_seen(kvdb.clone(), seen.clone(), &event_id).await? {
             continue
         }
-        mark_seen(sled_db.clone(), seen.clone(), &event_id).await?;
+        mark_seen(kvdb.clone(), seen.clone(), &event_id).await?;
 
         // Try to deserialize it. (Here we skip errors)
         let Ok((enc_task, _)) = deserialize_async_partial(event.content()).await else { continue };
@@ -881,7 +860,7 @@ pub const TAUD_GENESIS_COMMITMENTS_REPR: &[[u8; 32]] = &[
             event_graph.clone(),
             broadcast_rcv,
             workspaces.clone(),
-            sled_db.clone(),
+            kvdb.clone(),
             settings.clone(),
             p2p.clone(),
             seen.clone(),
@@ -963,7 +942,7 @@ pub const TAUD_GENESIS_COMMITMENTS_REPR: &[[u8; 32]] = &[
         event_graph.clone(),
         json_sub,
         deg_sub,
-        sled_db.clone(),
+        kvdb.clone(),
         rln_identity.clone(),
     ));
     let rpc_task = StoppableTask::new();
@@ -995,14 +974,12 @@ pub const TAUD_GENESIS_COMMITMENTS_REPR: &[[u8; 32]] = &[
     dnet_task.stop().await;
     deg_task.stop().await;
 
-    info!(target: "taud", "Flushing sled database...");
-    let flushed_bytes = sled_db.flush_async().await?;
-    info!(target: "taud", "Flushed {flushed_bytes} bytes");
+    info!(target: "taud", "Flushing kvdb database...");
+    kvdb.flush_default_mode_async().await?;
 
     if let Some(zk_key_db) = zk_key_db {
-        info!(target: "taud", "Flushing RLN key sled database...");
-        let flushed_key_bytes = zk_key_db.flush_async().await?;
-        info!(target: "taud", "Flushed {flushed_key_bytes} RLN key bytes");
+        info!(target: "taud", "Flushing RLN key kvdb database...");
+        zk_key_db.flush_default_mode_async().await?;
     }
 
     info!(target: "taud", "Shut down successfully");

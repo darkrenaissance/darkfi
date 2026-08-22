@@ -2291,6 +2291,7 @@ dependencies = [
  "easy-parallel",
  "futures",
  "futures-rustls",
+ "kvdb-overlay",
  "libc",
  "rand 0.8.6",
  "rustls-pemfile",
@@ -2298,7 +2299,6 @@ dependencies = [
  "serde",
  "signal-hook",
  "signal-hook-async-std",
- "sled-overlay",
  "smol",
  "structopt",
  "structopt-toml",
@@ -4678,7 +4678,7 @@ dependencies = [
 [[package]]
 name = "kvdb-overlay"
 version = "0.1.0"
-source = "git+https://git.dark.fi/darkrenaissance/kvdb-overlay#b59057e55ffa8c8e54d578f6a5b4c169f2c1f7ef"
+source = "git+https://git.dark.fi/darkrenaissance/kvdb-overlay#52ff2bf06e800e098b32089acff7e2fa1dcfa30d"
 dependencies = [
  "fjall",
  "tempfile",
@@ -8151,12 +8151,12 @@ dependencies = [
  "darkfi-serial",
  "easy-parallel",
  "futures",
+ "kvdb-overlay",
  "libc",
  "rand 0.8.6",
  "serde",
  "signal-hook",
  "signal-hook-async-std",
- "sled-overlay",
  "smol",
  "structopt",
  "structopt-toml",

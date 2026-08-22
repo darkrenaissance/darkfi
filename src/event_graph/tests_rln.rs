@@ -26,7 +26,6 @@ use darkfi_sdk::{
     pasta::pallas,
 };
 use darkfi_serial::{deserialize_async, serialize_async};
-use sled_overlay::sled;
 use smol::Executor;
 
 use crate::{
@@ -161,8 +160,8 @@ fn rln_message_metadata_prune_old() {
 
 #[test]
 fn rln_identity_state_register_then_slash() {
-    let db = sled::Config::new().temporary(true).open().unwrap();
-    let mut s = IdentityState::new(&db).unwrap();
+    let (kvdb, _kvdb_folder) = kvdb_overlay::Database::open_temp().unwrap();
+    let mut s = IdentityState::new(&kvdb).unwrap();
 
     let c = pallas::Base::from(0xabcd_1234u64);
     assert!(!s.contains(&c));
@@ -177,8 +176,8 @@ fn rln_identity_state_register_then_slash() {
 
 #[test]
 fn rln_identity_state_register_rejects_duplicate() {
-    let db = sled::Config::new().temporary(true).open().unwrap();
-    let mut s = IdentityState::new(&db).unwrap();
+    let (kvdb, _kvdb_folder) = kvdb_overlay::Database::open_temp().unwrap();
+    let mut s = IdentityState::new(&kvdb).unwrap();
 
     let c = pallas::Base::from(99u64);
     s.register(c).unwrap();
@@ -188,8 +187,8 @@ fn rln_identity_state_register_rejects_duplicate() {
 
 #[test]
 fn rln_identity_state_slash_idempotent_for_unknown() {
-    let db = sled::Config::new().temporary(true).open().unwrap();
-    let mut s = IdentityState::new(&db).unwrap();
+    let (kvdb, _kvdb_folder) = kvdb_overlay::Database::open_temp().unwrap();
+    let mut s = IdentityState::new(&kvdb).unwrap();
     // Slashing something that was never registered is not an error. This
     // matters for P2P propagation: a slash event may legitimately arrive twice
     // via different paths. The commitment is still tombstoned permanently.
@@ -201,60 +200,60 @@ fn rln_identity_state_slash_idempotent_for_unknown() {
 
 #[test]
 fn rln_identity_state_persists_across_reopen() {
-    let db = sled::Config::new().temporary(true).open().unwrap();
+    let (kvdb, _kvdb_folder) = kvdb_overlay::Database::open_temp().unwrap();
     let c = pallas::Base::from(0xfeedu64);
     let slashed = pallas::Base::from(0xdead_u64);
 
     {
-        let mut s = IdentityState::new(&db).unwrap();
+        let mut s = IdentityState::new(&kvdb).unwrap();
         s.register(c).unwrap();
         s.slash(slashed).unwrap();
-    } // drop closes the in-memory SMT but the derived state is in sled
+    } // drop closes the in-memory SMT but the derived state is in kvdb
 
-    let mut s2 = IdentityState::new(&db).unwrap();
+    let mut s2 = IdentityState::new(&kvdb).unwrap();
     assert!(s2.contains(&c), "leaf should survive close-and-reopen");
     assert!(s2.is_slashed(&slashed), "tombstone should survive close-and-reopen");
     assert!(s2.register(slashed).is_err());
 }
 
 #[test]
-fn rln_identity_state_restores_sled_smt_nodes_from_leaves() {
-    let db = sled::Config::new().temporary(true).open().unwrap();
+fn rln_identity_state_restores_kvdb_smt_nodes_from_leaves() {
+    let (kvdb, _kvdb_folder) = kvdb_overlay::Database::open_temp().unwrap();
     let c = pallas::Base::from(0xbeefu64);
 
     let original_root = {
-        let mut s = IdentityState::new(&db).unwrap();
+        let mut s = IdentityState::new(&kvdb).unwrap();
         s.register(c).unwrap();
         s.root()
     };
 
-    db.open_tree("rln-identity-smt-nodes").unwrap().clear().unwrap();
+    kvdb.open_tree_default("rln-identity-smt-nodes").unwrap().clear().unwrap();
 
-    let s2 = IdentityState::new(&db).unwrap();
+    let s2 = IdentityState::new(&kvdb).unwrap();
     assert!(s2.contains(&c));
     assert_eq!(s2.root(), original_root);
     assert!(s2.prove_membership(&c).verify(&original_root, &c, &c));
 }
 
 #[test]
-fn rln_rebuild_detects_stale_sled_smt_nodes() {
+fn rln_rebuild_detects_stale_kvdb_smt_nodes() {
     smol::block_on(async {
         let config = EventGraphConfig { hours_rotation: 1, ..test_config() };
-        let eg = make_eg_with_config(config).await;
+        let (eg, _kvdb_folder) = make_eg_with_config(config).await;
         let commitment = genesis_commitment_at(&eg, 0);
         let original_root = eg.identity_state.as_ref().unwrap().read().await.root();
 
-        eg.sled_db.open_tree("rln-identity-smt-nodes").unwrap().clear().unwrap();
+        eg.kvdb.open_tree_default("rln-identity-smt-nodes").unwrap().clear().unwrap();
 
         assert!(eg.rln_contains(&commitment).await);
         assert_ne!(eg.identity_state.as_ref().unwrap().read().await.root(), original_root);
-        assert_eq!(eg.rln_historical_roots_ordered.len(), 1);
+        assert_eq!(eg.rln_historical_roots_ordered.len().unwrap(), 1);
 
         eg.rebuild_historical_roots_if_needed().await.unwrap();
 
         assert!(eg.rln_contains(&commitment).await);
         assert_eq!(eg.identity_state.as_ref().unwrap().read().await.root(), original_root);
-        assert_eq!(eg.rln_historical_roots_ordered.len(), 1);
+        assert_eq!(eg.rln_historical_roots_ordered.len().unwrap(), 1);
     })
 }
 
@@ -415,7 +414,7 @@ fn rln_bootstrapped_identities_parent_static_genesis() {
             hours_rotation: 1,
             ..crate::event_graph::test_helpers::test_config()
         };
-        let eg = make_eg_with_config(config).await;
+        let (eg, _kvdb_folder) = make_eg_with_config(config).await;
         let static_genesis =
             generate_genesis(&EventGraphConfig { hours_rotation: 0, ..eg.config.clone() }).unwrap();
         let static_genesis_id = static_genesis.id();
@@ -453,15 +452,15 @@ fn rln_startup_rebuild_before_bootstrap_restores_configured_identity() {
         let commitment = pallas::Base::from_repr(config.pregenerated_identity_commitments[0])
             .into_option()
             .unwrap();
-        let db = sled::Config::new().temporary(true).open().unwrap();
+        let (kvdb, _kvdb_folder) = kvdb_overlay::Database::open_temp().unwrap();
 
         // Simulate a crash after the identity leaf was written but before the
         // corresponding pregenerated static event reached the static DAG.
-        let leaves = db.open_tree("rln-identity-leaves").unwrap();
-        leaves.insert(commitment.to_repr(), commitment.to_repr().as_ref()).unwrap();
+        let leaves = kvdb.open_tree_default("rln-identity-leaves").unwrap();
+        leaves.insert(&commitment.to_repr(), &commitment.to_repr()).unwrap();
         leaves.insert(b"bad-leaf", b"bad-value").unwrap();
 
-        let eg = make_eg_with_config_and_db(config, db).await;
+        let eg = make_eg_with_config_and_db(config, kvdb).await;
         assert!(eg.rln_contains(&commitment).await);
 
         let mut matching_static_events = 0usize;
@@ -485,7 +484,7 @@ fn rln_startup_rebuild_before_bootstrap_restores_configured_identity() {
 fn rln_rebuild_detects_stale_leaf_with_same_count() {
     smol::block_on(async {
         let config = EventGraphConfig { hours_rotation: 1, ..test_config() };
-        let eg = make_eg_with_config(config).await;
+        let (eg, _kvdb_folder) = make_eg_with_config(config).await;
         let commitment = genesis_commitment_at(&eg, 0);
         let stale = pallas::Base::from(0x51a1e_u64);
 
@@ -497,14 +496,14 @@ fn rln_rebuild_detects_stale_leaf_with_same_count() {
 
         assert!(!eg.rln_contains(&commitment).await);
         assert!(eg.rln_contains(&stale).await);
-        assert_eq!(eg.rln_historical_roots_ordered.len(), 1);
+        assert_eq!(eg.rln_historical_roots_ordered.len().unwrap(), 1);
 
         eg.rebuild_historical_roots_if_needed().await.unwrap();
 
         assert!(eg.rln_contains(&commitment).await);
         assert!(!eg.rln_contains(&stale).await);
-        assert_eq!(eg.rln_historical_roots_ordered.len(), 1);
-        assert_eq!(eg.rln_historical_roots_by_value.len(), 1);
+        assert_eq!(eg.rln_historical_roots_ordered.len().unwrap(), 1);
+        assert_eq!(eg.rln_historical_roots_by_value.len().unwrap(), 1);
     })
 }
 
@@ -522,7 +521,7 @@ fn rln_verify_signal_rejects_malformed_blobs() {
     // garbage bytes, or a truncated valid serialization. All must
     // be `Rejected`, never crash the verifier or mutate metadata.
     smol::block_on(async {
-        let eg = make_eg().await;
+        let (eg, _kvdb_folder) = make_eg().await;
         let ev = make_static_event(b"static-event-1", &eg).await;
 
         // Empty.
@@ -569,7 +568,7 @@ fn rln_verify_signal_rejects_out_of_range_msg_limit() {
     // through the bound check (and would only fail because we don't
     // have a real proof - that's the purpose of the e2e tests).
     smol::block_on(async {
-        let eg = make_eg().await;
+        let (eg, _kvdb_folder) = make_eg().await;
         let ev = make_static_event(b"static-event-2", &eg).await;
         let root = eg.identity_state.as_ref().unwrap().read().await.root();
         let mk = |limit: u64| Blob {
@@ -592,7 +591,7 @@ fn rln_verify_signal_rejects_out_of_range_msg_limit() {
 #[test]
 fn rln_verify_signal_no_metadata_mutation_on_reject() {
     smol::block_on(async {
-        let eg = make_eg().await;
+        let (eg, _kvdb_folder) = make_eg().await;
         let ev = make_static_event(b"static-event-3", &eg).await;
 
         // Use the real current root to bypass the root check, but
@@ -660,7 +659,7 @@ fn genesis_commitment_at(eg: &EventGraphPtr, index: usize) -> pallas::Base {
 #[test]
 fn rln_static_event_pregenerated_guard_accepted() {
     smol::block_on(async {
-        let eg = make_eg().await;
+        let (eg, _kvdb_folder) = make_eg().await;
         let commitment = genesis_commitment_at(&eg, 0);
         let node = RLNNode::Registration(commitment);
 
@@ -672,7 +671,7 @@ fn rln_static_event_pregenerated_guard_accepted() {
 #[test]
 fn rln_static_event_guard_with_unknown_commitment_is_malicious() {
     smol::block_on(async {
-        let eg = make_eg().await;
+        let (eg, _kvdb_folder) = make_eg().await;
         let commitment = pallas::Base::from(0xdead_beefu64);
         assert!(!eg.config.pregenerated_identity_commitments.contains(&commitment.to_repr()));
 
@@ -688,7 +687,7 @@ fn rln_static_event_non_guard_registration_blobs_rejected() {
     // registration blobs are rejected before proof parsing until staked,
     // contract-backed admission exists.
     smol::block_on(async {
-        let eg = make_eg().await;
+        let (eg, _kvdb_folder) = make_eg().await;
         let node = RLNNode::Registration(pallas::Base::from(1u64));
         let cases: &[(u64, &str)] = &[
             (0, "zero limit is structurally invalid"),
@@ -715,7 +714,7 @@ fn rln_static_event_registration_duplicate_commitment_soft_reject() {
     // peers may legitimately be relaying the same registration
     // event concurrently.
     smol::block_on(async {
-        let eg = make_eg().await;
+        let (eg, _kvdb_folder) = make_eg().await;
         let commitment = pallas::Base::from(0xc0ffeeu64);
         eg.identity_state.as_ref().unwrap().write().await.register(commitment).unwrap();
 
@@ -746,7 +745,7 @@ fn rln_static_event_slash_invalid_blobs_rejected() {
     //   (b) Unknown root - the blob's merkle_root has never been a
     //       tree state.
     smol::block_on(async {
-        let eg = make_eg().await;
+        let (eg, _kvdb_folder) = make_eg().await;
 
         // (a) Mismatched commitment.
         let real_root = eg.identity_state.as_ref().unwrap().read().await.root();
@@ -774,8 +773,8 @@ fn rln_identity_state_re_register_after_slash_requires_new_commitment() {
     // A slashed identity can re-register with new credentials
     // (different commitment). The ban is on the commitment, not
     // on the underlying network identity.
-    let db = sled::Config::new().temporary(true).open().unwrap();
-    let mut s = IdentityState::new(&db).unwrap();
+    let (kvdb, _kvdb_folder) = kvdb_overlay::Database::open_temp().unwrap();
+    let mut s = IdentityState::new(&kvdb).unwrap();
 
     let c1 = pallas::Base::from(1u64);
     let c2 = pallas::Base::from(2u64);
@@ -798,8 +797,8 @@ fn rln_identity_state_re_register_after_slash_requires_new_commitment() {
 fn rln_identity_state_root_history_window() {
     // ROOT_HISTORY_SIZE is 16. After 17 registrations the original
     // empty root should have been displaced.
-    let db = sled::Config::new().temporary(true).open().unwrap();
-    let mut s = IdentityState::new(&db).unwrap();
+    let (kvdb, _kvdb_folder) = kvdb_overlay::Database::open_temp().unwrap();
+    let mut s = IdentityState::new(&kvdb).unwrap();
     let original_empty_root = s.root();
     assert!(s.is_known_root(&original_empty_root));
 
@@ -818,14 +817,15 @@ fn rln_identity_state_root_history_window() {
 
 /// Build a fresh EG and an Alice identity. Convenience for the
 /// most common e2e setup.
-async fn fresh_identity_and_eg() -> (EventGraphPtr, TestIdentity) {
-    (make_eg().await, TestIdentity::new())
+async fn fresh_identity_and_eg() -> (EventGraphPtr, kvdb_overlay::TempDir, TestIdentity) {
+    let (eg, kvdb_folder) = make_eg().await;
+    (eg, kvdb_folder, TestIdentity::new())
 }
 
 #[test]
 fn rln_e2e_signals_up_to_user_limit() {
     smol::block_on(async {
-        let (eg, mut id) = fresh_identity_and_eg().await;
+        let (eg, _kvdb_folder, mut id) = fresh_identity_and_eg().await;
         // Use the smallest meaningful limit so the test is fast.
         id.user_message_limit = 3;
         id.register_directly(&eg).await.unwrap();
@@ -849,7 +849,7 @@ fn rln_e2e_signals_up_to_user_limit() {
 #[test]
 fn rln_e2e_duplicate_signal_dropped_not_slashed() {
     smol::block_on(async {
-        let (eg, mut id) = fresh_identity_and_eg().await;
+        let (eg, _kvdb_folder, mut id) = fresh_identity_and_eg().await;
         id.register_directly(&eg).await.unwrap();
 
         let event = make_static_event(b"static-event-6", &eg).await;
@@ -874,7 +874,7 @@ fn rln_verify_signal_rejects_recent_pre_slash_root_after_drift() {
     smol::block_on(async {
         use crate::event_graph::event::Header;
 
-        let eg = make_eg().await;
+        let (eg, _kvdb_folder) = make_eg().await;
         let mut id = TestIdentity::new();
         let commitment = id.commitment();
         let drift = crate::event_graph::EVENT_TIME_DRIFT;
@@ -927,7 +927,7 @@ fn rln_verify_signal_rejects_recent_pre_slash_root_after_drift() {
 #[test]
 fn rln_e2e_slot_reuse_is_slashable() {
     smol::block_on(async {
-        let (eg, mut id) = fresh_identity_and_eg().await;
+        let (eg, _kvdb_folder, mut id) = fresh_identity_and_eg().await;
         id.register_directly(&eg).await.unwrap();
 
         // First signal at message_id=0
@@ -965,7 +965,7 @@ fn rln_e2e_slot_reuse_is_slashable() {
 fn rln_e2e_slash_proof_round_trip() {
     // Recover identity_secret_hash, build a slash proof, verify it.
     smol::block_on(async {
-        let (eg, id) = fresh_identity_and_eg().await;
+        let (eg, _kvdb_folder, id) = fresh_identity_and_eg().await;
         id.register_directly(&eg).await.unwrap();
 
         // Drive a slash by forging two shares for the same
@@ -1040,7 +1040,7 @@ async fn concurrent_slashes(ex: Arc<Executor<'static>>) {
 
     let id = TestIdentity::new();
     let commitment = id.commitment();
-    for eg in &nodes {
+    for (eg, _) in &nodes {
         eg.identity_state.as_ref().unwrap().write().await.register(commitment).expect("reg");
     }
 
@@ -1064,30 +1064,32 @@ async fn concurrent_slashes(ex: Arc<Executor<'static>>) {
     }
 
     let ish = id.identity_secret_hash();
-    let (ev0, bytes0) = build_slash(&nodes[0], ish, commitment).await;
-    let (ev1, bytes1) = build_slash(&nodes[1], ish, commitment).await;
+    let (ev0, bytes0) = build_slash(&nodes[0].0, ish, commitment).await;
+    let (ev1, bytes1) = build_slash(&nodes[1].0, ish, commitment).await;
 
     // Commit locally to each origin through the verified static-event path.
     let slash_node = RLNNode::Slashing(commitment);
     nodes[0]
+        .0
         .commit_verified_static_event(&ev0, &bytes0, &slash_node)
         .await
         .expect("commit slash 0");
     nodes[1]
+        .0
         .commit_verified_static_event(&ev1, &bytes1, &slash_node)
         .await
         .expect("commit slash 1");
 
     // Broadcast concurrently.
-    let f0 = nodes[0].static_broadcast(ev0, bytes0);
-    let f1 = nodes[1].static_broadcast(ev1, bytes1);
+    let f0 = nodes[0].0.static_broadcast(ev0, bytes0);
+    let f1 = nodes[1].0.static_broadcast(ev1, bytes1);
     let (_, _) = futures::future::join(f0, f1).await;
 
     sleep(5).await;
 
     // Every node must have removed the commitment, regardless
     // of which slash event it processed first.
-    for (i, eg) in nodes.iter().enumerate() {
+    for (i, (eg, _)) in nodes.iter().enumerate() {
         assert!(!eg.rln_contains(&commitment).await, "node {i} still has the slashed identity",);
     }
 
@@ -1103,7 +1105,7 @@ fn rln_static_slashes_persist_and_tombstone_commitment() {
             pregenerated_identity_commitments: vec![commitment.to_repr()],
             ..test_config()
         };
-        let eg = make_eg_with_config(config).await;
+        let (eg, _kvdb_folder) = make_eg_with_config(config).await;
 
         let reg_node = RLNNode::Registration(commitment);
         let reg_event = synth_static_event(1, 499_000, &reg_node).await;
@@ -1139,8 +1141,8 @@ fn rln_static_slashes_persist_and_tombstone_commitment() {
         eg.commit_verified_static_event(&replayed_slash, &blob, &slash_node).await.unwrap();
         assert!(eg.static_fetch(&replayed_slash.id()).await.unwrap().is_some());
         assert_eq!(eg.static_blob_fetch(&replayed_slash.id()).unwrap().unwrap(), blob);
-        assert_eq!(eg.rln_historical_roots_ordered.len(), 3);
-        assert_eq!(eg.rln_historical_roots_by_value.len(), 3);
+        assert_eq!(eg.rln_historical_roots_ordered.len().unwrap(), 3);
+        assert_eq!(eg.rln_historical_roots_by_value.len().unwrap(), 3);
 
         let re_registration = synth_static_event(4, 500_002, &reg_node).await;
         let outcome = eg
@@ -1157,7 +1159,7 @@ fn rln_static_slashes_persist_and_tombstone_commitment() {
             .is_err());
         assert!(eg.static_fetch(&re_registration.id()).await.unwrap().is_none());
         assert!(eg.static_blob_fetch(&re_registration.id()).unwrap().is_none());
-        assert_eq!(eg.rln_historical_roots_ordered.len(), 3);
+        assert_eq!(eg.rln_historical_roots_ordered.len().unwrap(), 3);
 
         eg.rln_historical_roots_ordered.clear().unwrap();
         eg.rln_historical_roots_by_value.clear().unwrap();
@@ -1165,7 +1167,7 @@ fn rln_static_slashes_persist_and_tombstone_commitment() {
         eg.rebuild_historical_roots_if_needed().await.unwrap();
         assert!(!eg.rln_contains(&commitment).await);
         assert!(eg.identity_state.as_ref().unwrap().read().await.is_slashed(&commitment));
-        assert_eq!(eg.rln_historical_roots_ordered.len(), 3);
+        assert_eq!(eg.rln_historical_roots_ordered.len().unwrap(), 3);
     })
 }
 
@@ -1173,7 +1175,7 @@ fn rln_static_slashes_persist_and_tombstone_commitment() {
 fn rln_static_blob_audit_repairs_pregenerated_guard() {
     smol::block_on(async {
         let config = EventGraphConfig { hours_rotation: 1, ..test_config() };
-        let eg = make_eg_with_config(config).await;
+        let (eg, _kvdb_folder) = make_eg_with_config(config).await;
         let commitment = genesis_commitment_at(&eg, 0);
 
         let mut registration_event = None;
@@ -1203,7 +1205,7 @@ fn rln_static_blob_audit_repairs_pregenerated_guard() {
 #[test]
 fn rln_static_blob_audit_does_not_fabricate_slash_blob() {
     smol::block_on(async {
-        let eg = make_eg().await;
+        let (eg, _kvdb_folder) = make_eg().await;
         let commitment = pallas::Base::from(0x0051_5a5b_u64);
         let node = RLNNode::Slashing(commitment);
         let ev = synth_static_event(1, 400_000, &node).await;
@@ -1224,19 +1226,20 @@ fn rln_multi_node_old_static_event_propagates() {
 async fn old_static_event_propagates(ex: Arc<Executor<'static>>) {
     let nodes = make_network(ex).await;
 
-    let commitment = pallas::Base::from_repr(nodes[0].config.pregenerated_identity_commitments[0])
-        .into_option()
-        .unwrap();
+    let commitment =
+        pallas::Base::from_repr(nodes[0].0.config.pregenerated_identity_commitments[0])
+            .into_option()
+            .unwrap();
     let rln_node = RLNNode::Registration(commitment);
     let content = serialize_async(&rln_node).await;
 
     let static_genesis =
-        generate_genesis(&EventGraphConfig { hours_rotation: 0, ..nodes[0].config.clone() })
+        generate_genesis(&EventGraphConfig { hours_rotation: 0, ..nodes[0].0.config.clone() })
             .unwrap();
     let mut parents = NULL_PARENTS;
     parents[0] = static_genesis.id();
     let header = crate::event_graph::event::Header {
-        timestamp: nodes[0].config.initial_genesis + 1,
+        timestamp: nodes[0].0.config.initial_genesis + 1,
         parents,
         layer: 1,
         content_hash: blake3::hash(&content),
@@ -1247,12 +1250,12 @@ async fn old_static_event_propagates(ex: Arc<Executor<'static>>) {
     assert!(!event.validate_new(), "precondition: event is outside live drift window");
     assert!(event.validate_new_static(), "precondition: static structural validation passes");
 
-    nodes[0].commit_verified_static_event(&event, &blob, &rln_node).await.unwrap();
-    nodes[0].static_broadcast(event.clone(), blob).await.unwrap();
+    nodes[0].0.commit_verified_static_event(&event, &blob, &rln_node).await.unwrap();
+    nodes[0].0.static_broadcast(event.clone(), blob).await.unwrap();
 
     sleep(5).await;
 
-    for (i, eg) in nodes.iter().enumerate() {
+    for (i, (eg, _)) in nodes.iter().enumerate() {
         assert!(eg.rln_contains(&commitment).await, "node {i} did not accept old static event");
         assert!(eg.static_fetch(&event.id()).await.unwrap().is_some());
     }
@@ -1284,40 +1287,41 @@ async fn static_sync_registration(ex: Arc<Executor<'static>>) {
     // disabled, so this test uses an app-configured pregenerated identity.
     let nodes = make_network(ex).await;
 
-    let commitment = pallas::Base::from_repr(nodes[0].config.pregenerated_identity_commitments[0])
-        .into_option()
-        .unwrap();
+    let commitment =
+        pallas::Base::from_repr(nodes[0].0.config.pregenerated_identity_commitments[0])
+            .into_option()
+            .unwrap();
     let blob_bytes = GENESIS_BLOB_GUARD.to_vec();
 
     let rln_node = RLNNode::Registration(commitment);
     let content = serialize_async(&rln_node).await;
-    let event = Event::new_static(content, &nodes[0]).await.unwrap();
+    let event = Event::new_static(content, &nodes[0].0).await.unwrap();
 
     // Seed nodes 0..=3 the same way a real verified static event is
     // committed: blob and event become durable before RLN side tables,
     // and subscribers are notified after the RLN apply step.
-    for eg in nodes.iter().take(4) {
+    for (eg, _) in nodes.iter().take(4) {
         eg.commit_verified_static_event(&event, &blob_bytes, &rln_node).await.unwrap();
     }
 
     // Node 4 knows nothing. Verify the precondition.
     assert!(
-        !nodes[4].rln_contains(&commitment).await,
+        !nodes[4].0.rln_contains(&commitment).await,
         "precondition: node 4 should not yet have the commitment",
     );
 
     // Sync.
-    nodes[4].static_sync().await.expect("static_sync should succeed");
+    nodes[4].0.static_sync().await.expect("static_sync should succeed");
 
     // Node 4 now has it.
     assert!(
-        nodes[4].rln_contains(&commitment).await,
+        nodes[4].0.rln_contains(&commitment).await,
         "node 4 should have the commitment after static_sync",
     );
 
     // The event itself is in node 4's static DAG.
     assert!(
-        nodes[4].static_fetch(&event.id()).await.unwrap().is_some(),
+        nodes[4].0.static_fetch(&event.id()).await.unwrap().is_some(),
         "node 4 should have the event body after static_sync",
     );
 
@@ -1332,43 +1336,45 @@ async fn static_sync_rejects_child_when_parent_rejected(ex: Arc<Executor<'static
     let nodes = make_network(ex).await;
 
     let bad_node = RLNNode::Registration(pallas::Base::from(0x0051_a71c_u64));
-    let bad_parent = Event::new_static(serialize_async(&bad_node).await, &nodes[0]).await.unwrap();
+    let bad_parent =
+        Event::new_static(serialize_async(&bad_node).await, &nodes[0].0).await.unwrap();
     let bad_blob = b"not-a-valid-static-rln-blob".to_vec();
-    for eg in nodes.iter().take(4) {
+    for (eg, _) in nodes.iter().take(4) {
         eg.static_insert(&bad_parent).await.unwrap();
         eg.static_blob_store(&bad_parent.id(), &bad_blob).unwrap();
     }
 
-    let commitment = pallas::Base::from_repr(nodes[0].config.pregenerated_identity_commitments[0])
-        .into_option()
-        .unwrap();
+    let commitment =
+        pallas::Base::from_repr(nodes[0].0.config.pregenerated_identity_commitments[0])
+            .into_option()
+            .unwrap();
     let child_node = RLNNode::Registration(commitment);
-    let child = Event::new_static(serialize_async(&child_node).await, &nodes[0]).await.unwrap();
+    let child = Event::new_static(serialize_async(&child_node).await, &nodes[0].0).await.unwrap();
     assert!(child.header.parents.contains(&bad_parent.id()));
 
     let child_blob = GENESIS_BLOB_GUARD.to_vec();
-    for eg in nodes.iter().take(4) {
+    for (eg, _) in nodes.iter().take(4) {
         eg.commit_verified_static_event(&child, &child_blob, &child_node).await.unwrap();
     }
 
-    assert!(nodes[4].static_fetch(&bad_parent.id()).await.unwrap().is_none());
-    assert!(nodes[4].static_fetch(&child.id()).await.unwrap().is_none());
-    assert!(!nodes[4].rln_contains(&commitment).await);
+    assert!(nodes[4].0.static_fetch(&bad_parent.id()).await.unwrap().is_none());
+    assert!(nodes[4].0.static_fetch(&child.id()).await.unwrap().is_none());
+    assert!(!nodes[4].0.rln_contains(&commitment).await);
 
-    let result = nodes[4].static_sync().await;
+    let result = nodes[4].0.static_sync().await;
     assert!(
         matches!(result, Err(crate::Error::DagSyncFailed)),
         "static_sync should fail clearly when a fetched static parent is rejected, got {result:?}",
     );
     assert!(
-        nodes[4].static_fetch(&bad_parent.id()).await.unwrap().is_none(),
+        nodes[4].0.static_fetch(&bad_parent.id()).await.unwrap().is_none(),
         "bad static parent should not be committed",
     );
     assert!(
-        nodes[4].static_fetch(&child.id()).await.unwrap().is_none(),
+        nodes[4].0.static_fetch(&child.id()).await.unwrap().is_none(),
         "child static event should not be committed without its parent",
     );
-    assert!(!nodes[4].rln_contains(&commitment).await);
+    assert!(!nodes[4].0.rln_contains(&commitment).await);
 
     shutdown_network(&nodes).await;
 }
@@ -1382,7 +1388,7 @@ fn rln_multi_node_static_sync_no_peers_is_ok() {
     // critical security bug (a fresh node could just refuse all
     // peers and claim to be consistent).
     smol::block_on(async {
-        let eg = make_eg().await;
+        let (eg, _kvdb_folder) = make_eg().await;
         let r = eg.static_sync().await;
         assert!(
             matches!(r, Err(crate::Error::DagSyncFailed)),
@@ -1413,13 +1419,13 @@ async fn static_sync_blob_propagation(ex: Arc<Executor<'static>>) {
     let commitment = id.commitment();
 
     let content = serialize_async(&RLNNode::Registration(commitment)).await;
-    let event = Event::new_static(content.clone(), &nodes[0]).await.unwrap();
+    let event = Event::new_static(content.clone(), &nodes[0].0).await.unwrap();
     // Synthetic blob - content doesn't matter for propagation
     // testing, only that it's non-empty so static_sync's
     // verification path takes the "blob present" branch.
     let synthetic_blob = b"synthetic-test-blob-bytes".to_vec();
 
-    for eg in nodes.iter().take(4) {
+    for (eg, _) in nodes.iter().take(4) {
         eg.identity_state.as_ref().unwrap().write().await.register(commitment).unwrap();
         eg.static_insert(&event).await.unwrap();
         // Synthetic blob will fail rln_verify_static_event (no
@@ -1432,13 +1438,13 @@ async fn static_sync_blob_propagation(ex: Arc<Executor<'static>>) {
     }
 
     // Node 4 starts empty.
-    assert!(node_does_not_have_blob(&nodes[4], &event.id()));
+    assert!(node_does_not_have_blob(&nodes[4].0, &event.id()));
 
     // Sync. Verification will fail on node 4 (synthetic blob
     // doesn't carry a real proof), so the EVENT won't end up
     // in node 4's static_dag - but the BLOB request travelled,
     // which is what we're testing here.
-    let _ = nodes[4].static_sync().await;
+    let _ = nodes[4].0.static_sync().await;
 
     // We can't assert the event got applied (verification
     // failed by design). What we CAN assert: nothing crashed,
@@ -1483,35 +1489,36 @@ async fn dag_injection_rejected(ex: Arc<Executor<'static>>) {
     // exercises the same code path without real keys.
     let nodes = make_network(ex).await;
 
-    let dag_ts = nodes[0].current_genesis.read().await.header.timestamp;
+    let dag_ts = nodes[0].0.current_genesis.read().await.header.timestamp;
     let dag_name = dag_ts.to_string();
 
     // Craft an event that LOOKS valid (proper parents from
     // node 0's tip set) but has a garbage blob. We pre-insert
     // its header so the structural validation passes on the
     // recipient.
-    let injected = Event::new(b"injected by malicious peer".to_vec(), &nodes[0]).await.unwrap();
+    let injected = Event::new(b"injected by malicious peer".to_vec(), &nodes[0].0).await.unwrap();
     let bad_blob = b"not-a-real-rln-blob".to_vec();
 
     // Node 0 records the bad event in its own DAG and stashes
     // the bad blob.
-    nodes[0].header_dag_insert(vec![injected.header.clone()], &dag_name).await.unwrap();
+    nodes[0].0.header_dag_insert(vec![injected.header.clone()], &dag_name).await.unwrap();
     // Bypass the verifier path - directly write to the trees
     // to simulate a malicious peer. We don't have a clean API
     // for that since we deliberately don't expose one in
     // production; reach into the internals here for the test.
-    nodes[0].dag_blobs.insert(injected.id().as_bytes(), bad_blob.as_slice()).unwrap();
+    nodes[0].0.dag_blobs.insert(injected.id().as_bytes(), bad_blob.as_slice()).unwrap();
     // Insert via the lenient `dag_insert` path (no blob check) to
     // simulate a malicious peer that has bypassed verification.
     // Production never calls `dag_insert` for received events -
     // only for events the node has already verified itself, or
     // for already-known events. A real attacker would write
-    // directly to sled; this is observationally equivalent.
-    nodes[0].dag_insert(std::slice::from_ref(&injected), &dag_name).await.unwrap();
+    // directly to kvdb; this is observationally equivalent.
+    nodes[0].0.dag_insert(std::slice::from_ref(&injected), &dag_name).await.unwrap();
 
     // Sanity: node 0 has the event.
     assert!(
         nodes[0]
+            .0
             .dag_store
             .read()
             .await
@@ -1527,10 +1534,11 @@ async fn dag_injection_rejected(ex: Arc<Executor<'static>>) {
     // fetch_missing_events which calls dag_insert_with_blobs
     // with the blob from node 0 - that's the verification
     // gate.
-    let _ = nodes[1].dag_sync(dag_ts).await;
+    let _ = nodes[1].0.dag_sync(dag_ts).await;
 
     // Node 1 must NOT have the injected event.
     let recipient_has = nodes[1]
+        .0
         .dag_store
         .read()
         .await
@@ -1547,11 +1555,11 @@ async fn dag_injection_rejected(ex: Arc<Executor<'static>>) {
 
 #[test]
 fn rln_blob_side_tables_round_trip() {
-    // Both `static_dag_blobs` and `dag_blobs` use the same sled
+    // Both `static_dag_blobs` and `dag_blobs` use the same kvdb
     // mechanics. One test exercises both, including the idempotent
     // re-store and last-writer-wins overwrite.
     smol::block_on(async {
-        let eg = make_eg().await;
+        let (eg, _kvdb_folder) = make_eg().await;
         let eid_s = blake3::hash(b"fake-static-event-id");
         let eid_d = blake3::hash(b"fake-rotating-event-id");
         let blob_a = b"first-bytes".to_vec();
@@ -1581,7 +1589,7 @@ fn rln_static_blob_fetch_missing_is_none_not_error() {
     // because static_sync uses Option<Vec<u8>>; an Err leak would
     // wedge sync.
     smol::block_on(async {
-        let eg = make_eg().await;
+        let (eg, _kvdb_folder) = make_eg().await;
         let unknown = blake3::hash(b"never-stored");
         let result = eg.static_blob_fetch(&unknown).unwrap();
         assert!(result.is_none());
@@ -1603,7 +1611,7 @@ fn rln_dag_insert_with_blobs_already_known_skips_verification() {
     // least not error) because the already-known check fires before
     // the verifier.
     smol::block_on(async {
-        let eg = make_eg().await;
+        let (eg, _kvdb_folder) = make_eg().await;
         let dag_name = eg.current_genesis.read().await.header.timestamp.to_string();
 
         // Build a real event so it passes structural validation.
@@ -1648,7 +1656,7 @@ fn rln_dag_insert_with_blobs_rejects_missing_blob_on_non_genesis() {
     // This is the regression coverage for the policy tightening
     // that closed Vector 2 sync-time injection.
     smol::block_on(async {
-        let eg = make_eg().await;
+        let (eg, _kvdb_folder) = make_eg().await;
         let dag_name = eg.current_genesis.read().await.header.timestamp.to_string();
         let event = Event::new(b"missing-blob".to_vec(), &eg).await.unwrap();
         eg.header_dag_insert(vec![event.header.clone()], &dag_name).await.unwrap();
@@ -1679,7 +1687,7 @@ fn rln_disabled_skips_state_and_accepts_empty_signal_blob() {
             pregenerated_identity_commitments: Vec::new(),
             ..test_config()
         };
-        let eg = make_eg_with_config(config).await;
+        let (eg, _kvdb_folder) = make_eg_with_config(config).await;
 
         assert!(!eg.rln_enabled());
         assert!(eg.zk_keys.is_none());
@@ -1720,7 +1728,7 @@ fn rln_dag_insert_with_blobs_rejects_bad_content_before_verification() {
     // proof for that header would verify. This must be rejected before RLN
     // verification so the share is never recorded.
     smol::block_on(async {
-        let eg = make_eg().await;
+        let (eg, _kvdb_folder) = make_eg().await;
         let mut alice = TestIdentity::new();
         alice.register_directly(&eg).await.unwrap();
 
@@ -1762,7 +1770,7 @@ fn rln_insert_signal_with_blob_rejects_missing_blob_on_non_genesis() {
     // blob is rejected before any header, body, or blob side-table
     // state is persisted.
     smol::block_on(async {
-        let eg = make_eg().await;
+        let (eg, _kvdb_folder) = make_eg().await;
         let dag_ts = eg.current_genesis.read().await.header.timestamp;
         let dag_name = dag_ts.to_string();
         let event = Event::new(b"public-missing-blob".to_vec(), &eg).await.unwrap();
@@ -1788,7 +1796,7 @@ fn rln_dag_insert_with_blobs_genesis_skips_verification() {
     // verifier path. This is what allows dag_prune to seed a fresh
     // DAG.
     smol::block_on(async {
-        let eg = make_eg().await;
+        let (eg, _kvdb_folder) = make_eg().await;
 
         // The current_genesis IS such an event - already inserted
         // by the constructor. Re-inserting it via dag_insert_with_blobs
@@ -1827,7 +1835,7 @@ fn rln_dag_blobs_pruned_with_dag_rotation() {
     // This test is gated on max_dags being Some - under archival
     // mode (None), no eviction happens and the test would loop.
     smol::block_on(async {
-        let eg = make_eg().await;
+        let (eg, _kvdb_folder) = make_eg().await;
         if eg.config.max_dags.is_none() {
             // Archival mode - eviction never happens. Skip.
             return
@@ -1899,7 +1907,7 @@ fn rln_is_root_valid_at_respects_drift_window() {
     // direction), and stays valid for as long as it remains the
     // live root (until the next event).
     smol::block_on(async {
-        let eg = make_eg().await;
+        let (eg, _kvdb_folder) = make_eg().await;
         let drift = crate::event_graph::EVENT_TIME_DRIFT;
         let t_r: u64 = 1_000_000;
         let commitment = pallas::Base::from(0xaaaa_u64);
@@ -1960,7 +1968,7 @@ fn rln_slashed_identity_signal_rejection_lifecycle() {
     // Exercising the proof-verification side of (b) requires real
     // ZK keys and is left to the multi-node integration tests.
     smol::block_on(async {
-        let eg = make_eg().await;
+        let (eg, _kvdb_folder) = make_eg().await;
         let drift = crate::event_graph::EVENT_TIME_DRIFT;
 
         // The slashed identity's commitment.
@@ -2055,7 +2063,7 @@ fn rln_slashed_identity_signal_rejection_lifecycle() {
 #[test]
 fn rln_repeated_historical_root_keeps_original_interval() {
     smol::block_on(async {
-        let eg = make_eg().await;
+        let (eg, _kvdb_folder) = make_eg().await;
         let drift = crate::event_graph::EVENT_TIME_DRIFT;
 
         let commitment_a = pallas::Base::from(0xaaaa_0001_u64);
@@ -2078,8 +2086,8 @@ fn rln_repeated_historical_root_keeps_original_interval() {
 
         assert_eq!(duplicate_root, root_a);
         assert_ne!(root_b, root_a);
-        assert_eq!(eg.rln_historical_roots_ordered.len(), 3);
-        assert_eq!(eg.rln_historical_roots_by_value.len(), 3);
+        assert_eq!(eg.rln_historical_roots_ordered.len().unwrap(), 3);
+        assert_eq!(eg.rln_historical_roots_by_value.len().unwrap(), 3);
 
         assert!(eg.is_root_valid_at(&root_a, t0).unwrap());
         assert!(eg.is_root_valid_at(&root_a, t_duplicate).unwrap());
@@ -2090,7 +2098,7 @@ fn rln_repeated_historical_root_keeps_original_interval() {
 #[test]
 fn rln_commit_verified_static_event_notifies_after_rln_apply() {
     smol::block_on(async {
-        let eg = make_eg().await;
+        let (eg, _kvdb_folder) = make_eg().await;
         let sub = eg.static_subscribe().await;
 
         let commitment = pallas::Base::from(0xc0de_0001_u64);
@@ -2114,7 +2122,7 @@ fn rln_commit_verified_static_event_notifies_after_rln_apply() {
 #[test]
 fn rln_rebuild_restores_static_event_committed_before_rln_apply() {
     smol::block_on(async {
-        let eg = make_eg().await;
+        let (eg, _kvdb_folder) = make_eg().await;
 
         let commitment = pallas::Base::from(0xc0de_0002_u64);
         let node = RLNNode::Registration(commitment);
@@ -2127,14 +2135,14 @@ fn rln_rebuild_restores_static_event_committed_before_rln_apply() {
         eg.static_blob_store(&ev.id(), &blob).unwrap();
         eg.static_insert(&ev).await.unwrap();
         assert!(!eg.rln_contains(&commitment).await);
-        assert_eq!(eg.rln_historical_roots_ordered.len(), 0);
+        assert_eq!(eg.rln_historical_roots_ordered.len().unwrap(), 0);
 
         eg.rebuild_historical_roots_if_needed().await.unwrap();
 
         assert!(eg.rln_contains(&commitment).await);
         assert_eq!(eg.static_blob_fetch(&ev.id()).unwrap().unwrap(), blob);
-        assert_eq!(eg.rln_historical_roots_ordered.len(), 1);
-        assert_eq!(eg.rln_historical_roots_by_value.len(), 1);
+        assert_eq!(eg.rln_historical_roots_ordered.len().unwrap(), 1);
+        assert_eq!(eg.rln_historical_roots_by_value.len().unwrap(), 1);
         let state = eg.identity_state.as_ref().unwrap().read().await;
         assert!(state.is_known_root(&state.root()));
     })
@@ -2148,8 +2156,8 @@ fn rln_canonical_order_produces_same_roots_regardless_of_apply_order() {
     // ensures all nodes produce the same SEQUENCE of intermediate
     // roots when replaying the same set of events.
     smol::block_on(async {
-        let eg_a = make_eg().await;
-        let eg_b = make_eg().await;
+        let (eg_a, _kvdb_folder_a) = make_eg().await;
+        let (eg_b, _kvdb_folder_b) = make_eg().await;
 
         let c1 = pallas::Base::from(0x1111_u64);
         let c2 = pallas::Base::from(0x2222_u64);
@@ -2211,7 +2219,7 @@ fn rln_canonical_order_produces_same_roots_regardless_of_apply_order() {
 #[test]
 fn rln_rebuild_historical_roots() {
     smol::block_on(async {
-        let eg = make_eg().await;
+        let (eg, _kvdb_folder) = make_eg().await;
 
         let c1 = pallas::Base::from(0x3333_u64);
         let c2 = pallas::Base::from(0x4444_u64);
@@ -2226,9 +2234,9 @@ fn rln_rebuild_historical_roots() {
         eg.static_insert(&ev2).await.unwrap();
 
         // (b) Run rebuild on a consistent state - should be a no-op.
-        let before = eg.rln_historical_roots_ordered.len();
+        let before = eg.rln_historical_roots_ordered.len().unwrap();
         eg.rebuild_historical_roots_if_needed().await.unwrap();
-        assert_eq!(eg.rln_historical_roots_ordered.len(), before, "no-op when consistent");
+        assert_eq!(eg.rln_historical_roots_ordered.len().unwrap(), before, "no-op when consistent");
 
         // (a) Wipe tables and rebuild.
         eg.rln_historical_roots_ordered.clear().unwrap();
@@ -2239,14 +2247,18 @@ fn rln_rebuild_historical_roots() {
 
         assert!(eg.is_root_valid_at(&r1, 100_000).unwrap(), "rebuild restored r1");
         assert!(eg.is_root_valid_at(&r2, 100_001).unwrap(), "rebuild restored r2");
-        assert_eq!(eg.rln_historical_roots_ordered.len(), 2, "exactly one entry per static event",);
+        assert_eq!(
+            eg.rln_historical_roots_ordered.len().unwrap(),
+            2,
+            "exactly one entry per static event",
+        );
     })
 }
 
 #[test]
 fn rln_rebuild_repairs_mismatched_historical_root_by_value_index() {
     smol::block_on(async {
-        let eg = make_eg().await;
+        let (eg, _kvdb_folder) = make_eg().await;
 
         let c1 = pallas::Base::from(0x5555_u64);
         let c2 = pallas::Base::from(0x6666_u64);
@@ -2266,15 +2278,15 @@ fn rln_rebuild_repairs_mismatched_historical_root_by_value_index() {
         let bogus_a = [0u8; 72];
         let mut bogus_b = [0u8; 72];
         bogus_b[71] = 1;
-        eg.rln_historical_roots_by_value.insert(bogus_a, &[]).unwrap();
-        eg.rln_historical_roots_by_value.insert(bogus_b, &[]).unwrap();
-        assert_eq!(eg.rln_historical_roots_by_value.len(), 2);
+        eg.rln_historical_roots_by_value.insert(&bogus_a, &[]).unwrap();
+        eg.rln_historical_roots_by_value.insert(&bogus_b, &[]).unwrap();
+        assert_eq!(eg.rln_historical_roots_by_value.len().unwrap(), 2);
         assert!(!eg.is_root_valid_at(&r2, 200_001).unwrap());
 
         eg.rebuild_historical_roots_if_needed().await.unwrap();
 
-        assert_eq!(eg.rln_historical_roots_ordered.len(), 2);
-        assert_eq!(eg.rln_historical_roots_by_value.len(), 2);
+        assert_eq!(eg.rln_historical_roots_ordered.len().unwrap(), 2);
+        assert_eq!(eg.rln_historical_roots_by_value.len().unwrap(), 2);
         assert!(eg.is_root_valid_at(&r2, 200_001).unwrap());
     })
 }
@@ -2283,7 +2295,7 @@ fn rln_rebuild_repairs_mismatched_historical_root_by_value_index() {
 fn rln_perf_signal_verify() {
     use std::time::Instant;
     smol::block_on(async {
-        let (eg, mut id) = fresh_identity_and_eg().await;
+        let (eg, _kvdb_folder, mut id) = fresh_identity_and_eg().await;
         id.user_message_limit = 50; // enough headroom
         id.register_directly(&eg).await.unwrap();
 

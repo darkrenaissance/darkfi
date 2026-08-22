@@ -24,7 +24,7 @@ use std::{
 };
 
 use async_trait::async_trait;
-use sled_overlay::sled;
+use kvdb_overlay::Database;
 use smol::lock::{Mutex, MutexGuard, RwLock};
 use tinyjson::JsonValue;
 use tracing::{debug, info, warn};
@@ -72,7 +72,7 @@ pub struct JsonRpcInterface {
     dnet_sub: JsonSubscriber,
     deg_sub: JsonSubscriber,
     rpc_connections: Mutex<HashSet<StoppableTaskPtr>>,
-    sled_db: sled::Db,
+    kvdb: Database,
     rln_identity: Arc<RwLock<Option<RlnIdentity>>>,
 }
 
@@ -138,7 +138,7 @@ impl JsonRpcInterface {
         event_graph: EventGraphPtr,
         dnet_sub: JsonSubscriber,
         deg_sub: JsonSubscriber,
-        sled_db: sled::Db,
+        kvdb: Database,
         rln_identity: Arc<RwLock<Option<RlnIdentity>>>,
     ) -> Self {
         let workspace = Mutex::new(workspace);
@@ -153,7 +153,7 @@ impl JsonRpcInterface {
             rpc_connections: Mutex::new(HashSet::new()),
             dnet_sub,
             deg_sub,
-            sled_db,
+            kvdb,
             rln_identity,
         }
     }
@@ -905,22 +905,22 @@ impl JsonRpcInterface {
             )]))
         }
 
-        // Open the per-account sled tree only after the identity has
+        // Open the per-account kvdb tree only after the identity has
         // passed the pregenerated-admission checks.
-        let db = self.sled_db.open_tree(format!("{ACCOUNTS_DB_PREFIX}{account_name}"))?;
-        if !db.is_empty() {
+        let db = self.kvdb.open_tree_default(&format!("{ACCOUNTS_DB_PREFIX}{account_name}"))?;
+        if !db.is_empty()? {
             return Ok(strings_to_json(vec!["This account name is already registered.".to_string()]))
         }
 
         // Store account.
-        db.insert(ACCOUNTS_KEY_RLN_IDENTITY, serialize_async(&new_rln_identity).await)?;
+        db.insert(ACCOUNTS_KEY_RLN_IDENTITY, &serialize_async(&new_rln_identity).await)?;
 
         // First-ever registration also becomes the active one.
         let became_active = self.rln_identity.read().await.is_none();
         if became_active {
-            let db_default = self.sled_db.open_tree(ACCOUNTS_DEFAULT_TREE)?;
+            let db_default = self.kvdb.open_tree_default(ACCOUNTS_DEFAULT_TREE)?;
             db_default
-                .insert(ACCOUNTS_KEY_RLN_IDENTITY, serialize_async(&new_rln_identity).await)?;
+                .insert(ACCOUNTS_KEY_RLN_IDENTITY, &serialize_async(&new_rln_identity).await)?;
             *self.rln_identity.write().await = Some(new_rln_identity);
         }
 
@@ -958,7 +958,7 @@ impl JsonRpcInterface {
         let active_commitment = self.rln_identity.read().await.as_ref().map(|id| id.commitment());
 
         let mut accounts: Vec<(String, RlnIdentity)> = Vec::new();
-        for raw in self.sled_db.tree_names() {
+        for raw in self.kvdb.tree_names()? {
             let bytes: &[u8] = raw.as_ref();
             let Ok(name) = std::str::from_utf8(bytes) else { continue };
             // Skip the `default` mirror tree and anything that isn't an
@@ -968,7 +968,7 @@ impl JsonRpcInterface {
                 continue
             }
 
-            let tree = self.sled_db.open_tree(name)?;
+            let tree = self.kvdb.open_tree_default(name)?;
             let Some(blob) = tree.get(ACCOUNTS_KEY_RLN_IDENTITY)? else { continue };
             let Ok(identity): std::result::Result<RlnIdentity, _> = deserialize_async(&blob).await
             else {
@@ -1011,7 +1011,7 @@ impl JsonRpcInterface {
         }
 
         let tree_name = format!("{ACCOUNTS_DB_PREFIX}{account_name}");
-        let tree = self.sled_db.open_tree(&tree_name)?;
+        let tree = self.kvdb.open_tree_default(&tree_name)?;
         let Some(blob) = tree.get(ACCOUNTS_KEY_RLN_IDENTITY)? else {
             return Ok(vec![format!("No such account: \"{account_name}\"")])
         };
@@ -1074,7 +1074,7 @@ impl JsonRpcInterface {
         }
 
         let tree_name = format!("{ACCOUNTS_DB_PREFIX}{account_name}");
-        let tree = self.sled_db.open_tree(&tree_name)?;
+        let tree = self.kvdb.open_tree_default(&tree_name)?;
         let Some(blob) = tree.get(ACCOUNTS_KEY_RLN_IDENTITY)? else {
             return Ok(strings_to_json(vec![
                 format!("No such account: \"{account_name}\""),
@@ -1105,7 +1105,7 @@ impl JsonRpcInterface {
         // in-memory identity, which would have stale counter state if it
         // were the previously-active one) because the default tree is
         // meant to mirror an account tree exactly.
-        let db_default = self.sled_db.open_tree(ACCOUNTS_DEFAULT_TREE)?;
+        let db_default = self.kvdb.open_tree_default(ACCOUNTS_DEFAULT_TREE)?;
         db_default.insert(ACCOUNTS_KEY_RLN_IDENTITY, blob.as_ref())?;
 
         *self.rln_identity.write().await = Some(identity);
@@ -1139,7 +1139,7 @@ impl JsonRpcInterface {
         }
 
         let tree_name = format!("{ACCOUNTS_DB_PREFIX}{account_name}");
-        let tree = self.sled_db.open_tree(&tree_name)?;
+        let tree = self.kvdb.open_tree_default(&tree_name)?;
         let Some(blob) = tree.get(ACCOUNTS_KEY_RLN_IDENTITY)? else {
             return Ok(strings_to_json(vec![format!("No such account: \"{account_name}\"")]))
         };
@@ -1155,7 +1155,7 @@ impl JsonRpcInterface {
                          a clean account first, then retry."
                     )]))
                 }
-                self.sled_db.drop_tree(&tree_name)?;
+                self.kvdb.drop_tree(&tree_name)?;
                 return Ok(strings_to_json(vec![format!(
                     "Dropped corrupted account \"{account_name}\"."
                 )]))
@@ -1172,7 +1172,7 @@ impl JsonRpcInterface {
             }
         }
 
-        self.sled_db.drop_tree(&tree_name)?;
+        self.kvdb.drop_tree(&tree_name)?;
 
         Ok(strings_to_json(vec![format!("Successfully deregistered account \"{account_name}\"")]))
     }
@@ -1206,7 +1206,7 @@ impl JsonRpcInterface {
         }
 
         let tree_name = format!("{ACCOUNTS_DB_PREFIX}{account_name}");
-        let tree = self.sled_db.open_tree(&tree_name)?;
+        let tree = self.kvdb.open_tree_default(&tree_name)?;
         let Some(blob) = tree.get(ACCOUNTS_KEY_RLN_IDENTITY)? else {
             return Ok(strings_to_json(vec![format!("No such account: \"{account_name}\"")]))
         };
@@ -1270,7 +1270,7 @@ impl JsonRpcInterface {
 
         // Drop the local account tree. The on-network slash makes the
         // account unusable anyway.
-        self.sled_db.drop_tree(&tree_name)?;
+        self.kvdb.drop_tree(&tree_name)?;
 
         Ok(strings_to_json(vec![
             format!("SLASHED \"{account_name}\". The identity is permanently retired."),
@@ -1290,7 +1290,7 @@ fn is_account_name_char(byte: u8) -> bool {
     byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_')
 }
 
-/// Return true when a local account name is safe as a sled tree suffix.
+/// Return true when a local account name is safe as a kvdb tree suffix.
 fn is_valid_account_name(account_name: &str) -> bool {
     account_name != "default" &&
         !account_name.is_empty() &&
