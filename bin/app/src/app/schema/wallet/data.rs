@@ -58,9 +58,7 @@ mod android_ui_consts {
     pub const TOOLTIP_PADDING_Y: f32 = 15.;
 
     pub const NETSTATUS_ICON_SIZE: f32 = 140.;
-    pub const SETTINGS_ICON_SIZE: f32 = 140.;
     pub const NETLOGO_SCALE: f32 = 7.;
-    pub const EMOJI_PICKER_ICON_SIZE: f32 = 120.;
 
     pub const PROGRESS_FONTSIZE: f32 = 36.;
     pub const PROGRESS_MARGIN: f32 = 10.;
@@ -117,9 +115,7 @@ mod ui_consts {
     pub const TOOLTIP_PADDING_Y: f32 = 6.;
 
     pub const NETSTATUS_ICON_SIZE: f32 = 60.;
-    pub const SETTINGS_ICON_SIZE: f32 = 60.;
     pub const NETLOGO_SCALE: f32 = 3.5;
-    pub const EMOJI_PICKER_ICON_SIZE: f32 = 50.;
 
     pub const PROGRESS_FONTSIZE: f32 = 14.;
     pub const PROGRESS_MARGIN: f32 = 5.;
