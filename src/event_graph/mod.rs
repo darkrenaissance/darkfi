@@ -2137,6 +2137,20 @@ impl EventGraph {
         loop {
             let next =
                 next_rotation_timestamp(self.config.initial_genesis, self.config.hours_rotation)?;
+
+            loop {
+                match millis_until_next_rotation(next) {
+                    Ok(remaining_ms) => {
+                        if remaining_ms == 0 {
+                            break
+                        }
+                        msleep(remaining_ms.min(10_000)).await;
+                    }
+                    // we've already passed the boundary
+                    Err(_) => break,
+                }
+            }
+
             let hdr = Header {
                 timestamp: next,
                 parents: NULL_PARENTS,
@@ -2144,7 +2158,7 @@ impl EventGraph {
                 content_hash: blake3::hash(&self.config.genesis_contents),
             };
             let genesis = Event { header: hdr, content: self.config.genesis_contents.clone() };
-            msleep(millis_until_next_rotation(next)?).await;
+
             self.dag_prune(genesis).await?;
         }
     }
