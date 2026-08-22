@@ -52,7 +52,7 @@ with the configuration above—and then retains every new hourly DAG.
 
 To operate an archive containing history from before it was started, bootstrap
 it from a known-good archive datastore while both nodes are stopped. Copy the
-entire DarkIRC datastore, not individual sled trees. Be aware that this
+entire DarkIRC datastore, not individual kvdb trees. Be aware that this
 datastore can also contain local NickServ account secrets; a purpose-built
 archive should not be used for personal IRC accounts. See the
 [operations and recovery notes](darkirc.md#operations-and-recovery) before copying or

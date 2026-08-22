@@ -424,10 +424,10 @@ folder, and `./drk` command to be replaced by
 To run a node in full debug mode:
 
 ```shell
-$ LOG_TARGETS='!sled,!rustls,!net' ./darkfid -vv | tee /tmp/darkfid.log
+$ LOG_TARGETS='!fjall,!rustls,!net' ./darkfid -vv | tee /tmp/darkfid.log
 ```
 
-The `sled` and `net` targets are very noisy and slow down the node so
+The `fjall` and `net` targets are very noisy and slow down the node so
 we disable those.
 
 We can now view the log, and grep through it.

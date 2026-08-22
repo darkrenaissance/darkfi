@@ -159,7 +159,7 @@ secrets as well as public history.
 Stop DarkIRC, preserve the entire datastore and configuration, and follow the
 [Event Graph recovery guide](event_graph/recovery.md). If a clean resync is
 appropriate, move the old directory aside and start with a new empty path.
-Never copy individual sled trees between datastores.
+Never copy individual kvdb trees between datastores.
 
 ## Network viewers
 

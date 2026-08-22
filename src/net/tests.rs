@@ -49,7 +49,7 @@ use crate::{
 
 fn init_logger() {
     let ignored_targets = [
-        "sled",
+        "fjall",
         "net::protocol_ping",
         "net::channel::subscribe_stop()",
         "net::hosts",

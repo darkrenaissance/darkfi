@@ -8,7 +8,7 @@ needed.
 
 ## Data layout
 
-`EventGraph` stores several sled trees in the application's datastore.
+`EventGraph` stores several kvdb trees in the application's datastore.
 For DarkIRC this is the `--datastore` path, defaulting to
 `~/.local/share/darkfi/darkirc/darkirc_db`. This is not the same as the P2P
 `p2p_datastore` path.
@@ -26,7 +26,7 @@ Important trees are:
 | `rln-historical-roots-ordered` | Derived historical root index in canonical static-event order. |
 | `rln-historical-roots-by-value` | Reverse lookup for historical roots. |
 
-DarkIRC also stores local account secrets in the same sled database under
+DarkIRC also stores local account secrets in the same kvdb database under
 `darkirc_account_*` and `darkirc_account_default`. Treat the datastore as
 secret material. A clean resync can rebuild network DAG state, but it will
 not recover local account nullifiers and trapdoors unless they were backed
@@ -34,7 +34,7 @@ up or exported with `NickServ INFO <account_name>`.
 
 ## First response
 
-1. Stop the application. Do not edit or copy sled files while the process
+1. Stop the application. Do not edit or copy kvdb files while the process
    is running.
 2. Copy the whole datastore directory and the config file before changing
    anything.
@@ -136,7 +136,7 @@ Safe response:
   matters.
 - For disposable rotating history, move the datastore aside and let the node
   create a fresh store, then sync from peers.
-- Do not edit individual sled tree files in place. The `<timestamp>` and
+- Do not edit individual kvdb tree files in place. The `<timestamp>` and
   `headers_<timestamp>` trees must agree with each other, and event blobs must
   agree with the event bodies.
 

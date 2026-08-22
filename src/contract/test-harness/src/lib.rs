@@ -105,7 +105,7 @@ pub fn init_logger() {
     // We check this error so we can execute same-file tests in parallel.
     // Otherwise subsequent calls fail to init the logger here.
     if setup_test_logger(
-        &["fjall", "sled"],
+        &["fjall"],
         false,
         Level::Info,
         //Level::Verbose,

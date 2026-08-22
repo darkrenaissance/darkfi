@@ -9,7 +9,7 @@ mkdir -p darkfid0 darkfid1 darkfid2
 
 # Path to used binaries
 XMRIG="xmrig"
-DARKFID="LOG_TARGETS='!sled' ../../../darkfid"
+DARKFID="LOG_TARGETS='!fjall' ../../../darkfid"
 
 # Dummy mining wallet addresses so mining daemons can start
 XMRIG_USER0="DZnsGMCvZU5CEzvpuExnxbvz6SEhE2rn89sMcuHsppFE6TjL4SBTrKkf"

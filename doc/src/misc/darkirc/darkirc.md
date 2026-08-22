@@ -221,7 +221,7 @@ local NickServ account secrets. Stop the process and back up the complete
 public DAG state from suitable peers, but it cannot recover local nullifiers
 and trapdoors that were never backed up or exported.
 
-Do not hand-edit RLN counters, static DAG state, or individual sled trees. See
+Do not hand-edit RLN counters, static DAG state, or individual kvdb trees. See
 [Event Graph recovery](../event_graph/recovery.md) and
 [security invariants](../event_graph/security_invariants.md). For connection
 problems, see [network troubleshooting](../network-troubleshooting.md).

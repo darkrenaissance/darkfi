@@ -366,14 +366,6 @@ pub enum Error {
     #[error("Database error: {0}")]
     DatabaseError(String),
 
-    #[cfg(feature = "sled-overlay")]
-    #[error(transparent)]
-    SledError(#[from] sled_overlay::sled::Error),
-
-    #[cfg(feature = "sled-overlay")]
-    #[error(transparent)]
-    SledTransactionError(#[from] sled_overlay::sled::transaction::TransactionError),
-
     #[cfg(feature = "kvdb-overlay")]
     #[error(transparent)]
     KvdbError(#[from] kvdb_overlay::Error),
@@ -423,7 +415,7 @@ pub enum Error {
     #[error("Contract already initialized")]
     ContractAlreadyInitialized,
 
-    #[error("zkas bincode not found in sled database")]
+    #[error("zkas bincode not found in database")]
     ZkasBincodeNotFound,
 
     // ===================

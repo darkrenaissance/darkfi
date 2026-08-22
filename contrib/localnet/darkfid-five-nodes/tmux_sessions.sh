@@ -5,7 +5,7 @@ set -e
 
 # Path to used binaries
 XMRIG="xmrig"
-DARKFID="LOG_TARGETS='!runtime,!sled' ../../../darkfid"
+DARKFID="LOG_TARGETS='!runtime,!fjall' ../../../darkfid"
 
 # Dummy mining wallet address so mining daemons can start
 XMRIG_USER="DZnsGMCvZU5CEzvpuExnxbvz6SEhE2rn89sMcuHsppFE6TjL4SBTrKkf"

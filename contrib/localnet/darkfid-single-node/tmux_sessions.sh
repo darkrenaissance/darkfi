@@ -12,7 +12,7 @@ XMRIG_PARAMS="-u x+1 -r 1000 -R 20 -o $XMRIG_STRATUM_ENDPOINT -t $XMRIG_THREADS 
 XMRIG="$XMRIG_BINARY_PATH $XMRIG_PARAMS"
 
 # Path to darkfid binary
-DARKFID="LOG_TARGETS='!net,!runtime,!sled' ../../../darkfid -c darkfid.toml"
+DARKFID="LOG_TARGETS='!net,!runtime,!fjall' ../../../darkfid -c darkfid.toml"
 
 session=darkfid-single-node
 
