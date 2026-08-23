@@ -229,7 +229,7 @@ impl App {
     pub fn stop(&self) {
         let window_node = self.sg_root.lookup_node("/window").unwrap();
         match window_node.pimpl() {
-            Pimpl::Window(win) => win.stop(self.ex.clone()),
+            Pimpl::Window(win) => win.stop(),
             _ => panic!("wrong pimpl"),
         }
     }

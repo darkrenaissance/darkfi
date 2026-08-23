@@ -949,11 +949,7 @@ impl DarkIrc {
             .unwrap();
     }
 
-    async fn start(
-        self: Arc<Self>,
-        sg_root: SceneNodePtr,
-        ex: ExecutorPtr,
-    ) {
+    async fn start(self: Arc<Self>, sg_root: SceneNodePtr, ex: ExecutorPtr) {
         i!("Registering EventGraph P2P protocol");
         let event_graph_ = Arc::clone(&self.event_graph);
         let registry = self.p2p.protocol_registry();
@@ -1044,9 +1040,7 @@ impl DarkIrc {
                 let Some(self_) = me2.upgrade() else { break };
 
                 let mut cursor = Cursor::new(&data);
-                let Ok(screen_on) = bool::decode(&mut cursor) else {
-                    continue
-                };
+                let Ok(screen_on) = bool::decode(&mut cursor) else { continue };
 
                 if screen_on {
                     self_.set_outbound_connections(P2P_OUTBOUND_ACTIVE).await;

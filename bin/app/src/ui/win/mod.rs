@@ -149,9 +149,7 @@ impl Window {
         let me2 = me.clone();
         let screen_task = ex.spawn(async move {
             while let Ok(screen_on) = screen_sub.recv().await {
-                let Some(self_) = me2.upgrade() else {
-                    break
-                };
+                let Some(self_) = me2.upgrade() else { break };
 
                 self_
                     .node
@@ -282,24 +280,16 @@ impl Window {
         }
     }
 
-    pub fn stop(&self, ex: ExecutorPtr) {
-        let node = self.node.clone();
-        let stop_task = ex.spawn(async move {
-            node.upgrade()
-                .unwrap()
-                .trigger("stop", vec![])
-                .await
-                .unwrap();
+    pub fn stop(&self) {
+        let node = self.node.clone().upgrade().unwrap();
+        smol::block_on(async move {
+            node.trigger("stop", vec![]).await.unwrap();
         });
-
-        self.tasks.lock().clear();
 
         for child in self.get_children() {
             let obj = get_ui_object3(&child);
             obj.stop();
         }
-
-        smol::block_on(stop_task);
     }
 
     async fn process_char(me: &Weak<Self>, ev_sub: &GraphicsEventCharSub) -> bool {
