@@ -63,6 +63,18 @@ fn url_color_ranges(text: &str, offset: usize, color: Color) -> Vec<(Range<usize
     URL_REGEX.find_iter(text).map(|m| (m.start() + offset..m.end() + offset, color)).collect()
 }
 
+/// IRC CTCP ACTION framing prefix, e.g. `\x01ACTION waves\x01`.
+const CTCP_ACTION_PREFIX: &str = "\u{1}ACTION ";
+
+/// If `text` is a CTCP ACTION-framed message body, return the stripped
+/// action text. A single trailing `\x01` delimiter is stripped when present
+/// but is not required, since bodies truncated by length limits may lose it.
+fn parse_ctcp_action(text: &str) -> Option<&str> {
+    let body = text.strip_prefix(CTCP_ACTION_PREFIX)?;
+    let body = body.strip_suffix('\u{1}').unwrap_or(body);
+    Some(body)
+}
+
 #[derive(Clone)]
 pub struct PrivMessage {
     font_size: f32,
@@ -74,6 +86,10 @@ pub struct PrivMessage {
     nick: String,
     text: String,
     pub confirmed: bool,
+
+    /// Whether this is an IRC-style CTCP ACTION message (`/me`).
+    /// Detected in `PrivMessage::new`; `text` holds the stripped action text.
+    is_action: bool,
 
     is_selected: bool,
 
@@ -101,6 +117,11 @@ impl PrivMessage {
             font_size *= 0.8;
         }
 
+        let (is_action, text) = match parse_ctcp_action(&text) {
+            Some(action) => (true, action.to_string()),
+            None => (false, text),
+        };
+
         Message::Priv(Self {
             font_size,
             timestamp_font_size,
@@ -110,6 +131,7 @@ impl PrivMessage {
             nick,
             text,
             confirmed: true,
+            is_action,
             is_selected: false,
             mesh_cache: None,
             txt_layout: None,
@@ -127,6 +149,31 @@ impl PrivMessage {
         self.txt_layout.as_ref().unwrap().height()
     }
 
+    /// The full rendered line text: NOTICE renders the body alone, normal
+    /// messages render "<nick> <body>", and actions render "* <nick> <body>".
+    fn line_text(&self) -> String {
+        if self.nick == "NOTICE" {
+            return self.text.clone()
+        }
+        if self.is_action {
+            return format!("* {} {}", self.nick, self.text)
+        }
+        format!("{} {}", self.nick, self.text)
+    }
+
+    /// Byte offset of the body within the rendered line text. This is also
+    /// the end of the nick-colored prefix.
+    fn body_offset(&self) -> usize {
+        if self.nick == "NOTICE" {
+            return 0
+        }
+        if self.is_action {
+            // "* " + nick + " "
+            return self.nick.len() + 3
+        }
+        self.nick.len() + 1
+    }
+
     fn cache_txt_layout(
         &mut self,
         clip: &Rectangle,
@@ -134,25 +181,19 @@ impl PrivMessage {
         timestamp_width: f32,
         nick_colors: &[Color],
         text_color: Color,
+        action_text_color: Color,
         url_text_color: Color,
     ) {
         if self.txt_layout.is_some() {
             return
         }
 
-        // Message text layout
-        let linetext = if self.nick == "NOTICE" {
-            self.text.clone()
-        } else {
-            format!("{} {}", self.nick, self.text)
-        };
+        let linetext = self.line_text();
 
         let nick_color = select_nick_color(&self.nick, nick_colors);
 
         let is_notice = self.nick == "NOTICE";
-        // Byte offset of the body within linetext. NOTICE has no nick prefix;
-        // normal messages are "<nick> <body>" so the body starts after nick + space.
-        let body_offset = if is_notice { 0 } else { self.nick.len() + 1 };
+        let body_offset = self.body_offset();
         let url_ranges = url_color_ranges(&self.text, body_offset, url_text_color);
 
         let txt_layout = if is_notice {
@@ -169,9 +210,18 @@ impl PrivMessage {
                 "normal",
             )
         } else {
-            let body_color = if self.confirmed { text_color } else { UNCONF_COLOR };
-            let nick_end = self.nick.len() + 1;
-            let mut foreground_colors = vec![(0..nick_end, nick_color)];
+            let body_color = if self.is_action {
+                if self.confirmed {
+                    action_text_color
+                } else {
+                    UNCONF_COLOR
+                }
+            } else if self.confirmed {
+                text_color
+            } else {
+                UNCONF_COLOR
+            };
+            let mut foreground_colors = vec![(0..body_offset, nick_color)];
             foreground_colors.extend(url_ranges);
             text::make_layout2(
                 &linetext,
@@ -198,6 +248,7 @@ impl PrivMessage {
         nick_colors: &[Color],
         timestamp_color: Color,
         text_color: Color,
+        action_text_color: Color,
         url_text_color: Color,
         url_bg_color: Color,
         url_bg_border_size: f32,
@@ -228,6 +279,7 @@ impl PrivMessage {
             timestamp_width,
             nick_colors,
             text_color,
+            action_text_color,
             url_text_color,
         );
 
@@ -320,10 +372,8 @@ impl PrivMessage {
         let mut rects = vec![];
         let Some(layout) = self.txt_layout.as_ref() else { return rects };
 
-        let is_notice = self.nick == "NOTICE";
-        let linetext =
-            if is_notice { self.text.clone() } else { format!("{} {}", self.nick, self.text) };
-        let body_offset = if is_notice { 0 } else { self.nick.len() + 1 };
+        let linetext = self.line_text();
+        let body_offset = self.body_offset();
 
         // URL byte ranges within linetext (the color value is unused here).
         let url_ranges: Vec<Range<usize>> =
@@ -915,6 +965,7 @@ impl Message {
         timestamp_width: f32,
         nick_colors: &[Color],
         text_color: Color,
+        action_text_color: Color,
         url_text_color: Color,
     ) {
         match self {
@@ -925,6 +976,7 @@ impl Message {
                     timestamp_width,
                     nick_colors,
                     text_color,
+                    action_text_color,
                     url_text_color,
                 );
             }
@@ -942,6 +994,7 @@ impl Message {
         nick_colors: &[Color],
         timestamp_color: Color,
         text_color: Color,
+        action_text_color: Color,
         url_text_color: Color,
         url_bg_color: Color,
         url_bg_border_size: f32,
@@ -959,6 +1012,7 @@ impl Message {
                     nick_colors,
                     timestamp_color,
                     text_color,
+                    action_text_color,
                     url_text_color,
                     url_bg_color,
                     url_bg_border_size,
@@ -1070,6 +1124,7 @@ pub struct MessageBuffer {
     baseline: PropertyFloat32,
     timestamp_color: PropertyColor,
     text_color: PropertyColor,
+    action_text_color: PropertyColor,
     url_text_color: PropertyColor,
     url_bg_color: PropertyColor,
     url_bg_border_size: PropertyFloat32,
@@ -1095,6 +1150,7 @@ impl MessageBuffer {
         baseline: PropertyFloat32,
         timestamp_color: PropertyColor,
         text_color: PropertyColor,
+        action_text_color: PropertyColor,
         url_text_color: PropertyColor,
         url_bg_color: PropertyColor,
         url_bg_border_size: PropertyFloat32,
@@ -1117,6 +1173,7 @@ impl MessageBuffer {
             baseline,
             timestamp_color,
             text_color,
+            action_text_color,
             url_text_color,
             url_bg_color,
             url_bg_border_size,
@@ -1171,6 +1228,7 @@ impl MessageBuffer {
         let timestamp_width = self.timestamp_width.get();
         let msg_spacing = self.msg_spacing.get();
         let text_color = self.text_color.get();
+        let action_text_color = self.action_text_color.get();
         let url_text_color = self.url_text_color.get();
         let nick_colors = self.read_nick_colors();
         let mut height = 0.;
@@ -1193,6 +1251,7 @@ impl MessageBuffer {
                 timestamp_width,
                 &nick_colors,
                 text_color,
+                action_text_color,
                 url_text_color,
             );
 
@@ -1241,6 +1300,7 @@ impl MessageBuffer {
         let timestamp_width = self.timestamp_width.get();
         let window_scale = self.window_scale.get();
         let text_color = self.text_color.get();
+        let action_text_color = self.action_text_color.get();
         let url_text_color = self.url_text_color.get();
         let nick_colors = self.read_nick_colors();
 
@@ -1260,6 +1320,7 @@ impl MessageBuffer {
             timestamp_width,
             &nick_colors,
             text_color,
+            action_text_color,
             url_text_color,
         );
 
@@ -1313,6 +1374,7 @@ impl MessageBuffer {
         let timestamp_width = self.timestamp_width.get();
         let window_scale = self.window_scale.get();
         let text_color = self.text_color.get();
+        let action_text_color = self.action_text_color.get();
         let url_text_color = self.url_text_color.get();
         let nick_colors = self.read_nick_colors();
 
@@ -1332,6 +1394,7 @@ impl MessageBuffer {
             timestamp_width,
             &nick_colors,
             text_color,
+            action_text_color,
             url_text_color,
         );
 
@@ -1352,6 +1415,7 @@ impl MessageBuffer {
 
         let timest_color = self.timestamp_color.get();
         let text_color = self.text_color.get();
+        let action_text_color = self.action_text_color.get();
         let url_text_color = self.url_text_color.get();
         let url_bg_color = self.url_bg_color.get();
         let url_bg_border_size = self.url_bg_border_size.get();
@@ -1376,6 +1440,7 @@ impl MessageBuffer {
                     &nick_colors,
                     timest_color,
                     text_color,
+                    action_text_color,
                     url_text_color,
                     url_bg_color,
                     url_bg_border_size,
@@ -1511,6 +1576,7 @@ impl MessageBuffer {
         let msg_spacing = self.msg_spacing.get();
         let timestamp_width = self.timestamp_width.get();
         let text_color = self.text_color.get();
+        let action_text_color = self.action_text_color.get();
         let url_text_color = self.url_text_color.get();
         let nick_colors = self.read_nick_colors();
 
@@ -1528,6 +1594,7 @@ impl MessageBuffer {
                 timestamp_width,
                 &nick_colors,
                 text_color,
+                action_text_color,
                 url_text_color,
             );
             let mesh_height = msg.height(line_height);
@@ -1628,5 +1695,140 @@ impl MessageBuffer {
                 }
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    const TEXT_COLOR: Color = [1., 1., 1., 1.];
+    const ACTION_COLOR: Color = [0.5, 0.25, 0.75, 1.];
+    const URL_COLOR: Color = [0., 0.94, 1., 1.];
+    const NICK_COLORS: &[Color] = &[[1., 0., 0., 1.]];
+
+    fn make_priv(text: &str) -> Message {
+        PrivMessage::new(14., 10., 1., 0, MessageId([0; 32]), "alice".to_string(), text.to_string())
+    }
+
+    #[test]
+    fn ctcp_action_fully_framed() {
+        assert_eq!(parse_ctcp_action("\u{1}ACTION waves\u{1}"), Some("waves"));
+    }
+
+    #[test]
+    fn ctcp_action_missing_trailing_delimiter() {
+        assert_eq!(parse_ctcp_action("\u{1}ACTION waves"), Some("waves"));
+    }
+
+    #[test]
+    fn ctcp_action_empty_body() {
+        assert_eq!(parse_ctcp_action("\u{1}ACTION \u{1}"), Some(""));
+        assert_eq!(parse_ctcp_action("\u{1}ACTION "), Some(""));
+    }
+
+    #[test]
+    fn ctcp_action_not_an_action() {
+        assert_eq!(parse_ctcp_action("waves"), None);
+        assert_eq!(parse_ctcp_action("waves\u{1}"), None);
+        assert_eq!(parse_ctcp_action("see \u{1}ACTION waves\u{1} here"), None);
+        assert_eq!(parse_ctcp_action("\u{1}action waves\u{1}"), None);
+        assert_eq!(parse_ctcp_action("\u{1}PING\u{1}"), None);
+    }
+
+    #[test]
+    fn privmsg_action_detection() {
+        let Message::Priv(m) = make_priv("\u{1}ACTION waves\u{1}") else { panic!() };
+        assert!(m.is_action);
+        assert_eq!(m.text, "waves");
+
+        let Message::Priv(m) = make_priv("\u{1}ACTION waves") else { panic!() };
+        assert!(m.is_action);
+        assert_eq!(m.text, "waves");
+
+        let Message::Priv(m) = make_priv("/me waves") else { panic!() };
+        assert!(!m.is_action);
+        assert_eq!(m.text, "/me waves");
+    }
+
+    #[test]
+    fn action_line_text_and_body_offset() {
+        let Message::Priv(m) = make_priv("\u{1}ACTION waves\u{1}") else { panic!() };
+        assert_eq!(m.line_text(), "* alice waves");
+        assert_eq!(m.body_offset(), "alice".len() + 3);
+
+        let Message::Priv(m) = make_priv("waves") else { panic!() };
+        assert!(!m.is_action);
+        assert_eq!(m.line_text(), "alice waves");
+        assert_eq!(m.body_offset(), "alice".len() + 1);
+    }
+
+    #[test]
+    fn action_layout_colors() {
+        let mut msg = make_priv("\u{1}ACTION waves\u{1}");
+        let Message::Priv(m) = &mut msg else { panic!() };
+        m.cache_txt_layout(
+            &Rectangle::new(0., 0., 1000., 100.),
+            20.,
+            50.,
+            NICK_COLORS,
+            TEXT_COLOR,
+            ACTION_COLOR,
+            URL_COLOR,
+        );
+
+        // GlyphRun items are split per style, so brushes identify the
+        // colored ranges exactly: the "* <nick> " prefix uses the nick
+        // color and the action text uses action_text_color. No other
+        // brush may appear in a confirmed action line.
+        let layout = m.txt_layout.as_ref().unwrap();
+        let mut nick_brushes = 0;
+        let mut action_brushes = 0;
+        for line in layout.lines() {
+            for item in line.items() {
+                let parley::PositionedLayoutItem::GlyphRun(run) = item else { continue };
+                let brush = run.style().brush;
+                if brush == NICK_COLORS[0] {
+                    nick_brushes += 1;
+                } else if brush == ACTION_COLOR {
+                    action_brushes += 1;
+                } else {
+                    panic!("unexpected brush {brush:?}");
+                }
+            }
+        }
+        assert!(nick_brushes > 0);
+        assert!(action_brushes > 0);
+    }
+
+    #[test]
+    fn action_layout_url_color() {
+        let mut msg = make_priv("\u{1}ACTION see https://example.com now\u{1}");
+        let Message::Priv(m) = &mut msg else { panic!() };
+        m.cache_txt_layout(
+            &Rectangle::new(0., 0., 1000., 100.),
+            20.,
+            50.,
+            NICK_COLORS,
+            TEXT_COLOR,
+            ACTION_COLOR,
+            URL_COLOR,
+        );
+
+        let layout = m.txt_layout.as_ref().unwrap();
+        let mut url_brushes = 0;
+        let mut action_brushes = 0;
+        for line in layout.lines() {
+            for item in line.items() {
+                let parley::PositionedLayoutItem::GlyphRun(run) = item else { continue };
+                if run.style().brush == URL_COLOR {
+                    url_brushes += 1;
+                } else if run.style().brush == ACTION_COLOR {
+                    action_brushes += 1;
+                }
+            }
+        }
+        assert!(url_brushes > 0);
+        assert!(action_brushes > 0);
     }
 }

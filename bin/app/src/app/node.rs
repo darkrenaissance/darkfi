@@ -533,6 +533,12 @@ pub fn create_chatview(name: &str) -> SceneNode {
     prop.set_range_f32(0., 1.);
     node.add_property(prop).unwrap();
 
+    let mut prop =
+        Property::new("action_text_color", PropertyType::Float32, PropertySubType::Color);
+    prop.set_array_len(4);
+    prop.set_range_f32(0., 1.);
+    node.add_property(prop).unwrap();
+
     let mut prop = Property::new("url_text_color", PropertyType::Float32, PropertySubType::Color);
     prop.set_array_len(4);
     prop.set_range_f32(0., 1.);

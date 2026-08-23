@@ -539,6 +539,19 @@ pub async fn make(
         prop.set_f32(atom, Role::App, 3, 1.).unwrap();
     }
 
+    let prop = node.get_property("action_text_color").unwrap();
+    if COLOR_SCHEME == ColorScheme::PaperLight {
+        prop.set_f32(atom, Role::App, 0, 0.).unwrap();
+        prop.set_f32(atom, Role::App, 1, 0.).unwrap();
+        prop.set_f32(atom, Role::App, 2, 0.).unwrap();
+        prop.set_f32(atom, Role::App, 3, 1.).unwrap();
+    } else if COLOR_SCHEME == ColorScheme::DarkMode {
+        prop.set_f32(atom, Role::App, 0, 1.).unwrap();
+        prop.set_f32(atom, Role::App, 1, 1.).unwrap();
+        prop.set_f32(atom, Role::App, 2, 1.).unwrap();
+        prop.set_f32(atom, Role::App, 3, 1.).unwrap();
+    }
+
     let prop = node.get_property("url_text_color").unwrap();
     prop.set_f32(atom, Role::App, 0, 0.).unwrap();
     prop.set_f32(atom, Role::App, 1, 0.94).unwrap();
@@ -1096,6 +1109,40 @@ pub async fn make(
                 "NOTICE".encode(&mut data).unwrap();
                 msg.encode(&mut data).unwrap();
                 chatview_node.call_method("insert_line", data).await.unwrap();
+
+                return
+            }
+
+            if text == "/me" {
+                // Bare /me without action text sends nothing
+                return
+            }
+
+            if let Some(rest) = text.strip_prefix("/me ") {
+                let mut action = rest.trim().to_string();
+                if action.is_empty() {
+                    return
+                }
+
+                // Limit line length. The CTCP framing bytes are neither
+                // counted towards the limit nor cut by truncation.
+                if action.len() > 300 {
+                    action.truncate(300);
+                    action.push('…');
+                }
+
+                let text = format!("\u{1}ACTION {action}\u{1}");
+                let timest = UNIX_EPOCH.elapsed().unwrap().as_millis() as u64;
+                let nick = darkirc.get_property_str("nick").unwrap();
+                #[cfg(feature = "enable-plugin-darkirc")]
+                {
+                    let msg = Privmsg { version: 0, msg_type: 0, channel, nick, msg: text };
+                    let mut data = vec![];
+                    timest.encode(&mut data).unwrap();
+                    msg.channel.encode(&mut data).unwrap();
+                    msg.msg.encode(&mut data).unwrap();
+                    darkirc.call_method("send", data).await.unwrap();
+                }
 
                 return
             }
