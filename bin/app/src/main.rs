@@ -820,8 +820,11 @@ pub fn create_drk(name: &str) -> SceneNode {
 
     node.add_signal(
         "connect",
-        "Connections and disconnects",
-        vec![("connected", "Is darkfid connected", CallArgType::Bool)],
+        "Darkfid connection update",
+        vec![
+            ("status", "Connection status", CallArgType::Uint32),
+            ("description", "Description", CallArgType::Str),
+        ],
     )
     .unwrap();
 
