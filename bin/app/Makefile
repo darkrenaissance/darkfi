@@ -29,7 +29,7 @@ DEBUG_FEATURES = --features=schema-app,enable-filelog,enable-plugin-darkirc,enab
 
 #DEV_FEATURES = --features=enable-filelog,enable-netdebug,emulate-android
 #DEV_FEATURES = --features=enable-filelog,enable-netdebug,enable-plugins
-DEV_FEATURES = --features=schema-app,enable-filelog,enable-plugin-darkirc,enable-plugin-drk
+DEV_FEATURES = --features=schema-app,enable-filelog,enable-netdebug
 
 default: build-release
 	./darkfi-app

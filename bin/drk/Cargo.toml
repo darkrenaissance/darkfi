@@ -31,7 +31,7 @@ linenoise-rs = "0.1.1"
 num-bigint = "0.4.6"
 prettytable-rs = "0.10.0"
 rand = "0.8.6"
-rodio = {version = "0.21.1", default-features = false, features = ["playback", "mp3"]}
+rodio = { git = "https://github.com/RustAudio/rodio", default-features = false, features = ["playback", "mp3"] }
 sled-overlay = "0.1.20"
 toml = "0.9.8"
 tracing = "0.1.44"

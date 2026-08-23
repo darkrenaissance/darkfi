@@ -52,6 +52,7 @@ use super::{ColorScheme, COLOR_SCHEME};
 
 #[cfg(any(target_os = "android", feature = "emulate-android"))]
 mod android_ui_consts {
+    pub const CHANNEL_LABEL_X: f32 = 180.;
     pub const CHANNEL_LABEL_Y: f32 = 30.;
     pub const BACKARROW_SCALE: f32 = 30.;
     pub const BACKARROW_X: f32 = 70.;
@@ -117,6 +118,7 @@ mod ui_consts {
 ))]
 mod ui_consts {
     // Chat UI
+    pub const CHANNEL_LABEL_X: f32 = 100.;
     pub const CHANNEL_LABEL_Y: f32 = 12.;
     pub const BACKARROW_SCALE: f32 = 15.;
     pub const BACKARROW_X: f32 = 38.;
@@ -387,7 +389,7 @@ pub async fn make(
     // Create some text
     let node = create_text("channel_label");
     let prop = node.get_property("rect").unwrap();
-    prop.set_f32(atom, Role::App, 0, CHATEDIT_LHS_PAD).unwrap();
+    prop.set_f32(atom, Role::App, 0, CHANNEL_LABEL_X).unwrap();
     prop.set_f32(atom, Role::App, 1, CHANNEL_LABEL_Y).unwrap();
     prop.set_expr(atom, Role::App, 2, expr::load_var("w")).unwrap();
     prop.set_f32(atom, Role::App, 3, CHATEDIT_HEIGHT).unwrap();

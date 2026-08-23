@@ -32,7 +32,7 @@ use crate::{
     mesh::COLOR_CYAN,
     prop::{PropertyAtomicGuard, PropertyBool, PropertyFloat32, Role},
     scene::{SceneNodePtr, Slot},
-    shape,
+    sfx, shape,
     ui::{
         emoji_picker::EmojiMeshesPtr, Button, Layer, Menu, ShapeVertex, Text, VectorArt,
         VectorShape,
@@ -460,6 +460,7 @@ pub async fn make(
             if let Some(node) = sg_root.lookup_node(path) {
                 let atom = &mut redraw.make_guard(gfxtag!("channel_clicked"));
                 info!(target: "app::menu", "clicked: {channel}!");
+                sfx::play_click();
                 role1_group.remove_str_item(atom, Role::App, &channel);
                 role2_group.remove_str_item(atom, Role::App, &channel);
                 node.set_property_bool(atom, Role::App, "is_visible", true).unwrap();

@@ -24,7 +24,7 @@ pub mod textinput;
 pub(self) mod util;
 pub mod vid;
 
-use util::get_jni_env;
+pub use util::get_jni_env;
 
 macro_rules! call_mainactivity_int_method {
     ($method:expr, $sig:expr $(, $args:expr)*) => {{

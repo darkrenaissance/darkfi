@@ -63,6 +63,11 @@ fluent = "0.17.0"
 unic-langid = { version = "0.9.6", features = ["unic-langid-macros"] }
 indoc = "2.0.7"
 
+# Sound playback for UI events.
+# Git master: uses cpal 0.18 which has native pulseaudio/pipewire backends
+# (cpal 0.17 is ALSA-only and fails when pipewire owns the default device).
+rodio = { git = "https://github.com/RustAudio/rodio", default-features = false, features = ["playback", "vorbis", "pulseaudio"] }
+
 # This makes a HUGE difference to decoding speed.
 # Over 160s to like 2s.
 [profile.dev.package.rav1d]
@@ -108,6 +113,8 @@ x11-clipboard = "0.9.3"
 tracing-android = "0.2.0"
 # Required by Arti: tor-dirmgr
 tor-dirmgr = { version="0.42.0", features=["static"] }
+# Required by cpal (rodio) AAudio backend to access the JavaVM/Activity
+ndk-context = "0.1.1"
 # Android uses MediaCodec for hardware-accelerated H.264 decoding instead of rav1d
 
 [target.'cfg(target_os = "windows")'.dependencies]
