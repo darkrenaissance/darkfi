@@ -50,7 +50,7 @@ use crate::{
     expr,
     gfx::gfxtag,
     mesh::{COLOR_CYAN, COLOR_INACTIVE, COLOR_MINT, COLOR_MINT_OP, MINT_BTN_GRADIENT},
-    prop::{PropertyBool, PropertyFloat32, Role},
+    prop::{PropertyAtomicGuard, PropertyBool, PropertyFloat32, Role},
     scene::{Pimpl, SceneNodePtr, Slot},
     shape,
     ui::{
@@ -171,7 +171,6 @@ pub async fn make(
     contacts_tree: sled::Tree,
     db: &sled::Db,
     emoji_meshes: EmojiMeshesPtr,
-    is_first_time: bool,
 ) -> SceneNodePtr {
     let mut cc = expr::Compiler::new();
     cc.add_const_f32("CHATEDIT_PAD", CHATEDIT_PAD);
@@ -189,8 +188,7 @@ pub async fn make(
     cc.add_const_f32("COPY_BTN_SIZE", COPY_BTN_SIZE);
     cc.add_const_f32("CHANNEL_ITEM_HEIGHT", CHANNEL_ITEM_HEIGHT);
 
-    let renderer = app.renderer.clone();
-    let atom = &mut renderer.make_guard(gfxtag!("write_click"));
+    let atom = &mut PropertyAtomicGuard::none();
 
     // Header
     let node = create_vector_art("header_bg");
@@ -281,13 +279,13 @@ pub async fn make(
     let sg_root = app.sg_root.clone();
     let contact_vis = contact_is_visible.clone();
     let channel_vis = channel_is_visible.clone();
-    let renderer = app.renderer.clone();
+    let redraw = app.redraw_trigger.clone();
     let menu_node = sg_root.lookup_node("/window/content/chat/menu_layer").unwrap();
     let netstatus_layer = sg_root.lookup_node("/window/content/netstatus_layer").unwrap();
     let content_go = content.clone();
     let goback = async move || {
         info!(target: "app::chat", "clicked back");
-        let atom = &mut renderer.make_guard(gfxtag!("go back action"));
+        let atom = &mut redraw.make_guard(gfxtag!("go back action"));
 
         unfocus_editors(&content_go).await;
 
@@ -603,11 +601,11 @@ pub async fn make(
     let sg_root = app.sg_root.clone();
     let contact_vis = contact_is_visible.clone();
     let channel_vis = channel_is_visible.clone();
-    let renderer = app.renderer.clone();
+    let redraw = app.redraw_trigger.clone();
     let content_tab = content.clone();
     let listen_click = app.ex.spawn(async move {
         while let Ok(_) = recvr.recv().await {
-            let atom = &mut renderer.make_guard(gfxtag!("contacts_click"));
+            let atom = &mut redraw.make_guard(gfxtag!("contacts_click"));
 
             unfocus_editors(&content_tab).await;
 
@@ -694,11 +692,11 @@ pub async fn make(
     let sg_root = app.sg_root.clone();
     let contact_vis = contact_is_visible.clone();
     let channel_vis = channel_is_visible.clone();
-    let renderer = app.renderer.clone();
+    let redraw = app.redraw_trigger.clone();
     let content_tab = content.clone();
     let listen_click = app.ex.spawn(async move {
         while let Ok(_) = recvr.recv().await {
-            let atom = &mut renderer.make_guard(gfxtag!("channels_click"));
+            let atom = &mut redraw.make_guard(gfxtag!("channels_click"));
 
             unfocus_editors(&content_tab).await;
 
@@ -1263,14 +1261,14 @@ pub async fn make(
     let (slot, recvr) = Slot::new("receive_copy_clicked");
     node.register("click", slot).unwrap();
     let secedit_node2 = secedit_node.clone();
-    let renderer_clone = app.renderer.clone();
+    let redraw_clone = app.redraw_trigger.clone();
     let listen_click = app.ex.spawn(async move {
         while let Ok(_) = recvr.recv().await {
             debug!(target: "app::menu", "secret paste button clicked");
             match crate::clipboard::get() {
                 Some(clipboard_text) => {
                     let text_prop = secedit_node2.get_property("text").unwrap();
-                    let atom = &mut renderer_clone.make_guard(gfxtag!("secret paste"));
+                    let atom = &mut redraw_clone.make_guard(gfxtag!("secret paste"));
                     text_prop.set_str(atom, Role::App, 0, &clipboard_text).unwrap();
                     if let crate::scene::Pimpl::Edit(edit) = secedit_node2.pimpl() {
                         edit.on_text_prop_changed();
@@ -1468,7 +1466,7 @@ pub async fn make(
     let nickedit2 = nickedit_node.clone();
     let secedit2 = secedit_node.clone();
     let menu_prop2 = menu_node.get_property("items").unwrap();
-    let renderer2 = app.renderer.clone();
+    let redraw2 = app.redraw_trigger.clone();
     let sg_root2 = app.sg_root.clone();
 
     let save_contact = app.ex.spawn(async move {
@@ -1506,11 +1504,11 @@ pub async fn make(
             let _ = contacts_tree2.flush_async().await;
 
             let contact_name = format!("@{}", name);
-            let atom = &mut renderer2.make_guard(gfxtag!("add_contact"));
+            let atom = &mut redraw2.make_guard(gfxtag!("add_contact"));
             menu_prop2.push_str(atom, Role::App, &contact_name).unwrap();
             i!("Successfully saved contact: {}", contact_name);
 
-            let atom = &mut renderer2.make_guard(gfxtag!("clear_contact_fields"));
+            let atom = &mut redraw2.make_guard(gfxtag!("clear_contact_fields"));
             name_prop.set_str(atom, Role::App, 0, "").unwrap();
             public_prop.set_str(atom, Role::App, 0, "").unwrap();
         }
@@ -1535,7 +1533,7 @@ pub async fn make(
             let contact: String = deserialize(&data).unwrap();
             i!("Selected contact: {contact}");
             let path = format!("/window/content/{}_chat_layer", &contact);
-            let atom = &mut renderer.make_guard(gfxtag!("contact_selected"));
+            let atom = &mut redraw2.make_guard(gfxtag!("contact_selected"));
 
             if let Some(node) = sg_root.lookup_node(&path) {
                 node.set_property_bool(atom, Role::App, "is_visible", true).unwrap();
@@ -1553,7 +1551,6 @@ pub async fn make(
                 &db2,
                 &i18n_fish2,
                 emoji_meshes2.clone(),
-                is_first_time,
                 redraw2.clone(),
             )
             .await;

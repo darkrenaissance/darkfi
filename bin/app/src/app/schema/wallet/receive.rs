@@ -92,12 +92,12 @@ pub async fn make(
     let main_is_visible = PropertyBool::wrap(&main_layer, Role::App, "is_visible", 0).unwrap();
     let receive_is_visible =
         PropertyBool::wrap(&receive_layer, Role::App, "is_visible", 0).unwrap();
-    let renderer = app.renderer.clone();
+    let redraw = app.redraw_trigger.clone();
     let (slot, recvr) = Slot::new("receive_back_clicked");
     node.register("click", slot).unwrap();
     let listen_click = app.ex.spawn(async move {
         while let Ok(_) = recvr.recv().await {
-            let atom = &mut renderer.make_guard(gfxtag!("receive back button"));
+            let atom = &mut redraw.make_guard(gfxtag!("receive back button"));
             receive_is_visible.set(atom, false);
             main_is_visible.set(atom, true);
         }

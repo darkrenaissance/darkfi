@@ -106,12 +106,12 @@ pub async fn make(
 
     let step3_is_visible2 = step3_is_visible.clone();
     let step4_is_visible1 = step4_is_visible.clone();
-    let renderer = app.renderer.clone();
+    let redraw = app.redraw_trigger.clone();
     let (slot, recvr) = Slot::new("send_back_clicked4");
     node.register("click", slot).unwrap();
     let listen_click = app.ex.spawn(async move {
         while let Ok(_) = recvr.recv().await {
-            let atom = &mut renderer.make_guard(gfxtag!("send step4 back button"));
+            let atom = &mut redraw.make_guard(gfxtag!("send step4 back button"));
             step4_is_visible1.set(atom, false);
             step3_is_visible2.set(atom, true);
         }
@@ -467,7 +467,7 @@ pub async fn make(
     )
     .await;
 
-    let renderer = app.renderer.clone();
+    let redraw = app.redraw_trigger.clone();
     let sg_root = app.sg_root.clone();
     let step4_is_visible1 = step4_is_visible.clone();
     let send_tx_data_for_send = send_tx_data.clone();
@@ -483,7 +483,7 @@ pub async fn make(
                     continue;
                 }
             }
-            let atom = &mut renderer.make_guard(gfxtag!("send button"));
+            let atom = &mut redraw.make_guard(gfxtag!("send button"));
 
             step4_is_visible1.set(atom, false);
             if let Some(tx_status) = sg_root.lookup_node("/window/content/wallet/tx_status_layer") {
@@ -526,7 +526,7 @@ pub async fn make(
 
     // Add listener for step4 visibility to update amount positions
     let step4_is_visible_clone = step4_is_visible.clone();
-    let renderer_clone = app.renderer.clone();
+    let redraw_clone = app.redraw_trigger.clone();
     let amount_wrapper_clone = amount_wrapper.clone();
     let amount_text_node_clone = amount_text_node.clone();
     let token_symbol_node_clone = token_symbol_node.clone();
@@ -546,7 +546,7 @@ pub async fn make(
                     }
                 }
 
-                let atom = &mut renderer_clone.make_guard(gfxtag!("update step4 amount positions"));
+                let atom = &mut redraw_clone.make_guard(gfxtag!("update step4 amount positions"));
                 let data = send_tx_data_clone2.lock().unwrap().clone();
 
                 let token_symbol = data.token_symbol.unwrap_or_else(|| "".to_string());

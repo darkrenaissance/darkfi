@@ -709,7 +709,7 @@ pub async fn create_tooltip(
     // Subscribe to show method for auto-hide behavior
     let show_method_sub = tooltip_layer.subscribe_method_call("show").unwrap();
     let tooltip_clone = tooltip_layer.clone();
-    let renderer2 = app.renderer.clone();
+    let redraw2 = app.redraw_trigger.clone();
     let (reset_sender, reset_receiver) = unbounded::<()>();
 
     app.tasks.lock().unwrap().push(app.ex.spawn(async move {
@@ -718,7 +718,7 @@ pub async fn create_tooltip(
             let _ = show_method_sub.receive().await;
 
             // Show the tooltip
-            let atom = &mut renderer2.make_guard(gfxtag!("tooltip show"));
+            let atom = &mut redraw2.make_guard(gfxtag!("tooltip show"));
             tooltip_clone.set_property_bool(atom, Role::App, "is_visible", true).unwrap();
 
             // Send reset signal to hide timer
@@ -728,7 +728,7 @@ pub async fn create_tooltip(
 
     // Hide timer task
     let tooltip2 = tooltip_layer.clone();
-    let renderer2 = app.renderer.clone();
+    let redraw2 = app.redraw_trigger.clone();
     app.tasks.lock().unwrap().push(app.ex.spawn(async move {
         loop {
             // Wait for show signal
@@ -749,7 +749,7 @@ pub async fn create_tooltip(
             }
 
             // Hide the tooltip
-            let atom = &mut renderer2.make_guard(gfxtag!("tooltip hide"));
+            let atom = &mut redraw2.make_guard(gfxtag!("tooltip hide"));
             tooltip2.set_property_bool(atom, Role::App, "is_visible", false).unwrap();
         }
     }));

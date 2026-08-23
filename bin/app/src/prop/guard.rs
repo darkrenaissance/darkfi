@@ -53,18 +53,17 @@ pub struct PropertyAtomicGuard {
 }
 
 impl PropertyAtomicGuard {
-    pub fn new(start_batch: BatchGuardCb, end_batch: BatchGuardCb) -> Self {
+    pub fn new(end_batch: BatchGuardCb) -> Self {
         let batch_id = BATCH_ID.fetch_add(1, Ordering::Relaxed);
-        start_batch(batch_id);
         Self { batch_id, updates: vec![], end_batch: Some(end_batch), parent: None }
     }
 
     /// Should only be used when there's an explicit end_batch() called manually at the end
     /// of the context.
     /// You probably mostly want to either `batch.spawn()` from an existing batch
-    /// or use `renderer.make_guard()`.
+    /// or use `RedrawTrigger::make_guard()`.
     pub fn none() -> Self {
-        Self::new(Box::new(|_| {}), Box::new(|_| {}))
+        Self::new(Box::new(|_| {}))
     }
 
     pub(super) fn add(&mut self, prop: PropertyPtr, role: Role, action: ModifyAction) {

@@ -95,7 +95,7 @@ pub async fn make(
 
     // Add listener for tx built signal to update send button label and show fee
     let set_built_tx_sub = tx_status_layer.subscribe_method_call("set_built_tx").unwrap();
-    let renderer_for_built = app.renderer.clone();
+    let redraw_for_built = app.redraw_trigger.clone();
     let sg_root_for_built = app.sg_root.clone();
     app.tasks.lock().unwrap().push(app.ex.spawn(async move {
         while let Ok(mcall) = set_built_tx_sub.receive().await {
@@ -110,7 +110,7 @@ pub async fn make(
                 }
             }
 
-            let atom = &mut renderer_for_built.make_guard(gfxtag!("tx built - update send button"));
+            let atom = &mut redraw_for_built.make_guard(gfxtag!("tx built - update send button"));
 
             // Make send button active
             if let Some(send_label_node) = sg_root_for_built

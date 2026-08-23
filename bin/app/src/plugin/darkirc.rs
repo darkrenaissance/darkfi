@@ -97,18 +97,11 @@ mod paths {
     use crate::android::{get_appdata_path, get_external_storage_path};
     use std::path::PathBuf;
 
-    pub fn get_evgrdb_path() -> PathBuf {
-        get_external_storage_path().join("evgr2")
-    }
     pub fn get_chatdb_path() -> PathBuf {
         get_external_storage_path().join("chatdb")
     }
     pub fn get_use_tor_filename() -> PathBuf {
         get_external_storage_path().join("use_tor.txt")
-    }
-
-    pub fn nick_filename() -> PathBuf {
-        get_appdata_path().join("/nick2.txt")
     }
 
     pub fn p2p_datastore_path() -> PathBuf {
@@ -123,18 +116,11 @@ mod paths {
 mod paths {
     use std::path::PathBuf;
 
-    pub fn get_evgrdb_path() -> PathBuf {
-        dirs::data_local_dir().unwrap().join("darkfi/app/evgr2")
-    }
     pub fn get_chatdb_path() -> PathBuf {
         dirs::data_local_dir().unwrap().join("darkfi/app/chatdb")
     }
     pub fn get_use_tor_filename() -> PathBuf {
         dirs::data_local_dir().unwrap().join("darkfi/app/use_tor.txt")
-    }
-
-    pub fn nick_filename() -> PathBuf {
-        dirs::cache_dir().unwrap().join("darkfi/app/nick2.txt")
     }
 
     pub fn p2p_datastore_path() -> PathBuf {
@@ -190,6 +176,7 @@ pub struct DarkIrc {
     pub contacts: RwLock<HashMap<String, IrcContact>>,
     channels_tree: sled::Tree,
     contacts_tree: sled::Tree,
+    nick_tree: sled::Tree,
     dm_secret: SecretKey,
     settings: PluginSettings,
     ex: ExecutorPtr,
@@ -209,16 +196,9 @@ impl DarkIrc {
         node_ref.link(setting_root.clone());
 
         i!("Starting DarkIRC backend");
-        let evgr_path = get_evgrdb_path();
-        let evgr_db = match sled::open(&evgr_path) {
-            Ok(db) => db,
-            Err(err) => {
-                e!("Sled database '{}' failed to open: {err}!", evgr_path.display());
-                return Err(Error::SledDbErr)
-            }
-        };
 
-        let setting_tree = evgr_db.open_tree("settings")?;
+        let setting_tree = db.open_tree("darkirc_settings")?;
+        i!("Opened darkirc_settings tree from unified db");
 
         // Use the unified db for reading channels (UI stores channels there)
         let channels_tree = db.open_tree("channels")?;
@@ -226,6 +206,9 @@ impl DarkIrc {
 
         let contacts_tree = db.open_tree("contacts")?;
         i!("Opened contacts tree from unified db");
+
+        let nick_tree = db.open_tree("nick")?;
+        i!("Opened nick tree from unified db");
 
         let dm_secret = Self::load_or_create_dm_identity(&db);
         let dm_public_b58 = bs58::encode(dm_secret.public_key().to_bytes()).into_string();
@@ -325,8 +308,10 @@ impl DarkIrc {
             }
         };
 
-        if let Ok(prev_nick) = std::fs::read_to_string(nick_filename()) {
-            nick.set(&mut PropertyAtomicGuard::none(), prev_nick);
+        if let Ok(Some(nick_bytes)) = nick_tree.get(b"value") {
+            if let Ok(prev_nick) = String::from_utf8(nick_bytes.to_vec()) {
+                nick.set(&mut PropertyAtomicGuard::none(), prev_nick);
+            }
         }
 
         let self_ = Arc::new(Self {
@@ -343,6 +328,7 @@ impl DarkIrc {
             contacts: RwLock::new(HashMap::new()),
             channels_tree,
             contacts_tree,
+            nick_tree,
             dm_secret,
 
             settings,
@@ -974,7 +960,10 @@ impl DarkIrc {
 
         let mut on_modify = OnModify::new(ex.clone(), self.node.clone(), me.clone());
         async fn save_nick(self_: Arc<DarkIrc>, _batch: BatchGuardPtr) {
-            let _ = std::fs::write(nick_filename(), self_.nick.get());
+            if let Err(err) = self_.nick_tree.insert(b"value", self_.nick.get().as_bytes()) {
+                e!("Failed persisting nick to sled: {err}");
+            }
+            let _ = self_.nick_tree.flush();
         }
         on_modify.when_change(self.nick.prop(), save_nick);
 

@@ -300,7 +300,7 @@ impl UIObject for EmojiPicker {
             return false
         }
         t!("handle_mouse_wheel()");
-        let atom = &mut self.renderer.make_guard(gfxtag!("EmojiPicker::handle_mouse_wheel"));
+        let atom = &mut self.redraw.make_guard(gfxtag!("EmojiPicker::handle_mouse_wheel"));
 
         let mut scroll = self.scroll.get();
         scroll -= self.mouse_scroll_speed.get() * wheel_pos.y;
@@ -308,7 +308,6 @@ impl UIObject for EmojiPicker {
         self.scroll.set(atom, scroll);
 
         *self.draw_cache.lock() = None;
-        self.redraw.trigger();
 
         true
     }
@@ -331,7 +330,7 @@ impl UIObject for EmojiPicker {
             return false
         }
 
-        let atom = &mut self.renderer.make_guard(gfxtag!("EmojiPicker::handle_touch"));
+        let atom = &mut self.redraw.make_guard(gfxtag!("EmojiPicker::handle_touch"));
 
         let rect = self.rect.get();
         let pos = touch_pos - Point::new(rect.x, rect.y);
@@ -373,7 +372,6 @@ impl UIObject for EmojiPicker {
                         self.scroll.set(atom, scroll);
 
                         *self.draw_cache.lock() = None;
-                        self.redraw.trigger();
                     }
                 }
                 TouchPhase::Ended | TouchPhase::Cancelled => {
@@ -395,7 +393,6 @@ impl UIObject for EmojiPicker {
 
 impl Drop for EmojiPicker {
     fn drop(&mut self) {
-        let atom = self.renderer.make_guard(gfxtag!("EmojiPicker::drop"));
         self.renderer.replace_draw_calls(vec![(self.dc_key, Default::default())]);
     }
 }

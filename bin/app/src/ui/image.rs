@@ -223,7 +223,6 @@ impl UIObject for Image {
 
 impl Drop for Image {
     fn drop(&mut self) {
-        let atom = self.renderer.make_guard(gfxtag!("Image::drop"));
         self.renderer.replace_draw_calls(vec![(self.dc_key, Default::default())]);
     }
 }

@@ -106,14 +106,14 @@ pub async fn make(
     prop.set_f32(atom, Role::App, 3, HEADER_HEIGHT).unwrap();
 
     let main_is_visible = PropertyBool::wrap(&main_layer, Role::App, "is_visible", 0).unwrap();
-    let renderer = app.renderer.clone();
+    let redraw = app.redraw_trigger.clone();
     let main_is_visible1 = main_is_visible.clone();
     let step1_is_visible1 = step1_is_visible.clone();
     let (slot, recvr) = Slot::new("send_back_clicked");
     node.register("click", slot).unwrap();
     let listen_click = app.ex.spawn(async move {
         while let Ok(_) = recvr.recv().await {
-            let atom = &mut renderer.make_guard(gfxtag!("send back button"));
+            let atom = &mut redraw.make_guard(gfxtag!("send back button"));
             main_is_visible1.set(atom, true);
             step1_is_visible1.set(atom, false);
         }
@@ -179,7 +179,7 @@ pub async fn make(
     let (slot, recvr) = Slot::new("token_row_clicked");
     send_tokens_table.register("row_click", slot).unwrap();
     let sg_root = app.sg_root.clone();
-    let renderer = app.renderer.clone();
+    let redraw = app.redraw_trigger.clone();
     let send_tx_data2 = send_tx_data.clone();
     let step1_is_visible3 = step1_is_visible.clone();
     let listen_click = app.ex.spawn(async move {
@@ -191,7 +191,7 @@ pub async fn make(
                 data.token_id = Some(row.id);
                 drop(data);
 
-                let atom = &mut renderer.make_guard(gfxtag!("token selection"));
+                let atom = &mut redraw.make_guard(gfxtag!("token selection"));
                 if let Some(selected_token_symbol) = sg_root.lookup_node(
                     "/window/content/wallet/send_step2_layer/send_selected_token_symbol",
                 ) {

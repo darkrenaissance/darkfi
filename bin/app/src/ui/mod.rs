@@ -89,8 +89,10 @@ macro_rules! t { ($($arg:tt)*) => { trace!(target: "scene::on_modify", $($arg)*)
 /// Handle for requesting a redraw pass from the root window's draw loop.
 /// Cheap to clone. The underlying queue is bounded(1), so triggers sent
 /// while a pass is running or pending are coalesced into a single
-/// additional pass. State mutations must happen before calling `trigger()`
-/// so the resulting pass observes them.
+/// additional pass. Property mutations SHOULD be made through
+/// `make_guard()` so the trigger fires once, after the whole update
+/// chain has settled. State mutations must happen before calling
+/// `trigger()` so the resulting pass observes them.
 #[derive(Clone)]
 pub struct RedrawTrigger(async_channel::Sender<()>);
 
@@ -101,10 +103,16 @@ impl RedrawTrigger {
         (Self(tx), rx)
     }
 
-    /// Request a draw pass. Never blocks. A trigger is only dropped when
-    /// another is already queued, which is equivalent: the queued token
-    /// guarantees a pass that starts after this call, and since callers
-    /// mutate state before triggering, that pass observes the mutation.
+    /// Request a draw pass without a batch scope. Only for mutations that
+    /// need no `PropertyAtomicGuard` (plain fields, caches): the trigger is
+    /// enqueued immediately, so all state must already be settled. For
+    /// property updates use `make_guard()` instead, which defers the
+    /// trigger to end-of-batch.
+    ///
+    /// Never blocks. A trigger is only dropped when another is already
+    /// queued, which is equivalent: the queued token guarantees a pass
+    /// that starts after this call, and since callers mutate state before
+    /// triggering, that pass observes the mutation.
     ///
     /// Correctness relies on the draw loop draining exactly one token per
     /// iteration *before* drawing. Do not change the loop to recv after
@@ -114,6 +122,23 @@ impl RedrawTrigger {
     /// can trigger further passes.
     pub fn trigger(&self) {
         let _ = self.0.try_send(());
+    }
+
+    /// Open a property-update batch bound to this trigger. Property
+    /// notifications are deferred until the batch — including any batches
+    /// spawned from it by property-change reactions holding the batch
+    /// guard — completes, and then exactly one redraw trigger is enqueued.
+    /// Use this instead of manual `trigger()` calls around property
+    /// mutations so a pass can never observe the intermediate state of a
+    /// multi-step update.
+    pub fn make_guard(&self, debug_str: Option<&'static str>) -> PropertyAtomicGuard {
+        let redraw = self.0.clone();
+        PropertyAtomicGuard::new(Box::new(move |_| {
+            if let Some(tag) = debug_str {
+                t!("Redraw batch ({tag}) ended, triggering redraw");
+            }
+            let _ = redraw.try_send(());
+        }))
     }
 }
 

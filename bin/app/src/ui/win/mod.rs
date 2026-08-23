@@ -138,12 +138,10 @@ impl Window {
                     panic!("self destroyed before modify_task was stopped!");
                 };
 
-                let atom = &mut self_.renderer.make_guard(gfxtag!("Window::resize_task"));
-                // Now update the properties
+                // Now update the properties. The guard triggers a redraw
+                // pass once the update batch has settled.
+                let atom = &mut self_.redraw_tx.make_guard(gfxtag!("Window::resize_task"));
                 screen_size2.set(atom, size);
-                drop(atom);
-
-                self_.redraw_tx.trigger();
             }
         });
 
@@ -160,7 +158,9 @@ impl Window {
                 }
 
                 let Some(self_) = me2.upgrade() else { break };
-                let atom = &mut self_.renderer.make_guard(gfxtag!("Window::draw_pass"));
+                // A none() guard: the pass must not trigger a follow-on
+                // pass of itself when its own batch settles.
+                let atom = &mut PropertyAtomicGuard::none();
                 self_.draw(atom).await;
             }
         });
@@ -213,17 +213,16 @@ impl Window {
             ex.spawn(async move {
                 while let Ok(insets_val) = insets_rx.recv().await {
                     let Some(self_) = me.upgrade() else { break };
-                    let atom = &mut self_.renderer.make_guard(gfxtag!("Window::insets_task"));
                     let scale = self_.scale.get();
                     let insets_val = Rectangle::from(insets_val) / scale;
                     t!("Insets changed: {insets_val:?}");
-                    insets.set(atom, &insets_val);
-                    drop(atom);
 
                     // Insets are set with an internal role, so draw-pass
-                    // widgets skip the echo notifications. Trigger the pass
-                    // explicitly so the new insets get laid out.
-                    self_.redraw_tx.trigger();
+                    // widgets skip the echo notifications. The guard
+                    // triggers a pass once the batch settles so the new
+                    // insets get laid out.
+                    let atom = &mut self_.redraw_tx.make_guard(gfxtag!("Window::insets_task"));
+                    insets.set(atom, &insets_val);
                 }
             })
         };

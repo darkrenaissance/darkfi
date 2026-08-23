@@ -136,12 +136,12 @@ pub async fn make(
 
     let step1_is_visible2 = step1_is_visible.clone();
     let step2_is_visible1 = step2_is_visible.clone();
-    let renderer = app.renderer.clone();
+    let redraw = app.redraw_trigger.clone();
     let (slot, recvr) = Slot::new("send_back_clicked2");
     node.register("click", slot).unwrap();
     let listen_click = app.ex.spawn(async move {
         while let Ok(_) = recvr.recv().await {
-            let atom = &mut renderer.make_guard(gfxtag!("send step2 back button"));
+            let atom = &mut redraw.make_guard(gfxtag!("send step2 back button"));
             step2_is_visible1.set(atom, false);
             step1_is_visible2.set(atom, true);
         }
@@ -376,12 +376,12 @@ pub async fn make(
     let (slot, recvr) = Slot::new("send_paste_clicked");
     node.register("click", slot).unwrap();
     let recipient_input2 = recipient_input.clone();
-    let renderer_clone = app.renderer.clone();
+    let redraw_clone = app.redraw_trigger.clone();
     let listen_click = app.ex.spawn(async move {
         while let Ok(_) = recvr.recv().await {
             if let Some(clipboard_text) = clipboard::get() {
                 let text_prop = recipient_input2.get_property("text").unwrap();
-                let atom = &mut renderer_clone.make_guard(gfxtag!("step2 recipient paste"));
+                let atom = &mut redraw_clone.make_guard(gfxtag!("step2 recipient paste"));
                 text_prop.set_str(atom, Role::App, 0, &clipboard_text).unwrap();
                 if let crate::scene::Pimpl::Edit(edit) = recipient_input2.pimpl() {
                     edit.on_text_prop_changed();
@@ -412,12 +412,12 @@ pub async fn make(
     let recipient_input2 = recipient_input.clone();
     let recipient_text = recipient_input.get_property("text").unwrap();
     let recipient_text_sub = recipient_text.subscribe_modify();
-    let renderer = app.renderer.clone();
+    let redraw = app.redraw_trigger.clone();
     let btn_bg_valid_clone = btn_bg_valid.clone();
     let btn_bg_invalid_clone = btn_bg_invalid.clone();
     let listen_recipient_text = app.ex.spawn(async move {
         while let Ok(_) = recipient_text_sub.receive().await {
-            let atom = &mut renderer.make_guard(gfxtag!("wallet recipient input recv"));
+            let atom = &mut redraw.make_guard(gfxtag!("wallet recipient input recv"));
             let label_text_color = add_recipient_label_node.get_property("text_color").unwrap();
             let btn_bg_valid_visible = btn_bg_valid_clone.get_property("is_visible").unwrap();
             let btn_bg_invalid_visible = btn_bg_invalid_clone.get_property("is_visible").unwrap();
@@ -454,7 +454,7 @@ pub async fn make(
     app.tasks.lock().unwrap().push(listen_recipient_text);
 
     let step2_is_visible2 = step2_is_visible.clone();
-    let renderer = app.renderer.clone();
+    let redraw = app.redraw_trigger.clone();
     let recipient_input2 = recipient_input.clone();
     let send_tx_data3 = send_tx_data.clone();
     let sg_root = app.sg_root.clone();
@@ -468,7 +468,7 @@ pub async fn make(
                 continue;
             };
 
-            let atom = &mut renderer.make_guard(gfxtag!("add recipient button"));
+            let atom = &mut redraw.make_guard(gfxtag!("add recipient button"));
 
             let data = {
                 let mut tx_data = send_tx_data3.lock().unwrap();

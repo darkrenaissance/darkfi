@@ -266,13 +266,13 @@ impl EditButtons {
         // Subscribe to edit_active signal
         let (slot, recvr) = Slot::new("edit_activated");
         menu_node.register("edit_active", slot).unwrap();
-        let renderer = app.renderer.clone();
+        let redraw = app.redraw_trigger.clone();
         let editlayer = self.editlayer_is_visible.clone();
         let sibling_on = sibling.clone();
         let task = app.ex.spawn(async move {
             while let Ok(_) = recvr.recv().await {
                 debug!(target: "app::menu", "menu edit active");
-                let atom = &mut renderer.make_guard(gfxtag!("edit_active"));
+                let atom = &mut redraw.make_guard(gfxtag!("edit_active"));
                 if let Some(s) = &sibling_on {
                     s.set(atom, false);
                 }
@@ -313,12 +313,12 @@ impl EditButtons {
         let (slot, recvr) = Slot::new(slot_name);
         btn.register("click", slot).unwrap();
         let menu_node = menu_node.clone();
-        let renderer = app.renderer.clone();
+        let redraw = app.redraw_trigger.clone();
         let editlayer = self.editlayer_is_visible.clone();
         let task = app.ex.spawn(async move {
             while let Ok(_) = recvr.recv().await {
                 menu_node.call_method(method, vec![]).await.unwrap();
-                let atom = &mut renderer.make_guard(gfxtag!(slot_name));
+                let atom = &mut redraw.make_guard(gfxtag!(slot_name));
                 editlayer.set(atom, false);
                 if let Some(s) = &sibling {
                     s.set(atom, true);

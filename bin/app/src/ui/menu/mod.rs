@@ -336,7 +336,7 @@ impl Menu {
 
                     if pos.x >= x_min && pos.x <= x_max {
                         info!(target: "app::menu", "X clicked for item: {item_name}");
-                        let atom = &mut self.renderer.make_guard(gfxtag!("Menu::delete_item"));
+                        let atom = &mut self.redraw.make_guard(gfxtag!("Menu::delete_item"));
                         self.items.remove_str(atom, Role::App, item_idx).unwrap();
                     } else {
                         self.handle_selection(item_idx).await;
@@ -640,7 +640,7 @@ impl Menu {
             return true
         };
 
-        let atom = &mut self_.renderer.make_guard(gfxtag!("Menu::cancel_edit"));
+        let atom = &mut self_.redraw.make_guard(gfxtag!("Menu::cancel_edit"));
 
         // Restore the saved items
         // It must exist otherwise theres a logic err
@@ -650,7 +650,6 @@ impl Menu {
         // Exit edit mode
         self_.is_edit_mode.store(false, Ordering::Release);
         self_.invalidate_draw();
-        self_.redraw.trigger();
 
         true
     }
@@ -947,7 +946,7 @@ impl UIObject for Menu {
         if let Some(drag_info) = drag {
             if drag_info.item_idx != drag_info.insert_idx {
                 let item = self.items.get_str(drag_info.item_idx).unwrap();
-                let atom = &mut self.renderer.make_guard(gfxtag!("Menu::reorder_item"));
+                let atom = &mut self.redraw.make_guard(gfxtag!("Menu::reorder_item"));
                 self.items.remove_str(atom, Role::App, drag_info.item_idx).unwrap();
                 let insert_idx = drag_info.insert_idx;
                 self.items.insert_str(atom, Role::App, insert_idx, &item).unwrap();
@@ -1155,7 +1154,7 @@ impl UIObject for Menu {
                 if let Some(drag_info) = drag {
                     if drag_info.item_idx != drag_info.insert_idx {
                         let item = self.items.get_str(drag_info.item_idx).unwrap();
-                        let atom = &mut self.renderer.make_guard(gfxtag!("Menu::reorder_item"));
+                        let atom = &mut self.redraw.make_guard(gfxtag!("Menu::reorder_item"));
                         self.items.remove_str(atom, Role::App, drag_info.item_idx).unwrap();
                         let insert_idx = drag_info.insert_idx;
                         self.items.insert_str(atom, Role::App, insert_idx, &item).unwrap();

@@ -830,7 +830,7 @@ impl ChatView {
             }
 
             let scroll = self.scroll.get() + speed;
-            let atom = &mut self.renderer.make_guard(gfxtag!("ChatView::motion_task"));
+            let atom = &mut self.redraw.make_guard(gfxtag!("ChatView::motion_task"));
             let dist = self.scrollview(scroll, atom).await;
 
             // We reached the end so just stop
@@ -950,7 +950,6 @@ impl ChatView {
 
         self.scroll.set(atom, scroll);
         self.bgload_cv.notify();
-        self.redraw.trigger();
 
         scroll - old_scroll
     }
@@ -1524,7 +1523,7 @@ impl UIObject for ChatView {
                     return true
                 }
                 let scroll = start_scroll + dist;
-                let atom = &mut self.renderer.make_guard(gfxtag!("ChatView::handle_touch_scroll"));
+                let atom = &mut self.redraw.make_guard(gfxtag!("ChatView::handle_touch_scroll"));
                 self.scrollview(scroll, atom).await;
             }
             TouchPhase::Ended | TouchPhase::Cancelled => {
@@ -1572,7 +1571,6 @@ impl UIObject for ChatView {
 
 impl Drop for ChatView {
     fn drop(&mut self) {
-        let atom = self.renderer.make_guard(gfxtag!("ChatView::drop"));
         self.renderer.replace_draw_calls(vec![(self.dc_key, Default::default())]);
     }
 }

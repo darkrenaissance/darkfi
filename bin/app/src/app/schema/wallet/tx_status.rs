@@ -281,14 +281,14 @@ pub async fn make(
     .await;
 
     let main_is_visible = PropertyBool::wrap(&main_layer, Role::App, "is_visible", 0).unwrap();
-    let renderer = app.renderer.clone();
+    let redraw = app.redraw_trigger.clone();
     let tx_status_is_visible1 = tx_status_is_visible.clone();
     let send_tx_data2 = send_tx_data.clone();
     let (slot, recvr) = Slot::new("tx_status_close_clicked");
     node.register("click", slot).unwrap();
     let listen_click = app.ex.spawn(async move {
         while let Ok(_) = recvr.recv().await {
-            let atom = &mut renderer.make_guard(gfxtag!("tx status close button"));
+            let atom = &mut redraw.make_guard(gfxtag!("tx status close button"));
             tx_status_is_visible1.set(atom, false);
             main_is_visible.set(atom, true);
 
@@ -304,10 +304,10 @@ pub async fn make(
     let set_tx_status_sub = tx_status_layer.subscribe_method_call("set_tx_status").unwrap();
     let tx_status_layer_clone = tx_status_layer.clone();
     let sg_root = app.sg_root.clone();
-    let renderer = app.renderer.clone();
+    let redraw = app.redraw_trigger.clone();
     app.tasks.lock().unwrap().push(app.ex.spawn(async move {
         while let Ok(mcall) = set_tx_status_sub.receive().await {
-            let atom = &mut renderer.make_guard(gfxtag!("set_tx_status"));
+            let atom = &mut redraw.make_guard(gfxtag!("set_tx_status"));
 
             let mut cur = std::io::Cursor::new(mcall.data);
             let tx_id = Option::<String>::decode(&mut cur).unwrap();

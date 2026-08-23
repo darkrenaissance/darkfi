@@ -597,7 +597,6 @@ impl BaseEdit {
 
         // Any edit invalidates the action menu's selection
         self.action_mode.clear();
-        self.redraw.trigger();
         ed!("handle_shortcut: handled key={key:?} after=[{}]", self.dbg_state());
         true
     }
@@ -720,7 +719,6 @@ impl BaseEdit {
         self.pause_blinking();
         // Any edit invalidates the action menu's selection
         self.action_mode.clear();
-        self.redraw.trigger();
 
         ed!("handle_key: handled {key:?} after=[{}]", self.dbg_state());
         true
@@ -756,7 +754,7 @@ impl BaseEdit {
             return true
         }
 
-        let atom = &mut self.renderer.make_guard(gfxtag!("BaseEdit::handle_touch_start_action"));
+        let atom = &mut self.redraw.make_guard(gfxtag!("BaseEdit::handle_touch_start_action"));
         if let Some(action_id) = self.action_mode.interact(local_pos) {
             match action_id {
                 ACTION_COPY => {
@@ -781,12 +779,10 @@ impl BaseEdit {
                 _ => {}
             }
 
-            self.redraw.trigger();
             return true;
         } else {
-            // interact() already consumed the menu; trigger so the pass
-            // re-emits the (now empty) action overlay.
-            self.redraw.trigger();
+            // interact() already consumed the menu; the pass re-emits the
+            // (now empty) action overlay when the batch settles.
         }
 
         if !rect.contains(touch_pos) {
@@ -895,9 +891,8 @@ impl BaseEdit {
                     self.window_scale.get(),
                 );
 
-                let atom = &mut self
-                    .renderer
-                    .make_guard(gfxtag!("BaseEdit::TouchStateAction::StartSelect"));
+                let atom =
+                    &mut self.redraw.make_guard(gfxtag!("BaseEdit::TouchStateAction::StartSelect"));
 
                 if self.text.get().is_empty() {
                     menu.add("Paste", ACTION_PASTE);
@@ -930,7 +925,6 @@ impl BaseEdit {
                     self.touch_info.lock().state = TouchStateAction::Select;
                 }
                 self.action_mode.set(menu);
-                self.redraw.trigger();
                 ed!("handle_touch_move: StartSelect handled");
             }
             TouchStateAction::DragSelectHandle { side } => {
@@ -986,9 +980,8 @@ impl BaseEdit {
         match state {
             TouchStateAction::Inactive => return false,
             TouchStateAction::Started { pos: _, instant: _ } | TouchStateAction::SetCursorPos => {
-                let atom = &mut self.renderer.make_guard(gfxtag!("BaseEdit::handle_touch_end"));
+                let atom = &mut self.redraw.make_guard(gfxtag!("BaseEdit::handle_touch_end"));
                 self.touch_set_cursor_pos(atom, touch_pos);
-                self.redraw.trigger();
             }
             _ => {}
         }
@@ -1043,7 +1036,7 @@ impl BaseEdit {
 
         let mut clip_mouse_pos = rect.clip_point(mouse_pos);
 
-        let atom = &mut self.renderer.make_guard(gfxtag!("BaseEdit::handle_mouse_move"));
+        let atom = &mut self.redraw.make_guard(gfxtag!("BaseEdit::handle_mouse_move"));
 
         // Handle scrolling
         if !is_mouse_hover {
@@ -1056,8 +1049,6 @@ impl BaseEdit {
             let delta = travel * SELECT_SCROLL_TRAVEL_SPEED;
             let scroll = (self.scroll.load(Ordering::Relaxed) + delta).clamp(0., max_scroll);
             self.scroll.store(scroll, Ordering::Release);
-
-            self.redraw.trigger();
         }
 
         // Move mouse pos within this widget
@@ -1142,7 +1133,6 @@ impl BaseEdit {
 
         self.pause_blinking();
         //self.behave.apply_cursor_scroll();
-        self.redraw.trigger();
     }
 
     /// Holds the cursor solid while the user interacts. The renderer-managed
@@ -1272,11 +1262,12 @@ impl BaseEdit {
         vec![DrawInstruction::Draw(mesh.alloc(renderer).draw_untextured())]
     }
 
-    /// This does not make use of an atom since we want to de-atomize updating this widget from
-    /// its dependencies so theres zero latency when typing.
+    /// This does not make use of its own batch since we want to de-atomize updating this
+    /// widget from its dependencies so theres zero latency when typing.
+    /// Runs inside the draw pass, so it borrows the pass's atom: property
+    /// echoes are deferred there and no extra pass is triggered.
     /// Should be called when text contents changes.
-    fn eval_rect(&self) {
-        let atom = &mut self.renderer.make_guard(gfxtag!("BaseEdit::make_draw_calls"));
+    fn eval_rect(&self, atom: &mut PropertyAtomicGuard) {
         self.behave.eval_rect(atom);
     }
 
@@ -1374,10 +1365,9 @@ impl BaseEdit {
             panic!("self destroyed before insert_text_method_task was stopped!");
         };
 
-        let atom = &mut self_.renderer.make_guard(gfxtag!("BaseEdit::process_insert_text_method"));
+        let atom = &mut self_.redraw.make_guard(gfxtag!("BaseEdit::process_insert_text_method"));
         self_.editor.lock().insert(&text, atom);
         self_.action_mode.clear();
-        self_.redraw.trigger();
         ed!("insert_text method: inserted {text:?} after=[{}]", self_.dbg_state());
         true
     }
@@ -1406,9 +1396,8 @@ impl BaseEdit {
         }
         self_.editor.lock().focus();
 
-        let atom = &mut self_.renderer.make_guard(gfxtag!("BaseEdit::process_focus_method"));
+        let atom = &mut self_.redraw.make_guard(gfxtag!("BaseEdit::process_focus_method"));
         self_.is_focused.set(atom, true);
-        self_.redraw.trigger();
         ed!("focus method: done after=[{}]", self_.dbg_state());
         true
     }
@@ -1428,9 +1417,8 @@ impl BaseEdit {
         };
 
         self_.editor.lock().unfocus();
-        let atom = &mut self_.renderer.make_guard(gfxtag!("BaseEdit::process_unfocus_method"));
+        let atom = &mut self_.redraw.make_guard(gfxtag!("BaseEdit::process_unfocus_method"));
         self_.is_focused.set(atom, false);
-        self_.redraw.trigger();
         ed!("unfocus method: done after=[{}]", self_.dbg_state());
         true
     }
@@ -1459,7 +1447,7 @@ impl BaseEdit {
         }
 
         ed!("handle_android_event: ENTER incoming={state:?} before=[{}]", self.dbg_state());
-        let atom = &mut self.renderer.make_guard(gfxtag!("BaseEdit::handle_android_event"));
+        let atom = &mut self.redraw.make_guard(gfxtag!("BaseEdit::handle_android_event"));
 
         let is_new_select_collapsed = state.select.0 == state.select.1;
         let (is_text_changed, is_select_changed, is_compose_changed) = {
@@ -1515,7 +1503,6 @@ impl BaseEdit {
             //assert!(state.text != self.text.get());
             self.finish_select(atom);
             self.action_mode.clear();
-            self.redraw.trigger();
             ed!("handle_android_event: handled text change, after=[{}]", self.dbg_state());
         } else if is_select_changed {
             // The IME can collapse a phone-style word selection out from under
@@ -1528,11 +1515,9 @@ impl BaseEdit {
                 d!("IME has collapsed selection!");
                 self.finish_select(atom);
             }
-            self.redraw.trigger();
             ed!("handle_android_event: handled select change, after=[{}]", self.dbg_state());
         } else if is_compose_changed {
             self.editor.lock().refresh();
-            self.redraw.trigger();
             ed!("handle_android_event: handled compose change, after=[{}]", self.dbg_state());
         }
     }
@@ -1540,7 +1525,6 @@ impl BaseEdit {
 
 impl Drop for BaseEdit {
     fn drop(&mut self) {
-        let atom = self.renderer.make_guard(gfxtag!("BaseEdit::drop"));
         self.renderer.replace_draw_calls(vec![(self.text_dc_key, Default::default())]);
     }
 }
@@ -1723,10 +1707,10 @@ impl UIObject for BaseEdit {
     async fn draw(
         &self,
         parent_rect: Rectangle,
-        _atom: &mut PropertyAtomicGuard,
+        atom: &mut PropertyAtomicGuard,
     ) -> Option<DrawUpdate> {
         *self.parent_rect.lock() = Some(parent_rect);
-        self.eval_rect();
+        self.eval_rect(atom);
         // The fresh eval may have changed the content height, so re-clamp
         // the scroll to keep the cursor in view before computing draw instrs.
         self.behave.apply_cursor_scroll();
@@ -1755,7 +1739,7 @@ impl UIObject for BaseEdit {
             repeater.key_down(PressedKey::Char(key), repeat)
         };
 
-        let atom = &mut self.renderer.make_guard(gfxtag!("BaseEdit::handle_char"));
+        let atom = &mut self.redraw.make_guard(gfxtag!("BaseEdit::handle_char"));
 
         if mods.ctrl || mods.alt || mods.logo {
             if repeat {
@@ -1776,7 +1760,6 @@ impl UIObject for BaseEdit {
         self.pause_blinking();
         // Any edit invalidates the action menu's selection
         self.action_mode.clear();
-        self.redraw.trigger();
         ed!("handle_char: inserted {key_str:?} after=[{}]", self.dbg_state());
         true
     }
@@ -1806,7 +1789,7 @@ impl UIObject for BaseEdit {
             t!("Key {:?} has {} actions", key, actions);
         }
 
-        let atom = &mut self.renderer.make_guard(gfxtag!("BaseEdit::handle_key_down"));
+        let atom = &mut self.redraw.make_guard(gfxtag!("BaseEdit::handle_key_down"));
 
         let mut is_handled = false;
         for _ in 0..actions {
@@ -1858,7 +1841,7 @@ impl UIObject for BaseEdit {
             return false
         }
 
-        let atom = &mut self.renderer.make_guard(gfxtag!("BaseEdit::handle_mouse_btn_down"));
+        let atom = &mut self.redraw.make_guard(gfxtag!("BaseEdit::handle_mouse_btn_down"));
 
         // clicking inside box will:
         // 1. make it active
@@ -1889,7 +1872,6 @@ impl UIObject for BaseEdit {
         self.pause_blinking();
         // A click moves the cursor; any open action menu is stale now
         self.action_mode.clear();
-        self.redraw.trigger();
         true
     }
 
@@ -1908,7 +1890,7 @@ impl UIObject for BaseEdit {
         // releasing mouse button will end selection
         self.mouse_btn_held.store(false, Ordering::Relaxed);
 
-        let atom = &mut self.renderer.make_guard(gfxtag!("BaseEdit::handle_mouse_btn_up"));
+        let atom = &mut self.redraw.make_guard(gfxtag!("BaseEdit::handle_mouse_btn_up"));
         if let Some(action_id) = self.action_mode.interact(mouse_pos) {
             match action_id {
                 ACTION_COPY => {
@@ -1933,12 +1915,10 @@ impl UIObject for BaseEdit {
                 _ => {}
             }
 
-            self.redraw.trigger();
             return true;
         } else {
-            // interact() already consumed the menu; trigger so the pass
-            // re-emits the (now empty) action overlay.
-            self.redraw.trigger();
+            // interact() already consumed the menu; the pass re-emits the
+            // (now empty) action overlay when the batch settles.
         }
 
         // Stop any selection scrolling

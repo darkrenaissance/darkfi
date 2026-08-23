@@ -273,7 +273,6 @@ impl UIObject for Text {
 
 impl Drop for Text {
     fn drop(&mut self) {
-        let atom = self.renderer.make_guard(gfxtag!("Text::drop"));
         self.renderer.replace_draw_calls(vec![(self.dc_key, Default::default())]);
     }
 }

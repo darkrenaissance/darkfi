@@ -323,7 +323,6 @@ impl UIObject for Video {
 
 impl Drop for Video {
     fn drop(&mut self) {
-        let atom = self.renderer.make_guard(gfxtag!("Video::drop"));
         self.renderer.replace_draw_calls(vec![(self.dc_key, Default::default())]);
     }
 }

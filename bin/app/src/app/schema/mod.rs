@@ -20,7 +20,7 @@ use darkfi::system::msleep;
 use darkfi_serial::{deserialize, Encodable};
 use indoc::indoc;
 use sled_overlay::sled;
-use std::{fs::File, io::Write};
+use std::io::Write;
 
 use crate::{
     app::{
@@ -72,10 +72,6 @@ mod ui_consts {
         get_external_storage_path().join("chatdb")
     }
 
-    pub fn get_first_time_filename() -> PathBuf {
-        get_appdata_path().join("first_time")
-    }
-
     pub fn get_settingsdb_path() -> PathBuf {
         get_appdata_path().join("settings")
     }
@@ -98,10 +94,6 @@ mod desktop_paths {
 
     pub fn get_chatdb_path() -> PathBuf {
         dirs::data_local_dir().unwrap().join("darkfi/app/chatdb")
-    }
-
-    pub fn get_first_time_filename() -> PathBuf {
-        dirs::cache_dir().unwrap().join("darkfi/app/first_time")
     }
 
     pub fn get_settingsdb_path() -> PathBuf {
@@ -217,7 +209,7 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish, db
     node.register("shortcut", slot).unwrap();
     let window_scale = app.sg_root.lookup_node("/setting/scale").unwrap();
     let window_scale2 = window_scale.clone();
-    let renderer = app.renderer.clone();
+    let redraw = app.redraw_trigger.clone();
     let listen_zoom = app.ex.spawn(async move {
         while let Ok(_) = recvr.recv().await {
             let scale = 0.9 * window_scale2.get_property_f32("value").unwrap();
@@ -230,7 +222,7 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish, db
                 scale.encode(&mut file).unwrap();
             }
 
-            let atom = &mut renderer.make_guard(gfxtag!("zoom_out shortcut"));
+            let atom = &mut redraw.make_guard(gfxtag!("zoom_out shortcut"));
             window_scale2.set_property_f32(atom, Role::User, "value", scale).unwrap();
         }
     });
@@ -245,7 +237,7 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish, db
     let (slot, recvr) = Slot::new("zoom_in_pressed");
     node.register("shortcut", slot).unwrap();
     let window_scale2 = window_scale.clone();
-    let renderer = app.renderer.clone();
+    let redraw = app.redraw_trigger.clone();
     let listen_zoom = app.ex.spawn(async move {
         while let Ok(_) = recvr.recv().await {
             let scale = 1.1 * window_scale2.get_property_f32("value").unwrap();
@@ -258,7 +250,7 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish, db
                 scale.encode(&mut file).unwrap();
             }
 
-            let atom = &mut renderer.make_guard(gfxtag!("zoom_in shortcut"));
+            let atom = &mut redraw.make_guard(gfxtag!("zoom_in shortcut"));
             window_scale2.set_property_f32(atom, Role::User, "value", scale).unwrap();
         }
     });
@@ -523,7 +515,7 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish, db
     prop.set_f32(atom, Role::App, 3, NETSTATUS_ICON_SIZE).unwrap();
 
     let sg_root = app.sg_root.clone();
-    let renderer = app.renderer.clone();
+    let redraw = app.redraw_trigger.clone();
     let (slot, recvr) = Slot::new("reconnect_clicked");
     node.register("click", slot).unwrap();
     let reconnect_task = app.ex.spawn(async move {
@@ -535,7 +527,7 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish, db
                 sg_root.lookup_node("/window/content/netstatus_layer/netstat_klik").unwrap();
 
             {
-                let atom = &mut renderer.make_guard(gfxtag!("netstat_klik_show"));
+                let atom = &mut redraw.make_guard(gfxtag!("netstat_klik_show"));
                 if let Err(e) = netstat_klik.set_property_bool(atom, Role::App, "is_visible", true)
                 {
                     e!("Failed to show netstat_klik: {e}");
@@ -558,7 +550,7 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish, db
 
             // Hide netstat-klik icon
             {
-                let atom = &mut renderer.make_guard(gfxtag!("netstat_klik_hide"));
+                let atom = &mut redraw.make_guard(gfxtag!("netstat_klik_hide"));
                 if let Err(e) = netstat_klik.set_property_bool(atom, Role::App, "is_visible", false)
                 {
                     e!("Failed to hide netstat_klik: {e}");
@@ -674,15 +666,6 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish, db
         }
     });
 
-    let is_first_time = !get_first_time_filename().exists();
-    if is_first_time {
-        let filename = get_first_time_filename();
-        if let Some(parent) = filename.parent() {
-            let _ = std::fs::create_dir_all(parent);
-        }
-        let _ = File::create(filename);
-    }
-
     let channels_tree = db.open_tree("channels").expect("cannot open channels tree");
     let contacts_tree = db.open_tree("contacts").expect("cannot open contacts tree");
 
@@ -708,7 +691,6 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish, db
         contacts_tree.clone(),
         &db,
         emoji_meshes.clone(),
-        is_first_time,
     )
     .await;
     let chat_layer = app.sg_root.lookup_node("/window/content/chat").unwrap();
@@ -735,7 +717,6 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish, db
             &db,
             i18n_fish,
             emoji_meshes.clone(),
-            is_first_time,
             app.redraw_trigger.clone(),
         )
         .await;

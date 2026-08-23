@@ -117,7 +117,6 @@ pub async fn make(
     contacts_tree: sled::Tree,
     db: &sled::Db,
     emoji_meshes: EmojiMeshesPtr,
-    is_first_time: bool,
 ) {
     let window_scale = PropertyFloat32::wrap(
         &app.sg_root.lookup_node("/window").unwrap(),
@@ -127,8 +126,7 @@ pub async fn make(
     )
     .unwrap();
 
-    let renderer = app.renderer.clone();
-    let atom = &mut renderer.make_guard(gfxtag!("setup"));
+    let atom = &mut PropertyAtomicGuard::none();
 
     // Create chat container layer
     let chat_layer = create_layer("chat");
@@ -216,7 +214,6 @@ pub async fn make(
         contacts_tree.clone(),
         db,
         emoji_meshes.clone(),
-        is_first_time,
     )
     .await;
 
@@ -231,7 +228,6 @@ pub async fn make(
         channels_tree.clone(),
         db,
         emoji_meshes.clone(),
-        is_first_time,
     )
     .await;
 
@@ -372,13 +368,13 @@ pub async fn make(
 
     let (slot, recvr) = Slot::new("write_clicked");
     node.register("click", slot).unwrap();
-    let renderer = app.renderer.clone();
+    let redraw = app.redraw_trigger.clone();
     let contact_is_visible =
         PropertyBool::wrap(&contact_layer, Role::App, "is_visible", 0).unwrap();
     let menulayer_is_visible1 = menulayer_is_visible.clone();
     let listen_click = app.ex.spawn(async move {
         while let Ok(_) = recvr.recv().await {
-            let atom = &mut renderer.make_guard(gfxtag!("write_click"));
+            let atom = &mut redraw.make_guard(gfxtag!("write_click"));
             contact_is_visible.set(atom, true);
             menulayer_is_visible1.set(atom, false);
         }
@@ -454,7 +450,7 @@ pub async fn make(
     node.register("select", slot).unwrap();
     let sg_root = app.sg_root.clone();
     let menu_is_visible = PropertyBool::wrap(&layer_node, Role::App, "is_visible", 0).unwrap();
-    let renderer = app.renderer.clone();
+    let redraw = app.redraw_trigger.clone();
     let role1_group = node.get_property("role1_group").unwrap();
     let role2_group = node.get_property("role2_group").unwrap();
     let listen_click = app.ex.spawn(async move {
@@ -462,7 +458,7 @@ pub async fn make(
             let channel: String = deserialize(&data).unwrap();
             let path = format!("/window/content/chat/{}_chat_layer", channel);
             if let Some(node) = sg_root.lookup_node(path) {
-                let atom = &mut renderer.make_guard(gfxtag!("channel_clicked"));
+                let atom = &mut redraw.make_guard(gfxtag!("channel_clicked"));
                 info!(target: "app::menu", "clicked: {channel}!");
                 role1_group.remove_str_item(atom, Role::App, &channel);
                 role2_group.remove_str_item(atom, Role::App, &channel);
@@ -589,11 +585,11 @@ pub async fn setup_wallet_button(app: &App, menu_layer: SceneNodePtr, i18n_fish:
         0,
     )
     .unwrap();
-    let renderer = app.renderer.clone();
+    let redraw = app.redraw_trigger.clone();
     let menulayer_is_visible2 = menulayer_is_visible.clone();
     let listen_click = app.ex.spawn(async move {
         while let Ok(_) = recvr.recv().await {
-            let atom = &mut renderer.make_guard(gfxtag!("wallet_click"));
+            let atom = &mut redraw.make_guard(gfxtag!("wallet_click"));
             wallet_is_visible.set(atom, true);
             menulayer_is_visible2.set(atom, false);
         }

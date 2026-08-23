@@ -194,7 +194,6 @@ pub async fn make(
     db: &sled::Db,
     i18n_fish: &I18nBabelFish,
     emoji_meshes: emoji_picker::EmojiMeshesPtr,
-    is_first_time: bool,
     redraw: RedrawTrigger,
 ) -> SceneNodePtr {
     let window_scale =
@@ -335,10 +334,10 @@ pub async fn make(
     let sg_root2 = sg_root.clone();
     let layer_node2 = layer_node.clone();
     let chatview_is_visible = PropertyBool::wrap(&layer_node, Role::App, "is_visible", 0).unwrap();
-    let renderer2 = renderer.clone();
+    let redraw2 = redraw.clone();
     let goback = async move || {
         info!(target: "app::chat", "clicked back");
-        let atom = &mut renderer2.make_guard(gfxtag!("goback action"));
+        let atom = &mut redraw2.make_guard(gfxtag!("goback action"));
 
         let editz_node = layer_node2.lookup_node("/content/editz").unwrap();
         editz_node.call_method("unfocus", vec![]).await.unwrap();
@@ -739,13 +738,13 @@ pub async fn make(
     let select_is_visible = PropertyBool::wrap(&select_layer, Role::App, "is_visible", 0).unwrap();
     let back_btn_bg_node2 = back_btn_bg_node.clone();
     let sg_root2 = sg_root.clone();
-    let renderer2 = renderer.clone();
+    let redraw2 = redraw.clone();
     let (slot, recvr) = Slot::new("select_changed_slot");
     chatview_node.register("select_changed", slot).unwrap();
     let listen_select = ex.spawn(async move {
         while let Ok(data) = recvr.recv().await {
             let Ok(selected) = bool::decode(&mut std::io::Cursor::new(&data)) else { continue };
-            let atom = &mut renderer2.make_guard(gfxtag!("select_changed"));
+            let atom = &mut redraw2.make_guard(gfxtag!("select_changed"));
             select_is_visible.set(atom, selected);
             back_btn_bg_node2.set_property_bool(atom, Role::App, "is_visible", !selected).unwrap();
             if let Some(netstatus_layer) = sg_root2.lookup_node("/window/content/netstatus_layer") {
@@ -1058,18 +1057,18 @@ pub async fn make(
     let editz_text2 = editz_text.clone();
     let channel2 = channel.to_string();
     let sg_root2 = sg_root.clone();
-    let renderer2 = renderer.clone();
+    let redraw2 = redraw.clone();
     let sendmsg = move || {
         let editz_text = editz_text2.clone();
         let channel = channel2.clone();
         let sg_root = sg_root2.clone();
         let chatview_node = chatview_node.clone();
-        let renderer = renderer2.clone();
+        let redraw = redraw2.clone();
         async move {
             let mut text = editz_text.get();
             info!(target: "app::chat", "Send '{text}' to channel: {channel}");
             {
-                let atom = &mut renderer.make_guard(gfxtag!("sendmsg clear edit"));
+                let atom = &mut redraw.make_guard(gfxtag!("sendmsg clear edit"));
                 editz_text.set(atom, "");
             }
 
@@ -1082,7 +1081,7 @@ pub async fn make(
                 let nick = text.split_whitespace().nth(1).unwrap_or("anon");
                 info!(target: "app::chat", "Setting nick to: {nick}");
                 {
-                    let atom = &mut renderer.make_guard(gfxtag!("sendmsg action"));
+                    let atom = &mut redraw.make_guard(gfxtag!("sendmsg action"));
                     darkirc.set_property_str(atom, Role::App, "nick", nick).unwrap();
                 }
 
@@ -1177,7 +1176,7 @@ pub async fn make(
     let (slot, recvr) = Slot::new("emoji_clicked");
     let chatedit_node2 = chatedit_node.clone();
     node.register("click", slot).unwrap();
-    let renderer2 = renderer.clone();
+    let redraw2 = redraw.clone();
     let listen_click = ex.spawn(async move {
         let mut panel_height = if cfg!(target_os = "android") {
             let keyb_height = android_keyboard_height();
@@ -1192,7 +1191,7 @@ pub async fn make(
 
         while let Ok(_) = recvr.recv().await {
             info!(target: "app::chat", "clicked emoji");
-            let atom = &mut renderer2.make_guard(gfxtag!("emoji click action"));
+            let atom = &mut redraw2.make_guard(gfxtag!("emoji click action"));
 
             if cfg!(target_os = "android") {
                 let keyb_height = android_keyboard_height();
@@ -1269,11 +1268,11 @@ pub async fn make(
     let (slot, recvr) = Slot::new("nickcmd_clicked");
     node.register("click", slot).unwrap();
     let editz_text2 = editz_text.clone();
-    let renderer2 = renderer.clone();
+    let redraw2 = redraw.clone();
     let listen_click = ex.spawn(async move {
         while let Ok(_) = recvr.recv().await {
             info!(target: "app::chat", "clicked /nick");
-            let atom = &mut renderer2.make_guard(gfxtag!("nickcmd_clicked action"));
+            let atom = &mut redraw2.make_guard(gfxtag!("nickcmd_clicked action"));
             // This will autohide this popup due to ending in a space.
             // Setting the property will retrigger the logic whether to show popup.
             editz_text2.set(atom, "/nick ");
@@ -1378,10 +1377,10 @@ pub async fn make(
     cmd_layer_node.link(node);
 
     let editz_text_sub = editz_text.prop().subscribe_modify();
-    let renderer = renderer.clone();
+    let redraw = redraw.clone();
     let editz_text_task = ex.spawn(async move {
         while let Ok(_) = editz_text_sub.receive().await {
-            let atom = &mut renderer.make_guard(gfxtag!("chatedit txt changed"));
+            let atom = &mut redraw.make_guard(gfxtag!("chatedit txt changed"));
 
             let text = editz_text.get();
             debug!(target: "app::chat", "text changed: {text}");

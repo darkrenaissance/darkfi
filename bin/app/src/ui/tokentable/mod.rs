@@ -437,7 +437,6 @@ impl UIObject for TokenTable {
 
 impl Drop for TokenTable {
     fn drop(&mut self) {
-        let atom = self.renderer.make_guard(gfxtag!("TokenTable::drop"));
         self.renderer.replace_draw_calls(vec![(self.dc_key, Default::default())]);
     }
 }

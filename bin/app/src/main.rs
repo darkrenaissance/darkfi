@@ -188,10 +188,10 @@ impl God {
         {
             let sg_root = sg_root.clone();
             let ex = bg_ex.clone();
-            let renderer = renderer.clone();
+            let redraw = app.redraw_trigger.clone();
             let zmq_task = bg_ex.spawn(async {
                 i!("Enabled net debugging backend in this build");
-                let zmq_rpc = ZeroMQAdapter::new(sg_root, renderer, ex).await;
+                let zmq_rpc = ZeroMQAdapter::new(sg_root, redraw, ex).await;
                 zmq_rpc.run().await;
             });
             bg_runtime.push_task(zmq_task);
@@ -200,9 +200,9 @@ impl God {
         {
             let ex = bg_ex.clone();
             let cv = cv_app_is_setup.clone();
-            let renderer = renderer.clone();
+            let redraw = app.redraw_trigger.clone();
             let plug_task = bg_ex.spawn(async move {
-                load_plugins(ex, sg_root, renderer, cv, db).await;
+                load_plugins(ex, sg_root, redraw, cv, db).await;
             });
             bg_runtime.push_task(plug_task);
         }
@@ -277,7 +277,7 @@ static GOD: OnceLock<God> = OnceLock::new();
 async fn load_plugins(
     ex: ExecutorPtr,
     sg_root: SceneNodePtr,
-    renderer: Renderer,
+    redraw: crate::ui::RedrawTrigger,
     cv: Arc<CondVar>,
     db: sled::Db,
 ) {
@@ -305,10 +305,10 @@ async fn load_plugins(
         darkirc.register("recv", slot).unwrap();
         let sg_root2 = sg_root.clone();
         let darkirc_nick = PropertyStr::wrap(&darkirc, Role::App, "nick", 0).unwrap();
-        let renderer2 = renderer.clone();
+        let redraw2 = redraw.clone();
         let listen_recv = ex.spawn(async move {
         while let Ok(data) = recvr.recv().await {
-            let atom = &mut renderer2.make_guard(gfxtag!("darkirc msg recv"));
+            let atom = &mut redraw2.make_guard(gfxtag!("darkirc msg recv"));
 
             let mut cur = Cursor::new(&data);
             let channel = String::decode(&mut cur).unwrap();
@@ -357,7 +357,7 @@ async fn load_plugins(
         let (slot, recvr) = Slot::new("connect");
         darkirc.register("connect", slot).unwrap();
         let sg_root2 = sg_root.clone();
-        let renderer2 = renderer.clone();
+        let redraw2 = redraw.clone();
         let listen_connect = ex.spawn(async move {
             let net0 = sg_root2.lookup_node("/window/content/netstatus_layer/net0").unwrap();
             let net1 = sg_root2.lookup_node("/window/content/netstatus_layer/net1").unwrap();
@@ -372,7 +372,7 @@ async fn load_plugins(
             while let Ok(data) = recvr.recv().await {
                 let (peers_count, is_dag_synced): (u32, bool) = deserialize(&data).unwrap();
 
-                let atom = &mut renderer2.make_guard(gfxtag!("netstatus change"));
+                let atom = &mut redraw2.make_guard(gfxtag!("netstatus change"));
 
                 if peers_count == 0 {
                     net0_is_visible.set(atom, true);
@@ -462,7 +462,7 @@ async fn load_plugins(
         let (slot, recvr) = Slot::new("connect");
         drk.register("connect", slot).unwrap();
         let sg_root2 = sg_root.clone();
-        let renderer2 = renderer.clone();
+        let redraw2 = redraw.clone();
         let listen_connect = ex.spawn(async move {
             let net0 = sg_root2.lookup_node("/window/content/wallet/netstatus_layer/net0").unwrap();
             let net1 = sg_root2.lookup_node("/window/content/wallet/netstatus_layer/net1").unwrap();
@@ -476,7 +476,7 @@ async fn load_plugins(
 
             while let Ok(data) = recvr.recv().await {
                 let status: u8 = deserialize(&data).unwrap();
-                let atom = &mut renderer2.make_guard(gfxtag!("blockchain netstatus change"));
+                let atom = &mut redraw2.make_guard(gfxtag!("blockchain netstatus change"));
 
                 match status {
                     1 => {
@@ -510,7 +510,7 @@ async fn load_plugins(
         let (slot, recv) = Slot::new("balances_update");
         let _ = drk.register("balances_updated", slot);
         let sg_root2 = sg_root.clone();
-        let renderer2 = renderer.clone();
+        let redraw2 = redraw.clone();
         let drk_node2 = drk.clone();
         let listen_balances = ex.spawn(async move {
             use crate::ui::TokenRow;
@@ -522,7 +522,7 @@ async fn load_plugins(
 
                 let mut cur = std::io::Cursor::new(data);
                 if let Ok(balances) = Vec::<(String, TokenId, u64)>::decode(&mut cur) {
-                    let atom = &mut renderer2.make_guard(gfxtag!("wallet - refresh tokens"));
+                    let atom = &mut redraw2.make_guard(gfxtag!("wallet - refresh tokens"));
 
                     let token_rows: Vec<TokenRow> = balances
                         .iter()
@@ -608,7 +608,7 @@ async fn load_plugins(
         let (slot, recv) = Slot::new("tx_built");
         let _ = drk.register("tx_built", slot);
         let sg_root2 = sg_root.clone();
-        let renderer2 = renderer.clone();
+        let redraw2 = redraw.clone();
         let listen_tx_built = ex.spawn(async move {
             while let Ok(data) = recv.recv().await {
                 let mut cur = std::io::Cursor::new(data);
@@ -620,7 +620,7 @@ async fn load_plugins(
                 let tx = Transaction::decode(&mut cur).unwrap();
 
                 // Update tx_status_layer with built transaction
-                let atom = &mut renderer2.make_guard(gfxtag!("tx built"));
+                let atom = &mut redraw2.make_guard(gfxtag!("tx built"));
                 if let Some(tx_status) =
                     sg_root2.lookup_node("/window/content/wallet/tx_status_layer")
                 {
@@ -660,12 +660,12 @@ async fn load_plugins(
         let (slot, recv) = Slot::new("tx_built_error");
         let _ = drk.register("tx_built_error", slot);
         let sg_root2 = sg_root.clone();
-        let renderer2 = renderer.clone();
+        let redraw2 = redraw.clone();
         let listen_tx_built_error = ex.spawn(async move {
             while let Ok(data) = recv.recv().await {
                 let mut cur = std::io::Cursor::new(data);
                 let error_message = String::decode(&mut cur).unwrap();
-                let atom = &mut renderer2.make_guard(gfxtag!("tx built error"));
+                let atom = &mut redraw2.make_guard(gfxtag!("tx built error"));
 
                 // Display error message in step3
                 if let Some(error_node) =

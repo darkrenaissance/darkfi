@@ -274,14 +274,6 @@ impl Renderer {
         let method = GraphicsMethod::DeleteSeqAnim((anim, tag));
         self.send_with_epoch(method, epoch);
     }
-
-    /// Property transactions only: notifications are deferred until the
-    /// guard drops. Since the draw-pass migration there is no gfx-side
-    /// batching anymore — draw commits are single immediate messages —
-    /// so the guard no longer opens or closes renderer batches.
-    pub fn make_guard(&self, _debug_str: Option<&'static str>) -> PropertyAtomicGuard {
-        PropertyAtomicGuard::none()
-    }
 }
 
 impl RenderApi for Renderer {

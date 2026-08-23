@@ -111,13 +111,13 @@ pub async fn make(
 
     let step2_is_visible3 = step2_is_visible.clone();
     let step3_is_visible1 = step3_is_visible.clone();
-    let renderer = app.renderer.clone();
+    let redraw = app.redraw_trigger.clone();
     let sg_root2 = app.sg_root.clone();
     let (slot, recvr) = Slot::new("send_back_clicked3");
     node.register("click", slot).unwrap();
     let listen_click = app.ex.spawn(async move {
         while let Ok(_) = recvr.recv().await {
-            let atom = &mut renderer.make_guard(gfxtag!("send step3 back button"));
+            let atom = &mut redraw.make_guard(gfxtag!("send step3 back button"));
             // Reset error message on back button click
             if let Some(error_node) =
                 sg_root2.lookup_node("/window/content/wallet/send_step3_layer/error")
@@ -585,14 +585,14 @@ pub async fn make(
     let send_tx_data5 = send_tx_data.clone();
     let amount_text = amount_input2.get_property("text").unwrap();
     let amount_text_sub = amount_text.subscribe_modify();
-    let renderer = app.renderer.clone();
+    let redraw = app.redraw_trigger.clone();
     let sg_root = app.sg_root.clone();
     let btn_bg_valid_clone = btn_bg_valid.clone();
     let btn_bg_invalid_clone = btn_bg_invalid.clone();
     let add_amount_label_node_for_validation = add_amount_label_node.clone();
     let listen_amount_text = app.ex.spawn(async move {
         while let Ok(_) = amount_text_sub.receive().await {
-            let atom = &mut renderer.make_guard(gfxtag!("wallet amount input recv"));
+            let atom = &mut redraw.make_guard(gfxtag!("wallet amount input recv"));
             // Reset error message on amount change
             if let Some(error_node) =
                 sg_root.lookup_node("/window/content/wallet/send_step3_layer/error")
@@ -658,7 +658,7 @@ pub async fn make(
     });
     app.tasks.lock().unwrap().push(listen_amount_text);
 
-    let renderer = app.renderer.clone();
+    let redraw = app.redraw_trigger.clone();
     let amount_input2 = input_node.clone();
     let send_tx_data4 = send_tx_data.clone();
     let step3_is_visible2 = step3_is_visible.clone();
@@ -667,7 +667,7 @@ pub async fn make(
     node.register("click", slot).unwrap();
     let listen_click = app.ex.spawn(async move {
         while let Ok(_) = recvr.recv().await {
-            let atom = &mut renderer.make_guard(gfxtag!("add amount button"));
+            let atom = &mut redraw.make_guard(gfxtag!("add amount button"));
             // Reset error message on button click
             if let Some(error_node) = sg_root.lookup_node("/window/content/wallet/send_step3_layer/error") {
                 error_node.set_property_str(atom, Role::App, "text", "").unwrap();
@@ -751,7 +751,7 @@ pub async fn make(
 
     // Add listener for step3 visibility to focus/unfocus amount input
     let step3_is_visible_clone = step3_is_visible.clone();
-    let renderer_clone = app.renderer.clone();
+    let redraw_clone = app.redraw_trigger.clone();
     let sg_root = app.sg_root.clone();
     let amount_wrapper_clone = amount_wrapper.clone();
     let input_node_clone = input_node.clone();
@@ -784,7 +784,7 @@ pub async fn make(
                 };
                 if let Some(token_id) = token_id {
                     if !token_symbol.is_empty() {
-                        let atom = &mut renderer_clone
+                        let atom = &mut redraw_clone
                             .make_guard(gfxtag!("update amount positions on visible"));
                         update_amount_screen(
                             atom,

@@ -189,14 +189,14 @@ pub async fn make(
     prop.set_expr(atom, Role::App, 2, code).unwrap();
     prop.set_f32(atom, Role::App, 3, BUTTON_HEIGHT).unwrap();
 
-    let renderer = app.renderer.clone();
+    let redraw = app.redraw_trigger.clone();
     let main_is_visible2 = main_is_visible.clone();
     let sg_root = app.sg_root.clone();
     let (slot, recvr) = Slot::new("receive_clicked");
     node.register("click", slot).unwrap();
     let listen_click = app.ex.spawn(async move {
         while recvr.recv().await.is_ok() {
-            let atom = &mut renderer.make_guard(gfxtag!("receive button click"));
+            let atom = &mut redraw.make_guard(gfxtag!("receive button click"));
             main_is_visible2.set(atom, false);
 
             let receive_layer =
@@ -308,14 +308,14 @@ pub async fn make(
     prop.set_expr(atom, Role::App, 2, code).unwrap();
     prop.set_f32(atom, Role::App, 3, BUTTON_HEIGHT).unwrap();
 
-    let renderer = app.renderer.clone();
+    let redraw = app.redraw_trigger.clone();
     let sg_root = app.sg_root.clone();
     let main_is_visible3 = main_is_visible.clone();
     let (slot, recvr) = Slot::new("send_clicked");
     node.register("click", slot).unwrap();
     let listen_click = app.ex.spawn(async move {
         while let Ok(_) = recvr.recv().await {
-            let atom = &mut renderer.make_guard(gfxtag!("send button click"));
+            let atom = &mut redraw.make_guard(gfxtag!("send button click"));
             main_is_visible3.set(atom, false);
             let send_layer =
                 sg_root.lookup_node("/window/content/wallet/send_step1_layer").unwrap();
@@ -491,7 +491,7 @@ async fn create_chat_btn(
     prop.set_f32(atom, Role::App, 3, CHAT_BTN_SIZE).unwrap();
 
     let sg_root = app.sg_root.clone();
-    let renderer = app.renderer.clone();
+    let redraw = app.redraw_trigger.clone();
     let menu_is_visible = PropertyBool::wrap(
         &sg_root.lookup_node("/window/content/chat/menu_layer").unwrap(),
         Role::App,
@@ -511,7 +511,7 @@ async fn create_chat_btn(
     let listen_click = app.ex.spawn(async move {
         while let Ok(_) = recvr.recv().await {
             info!(target: "app::wallet", "clicked back from wallet");
-            let atom = &mut renderer.make_guard(gfxtag!("wallet goback action"));
+            let atom = &mut redraw.make_guard(gfxtag!("wallet goback action"));
             wallet_is_visible.set(atom, false);
             menu_is_visible.set(atom, true);
         }
