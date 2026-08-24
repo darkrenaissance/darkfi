@@ -20,7 +20,7 @@ use parking_lot::Mutex as SyncMutex;
 use std::sync::Arc;
 
 use crate::{
-    gfx::{gfxtag, DrawInstruction, DrawMesh, Renderer},
+    gfx::{gfxtag, DrawInstruction, DrawMesh, EpochTracker, Renderer},
     mesh::COLOR_WHITE,
     text,
 };
@@ -32,12 +32,14 @@ pub type EmojiMeshesPtr = Arc<SyncMutex<EmojiMeshes>>;
 pub struct EmojiMeshes {
     renderer: Renderer,
     emoji_size: f32,
+    epoch_tracker: EpochTracker,
     meshes: Vec<DrawMesh>,
 }
 
 impl EmojiMeshes {
     pub fn new(renderer: Renderer, emoji_size: f32) -> EmojiMeshesPtr {
-        Arc::new(SyncMutex::new(Self { renderer, emoji_size, meshes: vec![] }))
+        let epoch_tracker = EpochTracker::new(&renderer);
+        Arc::new(SyncMutex::new(Self { renderer, emoji_size, epoch_tracker, meshes: vec![] }))
     }
 
     pub fn clear(&mut self) {
@@ -46,6 +48,13 @@ impl EmojiMeshes {
 
     pub fn get(&mut self, i: usize) -> DrawMesh {
         assert!(i < DEFAULT_EMOJI_LIST.len());
+
+        // Meshes hold epoch-scoped buffers; after a UI restart they are
+        // dead, so drop them and rebuild lazily.
+        if self.epoch_tracker.changed() {
+            self.meshes.clear();
+        }
+
         self.meshes.reserve_exact(DEFAULT_EMOJI_LIST.len());
 
         if i >= self.meshes.len() {

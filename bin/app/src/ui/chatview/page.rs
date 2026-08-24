@@ -40,7 +40,10 @@ use url::Url;
 
 use super::{MessageId, Timestamp};
 use crate::{
-    gfx::{gfxtag, DrawInstruction, ManagedTexturePtr, Point, Rectangle, RenderApi, Renderer},
+    gfx::{
+        gfxtag, DrawInstruction, EpochTracker, ManagedTexturePtr, Point, Rectangle, RenderApi,
+        Renderer,
+    },
     mesh::{Color, MeshBuilder, COLOR_CYAN, COLOR_GREEN, COLOR_RED, COLOR_WHITE},
     prop::{PropertyColor, PropertyFloat32, PropertyPtr},
     scene::SceneNodeWeak,
@@ -1142,6 +1145,7 @@ pub struct MessageBuffer {
     old_window_scale: f32,
 
     renderer: Renderer,
+    epoch_tracker: EpochTracker,
 }
 
 impl MessageBuffer {
@@ -1165,6 +1169,7 @@ impl MessageBuffer {
         renderer: Renderer,
     ) -> Self {
         let old_window_scale = window_scale.get();
+        let epoch_tracker = EpochTracker::new(&renderer);
         Self {
             msgs: vec![],
             date_msgs: HashMap::new(),
@@ -1189,6 +1194,7 @@ impl MessageBuffer {
             old_window_scale,
 
             renderer,
+            epoch_tracker,
         }
     }
 
@@ -1206,6 +1212,12 @@ impl MessageBuffer {
 
         self.adjust_params();
         true
+    }
+
+    /// Returns whether the gfx epoch changed since the last check,
+    /// meaning every message mesh cache holds dead GPU resources.
+    pub fn epoch_changed(&mut self) -> bool {
+        self.epoch_tracker.changed()
     }
 
     /// This will force a reload of everything

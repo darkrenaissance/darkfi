@@ -1232,7 +1232,10 @@ impl UIObject for ChatView {
 
         let mut msgbuf = self.msgbuf.lock().await;
         let scale_changed = msgbuf.adjust_window_scale();
-        if rect_changed || scale_changed {
+        // Mesh caches hold epoch-scoped GPU resources; drop them after a
+        // UI restart so messages are rebuilt against the new epoch.
+        let epoch_changed = msgbuf.epoch_changed();
+        if rect_changed || scale_changed || epoch_changed {
             msgbuf.clear_meshes();
         }
 

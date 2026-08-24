@@ -45,6 +45,8 @@ pub use api::{
     EpochIndex, GraphicsMethod, ManagedBuffer, ManagedBufferPtr, ManagedSeqAnim, ManagedSeqAnimPtr,
     ManagedTexture, ManagedTexturePtr, RenderApi, Renderer,
 };
+mod epoch_cache;
+pub use epoch_cache::{EpochCache, EpochTracker};
 mod ev;
 pub use ev::{
     GraphicsEventCharSub, GraphicsEventKeyDownSub, GraphicsEventKeyUpSub,

@@ -27,7 +27,7 @@ use std::sync::{
 };
 
 use crate::{
-    gfx::{gfxtag, DrawCall, DrawInstruction, Point, Rectangle, RenderApi, Renderer},
+    gfx::{gfxtag, DrawCall, DrawInstruction, EpochCache, Point, Rectangle, RenderApi, Renderer},
     prop::{PropertyAtomicGuard, PropertyFloat32, PropertyRect, PropertyUint32, Role},
     scene::{Pimpl, SceneNodeWeak},
     ExecutorPtr,
@@ -68,10 +68,11 @@ pub struct EmojiPicker {
     mouse_scroll_speed: PropertyFloat32,
 
     redraw: RedrawTrigger,
-    /// Cached emoji grid instructions. `None` means stale (rect, scroll or
+    /// Cached emoji grid instructions. Empty means stale (rect, scroll or
     /// z_index changed). Scroll is set with an internal role, so scroll
-    /// mutation sites invalidate explicitly.
-    draw_cache: SyncMutex<Option<Vec<DrawInstruction>>>,
+    /// mutation sites invalidate explicitly. Entries from a dead UI epoch
+    /// are evicted automatically.
+    draw_cache: EpochCache<Vec<DrawInstruction>>,
     is_mouse_hover: AtomicBool,
     touch_info: SyncMutex<Option<TouchInfo>>,
 }
@@ -92,6 +93,8 @@ impl EmojiPicker {
         let mouse_scroll_speed =
             PropertyFloat32::wrap(node_ref, Role::Internal, "mouse_scroll_speed", 0).unwrap();
 
+        let draw_cache = EpochCache::new(&renderer);
+
         let self_ = Arc::new(Self {
             node,
             renderer,
@@ -108,7 +111,7 @@ impl EmojiPicker {
             mouse_scroll_speed,
 
             redraw,
-            draw_cache: SyncMutex::new(None),
+            draw_cache,
             is_mouse_hover: AtomicBool::new(false),
             touch_info: SyncMutex::new(None),
         });
@@ -202,13 +205,16 @@ impl EmojiPicker {
         let max_scroll = self.max_scroll();
         if self.scroll.get() > max_scroll {
             self.scroll.set(atom, max_scroll);
-            *self.draw_cache.lock() = None;
+            self.draw_cache.clear();
         }
 
-        // The grid depends on rect and scroll. Compute under the lock so
-        // concurrent invalidations land before or after, never between.
-        let mut cache = self.draw_cache.lock();
-        if cache.is_none() || rect_changed {
+        // The grid depends on rect and scroll. Compute under the cache
+        // lock so concurrent invalidations land before or after, never
+        // between.
+        if rect_changed {
+            self.draw_cache.clear();
+        }
+        let instrs = self.draw_cache.get_or_insert_with(|| {
             let mut instrs = vec![DrawInstruction::ApplyView(rect)];
 
             let off_x = self.calc_off_x();
@@ -236,10 +242,8 @@ impl EmojiPicker {
                 }
             }
 
-            *cache = Some(instrs);
-        }
-        let instrs = cache.clone().unwrap();
-        drop(cache);
+            instrs
+        });
 
         Some(DrawUpdate {
             key: self.dc_key,
@@ -264,11 +268,11 @@ impl UIObject for EmojiPicker {
         // Invalidate the cache, then request a pass. Internal-role echoes
         // (the pass's own evals) are skipped.
         on_modify.when_change_external(self.rect.prop(), |self_, _| async move {
-            *self_.draw_cache.lock() = None;
+            self_.draw_cache.clear();
             self_.redraw.trigger();
         });
         on_modify.when_change_external(self.z_index.prop(), |self_, _| async move {
-            *self_.draw_cache.lock() = None;
+            self_.draw_cache.clear();
             self_.redraw.trigger();
         });
 
@@ -277,7 +281,7 @@ impl UIObject for EmojiPicker {
 
     fn stop(&self) {
         self.tasks.lock().clear();
-        *self.draw_cache.lock() = None;
+        self.draw_cache.clear();
         self.emoji_meshes.lock().clear();
     }
 
@@ -307,7 +311,7 @@ impl UIObject for EmojiPicker {
         scroll = scroll.clamp(0., self.max_scroll());
         self.scroll.set(atom, scroll);
 
-        *self.draw_cache.lock() = None;
+        self.draw_cache.clear();
 
         true
     }
@@ -371,7 +375,7 @@ impl UIObject for EmojiPicker {
                         scroll = scroll.clamp(0., self.max_scroll());
                         self.scroll.set(atom, scroll);
 
-                        *self.draw_cache.lock() = None;
+                        self.draw_cache.clear();
                     }
                 }
                 TouchPhase::Ended | TouchPhase::Cancelled => {

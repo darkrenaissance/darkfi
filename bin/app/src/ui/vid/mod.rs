@@ -24,7 +24,7 @@ use tracing::instrument;
 
 use crate::{
     gfx::{
-        anim::Frame, gfxtag, DrawCall, DrawInstruction, DrawMesh, GraphicPipeline,
+        anim::Frame, gfxtag, DrawCall, DrawInstruction, DrawMesh, EpochCache, GraphicPipeline,
         ManagedSeqAnimPtr, ManagedTexturePtr, Rectangle, RenderApi, Renderer,
     },
     mesh::{MeshBuilder, MeshInfo, COLOR_WHITE},
@@ -87,8 +87,9 @@ pub struct Video {
     priority: PropertyUint32,
     path: PropertyStr,
 
-    /// Cached draw instructions. `None` means stale.
-    draw_cache: SyncMutex<Option<Vec<DrawInstruction>>>,
+    /// Cached draw instructions. Empty means stale. Entries from a dead
+    /// UI epoch are evicted automatically.
+    draw_cache: EpochCache<Vec<DrawInstruction>>,
 
     parent_rect: SyncMutex<Option<Rectangle>>,
 }
@@ -106,6 +107,8 @@ impl Video {
         let z_index = PropertyUint32::wrap(node_ref, Role::Internal, "z_index", 0).unwrap();
         let priority = PropertyUint32::wrap(node_ref, Role::Internal, "priority", 0).unwrap();
         let path = PropertyStr::wrap(node_ref, Role::Internal, "path", 0).unwrap();
+
+        let draw_cache = EpochCache::new(&renderer);
 
         let self_ = Arc::new(Self {
             node,
@@ -126,7 +129,7 @@ impl Video {
             priority,
             path,
 
-            draw_cache: SyncMutex::new(None),
+            draw_cache,
 
             parent_rect: SyncMutex::new(None),
         });
@@ -136,7 +139,7 @@ impl Video {
 
     async fn reload(self_: Arc<Self>, _batch: BatchGuardPtr) {
         self_.load_video();
-        *self_.draw_cache.lock() = None;
+        self_.draw_cache.clear();
         self_.redraw.trigger();
     }
 
@@ -252,6 +255,8 @@ impl UIObject for Video {
     }
 
     fn init(&self) {
+        // Drop textures from a dead UI epoch (if any) before reloading
+        *self.vid_data.lock() = None;
         self.load_video();
     }
 
@@ -260,15 +265,15 @@ impl UIObject for Video {
 
         let mut on_modify = OnModify::new(ex, self.node.clone(), me.clone());
         on_modify.when_change_external(self.rect.prop(), |self_, _| async move {
-            *self_.draw_cache.lock() = None;
+            self_.draw_cache.clear();
             self_.redraw.trigger();
         });
         on_modify.when_change_external(self.uv.prop(), |self_, _| async move {
-            *self_.draw_cache.lock() = None;
+            self_.draw_cache.clear();
             self_.redraw.trigger();
         });
         on_modify.when_change_external(self.z_index.prop(), |self_, _| async move {
-            *self_.draw_cache.lock() = None;
+            self_.draw_cache.clear();
             self_.redraw.trigger();
         });
         on_modify.when_change(self.path.prop(), Self::reload);
@@ -280,7 +285,7 @@ impl UIObject for Video {
         self.tasks.lock().clear();
         *self.parent_rect.lock() = None;
         *self.vid_data.lock() = None;
-        *self.draw_cache.lock() = None;
+        self.draw_cache.clear();
         // Threads terminate naturally when channels close
     }
 
@@ -299,17 +304,20 @@ impl UIObject for Video {
         let rect_changed = rect != prev_rect;
         self.uv.eval(atom, &rect).ok()?;
 
-        // Compute under the lock so a concurrent invalidation lands
+        // Compute under the cache lock so a concurrent invalidation lands
         // before or after, never between. A video that has not loaded
         // yet stays uncached so the next pass retries.
-        let mut cache = self.draw_cache.lock();
-        if cache.is_none() || rect_changed {
-            if let Some(instrs) = self.make_instrs(&rect) {
-                *cache = Some(instrs);
-            }
+        if rect_changed {
+            self.draw_cache.clear();
         }
-        let instrs = cache.clone()?;
-        drop(cache);
+        let instrs = match self.draw_cache.get() {
+            Some(instrs) => instrs,
+            None => {
+                let Some(instrs) = self.make_instrs(&rect) else { return None };
+                self.draw_cache.set(instrs.clone());
+                instrs
+            }
+        };
 
         Some(DrawUpdate {
             key: self.dc_key,

@@ -144,7 +144,7 @@ pub struct Renderer {
     /// We are abusing async_channel since it's cloneable whereas std::sync::mpsc is shit.
     method_send: async_channel::Sender<(EpochIndex, GraphicsMethod)>,
     /// Keep track of the current UI epoch
-    epoch: Arc<AtomicU32>,
+    pub epoch: Arc<AtomicU32>,
 }
 
 impl Renderer {

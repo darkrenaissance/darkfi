@@ -25,7 +25,7 @@ use rand::{rngs::OsRng, Rng};
 use std::sync::{Arc, Weak};
 
 use crate::{
-    gfx::{gfxtag, DrawCall, DrawInstruction, Point, Rectangle, RenderApi, Renderer},
+    gfx::{gfxtag, DrawCall, DrawInstruction, EpochCache, Point, Rectangle, RenderApi, Renderer},
     mesh::MeshBuilder,
     prop::{
         PropertyAtomicGuard, PropertyColor, PropertyFloat32, PropertyRect, PropertyUint32, Role,
@@ -78,8 +78,9 @@ pub struct TokenTable {
     padding_x: PropertyFloat32,
     padding_y: PropertyFloat32,
 
-    /// Cached draw instructions. `None` means stale.
-    draw_cache: SyncMutex<Option<Vec<DrawInstruction>>>,
+    /// Cached draw instructions. Empty means stale. Entries from a dead
+    /// UI epoch are evicted automatically.
+    draw_cache: EpochCache<Vec<DrawInstruction>>,
 
     parent_rect: SyncMutex<Option<Rectangle>>,
     tasks: SyncMutex<Vec<smol::Task<()>>>,
@@ -98,6 +99,8 @@ impl TokenTable {
         let z_index = PropertyUint32::wrap(node_ref, Role::Internal, "z_index", 0).unwrap();
         let priority = PropertyUint32::wrap(node_ref, Role::Internal, "priority", 0).unwrap();
 
+        let draw_cache = EpochCache::new(&renderer);
+
         let self_ = Arc::new(Self {
             node: node.clone(),
             renderer: renderer.clone(),
@@ -113,7 +116,7 @@ impl TokenTable {
             separator_color,
             padding_x,
             padding_y,
-            draw_cache: SyncMutex::new(None),
+            draw_cache,
             parent_rect: SyncMutex::new(None),
             tasks: SyncMutex::new(vec![]),
         });
@@ -182,7 +185,7 @@ impl TokenTable {
 
         *self.rows.lock() = rows;
 
-        *self.draw_cache.lock() = None;
+        self.draw_cache.clear();
         self.redraw.trigger();
     }
 
@@ -286,31 +289,31 @@ impl UIObject for TokenTable {
         let mut on_modify = OnModify::new(ex, self.node.clone(), me.clone());
 
         on_modify.when_change_external(self.rect.prop(), |self_, _| async move {
-            *self_.draw_cache.lock() = None;
+            self_.draw_cache.clear();
             self_.redraw.trigger();
         });
         on_modify.when_change_external(self.font_size.prop(), |self_, _| async move {
-            *self_.draw_cache.lock() = None;
+            self_.draw_cache.clear();
             self_.redraw.trigger();
         });
         on_modify.when_change_external(self.text_color.prop(), |self_, _| async move {
-            *self_.draw_cache.lock() = None;
+            self_.draw_cache.clear();
             self_.redraw.trigger();
         });
         on_modify.when_change_external(self.separator_color.prop(), |self_, _| async move {
-            *self_.draw_cache.lock() = None;
+            self_.draw_cache.clear();
             self_.redraw.trigger();
         });
         on_modify.when_change_external(self.padding_x.prop(), |self_, _| async move {
-            *self_.draw_cache.lock() = None;
+            self_.draw_cache.clear();
             self_.redraw.trigger();
         });
         on_modify.when_change_external(self.padding_y.prop(), |self_, _| async move {
-            *self_.draw_cache.lock() = None;
+            self_.draw_cache.clear();
             self_.redraw.trigger();
         });
         on_modify.when_change_external(self.z_index.prop(), |self_, _| async move {
-            *self_.draw_cache.lock() = None;
+            self_.draw_cache.clear();
             self_.redraw.trigger();
         });
 
@@ -322,7 +325,7 @@ impl UIObject for TokenTable {
     fn stop(&self) {
         self.tasks.lock().clear();
         *self.parent_rect.lock() = None;
-        *self.draw_cache.lock() = None;
+        self.draw_cache.clear();
     }
 
     async fn draw(
@@ -338,17 +341,17 @@ impl UIObject for TokenTable {
         let rect = self.rect.get();
         let rect_changed = rect != prev_rect;
 
-        // Compute under the lock so a concurrent invalidation lands
+        // Compute under the cache lock so a concurrent invalidation lands
         // before or after, never between.
-        let mut cache = self.draw_cache.lock();
-        if cache.is_none() || rect_changed {
+        if rect_changed {
+            self.draw_cache.clear();
+        }
+        let instrs = self.draw_cache.get_or_insert_with(|| {
             let mut mesh_instrs = self.get_meshes(&rect);
             let mut instrs = vec![DrawInstruction::ApplyView(rect)];
             instrs.append(&mut mesh_instrs);
-            *cache = Some(instrs);
-        }
-        let instrs = cache.clone().unwrap();
-        drop(cache);
+            instrs
+        });
 
         Some(DrawUpdate {
             key: self.dc_key,

@@ -26,8 +26,8 @@ use tracing::instrument;
 
 use crate::{
     gfx::{
-        gfxtag, DrawCall, DrawInstruction, DrawMesh, ManagedTexturePtr, Rectangle, RenderApi,
-        Renderer,
+        gfxtag, DrawCall, DrawInstruction, DrawMesh, EpochCache, ManagedTexturePtr, Rectangle,
+        RenderApi, Renderer,
     },
     mesh::{MeshBuilder, MeshInfo, COLOR_WHITE},
     prop::{BatchGuardPtr, PropertyAtomicGuard, PropertyRect, PropertyStr, PropertyUint32, Role},
@@ -54,8 +54,9 @@ pub struct Image {
     priority: PropertyUint32,
     path: PropertyStr,
 
-    /// Cached draw instructions. `None` means stale.
-    draw_cache: SyncMutex<Option<Vec<DrawInstruction>>>,
+    /// Cached draw instructions. Empty means stale. Entries from a dead
+    /// UI epoch are evicted automatically.
+    draw_cache: EpochCache<Vec<DrawInstruction>>,
 }
 
 impl Image {
@@ -66,6 +67,8 @@ impl Image {
         let z_index = PropertyUint32::wrap(node_ref, Role::Internal, "z_index", 0).unwrap();
         let priority = PropertyUint32::wrap(node_ref, Role::Internal, "priority", 0).unwrap();
         let path = PropertyStr::wrap(node_ref, Role::Internal, "path", 0).unwrap();
+
+        let draw_cache = EpochCache::new(&renderer);
 
         let self_ = Arc::new(Self {
             node,
@@ -82,7 +85,7 @@ impl Image {
             priority,
             path,
 
-            draw_cache: SyncMutex::new(None),
+            draw_cache,
         });
 
         Pimpl::Image(self_)
@@ -92,7 +95,7 @@ impl Image {
         let texture = self_.load_texture();
         *self_.texture.lock() = Some(texture);
 
-        *self_.draw_cache.lock() = None;
+        self_.draw_cache.clear();
         self_.redraw.trigger();
     }
 
@@ -145,10 +148,12 @@ impl Image {
         let rect_changed = rect != prev_rect;
         self.uv.eval(atom, &rect).ok()?;
 
-        // Mesh geometry depends on the rect; compute under the lock so a
-        // concurrent invalidation lands before or after, never between.
-        let mut cache = self.draw_cache.lock();
-        if cache.is_none() || rect_changed {
+        // Mesh geometry depends on the rect; compute under the cache lock
+        // so a concurrent invalidation lands before or after, never between.
+        if rect_changed {
+            self.draw_cache.clear();
+        }
+        let instrs = self.draw_cache.get_or_insert_with(|| {
             let mesh = self.regen_mesh();
             let texture = self.texture.lock().clone().expect("Node missing texture_id!");
             let mesh = DrawMesh {
@@ -157,10 +162,8 @@ impl Image {
                 textures: Some(vec![texture]),
                 num_elements: mesh.num_elements,
             };
-            *cache = Some(vec![DrawInstruction::Move(rect.pos()), DrawInstruction::Draw(mesh)]);
-        }
-        let instrs = cache.clone().unwrap();
-        drop(cache);
+            vec![DrawInstruction::Move(rect.pos()), DrawInstruction::Draw(mesh)]
+        });
 
         Some(DrawUpdate {
             key: self.dc_key,
@@ -189,15 +192,15 @@ impl UIObject for Image {
         // Invalidate the cache, then request a pass. Internal-role echoes
         // (the pass's own evals) are skipped.
         on_modify.when_change_external(self.rect.prop(), |self_, _| async move {
-            *self_.draw_cache.lock() = None;
+            self_.draw_cache.clear();
             self_.redraw.trigger();
         });
         on_modify.when_change_external(self.uv.prop(), |self_, _| async move {
-            *self_.draw_cache.lock() = None;
+            self_.draw_cache.clear();
             self_.redraw.trigger();
         });
         on_modify.when_change_external(self.z_index.prop(), |self_, _| async move {
-            *self_.draw_cache.lock() = None;
+            self_.draw_cache.clear();
             self_.redraw.trigger();
         });
         on_modify.when_change(self.path.prop(), Self::reload);
@@ -207,7 +210,7 @@ impl UIObject for Image {
 
     fn stop(&self) {
         self.tasks.lock().clear();
-        *self.draw_cache.lock() = None;
+        self.draw_cache.clear();
         *self.texture.lock() = None;
     }
 

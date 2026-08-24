@@ -23,7 +23,7 @@ use std::sync::Arc;
 use tracing::instrument;
 
 use crate::{
-    gfx::{gfxtag, DrawCall, DrawInstruction, Rectangle, RenderApi, Renderer},
+    gfx::{gfxtag, DrawCall, DrawInstruction, EpochCache, Rectangle, RenderApi, Renderer},
     mesh::MeshBuilder,
     prop::{
         PropertyAtomicGuard, PropertyBool, PropertyColor, PropertyEnum, PropertyFloat32,
@@ -62,9 +62,10 @@ pub struct Text {
     debug: PropertyBool,
 
     window_scale: PropertyFloat32,
-    /// Cached layout + rendered instrs. `None` means stale: recompute in
+    /// Cached layout + rendered instrs. Empty means stale: recompute in
     /// the draw pass. Layout is the expensive part (shaping, line breaks).
-    draw_cache: SyncMutex<Option<(text::TextLayout, Vec<DrawInstruction>)>>,
+    /// Entries from a dead UI epoch are evicted automatically.
+    draw_cache: EpochCache<(text::TextLayout, Vec<DrawInstruction>)>,
 }
 
 impl Text {
@@ -90,6 +91,8 @@ impl Text {
         let use_i18n = PropertyBool::wrap(node_ref, Role::Internal, "use_i18n", 0).unwrap();
         let debug = PropertyBool::wrap(node_ref, Role::Internal, "debug", 0).unwrap();
 
+        let draw_cache = EpochCache::new(&renderer);
+
         let self_ = Arc::new(Self {
             node,
             renderer,
@@ -112,7 +115,7 @@ impl Text {
             debug,
 
             window_scale,
-            draw_cache: SyncMutex::new(None),
+            draw_cache,
         });
 
         Pimpl::Text(self_)
@@ -175,17 +178,17 @@ impl Text {
 
         // Layout depends on the width, so a rect change invalidates the
         // layout even if the text itself did not change. Compute under the
-        // lock: the compute is synchronous, so concurrent invalidations
-        // either land before (seen as None) or after (clear our result).
-        let mut cache = self.draw_cache.lock();
-        if cache.is_none() || rect_changed {
+        // cache lock: the compute is synchronous, so concurrent invalidations
+        // either land before (seen as None) or after (they clear our result).
+        if rect_changed {
+            self.draw_cache.clear();
+        }
+        let (layout, mut instrs) = self.draw_cache.get_or_insert_with(|| {
             let layout = self.make_layout();
             let mut instrs = vec![DrawInstruction::Move(rect.pos())];
             instrs.append(&mut self.regen_mesh(&layout));
-            *cache = Some((layout, instrs));
-        }
-        let (layout, mut instrs) = cache.clone().unwrap();
-        drop(cache);
+            (layout, instrs)
+        });
 
         // Height output for parents that depend on it.
         self.height.set(atom, layout.height());
@@ -221,31 +224,31 @@ impl UIObject for Text {
         // Invalidate the cache, then request a pass. Internal-role echoes
         // (the pass's own evals) are skipped.
         on_modify.when_change_external(self.rect.prop(), |self_, _| async move {
-            *self_.draw_cache.lock() = None;
+            self_.draw_cache.clear();
             self_.redraw.trigger();
         });
         on_modify.when_change_external(self.z_index.prop(), |self_, _| async move {
-            *self_.draw_cache.lock() = None;
+            self_.draw_cache.clear();
             self_.redraw.trigger();
         });
         on_modify.when_change_external(self.text.prop(), |self_, _| async move {
-            *self_.draw_cache.lock() = None;
+            self_.draw_cache.clear();
             self_.redraw.trigger();
         });
         on_modify.when_change_external(self.text_align.prop(), |self_, _| async move {
-            *self_.draw_cache.lock() = None;
+            self_.draw_cache.clear();
             self_.redraw.trigger();
         });
         on_modify.when_change_external(self.font_size.prop(), |self_, _| async move {
-            *self_.draw_cache.lock() = None;
+            self_.draw_cache.clear();
             self_.redraw.trigger();
         });
         on_modify.when_change_external(self.text_color.prop(), |self_, _| async move {
-            *self_.draw_cache.lock() = None;
+            self_.draw_cache.clear();
             self_.redraw.trigger();
         });
         on_modify.when_change_external(self.debug.prop(), |self_, _| async move {
-            *self_.draw_cache.lock() = None;
+            self_.draw_cache.clear();
             self_.redraw.trigger();
         });
 
@@ -254,7 +257,7 @@ impl UIObject for Text {
 
     fn stop(&self) {
         self.tasks.lock().clear();
-        *self.draw_cache.lock() = None;
+        self.draw_cache.clear();
     }
 
     #[instrument(target = "ui::text")]

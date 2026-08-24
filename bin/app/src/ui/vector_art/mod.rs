@@ -23,7 +23,9 @@ use std::sync::Arc;
 use tracing::instrument;
 
 use crate::{
-    gfx::{gfxtag, DrawCall, DrawInstruction, DrawMesh, Rectangle, RenderApi, Renderer},
+    gfx::{
+        gfxtag, DrawCall, DrawInstruction, DrawMesh, EpochCache, Rectangle, RenderApi, Renderer,
+    },
     prop::{
         PropertyAtomicGuard, PropertyBool, PropertyFloat32, PropertyRect, PropertyUint32, Role,
     },
@@ -53,10 +55,11 @@ pub struct VectorArt {
     z_index: PropertyUint32,
     priority: PropertyUint32,
 
-    /// Cached draw instructions. `None` means the output is stale and must
-    /// be recomputed by the draw pass. Shape is static, so only visibility,
-    /// rect, scale and z_index changes invalidate it.
-    draw_cache: SyncMutex<Option<Vec<DrawInstruction>>>,
+    /// Cached draw instructions. Empty means the output is stale and must
+    /// be recomputed by the draw pass. Entries from a dead UI epoch are
+    /// evicted automatically. Shape is static, so only visibility, rect,
+    /// scale and z_index changes invalidate it.
+    draw_cache: EpochCache<Vec<DrawInstruction>>,
 }
 
 impl VectorArt {
@@ -73,6 +76,8 @@ impl VectorArt {
         let z_index = PropertyUint32::wrap(node_ref, Role::Internal, "z_index", 0).unwrap();
         let priority = PropertyUint32::wrap(node_ref, Role::Internal, "priority", 0).unwrap();
 
+        let draw_cache = EpochCache::new(&renderer);
+
         let self_ = Arc::new(Self {
             node,
             renderer,
@@ -88,7 +93,7 @@ impl VectorArt {
             z_index,
             priority,
 
-            draw_cache: SyncMutex::new(None),
+            draw_cache,
         });
 
         Pimpl::VectorArt(self_)
@@ -135,16 +140,14 @@ impl VectorArt {
         }
         let rect_changed = self.rect.get() != prev_rect;
 
-        // Compute while holding the lock: the compute is synchronous, so a
+        // Compute under the cache lock: the compute is synchronous, so a
         // concurrent invalidation either lands before us (we see None and
         // recompute with the newer state) or after us (it clears our result
         // and the trailing pass recomputes). No lost invalidation.
-        let mut cache = self.draw_cache.lock();
-        if cache.is_none() || rect_changed {
-            *cache = Some(self.get_draw_instrs());
+        if rect_changed {
+            self.draw_cache.clear();
         }
-        let instrs = cache.clone().unwrap();
-        drop(cache);
+        let instrs = self.draw_cache.get_or_insert_with(|| self.get_draw_instrs());
 
         Some(DrawUpdate {
             key: self.dc_key,
@@ -170,19 +173,19 @@ impl UIObject for VectorArt {
         // (the pass's own evals) are skipped: reacting to them would queue
         // a pass for every pass, forever.
         on_modify.when_change_external(self.is_visible.prop(), |self_, _| async move {
-            *self_.draw_cache.lock() = None;
+            self_.draw_cache.clear();
             self_.redraw.trigger();
         });
         on_modify.when_change_external(self.rect.prop(), |self_, _| async move {
-            *self_.draw_cache.lock() = None;
+            self_.draw_cache.clear();
             self_.redraw.trigger();
         });
         on_modify.when_change_external(self.scale.prop(), |self_, _| async move {
-            *self_.draw_cache.lock() = None;
+            self_.draw_cache.clear();
             self_.redraw.trigger();
         });
         on_modify.when_change_external(self.z_index.prop(), |self_, _| async move {
-            *self_.draw_cache.lock() = None;
+            self_.draw_cache.clear();
             self_.redraw.trigger();
         });
 
@@ -191,7 +194,7 @@ impl UIObject for VectorArt {
 
     fn stop(&self) {
         self.tasks.lock().clear();
-        *self.draw_cache.lock() = None;
+        self.draw_cache.clear();
     }
 
     #[instrument(target = "ui::vector_art")]
