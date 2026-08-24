@@ -20,16 +20,16 @@ use darkfi_serial::deserialize;
 
 use crate::{
     cache::CacheOverlay,
-    dao::{SLED_MERKLE_TREES_DAO_DAOS, SLED_MERKLE_TREES_DAO_PROPOSALS},
+    dao::{KVDB_MERKLE_TREES_DAO_DAOS, KVDB_MERKLE_TREES_DAO_PROPOSALS},
     error::{WalletDbError, WalletDbResult},
-    money::SLED_MERKLE_TREES_MONEY,
+    money::KVDB_MERKLE_TREES_MONEY,
     Drk,
 };
 
 impl Drk {
     /// Get a scanned block information record.
     pub fn get_scanned_block(&self, height: &u32) -> WalletDbResult<(String, String)> {
-        let Ok(query_result) = self.cache.scanned_blocks.get(height.to_be_bytes()) else {
+        let Ok(query_result) = self.cache.scanned_blocks.get(&height.to_be_bytes()) else {
             return Err(WalletDbError::QueryExecutionFailed);
         };
         let Some(value_bytes) = query_result else {
@@ -49,7 +49,7 @@ impl Drk {
             let Ok((key, value)) = record else {
                 return Err(WalletDbError::QueryExecutionFailed);
             };
-            let key: [u8; 4] = match key.as_ref().try_into() {
+            let key: [u8; 4] = match key.try_into() {
                 Ok(k) => k,
                 Err(_) => return Err(WalletDbError::ParseColumnValueError),
             };
@@ -70,7 +70,7 @@ impl Drk {
             return Err(WalletDbError::QueryExecutionFailed);
         };
         let Some((key, value)) = query_result else { return Ok((0, String::from("-"))) };
-        let key: [u8; 4] = match key.as_ref().try_into() {
+        let key: [u8; 4] = match key.try_into() {
             Ok(k) => k,
             Err(_) => return Err(WalletDbError::ParseColumnValueError),
         };
@@ -177,7 +177,7 @@ impl Drk {
             }
 
             // Remove it
-            if let Err(e) = self.cache.state_inverse_diff.remove(height.to_be_bytes()) {
+            if let Err(e) = self.cache.state_inverse_diff.remove(&height.to_be_bytes()) {
                 output.push(format!(
                     "[reset_to_height] Removing state inverse diff from the cache failed: {e}"
                 ));
@@ -189,17 +189,19 @@ impl Drk {
             dao_daos_tree.rewind();
             dao_proposals_tree.rewind();
             if let Err(e) = self.cache.insert_merkle_trees(&[
-                (SLED_MERKLE_TREES_MONEY, &money_tree),
-                (SLED_MERKLE_TREES_DAO_DAOS, &dao_daos_tree),
-                (SLED_MERKLE_TREES_DAO_PROPOSALS, &dao_proposals_tree),
+                (KVDB_MERKLE_TREES_MONEY, &money_tree),
+                (KVDB_MERKLE_TREES_DAO_DAOS, &dao_daos_tree),
+                (KVDB_MERKLE_TREES_DAO_PROPOSALS, &dao_proposals_tree),
             ]) {
                 output.push(format!("[reset_to_height] Updating merkle trees failed: {e}"));
                 return Err(WalletDbError::GenericError)
             };
 
-            // Flush sled
-            if let Err(e) = self.cache.sled_db.flush() {
-                output.push(format!("[reset_to_height] Flushing cache sled database failed: {e}"));
+            // Flush kvdb
+            if let Err(e) = self.cache.kvdb.flush_default_mode() {
+                output.push(format!(
+                    "[reset_to_height] Flushing cache key-value database failed: {e}"
+                ));
                 return Err(WalletDbError::GenericError)
             }
         }

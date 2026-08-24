@@ -70,8 +70,8 @@ use crate::{
     Drk,
 };
 
-// Money Merkle tree Sled key
-pub const SLED_MERKLE_TREES_MONEY: &[u8] = b"_money_tree";
+// Money Merkle tree kvdb key
+pub const KVDB_MERKLE_TREES_MONEY: &[u8] = b"_money_tree";
 
 // Wallet SQL table constant names. These have to represent the `money.sql`
 // SQL schema. Table names are prefixed with the contract ID to avoid collisions.
@@ -743,7 +743,7 @@ impl Drk {
     /// Fetch the Money Merkle tree from the cache.
     /// If it doesn't exists a new Merkle Tree is returned.
     pub async fn get_money_tree(&self) -> Result<MerkleTree> {
-        match self.cache.merkle_trees.get(SLED_MERKLE_TREES_MONEY)? {
+        match self.cache.merkle_trees.get(KVDB_MERKLE_TREES_MONEY)? {
             Some(tree_bytes) => Ok(deserialize_async(&tree_bytes).await?),
             None => {
                 let mut tree = MerkleTree::new(u32::MAX as usize);
@@ -1182,7 +1182,7 @@ impl Drk {
     /// Reset the Money Merkle tree in the cache.
     pub fn reset_money_tree(&self, output: &mut Vec<String>) -> WalletDbResult<()> {
         output.push(String::from("Resetting Money Merkle tree"));
-        if let Err(e) = self.cache.merkle_trees.remove(SLED_MERKLE_TREES_MONEY) {
+        if let Err(e) = self.cache.merkle_trees.remove(KVDB_MERKLE_TREES_MONEY) {
             output.push(format!("[reset_money_tree] Resetting Money Merkle tree failed: {e}"));
             return Err(WalletDbError::GenericError)
         }

@@ -76,7 +76,7 @@ use darkfi_serial::{
 };
 
 use crate::{
-    cache::{CacheOverlay, CacheSmt, CacheSmtStorage, SLED_MONEY_SMT_TREE},
+    cache::{CacheOverlay, CacheSmt, CacheSmtStorage, KVDB_MONEY_SMT_TREE},
     convert_named_params,
     error::{WalletDbError, WalletDbResult},
     money::BALANCE_BASE10_DECIMALS,
@@ -86,9 +86,9 @@ use crate::{
     Drk,
 };
 
-// DAO Merkle trees Sled keys
-pub const SLED_MERKLE_TREES_DAO_DAOS: &[u8] = b"_dao_daos";
-pub const SLED_MERKLE_TREES_DAO_PROPOSALS: &[u8] = b"_dao_proposals";
+// DAO Merkle trees kvdb keys
+pub const KVDB_MERKLE_TREES_DAO_DAOS: &[u8] = b"_dao_daos";
+pub const KVDB_MERKLE_TREES_DAO_PROPOSALS: &[u8] = b"_dao_proposals";
 
 // Wallet SQL table constant names. These have to represent the `dao.sql`
 // SQL schema. Table names are prefixed with the contract ID to avoid collisions.
@@ -931,11 +931,11 @@ impl Drk {
     /// Fetch DAO Merkle trees from the wallet.
     /// If a tree doesn't exists a new Merkle Tree is returned.
     pub async fn get_dao_trees(&self) -> Result<(MerkleTree, MerkleTree)> {
-        let daos_tree = match self.cache.merkle_trees.get(SLED_MERKLE_TREES_DAO_DAOS)? {
+        let daos_tree = match self.cache.merkle_trees.get(KVDB_MERKLE_TREES_DAO_DAOS)? {
             Some(tree_bytes) => deserialize_async(&tree_bytes).await?,
             None => MerkleTree::new(u32::MAX as usize),
         };
-        let proposals_tree = match self.cache.merkle_trees.get(SLED_MERKLE_TREES_DAO_PROPOSALS)? {
+        let proposals_tree = match self.cache.merkle_trees.get(KVDB_MERKLE_TREES_DAO_PROPOSALS)? {
             Some(tree_bytes) => deserialize_async(&tree_bytes).await?,
             None => MerkleTree::new(u32::MAX as usize),
         };
@@ -1624,11 +1624,11 @@ impl Drk {
     /// Reset the DAO Merkle trees in the cache.
     pub fn reset_dao_trees(&self, output: &mut Vec<String>) -> WalletDbResult<()> {
         output.push(String::from("Resetting DAO Merkle trees"));
-        if let Err(e) = self.cache.merkle_trees.remove(SLED_MERKLE_TREES_DAO_DAOS) {
+        if let Err(e) = self.cache.merkle_trees.remove(KVDB_MERKLE_TREES_DAO_DAOS) {
             output.push(format!("[reset_dao_trees] Resetting DAO DAOs Merkle tree failed: {e}"));
             return Err(WalletDbError::GenericError)
         }
-        if let Err(e) = self.cache.merkle_trees.remove(SLED_MERKLE_TREES_DAO_PROPOSALS) {
+        if let Err(e) = self.cache.merkle_trees.remove(KVDB_MERKLE_TREES_DAO_PROPOSALS) {
             output
                 .push(format!("[reset_dao_trees] Resetting DAO Proposals Merkle tree failed: {e}"));
             return Err(WalletDbError::GenericError)
@@ -2551,7 +2551,7 @@ impl Drk {
         };
 
         // Generate the Money nullifiers Sparse Merkle Tree
-        let store = CacheSmtStorage::new(CacheOverlay::new(&self.cache)?, SLED_MONEY_SMT_TREE);
+        let store = CacheSmtStorage::new(CacheOverlay::new(&self.cache)?, KVDB_MONEY_SMT_TREE);
         let money_null_smt = CacheSmt::new(store, PoseidonFp::new(), &EMPTY_NODES_FP);
 
         // Create the proposal call
@@ -2732,7 +2732,7 @@ impl Drk {
         };
 
         // Generate the Money nullifiers Sparse Merkle Tree
-        let store = CacheSmtStorage::new(CacheOverlay::new(&self.cache)?, SLED_MONEY_SMT_TREE);
+        let store = CacheSmtStorage::new(CacheOverlay::new(&self.cache)?, KVDB_MONEY_SMT_TREE);
         let money_null_smt = CacheSmt::new(store, PoseidonFp::new(), &EMPTY_NODES_FP);
 
         // Create the proposal call

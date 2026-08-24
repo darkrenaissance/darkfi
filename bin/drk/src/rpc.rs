@@ -51,11 +51,11 @@ use darkfi_sdk::{
 use darkfi_serial::{deserialize_async, serialize_async};
 
 use crate::{
-    cache::{CacheOverlay, CacheSmt, CacheSmtStorage, SLED_MONEY_SMT_TREE},
+    cache::{CacheOverlay, CacheSmt, CacheSmtStorage, KVDB_MONEY_SMT_TREE},
     cli_util::append_or_print,
-    dao::{SLED_MERKLE_TREES_DAO_DAOS, SLED_MERKLE_TREES_DAO_PROPOSALS},
+    dao::{KVDB_MERKLE_TREES_DAO_DAOS, KVDB_MERKLE_TREES_DAO_PROPOSALS},
     error::{WalletDbError, WalletDbResult},
-    money::SLED_MERKLE_TREES_MONEY,
+    money::KVDB_MERKLE_TREES_MONEY,
     Drk, DrkPtr,
 };
 
@@ -124,7 +124,7 @@ impl Drk {
     /// wallet.
     pub async fn scan_cache(&self) -> Result<ScanCache> {
         let money_tree = self.get_money_tree().await?;
-        let smt_store = CacheSmtStorage::new(CacheOverlay::new(&self.cache)?, SLED_MONEY_SMT_TREE);
+        let smt_store = CacheSmtStorage::new(CacheOverlay::new(&self.cache)?, KVDB_MONEY_SMT_TREE);
         let money_smt = CacheSmt::new(smt_store, PoseidonFp::new(), &EMPTY_NODES_FP);
         let mut notes_secrets = self.get_money_secrets().await?;
         let mut owncoins_nullifiers = BTreeMap::new();
@@ -277,13 +277,13 @@ impl Drk {
 
         // Update the merkle trees
         self.cache.insert_merkle_trees(&[
-            (SLED_MERKLE_TREES_MONEY, &scan_cache.money_tree),
-            (SLED_MERKLE_TREES_DAO_DAOS, &scan_cache.dao_daos_tree),
-            (SLED_MERKLE_TREES_DAO_PROPOSALS, &scan_cache.dao_proposals_tree),
+            (KVDB_MERKLE_TREES_MONEY, &scan_cache.money_tree),
+            (KVDB_MERKLE_TREES_DAO_DAOS, &scan_cache.dao_daos_tree),
+            (KVDB_MERKLE_TREES_DAO_PROPOSALS, &scan_cache.dao_proposals_tree),
         ])?;
 
-        // Flush sled
-        self.cache.sled_db.flush()?;
+        // Flush kvdb
+        self.cache.kvdb.flush_default_mode()?;
 
         // Update wallet transactions records
         if let Err(e) =

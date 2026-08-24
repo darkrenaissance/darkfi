@@ -29,66 +29,60 @@ use darkfi_sdk::{
     pasta::pallas,
 };
 use darkfi_serial::{deserialize, serialize};
+use kvdb_overlay::{Batch, Database, DatabaseOverlay, DatabaseOverlayStateDiff, Tree};
 use num_bigint::BigUint;
-use sled_overlay::{sled, SledDbOverlay, SledDbOverlayStateDiff};
 use tracing::error;
 
-pub const SLED_SCANNED_BLOCKS_TREE: &[u8] = b"_scanned_blocks";
-pub const SLED_STATE_INVERSE_DIFF_TREE: &[u8] = b"_state_inverse_diff";
-pub const SLED_MERKLE_TREES_TREE: &[u8] = b"_merkle_trees";
-pub const SLED_MONEY_SMT_TREE: &[u8] = b"_money_smt";
+pub const KVDB_SCANNED_BLOCKS_TREE: &str = "_scanned_blocks";
+pub const KVDB_STATE_INVERSE_DIFF_TREE: &str = "_state_inverse_diff";
+pub const KVDB_MERKLE_TREES_TREE: &str = "_merkle_trees";
+pub const KVDB_MONEY_SMT_TREE: &str = "_money_smt";
 
-/// Structure holding all sled trees that define the blockchain cache.
+/// Structure holding all kvdb trees that define the blockchain cache.
 #[derive(Clone)]
 pub struct Cache {
-    /// Main pointer to the sled db connection
-    pub sled_db: sled::Db,
-    /// The `sled` tree storing the scanned blocks from the blockchain,
+    /// Main pointer to the kvdb connection
+    pub kvdb: Database,
+    /// The kvdb tree storing the scanned blocks from the blockchain,
     /// where the key is the height number, and the value is the blocks'
     /// hash.
-    pub scanned_blocks: sled::Tree,
-    /// The `sled` tree storing each blocks' full database state inverse
+    pub scanned_blocks: Tree,
+    /// The kvdb tree storing each blocks' full database state inverse
     /// changes, where the key is the block height number, and the value
     /// is the serialized database inverse diff.
-    pub state_inverse_diff: sled::Tree,
-    /// The `sled` tree storing the merkle trees of the blockchain,
+    pub state_inverse_diff: Tree,
+    /// The kvdb tree storing the merkle trees of the blockchain,
     /// where the key is the tree name, and the value is the serialized
     /// merkle tree itself.
-    pub merkle_trees: sled::Tree,
-    /// The `sled` tree storing the Sparse Merkle Tree of the Money
+    pub merkle_trees: Tree,
+    /// The kvdb tree storing the Sparse Merkle Tree of the Money
     /// contract.
     // TODO: this could be a map of trees so more contracts can open
     // SMTs if needed
-    pub money_smt: sled::Tree,
+    pub money_smt: Tree,
     // TODO: Perhaps we should also move transactions history here
 }
 
 impl Cache {
-    /// Instantiate a new `Cache` with the given `sled` database.
-    pub fn new(db: &sled::Db) -> Result<Self> {
-        let scanned_blocks = db.open_tree(SLED_SCANNED_BLOCKS_TREE)?;
-        let state_inverse_diff = db.open_tree(SLED_STATE_INVERSE_DIFF_TREE)?;
-        let merkle_trees = db.open_tree(SLED_MERKLE_TREES_TREE)?;
-        let money_smt = db.open_tree(SLED_MONEY_SMT_TREE)?;
+    /// Instantiate a new `Cache` with the given key-value database.
+    pub fn new(kvdb: &Database) -> Result<Self> {
+        let scanned_blocks = kvdb.open_tree_default(KVDB_SCANNED_BLOCKS_TREE)?;
+        let state_inverse_diff = kvdb.open_tree_default(KVDB_STATE_INVERSE_DIFF_TREE)?;
+        let merkle_trees = kvdb.open_tree_default(KVDB_MERKLE_TREES_TREE)?;
+        let money_smt = kvdb.open_tree_default(KVDB_MONEY_SMT_TREE)?;
 
-        Ok(Self {
-            sled_db: db.clone(),
-            scanned_blocks,
-            state_inverse_diff,
-            merkle_trees,
-            money_smt,
-        })
+        Ok(Self { kvdb: kvdb.clone(), scanned_blocks, state_inverse_diff, merkle_trees, money_smt })
     }
 
-    /// Execute an atomic sled batch corresponding to inserts to the
+    /// Execute an atomic kvdb batch corresponding to inserts to the
     /// merkle trees tree. For each record, the bytes slice is used as
     /// the key, and the serialized merkle tree is used as value.
     pub fn insert_merkle_trees(&self, trees: &[(&[u8], &MerkleTree)]) -> Result<()> {
-        let mut batch = sled::Batch::default();
+        let mut batch = Batch::new();
         for (key, tree) in trees {
-            batch.insert(*key, serialize(*tree));
+            batch.insert(key, &serialize(*tree));
         }
-        self.merkle_trees.apply_batch(batch)?;
+        self.kvdb.atomic_write(&[(&self.merkle_trees, &batch)])?;
         Ok(())
     }
 
@@ -98,17 +92,17 @@ impl Cache {
     pub fn insert_state_inverse_diff(
         &self,
         height: &u32,
-        diff: &SledDbOverlayStateDiff,
+        diff: &DatabaseOverlayStateDiff,
     ) -> Result<()> {
-        self.state_inverse_diff.insert(height.to_be_bytes(), serialize(diff))?;
+        self.state_inverse_diff.insert(&height.to_be_bytes(), &serialize(diff))?;
         Ok(())
     }
 
     /// Fetch given block height number from the store's state inverse
     /// diffs tree. The function will fail if the block height number
     /// was not found.
-    pub fn get_state_inverse_diff(&self, height: &u32) -> Result<SledDbOverlayStateDiff> {
-        match self.state_inverse_diff.get(height.to_be_bytes())? {
+    pub fn get_state_inverse_diff(&self, height: &u32) -> Result<DatabaseOverlayStateDiff> {
+        match self.state_inverse_diff.get(&height.to_be_bytes())? {
             Some(found) => Ok(deserialize(&found)?),
             None => Err(Error::BlockStateInverseDiffNotFound(*height)),
         }
@@ -116,25 +110,25 @@ impl Cache {
 }
 
 /// Overlay structure over a [`Cache`] instance.
-pub struct CacheOverlay(pub SledDbOverlay);
+pub struct CacheOverlay(pub DatabaseOverlay);
 
 impl CacheOverlay {
     /// Instantiate a new `CacheOverlay` over the given [`Cache`] instance.
     pub fn new(cache: &Cache) -> Result<CacheOverlay> {
-        // Here we configure all our cache sled trees to be protected in the overlay
+        // Here we configure all our cache kvdb trees to be protected in the overlay
         let protected_trees = vec![
-            SLED_SCANNED_BLOCKS_TREE,
-            SLED_STATE_INVERSE_DIFF_TREE,
-            SLED_MERKLE_TREES_TREE,
-            SLED_MONEY_SMT_TREE,
+            KVDB_SCANNED_BLOCKS_TREE.to_string(),
+            KVDB_STATE_INVERSE_DIFF_TREE.to_string(),
+            KVDB_MERKLE_TREES_TREE.to_string(),
+            KVDB_MONEY_SMT_TREE.to_string(),
         ];
-        let mut overlay = SledDbOverlay::new(&cache.sled_db, protected_trees);
+        let mut overlay = DatabaseOverlay::new(&cache.kvdb, protected_trees)?;
 
-        // Open all our cache sled trees in the overlay
-        overlay.open_tree(SLED_SCANNED_BLOCKS_TREE, true)?;
-        overlay.open_tree(SLED_STATE_INVERSE_DIFF_TREE, true)?;
-        overlay.open_tree(SLED_MERKLE_TREES_TREE, true)?;
-        overlay.open_tree(SLED_MONEY_SMT_TREE, true)?;
+        // Open all our cache kvdb trees in the overlay
+        overlay.open_tree_default(KVDB_SCANNED_BLOCKS_TREE, true)?;
+        overlay.open_tree_default(KVDB_STATE_INVERSE_DIFF_TREE, true)?;
+        overlay.open_tree_default(KVDB_MERKLE_TREES_TREE, true)?;
+        overlay.open_tree_default(KVDB_MONEY_SMT_TREE, true)?;
 
         Ok(Self(overlay))
     }
@@ -154,7 +148,7 @@ impl CacheOverlay {
             None => String::from("-"),
         };
         self.0.insert(
-            SLED_SCANNED_BLOCKS_TREE,
+            KVDB_SCANNED_BLOCKS_TREE,
             &height.to_be_bytes(),
             &serialize(&(hash.to_string(), block_signing_key)),
         )?;
@@ -173,12 +167,12 @@ pub type CacheSmt = SparseMerkleTree<
 
 pub struct CacheSmtStorage {
     pub overlay: CacheOverlay,
-    tree: Vec<u8>,
+    tree: String,
 }
 
 impl CacheSmtStorage {
-    pub fn new(overlay: CacheOverlay, tree: &[u8]) -> Self {
-        Self { overlay, tree: tree.to_vec() }
+    pub fn new(overlay: CacheOverlay, tree: &str) -> Self {
+        Self { overlay, tree: tree.to_string() }
     }
 
     pub fn snapshot(&self) -> Result<HashMap<BigUint, pallas::Base>> {
@@ -242,16 +236,16 @@ mod tests {
         crypto::smt::{gen_empty_nodes, util::FieldHasher, PoseidonFp, SparseMerkleTree},
         pasta::pallas,
     };
+    use kvdb_overlay::Database;
     use rand::rngs::OsRng;
-    use sled_overlay::sled;
 
-    use crate::cache::{Cache, CacheOverlay, CacheSmtStorage, SLED_MONEY_SMT_TREE};
+    use crate::cache::{Cache, CacheOverlay, CacheSmtStorage, KVDB_MONEY_SMT_TREE};
 
     #[test]
     fn test_cache_smt() -> Result<()> {
         // Setup cache and its overlay
-        let sled_db = sled::Config::new().temporary(true).open()?;
-        let cache = Cache::new(&sled_db)?;
+        let (kvdb, _kvdb_folder) = Database::open_temp()?;
+        let cache = Cache::new(&kvdb)?;
         let overlay = CacheOverlay::new(&cache)?;
 
         // Setup SMT
@@ -259,7 +253,7 @@ mod tests {
         let hasher = PoseidonFp::new();
         let empty_leaf = pallas::Base::ZERO;
         let empty_nodes = gen_empty_nodes::<{ HEIGHT + 1 }, _, _>(&hasher, empty_leaf);
-        let store = CacheSmtStorage::new(overlay, SLED_MONEY_SMT_TREE);
+        let store = CacheSmtStorage::new(overlay, KVDB_MONEY_SMT_TREE);
         let mut smt = SparseMerkleTree::<HEIGHT, { HEIGHT + 1 }, _, _, _>::new(
             store,
             hasher.clone(),
@@ -267,7 +261,7 @@ mod tests {
         );
 
         // Verify database is empty
-        assert!(cache.money_smt.is_empty());
+        assert!(cache.money_smt.is_empty()?);
 
         let leaves = vec![
             (pallas::Base::from(1), pallas::Base::random(&mut OsRng)),
@@ -309,13 +303,13 @@ mod tests {
         smt.store.overlay.0.apply_diff(&diff)?;
 
         // Verify database contains keys
-        assert!(!cache.money_smt.is_empty());
+        assert!(!cache.money_smt.is_empty()?);
 
         // We are now going to rollback the changes
         smt.store.overlay.0.apply_diff(&diff.inverse())?;
 
         // Verify database is empty again
-        assert!(cache.money_smt.is_empty());
+        assert!(cache.money_smt.is_empty()?);
 
         Ok(())
     }
