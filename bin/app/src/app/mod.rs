@@ -18,8 +18,10 @@
 
 use sled_overlay::sled;
 use smol::Task;
-use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Arc, Mutex as SyncMutex};
+use std::sync::{
+    atomic::{AtomicBool, Ordering},
+    Arc, Mutex as SyncMutex,
+};
 
 #[cfg(target_os = "android")]
 use crate::android;
