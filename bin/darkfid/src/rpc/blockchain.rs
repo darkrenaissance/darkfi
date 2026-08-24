@@ -34,7 +34,7 @@ use darkfi::{
     util::encoding::base64,
 };
 
-use crate::{server_error, DarkfiNode, RpcError};
+use crate::{proto::BATCH, server_error, DarkfiNode, RpcError};
 
 impl DarkfiNode {
     // RPCAPI:
@@ -83,6 +83,55 @@ impl DarkfiNode {
 
         let block = base64::encode(&serialize_async(&blocks[0]).await);
         JsonResponse::new(JsonValue::String(block), id).into()
+    }
+
+    // RPCAPI:
+    // Queries the blockchain database for up to `BATCH` blocks after
+    // the given height.
+    //
+    // **Params:**
+    // * `array[0]`: `u32` block height
+    //
+    // **Returns:**
+    // * `array[n]`: base64-encoded blocks.
+    //
+    // --> {"jsonrpc": "2.0", "method": "blockchain.get_blocks", "params": [0], "id": 1}
+    // <-- {"jsonrpc": "2.0", "result": ["base64encodedblock", "base64encodedblock"], "id": 1}
+    pub async fn blockchain_get_blocks(&self, id: i64, params: JsonValue) -> JsonResult {
+        let Some(params) = params.get::<Vec<JsonValue>>() else {
+            return JsonError::new(InvalidParams, None, id).into()
+        };
+        if params.len() != 1 || !params[0].is_number() {
+            return JsonError::new(InvalidParams, None, id).into()
+        }
+
+        let block_height = *params[0].get::<f64>().unwrap() as u32;
+        let block_heights: Vec<u32> = (block_height..block_height + BATCH as u32).collect();
+
+        let blocks = match self
+            .validator
+            .read()
+            .await
+            .blockchain
+            .get_blocks_by_heights(&block_heights)
+        {
+            Ok(v) => v,
+            Err(e) => {
+                error!(target: "darkfid::rpc::blockchain_get_blocks", "Failed fetching blocks by heights: {e}");
+                return JsonError::new(InternalError, None, id).into()
+            }
+        };
+
+        if blocks.is_empty() {
+            return server_error(RpcError::UnknownBlockHeight, id, None)
+        }
+
+        let mut ret = vec![];
+        for block in blocks {
+            ret.push(JsonValue::String(base64::encode(&serialize_async(&block).await)));
+        }
+
+        JsonResponse::new(JsonValue::Array(ret), id).into()
     }
 
     // RPCAPI:

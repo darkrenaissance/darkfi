@@ -70,6 +70,7 @@ impl RequestHandler<DefaultRpcHandler> for DarkfiNode {
             // Blockchain methods
             // ==================
             "blockchain.get_block" => self.blockchain_get_block(req.id, req.params).await,
+            "blockchain.get_blocks" => self.blockchain_get_blocks(req.id, req.params).await,
             "blockchain.get_tx" => self.blockchain_get_tx(req.id, req.params).await,
             "blockchain.get_difficulty" => self.blockchain_get_difficulty(req.id, req.params).await,
             "blockchain.last_confirmed_block" => self.blockchain_last_confirmed_block(req.id, req.params).await,
