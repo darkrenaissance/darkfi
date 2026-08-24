@@ -67,10 +67,10 @@ use {
     // Local imports
     app::schema::get_main_db_path,
     gfx::Renderer,
+    // Global imports
+    kvdb_overlay::Database,
     prop::{PropertyBool, PropertyStr, Role},
     scene::Slot,
-    // Global imports
-    sled_overlay::sled,
     std::io::Cursor,
     ui::chatview,
     url::Url,
@@ -156,7 +156,7 @@ impl God {
         std::env::set_current_dir(basename).unwrap();
 
         let db_path = get_main_db_path();
-        let db = sled::open(&db_path).expect("Sled DB failed to open");
+        let db = Database::open_default(&db_path).expect("KVDB failed to open");
 
         let bg_ex = Arc::new(smol::Executor::new());
         let fg_ex = Arc::new(smol::Executor::new());
@@ -277,7 +277,7 @@ async fn load_plugins(
     sg_root: SceneNodePtr,
     redraw: crate::ui::RedrawTrigger,
     cv: Arc<CondVar>,
-    db: sled::Db,
+    db: Database,
 ) {
     let plugin = SceneNode::new("plugin", SceneNodeType::PluginRoot);
     let plugin = plugin.setup_null();

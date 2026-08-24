@@ -40,7 +40,7 @@ futures = "0.3.32"
 async-recursion = "1.1.1"
 colored = "3.1.1"
 #rustpython-vm = "0.3.1"
-sled-overlay = "0.1.20"
+kvdb-overlay = {git = "https://git.dark.fi/darkrenaissance/kvdb-overlay", version = "0.1.0"}
 url = "2.5.8"
 semver = "1.0.28"
 chrono = "0.4.44"

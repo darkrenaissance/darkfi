@@ -18,8 +18,8 @@
 
 use bs58;
 use darkfi_serial::{async_trait, deserialize, Encodable, SerialDecodable, SerialEncodable};
+use kvdb_overlay::{Database, Tree};
 use rand::{rngs::OsRng, Rng};
-use sled_overlay::sled;
 use ui_consts::*;
 
 macro_rules! d { ($($arg:tt)*) => { debug!(target: "app::channel", $($arg)*); } }
@@ -168,8 +168,8 @@ pub async fn make(
     window_scale: PropertyFloat32,
     contact_is_visible: PropertyBool,
     channel_is_visible: PropertyBool,
-    channels_tree: sled::Tree,
-    db: &sled::Db,
+    channels_tree: Tree,
+    db: &Database,
     emoji_meshes: EmojiMeshesPtr,
 ) -> SceneNodePtr {
     let mut cc = expr::Compiler::new();
@@ -1589,8 +1589,7 @@ pub async fn make(
 
             let key = name;
 
-            channels_tree2.insert(key, val).unwrap();
-            let _ = channels_tree2.flush_async().await;
+            channels_tree2.insert(key.as_bytes(), &val).unwrap();
 
             let atom = &mut redraw2.make_guard(gfxtag!("add_channel"));
             menu_prop2.push_str(atom, Role::App, &channel_name).unwrap();

@@ -16,7 +16,7 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use sled_overlay::sled;
+use kvdb_overlay::Tree;
 use std::{array::TryFromSliceError, string::FromUtf8Error, sync::Arc};
 
 #[cfg(feature = "enable-plugin-darkirc")]
@@ -53,7 +53,7 @@ use crate::{
 #[cfg(any(feature = "enable-plugin-darkirc", feature = "enable-plugin-fud"))]
 pub struct PluginSettings {
     pub setting_root: SceneNodePtr,
-    pub sled_tree: sled::Tree,
+    pub kvdb_tree: Tree,
 }
 
 #[cfg(any(feature = "enable-plugin-darkirc", feature = "enable-plugin-fud"))]
@@ -114,7 +114,7 @@ impl PluginSettings {
         }
     }
 
-    // For all settings, copy the value from sled into the setting node's value property
+    // For all settings, copy the value from kvdb into the setting node's value property
     pub fn load_settings(&self) {
         let atom = &mut PropertyAtomicGuard::none();
         for setting_node in self.setting_root.get_children().iter() {
@@ -125,20 +125,18 @@ impl PluginSettings {
             let value = setting_node.get_property("value").clone().unwrap();
             match value.typ {
                 PropertyType::Bool => {
-                    let sled_result = self.sled_tree.get(setting_node.name.as_str());
-                    if let Ok(Some(sled_value)) = sled_result {
+                    let kvdb_result = self.kvdb_tree.get(setting_node.name.as_bytes());
+                    if let Ok(Some(kvdb_value)) = kvdb_result {
                         setting_node
-                            .set_property_bool(atom, Role::User, "value", sled_value[0] != 0)
+                            .set_property_bool(atom, Role::User, "value", kvdb_value[0] != 0)
                             .unwrap();
                     }
                 }
                 PropertyType::Uint32 => {
-                    let sled_result = self.sled_tree.get(setting_node.name.as_str());
-                    if let Ok(Some(sled_value)) = sled_result {
-                        if sled_value.len() == 4 {
-                            let bytes: Result<[u8; 4], TryFromSliceError> =
-                                sled_value.as_ref().try_into();
-                            if let Ok(b) = bytes {
+                    let kvdb_result = self.kvdb_tree.get(setting_node.name.as_bytes());
+                    if let Ok(Some(kvdb_value)) = kvdb_result {
+                        if kvdb_value.len() == 4 {
+                            if let Ok(b) = kvdb_value.try_into() {
                                 setting_node
                                     .set_property_u32(
                                         atom,
@@ -152,12 +150,10 @@ impl PluginSettings {
                     }
                 }
                 PropertyType::Float32 => {
-                    let sled_result = self.sled_tree.get(setting_node.name.as_str());
-                    if let Ok(Some(sled_value)) = sled_result {
-                        if sled_value.len() == 4 {
-                            let bytes: Result<[u8; 4], TryFromSliceError> =
-                                sled_value.as_ref().try_into();
-                            if let Ok(b) = bytes {
+                    let kvdb_result = self.kvdb_tree.get(setting_node.name.as_bytes());
+                    if let Ok(Some(kvdb_value)) = kvdb_result {
+                        if kvdb_value.len() == 4 {
+                            if let Ok(b) = kvdb_value.try_into() {
                                 setting_node
                                     .set_property_f32(
                                         atom,
@@ -171,10 +167,10 @@ impl PluginSettings {
                     }
                 }
                 PropertyType::Str => {
-                    let sled_result = self.sled_tree.get(setting_node.name.as_str());
-                    if let Ok(Some(sled_value)) = sled_result {
+                    let kvdb_result = self.kvdb_tree.get(setting_node.name.as_bytes());
+                    if let Ok(Some(kvdb_value)) = kvdb_result {
                         let string: Result<String, FromUtf8Error> =
-                            String::from_utf8(sled_value.to_vec());
+                            String::from_utf8(kvdb_value.to_vec());
                         if let Ok(s) = string {
                             setting_node.set_property_str(atom, Role::User, "value", s).unwrap();
                         }
@@ -185,7 +181,7 @@ impl PluginSettings {
         }
     }
 
-    // Save all settings to sled
+    // Save all settings to kvdb
     pub fn save_settings(&self) {
         for setting_node in self.setting_root.get_children().iter() {
             if setting_node.typ != SceneNodeType::Setting {
@@ -196,32 +192,29 @@ impl PluginSettings {
             match value.typ {
                 PropertyType::Bool => {
                     let value_bytes = if value.get_bool(0).unwrap() { 1u8 } else { 0u8 };
-                    self.sled_tree
-                        .insert(setting_node.name.as_str(), sled::IVec::from(vec![value_bytes]))
+                    self.kvdb_tree
+                        .insert(setting_node.name.as_bytes(), &vec![value_bytes])
                         .unwrap();
                 }
                 PropertyType::Uint32 => {
-                    self.sled_tree
+                    self.kvdb_tree
                         .insert(
-                            setting_node.name.as_str(),
-                            sled::IVec::from(value.get_u32(0).unwrap().to_le_bytes().as_ref()),
+                            setting_node.name.as_bytes(),
+                            value.get_u32(0).unwrap().to_le_bytes().as_ref(),
                         )
                         .unwrap();
                 }
                 PropertyType::Float32 => {
-                    self.sled_tree
+                    self.kvdb_tree
                         .insert(
-                            setting_node.name.as_str(),
-                            sled::IVec::from(value.get_f32(0).unwrap().to_le_bytes().as_ref()),
+                            setting_node.name.as_bytes(),
+                            value.get_f32(0).unwrap().to_le_bytes().as_ref(),
                         )
                         .unwrap();
                 }
                 PropertyType::Str => {
-                    self.sled_tree
-                        .insert(
-                            setting_node.name.as_str(),
-                            sled::IVec::from(value.get_str(0).unwrap().as_bytes()),
-                        )
+                    self.kvdb_tree
+                        .insert(setting_node.name.as_bytes(), value.get_str(0).unwrap().as_bytes())
                         .unwrap();
                 }
                 _ => {}

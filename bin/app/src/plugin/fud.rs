@@ -33,7 +33,7 @@ use fud::{
     util::{hash_to_string, FileSelection},
     Fud,
 };
-use sled_overlay::sled;
+use kvdb_overlay::Database;
 use smol::lock::Mutex;
 use std::{
     collections::HashSet,
@@ -145,16 +145,16 @@ impl FudPlugin {
 
         i!("Starting Fud backend");
         let db_path = get_db_path();
-        let db = match sled::open(&db_path) {
+        let db = match Database::open_default(&db_path) {
             Ok(db) => db,
             Err(err) => {
-                e!("Sled database '{}' failed to open: {err}!", db_path.display());
-                return Err(Error::SledDbErr)
+                e!("Kvdb database '{}' failed to open: {err}!", db_path.display());
+                return Err(Error::KvdbErr)
             }
         };
 
-        let setting_tree = db.open_tree("settings")?;
-        let settings = PluginSettings { setting_root, sled_tree: setting_tree };
+        let setting_tree = db.open_tree_default("settings")?;
+        let settings = PluginSettings { setting_root, kvdb_tree: setting_tree };
 
         let mut fud_settings: FudSettings = Default::default();
         fud_settings.base_dir = basedir.to_string_lossy().to_string();

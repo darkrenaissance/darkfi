@@ -23,11 +23,11 @@ use async_trait::async_trait;
 use atomic_float::AtomicF32;
 use darkfi::system::{msleep, CondVar};
 use darkfi_serial::{deserialize, Decodable, Encodable, SerialDecodable, SerialEncodable};
+use kvdb_overlay::Tree;
 use miniquad::{KeyCode, KeyMods, MouseButton, TouchPhase};
 use parking_lot::Mutex as SyncMutex;
 use rand::{rngs::OsRng, Rng};
 use regex::Regex;
-use sled_overlay::sled;
 use std::{
     collections::VecDeque,
     io::Cursor,
@@ -223,7 +223,7 @@ pub struct ChatView {
     redraw: RedrawTrigger,
     sg_root: SceneNodePtr,
 
-    tree: sled::Tree,
+    tree: Tree,
     msgbuf: AsyncMutex<MessageBuffer>,
     dc_key: u64,
 
@@ -290,7 +290,7 @@ pub struct ChatView {
 impl ChatView {
     pub async fn new(
         node: SceneNodeWeak,
-        tree: sled::Tree,
+        tree: Tree,
         window_scale: PropertyFloat32,
         renderer: Renderer,
         redraw: RedrawTrigger,
@@ -719,8 +719,7 @@ impl ChatView {
         let mut val = vec![];
         msg.encode(&mut val).unwrap();
 
-        self.tree.insert(&key, val).unwrap();
-        let _ = self.tree.flush_async().await;
+        self.tree.insert(&key, &val).unwrap();
         true
     }
     #[instrument(target = "ui::chatview")]

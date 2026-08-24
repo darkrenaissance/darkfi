@@ -17,7 +17,7 @@
  */
 
 use darkfi_serial::deserialize;
-use sled_overlay::sled;
+use kvdb_overlay::{Database, Tree};
 use std::io::Write;
 use ui_consts::*;
 
@@ -113,9 +113,9 @@ pub async fn make(
     app: &App,
     content: SceneNodePtr,
     i18n_fish: &I18nBabelFish,
-    channels_tree: sled::Tree,
-    contacts_tree: sled::Tree,
-    db: &sled::Db,
+    channels_tree: Tree,
+    contacts_tree: Tree,
+    db: &Database,
     emoji_meshes: EmojiMeshesPtr,
 ) {
     let window_scale = PropertyFloat32::wrap(

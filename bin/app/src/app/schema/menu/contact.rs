@@ -18,7 +18,7 @@
 
 use bs58;
 use darkfi_serial::{async_trait, deserialize, Encodable, SerialDecodable, SerialEncodable};
-use sled_overlay::sled;
+use kvdb_overlay::{Database, Tree};
 use ui_consts::*;
 
 macro_rules! d { ($($arg:tt)*) => { debug!(target: "app::contact", $($arg)*); } }
@@ -168,8 +168,8 @@ pub async fn make(
     window_scale: PropertyFloat32,
     contact_is_visible: PropertyBool,
     channel_is_visible: PropertyBool,
-    contacts_tree: sled::Tree,
-    db: &sled::Db,
+    contacts_tree: Tree,
+    db: &Database,
     emoji_meshes: EmojiMeshesPtr,
 ) -> SceneNodePtr {
     let mut cc = expr::Compiler::new();
@@ -1500,8 +1500,7 @@ pub async fn make(
             let contact = Contact { name: name.clone(), public };
             let mut val = vec![];
             contact.encode(&mut val).unwrap();
-            contacts_tree2.insert(name.as_str(), val).unwrap();
-            let _ = contacts_tree2.flush_async().await;
+            contacts_tree2.insert(name.as_bytes(), &val).unwrap();
 
             let contact_name = format!("@{}", name);
             let atom = &mut redraw2.make_guard(gfxtag!("add_contact"));

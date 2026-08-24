@@ -48,8 +48,8 @@ use irc2::{
     irc::{server::MAX_NICK_LEN, IrcChannel, IrcContact},
     pad, unpad, Privmsg,
 };
+use kvdb_overlay::{Database, Tree};
 use parking_lot::Mutex as SyncMutex;
-use sled_overlay::sled;
 
 use crate::{
     app::schema::{
@@ -174,9 +174,9 @@ pub struct DarkIrc {
     nick: PropertyStr,
     pub channels: RwLock<HashMap<String, IrcChannel>>,
     pub contacts: RwLock<HashMap<String, IrcContact>>,
-    channels_tree: sled::Tree,
-    contacts_tree: sled::Tree,
-    nick_tree: sled::Tree,
+    channels_tree: Tree,
+    contacts_tree: Tree,
+    nick_tree: Tree,
     dm_secret: SecretKey,
     settings: PluginSettings,
     ex: ExecutorPtr,
@@ -187,7 +187,7 @@ impl DarkIrc {
         node: SceneNodeWeak,
         sg_root: SceneNodePtr,
         ex: ExecutorPtr,
-        db: sled::Db,
+        db: Database,
     ) -> Result<Pimpl> {
         let node_ref = &node.upgrade().unwrap();
         let nick = PropertyStr::wrap(node_ref, Role::Internal, "nick", 0).unwrap();
@@ -197,17 +197,17 @@ impl DarkIrc {
 
         i!("Starting DarkIRC backend");
 
-        let setting_tree = db.open_tree("darkirc_settings")?;
+        let setting_tree = evgr_db.open_tree_default("settings")?;
         i!("Opened darkirc_settings tree from unified db");
 
         // Use the unified db for reading channels (UI stores channels there)
-        let channels_tree = db.open_tree("channels")?;
+        let channels_tree = db.open_tree_default("channels")?;
         i!("Opened channels tree from unified db");
 
-        let contacts_tree = db.open_tree("contacts")?;
+        let contacts_tree = db.open_tree_default("contacts")?;
         i!("Opened contacts tree from unified db");
 
-        let nick_tree = db.open_tree("nick")?;
+        let nick_tree = db.open_tree_default("nick")?;
         i!("Opened nick tree from unified db");
 
         let dm_secret = Self::load_or_create_dm_identity(&db);
@@ -223,7 +223,7 @@ impl DarkIrc {
             .unwrap();
         i!("DM identity public key (share with contacts): {dm_public_b58}");
 
-        let settings = PluginSettings { setting_root, sled_tree: setting_tree };
+        let settings = PluginSettings { setting_root, kvdb_tree: setting_tree };
 
         let mut p2p_settings: NetSettings = Default::default();
         p2p_settings.magic_bytes = MagicBytes([251, 229, 199, 181]);
@@ -771,17 +771,16 @@ impl DarkIrc {
     }
 
     /// Load (or generate on first run) the single global DM identity key.
-    fn load_or_create_dm_identity(db: &sled::Db) -> SecretKey {
-        let tree = db.open_tree("dm_identity").expect("cannot open dm_identity tree");
+    fn load_or_create_dm_identity(db: &Database) -> SecretKey {
+        let tree = db.open_tree_default("dm_identity").expect("cannot open dm_identity tree");
         if let Ok(Some(stored)) = tree.get(b"secret") {
             if stored.len() == 32 {
-                let arr: [u8; 32] = stored.as_ref().try_into().unwrap();
+                let arr: [u8; 32] = stored.try_into().unwrap();
                 return SecretKey::from_bytes(arr);
             }
         }
         let bytes: [u8; 32] = rand::random();
-        let _ = tree.insert(b"secret", bytes.to_vec());
-        let _ = tree.flush();
+        let _ = tree.insert(b"secret", &bytes);
         SecretKey::from_bytes(bytes)
     }
 

@@ -18,8 +18,6 @@
 
 #![allow(unused_imports, unused_variables, dead_code)]
 
-use sled_overlay::sled;
-
 use super::chat::populate_tree;
 use crate::{
     app::{
@@ -372,7 +370,7 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish) {
         prop.set_f32(atom, Role::App, 3, 1.).unwrap();
     }
 
-    let db = sled::open(get_chatdb_path()).expect("cannot open sleddb");
+    let db = kvdb_overlay::Database::open_default(&get_chatdb_path()).expect("cannot open kvdb");
     let chat_tree = db.open_tree(b"chat").unwrap();
     if chat_tree.is_empty() {
         populate_tree(&chat_tree);

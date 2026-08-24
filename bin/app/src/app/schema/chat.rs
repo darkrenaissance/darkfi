@@ -19,7 +19,7 @@
 use darkfi_serial::{Decodable, Encodable};
 #[cfg(feature = "enable-plugin-darkirc")]
 use irc2::Privmsg;
-use sled_overlay::sled;
+use kvdb_overlay::{Database, Tree};
 use std::{sync::Arc, time::UNIX_EPOCH};
 
 #[cfg(feature = "enable-plugin-darkirc")]
@@ -193,7 +193,7 @@ pub async fn make(
     ex: &ExecutorPtr,
     content: SceneNodePtr,
     channel: &str,
-    db: &sled::Db,
+    db: &Database,
     i18n_fish: &I18nBabelFish,
     emoji_meshes: emoji_picker::EmojiMeshesPtr,
     redraw: RedrawTrigger,
@@ -616,11 +616,11 @@ pub async fn make(
     }
 
     let tree_name = channel.to_string() + "__chat_tree";
-    let chat_tree = db.open_tree(tree_name.as_bytes()).unwrap();
+    let chat_tree = db.open_tree_default(&tree_name).unwrap();
     //if chat_tree.is_empty() {
     //    populate_tree(&chat_tree);
     //}
-    debug!(target: "app", "Loaded {channel} history: {} lines", chat_tree.len());
+    debug!(target: "app", "Loaded {channel} history: {} lines", chat_tree.len().unwrap());
     let chatview_node = node
         .setup(|me| {
             ChatView::new(
@@ -1637,7 +1637,7 @@ pub async fn make(
 
 // Just for testing
 #[allow(dead_code)]
-pub(super) fn populate_tree(tree: &sled::Tree) {
+pub(super) fn populate_tree(tree: &Tree) {
     use chrono::{NaiveDate, NaiveDateTime};
     let chat_txt = include_str!("../../../data/chat.txt");
     for line in chat_txt.lines() {
@@ -1664,8 +1664,8 @@ pub(super) fn populate_tree(tree: &sled::Tree) {
         let mut val = vec![];
         msg.encode(&mut val).unwrap();
 
-        tree.insert(&key, val).unwrap();
+        tree.insert(&key, &val).unwrap();
     }
     // O(n)
-    debug!(target: "app::schema", "populated db with {} lines", tree.len());
+    debug!(target: "app::schema", "populated db with {} lines", tree.len().unwrap());
 }

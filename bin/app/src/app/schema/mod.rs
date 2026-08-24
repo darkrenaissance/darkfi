@@ -16,11 +16,12 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+use std::{fs::File, io::Write};
+
 use darkfi::system::msleep;
 use darkfi_serial::{deserialize, Encodable};
 use indoc::indoc;
-use sled_overlay::sled;
-use std::io::Write;
+use kvdb_overlay::Database;
 
 use crate::{
     app::{
@@ -204,7 +205,7 @@ pub fn write_joined_channels(items: &[String]) {
     let _ = std::fs::write(get_joined_channels_filename(), items.join("\n"));
 }
 
-pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish, db: sled::Db) {
+pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish, db: Database) {
     let mut cc = Compiler::new();
     cc.add_const_f32("NETSTATUS_ICON_SIZE", NETSTATUS_ICON_SIZE);
     cc.add_const_f32("SETTINGS_ICON_SIZE", SETTINGS_ICON_SIZE);
@@ -811,18 +812,17 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish, db
         }
     });
 
-    let channels_tree = db.open_tree("channels").expect("cannot open channels tree");
-    let contacts_tree = db.open_tree("contacts").expect("cannot open contacts tree");
+    let channels_tree = db.open_tree_default("channels").expect("cannot open channels tree");
+    let contacts_tree = db.open_tree_default("contacts").expect("cannot open contacts tree");
 
     // Initialize default channels if tree is empty
-    if channels_tree.is_empty() {
+    if channels_tree.is_empty().unwrap() {
         for channel_name in DEFAULT_CHANNELS {
             let channel = Channel { name: channel_name.to_string(), secret: None };
             let mut val = vec![];
             channel.encode(&mut val).unwrap();
-            channels_tree.insert(channel_name, val).unwrap();
+            channels_tree.insert(channel_name.to_string().as_bytes(), &val).unwrap();
         }
-        let _ = channels_tree.flush_async().await;
     }
 
     // Seed the joined-channels file with defaults on first run.
@@ -844,8 +844,8 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish, db
     for name in read_joined_channels() {
         let bare = if name.starts_with('#') || name.starts_with('@') { &name[1..] } else { &name };
         let in_tree = match name.chars().next() {
-            Some('#') => channels_tree.contains_key(bare).unwrap_or(false),
-            Some('@') => contacts_tree.contains_key(bare).unwrap_or(false),
+            Some('#') => channels_tree.contains_key(bare.to_string().as_bytes()).unwrap_or(false),
+            Some('@') => contacts_tree.contains_key(bare.to_string().as_bytes()).unwrap_or(false),
             _ => false,
         };
         if !in_tree {

@@ -16,7 +16,7 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use sled_overlay::sled;
+use kvdb_overlay::Database;
 use smol::Task;
 use std::sync::{
     atomic::{AtomicBool, Ordering},
@@ -92,12 +92,12 @@ impl App {
 
     /// Does not require miniquad to be init. Created the scene graph tree / schema and all
     /// the objects.
-    pub async fn setup(&self, db: sled::Db) -> Result<Option<i32>, Error> {
+    pub async fn setup(&self, db: Database) -> Result<Option<i32>, Error> {
         t!("App::setup()");
 
         let setting_root = SceneNode::new("setting", SceneNodeType::SettingRoot);
         let setting_root = setting_root.setup_null();
-        let settings_tree = db.open_tree("settings").unwrap();
+        let settings_tree = db.open_tree_default("settings").unwrap();
 
         let flags_tree = db.open_tree("app_flags").unwrap();
         let is_first_time = !flags_tree.contains_key(IS_FIRST_TIME_KEY).unwrap();
@@ -110,7 +110,7 @@ impl App {
         /*
         let settings = Arc::new(PluginSettings {
             setting_root: setting_root.clone(),
-            sled_tree: settings_tree,
+            kvdb_tree: settings_tree,
         });
         */
 

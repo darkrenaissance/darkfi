@@ -16,8 +16,6 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use sled_overlay::sled;
-
 pub type Result<T> = std::result::Result<T, Error>;
 
 #[repr(u8)]
@@ -116,8 +114,8 @@ pub enum Error {
     #[error("Unexpected token found")]
     UnexpectedToken = 38,
 
-    #[error("Sled database error")]
-    SledDbErr = 39,
+    #[error("Key-value database error")]
+    KvdbErr = 39,
 
     #[error("Service failed")]
     ServiceFailed = 40,
@@ -144,8 +142,8 @@ pub enum Error {
     ContactNotFound = 47,
 }
 
-impl From<sled::Error> for Error {
-    fn from(_: sled::Error) -> Error {
-        Error::SledDbErr
+impl From<kvdb_overlay::Error> for Error {
+    fn from(_: kvdb_overlay::Error) -> Error {
+        Error::KvdbErr
     }
 }

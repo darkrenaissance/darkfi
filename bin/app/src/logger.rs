@@ -36,7 +36,7 @@ use darkfi::util::logger::{EventFormatter, Level, TargetFilter};
 const LOGFILE_MAXSIZE: usize = 5_000_000;
 
 static MUTED_TARGETS: &[&'static str] = &[
-    "sled",
+    "fjall",
     "rustls",
     "async_io",
     "polling",
@@ -120,7 +120,7 @@ pub fn setup_logging() -> Option<WorkerGuard> {
             .with_filter(
                 TargetFilter::default()
                     .ignore_targets([
-                        "sled",
+                        "fjall",
                         "rustls",
                         "async_io",
                         "polling",
