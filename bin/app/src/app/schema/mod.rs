@@ -24,15 +24,15 @@ use std::io::Write;
 
 use crate::{
     app::{
-        node::{create_button, create_layer, create_vector_art, create_video},
+        node::{create_button, create_layer, create_text, create_vector_art, create_video},
         App,
     },
     expr::{self, Compiler},
     gfx::gfxtag,
-    prop::{PropertyAtomicGuard, Role},
+    prop::{PropertyAtomicGuard, PropertyFloat32, Role},
     scene::{SceneNodePtr, Slot},
     shape,
-    ui::{emoji_picker, Button, Layer, VectorArt, VectorShape, Video},
+    ui::{emoji_picker, Button, Layer, Text, VectorArt, VectorShape, Video},
     util::i18n::I18nBabelFish,
 };
 
@@ -57,6 +57,11 @@ mod android_ui_consts {
     pub const SETTINGS_ICON_SIZE: f32 = 140.;
     pub const NETLOGO_SCALE: f32 = 50.;
     pub const EMOJI_PICKER_ICON_SIZE: f32 = 120.;
+
+    pub const NETSTAT_OVERLAY_MARGIN: f32 = 20.;
+    pub const NETSTAT_OVERLAY_BTN_W: f32 = 200.;
+    pub const NETSTAT_OVERLAY_BTN_H: f32 = 90.;
+    pub const NETSTAT_OVERLAY_BTN_FONTSIZE: f32 = 40.;
 }
 
 #[cfg(target_os = "android")]
@@ -123,6 +128,12 @@ mod ui_consts {
     pub const SETTINGS_ICON_SIZE: f32 = 60.;
     pub const NETLOGO_SCALE: f32 = 25.;
     pub const EMOJI_PICKER_ICON_SIZE: f32 = 50.;
+
+    pub const NETSTAT_OVERLAY_MARGIN: f32 = 10.;
+    pub const NETSTAT_OVERLAY_BTN_W: f32 = 100.;
+    pub const NETSTAT_OVERLAY_BTN_H: f32 = 45.;
+    pub const NETSTAT_OVERLAY_BTN_FONTSIZE: f32 = 20.;
+
     pub use super::desktop_paths::*;
 }
 
@@ -197,9 +208,19 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish, db
     let mut cc = Compiler::new();
     cc.add_const_f32("NETSTATUS_ICON_SIZE", NETSTATUS_ICON_SIZE);
     cc.add_const_f32("SETTINGS_ICON_SIZE", SETTINGS_ICON_SIZE);
+    cc.add_const_f32("NETSTAT_OVERLAY_MARGIN", NETSTAT_OVERLAY_MARGIN);
+    cc.add_const_f32("NETSTAT_OVERLAY_BTN_W", NETSTAT_OVERLAY_BTN_W);
+    cc.add_const_f32("NETSTAT_OVERLAY_BTN_H", NETSTAT_OVERLAY_BTN_H);
 
     let atom = &mut PropertyAtomicGuard::none();
 
+    let window_scale = PropertyFloat32::wrap(
+        &app.sg_root.lookup_node("/window").unwrap(),
+        Role::Internal,
+        "scale",
+        0,
+    )
+    .unwrap();
     /*
     let node = create_shortcut("zoom_out_shortcut");
     node.set_property_str(atom, Role::App, "key", "ctrl+-").unwrap();
@@ -523,6 +544,14 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish, db
         while let Ok(_) = recvr.recv().await {
             i!("Reconnect button clicked");
 
+            /*
+            // Toggle the overlay layer
+            let overlay = sg_root.lookup_node("/window/content/netstatus_overlay").unwrap();
+            let visible = !overlay.get_property_bool("is_visible").unwrap();
+            let atom = &mut redraw.make_guard(gfxtag!("netstatus overlay toggle"));
+            overlay.set_property_bool(atom, Role::App, "is_visible", visible).unwrap();
+            */
+
             // Show netstat-klik icon
             let netstat_klik =
                 sg_root.lookup_node("/window/content/netstatus_layer/netstat_klik").unwrap();
@@ -564,6 +593,121 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish, db
     let node =
         node.setup(|me| Button::new(me, app.renderer.clone(), app.redraw_trigger.clone())).await;
     netlayer_node.link(node);
+
+    // Overlay layer toggled by the netstatus logo. Sits on top of everything
+    // except the header strip, so the logo stays visible and clickable.
+    let overlay_node = create_layer("netstatus_overlay");
+    let prop = overlay_node.get_property("rect").unwrap();
+    prop.set_f32(atom, Role::App, 0, NETSTAT_OVERLAY_MARGIN).unwrap();
+    prop.set_f32(atom, Role::App, 1, NETSTATUS_ICON_SIZE + NETSTAT_OVERLAY_MARGIN).unwrap();
+    let code = cc.compile("w - 2 * NETSTAT_OVERLAY_MARGIN").unwrap();
+    prop.set_expr(atom, Role::App, 2, code).unwrap();
+    let code = cc.compile("h - NETSTATUS_ICON_SIZE - 2 * NETSTAT_OVERLAY_MARGIN").unwrap();
+    prop.set_expr(atom, Role::App, 3, code).unwrap();
+    overlay_node.set_property_bool(atom, Role::App, "is_visible", false).unwrap();
+    overlay_node.set_property_u32(atom, Role::App, "z_index", 2).unwrap();
+    let overlay_node = overlay_node
+        .setup(|me| Layer::new(me, app.renderer.clone(), app.redraw_trigger.clone()))
+        .await;
+    content.link(overlay_node.clone());
+
+    // Placeholder single-color background filling the whole overlay
+    let node = create_vector_art("overlay_bg");
+    let prop = node.get_property("rect").unwrap();
+    prop.set_f32(atom, Role::App, 0, 0.).unwrap();
+    prop.set_f32(atom, Role::App, 1, 0.).unwrap();
+    prop.set_expr(atom, Role::App, 2, expr::load_var("w")).unwrap();
+    prop.set_expr(atom, Role::App, 3, expr::load_var("h")).unwrap();
+    node.set_property_bool(atom, Role::App, "is_visible", true).unwrap();
+    node.set_property_u32(atom, Role::App, "z_index", 0).unwrap();
+    let overlay_color = [0.05, 0.25, 0.3, 0.8];
+    let mut shape = VectorShape::new();
+    shape.add_filled_box(
+        expr::const_f32(0.),
+        expr::const_f32(0.),
+        expr::load_var("w"),
+        expr::load_var("h"),
+        overlay_color,
+    );
+    let node = node
+        .setup(|me| VectorArt::new(me, shape, app.renderer.clone(), app.redraw_trigger.clone()))
+        .await;
+    overlay_node.link(node);
+
+    let node = create_text("info");
+    prop.set_f32(atom, Role::App, 0, 0.).unwrap();
+    prop.set_f32(atom, Role::App, 1, 0.).unwrap();
+    prop.set_expr(atom, Role::App, 2, expr::load_var("w")).unwrap();
+    prop.set_expr(atom, Role::App, 3, expr::load_var("h")).unwrap();
+    node.set_property_f32(atom, Role::App, "font_size", NETSTAT_OVERLAY_BTN_FONTSIZE).unwrap();
+    /*
+    #[cfg(target_os = "android")]
+    {
+        let info = crate::android::get_display_debug_info();
+        i!("Display debug report:\n{info}");
+        node.set_property_str(atom, Role::App, "text", info).unwrap();
+    }
+    #[cfg(not(target_os = "android"))]
+    {
+        let info = indoc! {"
+            nothing to see here
+            folx
+            hello
+        "};
+        node.set_property_str(atom, Role::App, "text", info).unwrap();
+    }
+    */
+    node.set_property_enum(atom, Role::App, "text_align", "center").unwrap();
+    let prop = node.get_property("text_color").unwrap();
+    prop.set_f32(atom, Role::App, 0, 1.).unwrap();
+    prop.set_f32(atom, Role::App, 1, 1.).unwrap();
+    prop.set_f32(atom, Role::App, 2, 1.).unwrap();
+    prop.set_f32(atom, Role::App, 3, 1.).unwrap();
+    node.set_property_u32(atom, Role::App, "z_index", 2).unwrap();
+    let node = node
+        .setup(|me| {
+            Text::new(
+                me,
+                window_scale.clone(),
+                app.renderer.clone(),
+                i18n_fish.clone(),
+                app.redraw_trigger.clone(),
+            )
+        })
+        .await;
+    overlay_node.link(node);
+
+    // Stop/start p2p button
+    let node = create_button("copy_btn");
+    node.set_property_bool(atom, Role::App, "is_active", true).unwrap();
+    let prop = node.get_property("rect").unwrap();
+    prop.set_f32(atom, Role::App, 0, 0.).unwrap();
+    prop.set_f32(atom, Role::App, 1, 0.).unwrap();
+    prop.set_expr(atom, Role::App, 2, expr::load_var("w")).unwrap();
+    prop.set_expr(atom, Role::App, 3, expr::load_var("h")).unwrap();
+
+    let sg_root = app.sg_root.clone();
+    let redraw = app.redraw_trigger.clone();
+    let (slot, recvr) = Slot::new("stop_btn_clicked");
+    node.register("click", slot).unwrap();
+    let stop_task = app.ex.spawn(async move {
+        let mut p2p_running = true;
+        while let Ok(_) = recvr.recv().await {
+            /*
+            #[cfg(target_os = "android")]
+            {
+                let info = crate::android::get_display_debug_info();
+                crate::clipboard::set(&info);
+                i!("Copied report!");
+            }
+            */
+        }
+    });
+    app.tasks.lock().unwrap().push(stop_task);
+
+    let node =
+        node.setup(|me| Button::new(me, app.renderer.clone(), app.redraw_trigger.clone())).await;
+    overlay_node.link(node);
 
     // Navbar Settings Button
 
