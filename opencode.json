@@ -1,0 +1,17 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "default_agent": "openspec-dev",
+  "lsp": {
+    "rust": {
+      "command": [
+        "rust-analyzer"
+      ],
+      "initialization": {
+        "cargo": {
+          "features": "all",
+	  "targetDir": true
+	}
+      }
+    }
+  }
+}
