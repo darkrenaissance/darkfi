@@ -21,7 +21,10 @@ use crate::{
     mesh::{Color, MeshBuilder, COLOR_WHITE},
 };
 
-use super::atlas::{Atlas, RenderedAtlas, RunIdx};
+use super::{
+    atlas::{Atlas, RenderedAtlas, RunIdx},
+    TextLayout,
+};
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub struct DebugRenderOptions(u32);
@@ -50,11 +53,23 @@ impl std::ops::BitOrAssign for DebugRenderOptions {
 }
 
 pub fn render_layout(
-    layout: &parley::Layout<Color>,
+    layout: &TextLayout,
     renderer: &Renderer,
     tag: DebugTag,
 ) -> Vec<DrawInstruction> {
     render_layout_with_opts(layout, DebugRenderOptions::OFF, renderer, tag)
+}
+
+/// Render a raw parley layout that was built with the given scale. Used
+/// by editors that own their layout internally (e.g. `PlainEditor`).
+#[cfg(not(target_os = "android"))]
+pub fn render_raw_layout(
+    layout: &parley::Layout<Color>,
+    scale: f32,
+    renderer: &Renderer,
+    tag: DebugTag,
+) -> Vec<DrawInstruction> {
+    render_raw_layout_with_opts(layout, scale, DebugRenderOptions::OFF, renderer, tag)
 }
 
 /// Draw a filled (and optionally outlined) background box behind every glyph run
@@ -70,7 +85,7 @@ pub fn render_layout(
 /// highlighted. The fill is skipped when `bg_color` alpha is ~0; the outline is
 /// skipped when `border_size` is ~0 or `border_color` alpha is ~0.
 pub fn render_backgrounds(
-    layout: &parley::Layout<Color>,
+    layout: &TextLayout,
     match_brush: Color,
     bg_color: Color,
     border_color: Color,
@@ -85,6 +100,7 @@ pub fn render_backgrounds(
         return instrs
     }
 
+    let scale = layout.scale();
     for line in layout.lines() {
         for item in line.items() {
             let parley::PositionedLayoutItem::GlyphRun(glyph_run) = item else { continue };
@@ -97,7 +113,7 @@ pub fn render_backgrounds(
             let y = glyph_run.baseline() - metrics.ascent;
             let w = glyph_run.advance();
             let h = metrics.ascent + metrics.descent;
-            let rect = Rectangle::new(x, y, w, h);
+            let rect = Rectangle::new(x, y, w, h) / scale;
 
             let mut mesh = MeshBuilder::new(tag);
             if has_fill {
@@ -114,7 +130,22 @@ pub fn render_backgrounds(
 }
 
 pub fn render_layout_with_opts(
+    layout: &TextLayout,
+    opts: DebugRenderOptions,
+    renderer: &Renderer,
+    tag: DebugTag,
+) -> Vec<DrawInstruction> {
+    render_raw_layout_with_opts(layout, layout.scale(), opts, renderer, tag)
+}
+
+/// Layout coordinates are physical (scale is baked in by parley) while
+/// meshes are consumed in virtual units and scaled up again by the
+/// renderer's `SetScale`. So every emitted coordinate is divided by
+/// `scale` here. Glyphs are still rasterized at physical resolution so
+/// the final on-screen texel mapping stays crisp.
+fn render_raw_layout_with_opts(
     layout: &parley::Layout<Color>,
+    scale: f32,
     opts: DebugRenderOptions,
     renderer: &Renderer,
     tag: DebugTag,
@@ -145,7 +176,8 @@ pub fn render_layout_with_opts(
         for item in line.items() {
             match item {
                 parley::PositionedLayoutItem::GlyphRun(glyph_run) => {
-                    let mesh = render_glyph_run(&glyph_run, run_idx, opts, &atlas, renderer, tag);
+                    let mesh =
+                        render_glyph_run(&glyph_run, run_idx, opts, &atlas, scale, renderer, tag);
                     instrs.push(DrawInstruction::Draw(mesh));
                     run_idx += 1;
                 }
@@ -185,6 +217,7 @@ fn render_glyph_run(
     run_idx: usize,
     opts: DebugRenderOptions,
     atlas: &RenderedAtlas,
+    scale: f32,
     renderer: &Renderer,
     tag: DebugTag,
 ) -> DrawMesh {
@@ -197,7 +230,7 @@ fn render_glyph_run(
     let mut mesh = MeshBuilder::new(tag);
 
     if let Some(underline) = &style.underline {
-        render_underline(underline, glyph_run, &mut mesh);
+        render_underline(underline, glyph_run, scale, &mut mesh);
     }
 
     for glyph in glyph_run.glyphs() {
@@ -208,10 +241,10 @@ fn render_glyph_run(
         run_x += glyph.advance;
 
         let glyph_rect = Rectangle::new(
-            glyph_x + glyph_inf.place.left as f32,
-            glyph_y - glyph_inf.place.top as f32,
-            glyph_inf.place.width as f32,
-            glyph_inf.place.height as f32,
+            (glyph_x + glyph_inf.place.left as f32) / scale,
+            (glyph_y - glyph_inf.place.top as f32) / scale,
+            glyph_inf.place.width as f32 / scale,
+            glyph_inf.place.height as f32 / scale,
         );
 
         if opts.has(DebugRenderOptions::GLYPH) {
@@ -223,10 +256,10 @@ fn render_glyph_run(
     }
 
     if opts.has(DebugRenderOptions::BASELINE) {
-        mesh.draw_filled_box(
-            &Rectangle::new(glyph_run.offset(), glyph_run.baseline(), glyph_run.advance(), 1.),
-            [0., 0., 1., 0.7],
-        );
+        let rect =
+            Rectangle::new(glyph_run.offset(), glyph_run.baseline(), glyph_run.advance(), 1.) /
+                scale;
+        mesh.draw_filled_box(&rect, [0., 0., 1., 0.7]);
     }
 
     mesh.alloc(renderer).draw_with_textures(vec![atlas.texture.clone()])
@@ -235,6 +268,7 @@ fn render_glyph_run(
 fn render_underline(
     underline: &parley::layout::Decoration<Color>,
     glyph_run: &parley::GlyphRun<'_, Color>,
+    scale: f32,
     mesh: &mut MeshBuilder,
 ) {
     let color = underline.brush;
@@ -252,13 +286,13 @@ fn render_underline(
     // Remember that we are using a y-down coordinate system
     // If there's a custom width, because this is an underline, we want the custom
     // width to go down from the default expectation
-    let y = glyph_run.baseline() - offset + width / 2.;
+    let y = (glyph_run.baseline() - offset + width / 2.) / scale;
 
-    let start_x = glyph_run.offset();
-    let end_x = start_x + glyph_run.advance();
+    let start_x = glyph_run.offset() / scale;
+    let end_x = start_x + glyph_run.advance() / scale;
 
     let start = Point::new(start_x, y);
     let end = Point::new(end_x, y);
 
-    mesh.draw_line(start, end, color, width);
+    mesh.draw_line(start, end, color, width / scale);
 }

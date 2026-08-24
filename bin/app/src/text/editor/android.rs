@@ -21,7 +21,7 @@ use std::cmp::{max, min};
 use super::driver::ParleyDriverWrapper;
 use crate::{
     android::textinput::{AndroidTextInput, AndroidTextInputState},
-    gfx::Point,
+    gfx::{DebugTag, DrawInstruction, Point, Rectangle, Renderer},
     mesh::Color,
     prop::{PropertyAtomicGuard, PropertyColor, PropertyFloat32, PropertyStr},
     text,
@@ -34,7 +34,7 @@ pub struct Editor {
     pub state: AndroidTextInputState,
     pub recvr: async_channel::Receiver<AndroidTextInputState>,
 
-    layout: parley::Layout<Color>,
+    layout: text::TextLayout,
     width: Option<f32>,
 
     text: PropertyStr,
@@ -126,7 +126,43 @@ impl Editor {
         &self.layout
     }
 
+    /// Render the editor text. Meshes are emitted in virtual units.
+    pub fn render_instrs(&self, renderer: &Renderer, tag: DebugTag) -> Vec<DrawInstruction> {
+        text::render_layout(&self.layout, renderer, tag)
+    }
+
+    /// Selection highlight rectangles in virtual units.
+    pub fn selection_rects(&self) -> Vec<Rectangle> {
+        let mut rects = vec![];
+        let sel = self.selection(1);
+        if sel.is_collapsed() {
+            return rects
+        }
+
+        let scale = self.window_scale.get();
+        sel.geometry_with(&self.layout, |rect: parley::BoundingBox, _| {
+            rects.push(Rectangle::from(rect) / scale);
+        });
+        rects
+    }
+
+    /// Selection anchor and focus endpoint positions in virtual units.
+    pub fn selection_endpoints(&self) -> Option<(Point, Point)> {
+        let sel = self.selection(1);
+        if sel.is_collapsed() {
+            return None
+        }
+
+        let scale = self.window_scale.get();
+        let first = Rectangle::from(sel.anchor().geometry(&self.layout, 0.)).pos() / scale;
+        let last = Rectangle::from(sel.focus().geometry(&self.layout, 0.)).pos() / scale;
+        Some((first, last))
+    }
+
     pub fn move_to_pos(&mut self, pos: Point) {
+        // The layout coordinates are physical so scale the virtual
+        // position up before hit testing.
+        let pos = pos * self.window_scale.get();
         let cursor = parley::Cursor::from_point(&self.layout, pos.x, pos.y);
         let cursor_idx = cursor.index();
         t!("  move_to_pos: {cursor_idx}");
@@ -138,6 +174,7 @@ impl Editor {
     }
 
     pub fn select_word_at_point(&mut self, pos: Point) {
+        let pos = pos * self.window_scale.get();
         let select = parley::Selection::word_from_point(&self.layout, pos.x, pos.y);
         assert!(!select.is_collapsed());
         let select = select.text_range();
@@ -146,6 +183,7 @@ impl Editor {
 
     pub fn get_cursor_pos(&self) -> Point {
         let lineheight = self.lineheight.get();
+        let scale = self.window_scale.get();
         let cursor_idx = self.state.select.0;
 
         let cursor = if cursor_idx >= self.state.text.len() {
@@ -157,8 +195,8 @@ impl Editor {
         } else {
             parley::Cursor::from_byte_index(&self.layout, cursor_idx, parley::Affinity::Downstream)
         };
-        let cursor_rect = cursor.geometry(&self.layout, lineheight);
-        Point::new(cursor_rect.x0 as f32, cursor_rect.y0 as f32)
+        let cursor_rect = cursor.geometry(&self.layout, lineheight * scale);
+        Point::new(cursor_rect.x0 as f32 / scale, cursor_rect.y0 as f32 / scale)
     }
 
     pub fn insert(&mut self, txt: &str, atom: &mut PropertyAtomicGuard) {
@@ -180,10 +218,10 @@ impl Editor {
         self.width = Some(w);
     }
     pub fn width(&self) -> f32 {
-        self.layout().full_width()
+        self.layout().full_width() / self.window_scale.get()
     }
     pub fn height(&self) -> f32 {
-        self.layout().height()
+        self.layout().height() / self.window_scale.get()
     }
 
     pub fn selected_text(&self) -> Option<String> {

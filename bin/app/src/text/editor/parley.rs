@@ -17,7 +17,7 @@
  */
 
 use crate::{
-    gfx::Point,
+    gfx::{DebugTag, DrawInstruction, Point, Rectangle, Renderer},
     mesh::Color,
     prop::{PropertyAtomicGuard, PropertyColor, PropertyFloat32, PropertyStr},
     text::{self, FONT_STACK},
@@ -96,6 +96,41 @@ impl Editor {
         self.editor.try_layout().unwrap()
     }
 
+    /// Render the editor text. Meshes are emitted in virtual units.
+    pub fn render_instrs(&self, renderer: &Renderer, tag: DebugTag) -> Vec<DrawInstruction> {
+        text::render_raw_layout(self.layout(), self.window_scale.get(), renderer, tag)
+    }
+
+    /// Selection highlight rectangles in virtual units.
+    pub fn selection_rects(&self) -> Vec<Rectangle> {
+        let mut rects = vec![];
+        let sel = self.selection(1);
+        if sel.is_collapsed() {
+            return rects
+        }
+
+        let scale = self.window_scale.get();
+        let layout = self.layout();
+        sel.geometry_with(layout, |rect: parley::BoundingBox, _| {
+            rects.push(Rectangle::from(rect) / scale);
+        });
+        rects
+    }
+
+    /// Selection anchor and focus endpoint positions in virtual units.
+    pub fn selection_endpoints(&self) -> Option<(Point, Point)> {
+        let sel = self.selection(1);
+        if sel.is_collapsed() {
+            return None
+        }
+
+        let scale = self.window_scale.get();
+        let layout = self.layout();
+        let first = Rectangle::from(sel.anchor().geometry(layout, 0.)).pos() / scale;
+        let last = Rectangle::from(sel.focus().geometry(layout, 0.)).pos() / scale;
+        Some((first, last))
+    }
+
     pub fn move_to_pos(&mut self, _: Point) {
         unimplemented!()
     }
@@ -104,8 +139,9 @@ impl Editor {
     }
 
     pub fn get_cursor_pos(&self) -> Point {
+        let scale = self.window_scale.get();
         let cursor_rect = self.editor.cursor_geometry(0.).unwrap();
-        let cursor_pos = Point::new(cursor_rect.x0 as f32, cursor_rect.y0 as f32);
+        let cursor_pos = Point::new(cursor_rect.x0 as f32 / scale, cursor_rect.y0 as f32 / scale);
         cursor_pos
     }
 
@@ -119,13 +155,14 @@ impl Editor {
     }
 
     pub fn set_width(&mut self, w: f32) {
-        self.editor.set_width(Some(w));
+        // The editor layout is physical so scale the virtual width up.
+        self.editor.set_width(Some(w * self.window_scale.get()));
     }
     pub fn width(&self) -> f32 {
-        self.layout().full_width()
+        self.layout().full_width() / self.window_scale.get()
     }
     pub fn height(&self) -> f32 {
-        self.layout().height()
+        self.layout().height() / self.window_scale.get()
     }
 
     pub fn selected_text(&self) -> Option<String> {

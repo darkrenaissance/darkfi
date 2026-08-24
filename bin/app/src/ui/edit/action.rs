@@ -28,7 +28,7 @@ use crate::{
 macro_rules! d { ($($arg:tt)*) => { debug!(target: "ui::edit::action", $($arg)*); } }
 
 struct MenuItem {
-    layout: parley::Layout<Color>,
+    layout: text::TextLayout,
     action_id: u32,
     rect: Rectangle,
 }

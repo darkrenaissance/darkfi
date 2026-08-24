@@ -172,7 +172,7 @@ pub type ChatViewPtr = Arc<ChatView>;
 /// Transient "Copied link" overlay state. Rendered as a `DrawInstruction::Overlay`
 /// in its own draw call so it floats above the link and escapes the message clip rect.
 struct LinkToast {
-    text_layout: parley::Layout<Color>,
+    text_layout: text::TextLayout,
     anchor: Point,
     offset: f32,
     fg_color: Color,

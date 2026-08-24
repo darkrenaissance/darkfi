@@ -798,17 +798,11 @@ impl BaseEdit {
     }
 
     fn get_select_handles(&self, editor: &Editor) -> Option<(Point, Point)> {
-        let layout = editor.layout();
-
-        let sel = editor.selection(1);
-        if sel.is_collapsed() {
+        let endpoints = editor.selection_endpoints();
+        if endpoints.is_none() {
             assert!(!self.is_phone_select.load(Ordering::Relaxed));
-            return None
         }
-
-        let first = Rectangle::from(sel.anchor().geometry(layout, 0.)).pos();
-        let last = Rectangle::from(sel.focus().geometry(layout, 0.)).pos();
-        Some((first, last))
+        endpoints
     }
 
     fn try_handle_drag(&self, mut touch_pos: Point) -> bool {
@@ -1215,10 +1209,8 @@ impl BaseEdit {
 
         // Render text
         let editor = self.editor.lock();
-        let layout = editor.layout();
 
-        let mut render_instrs =
-            text::render_layout(layout, &self.renderer, gfxtag!("chatedit_txt_mesh"));
+        let mut render_instrs = editor.render_instrs(&self.renderer, gfxtag!("chatedit_txt_mesh"));
         instrs.append(&mut render_instrs);
 
         instrs
@@ -1228,15 +1220,14 @@ impl BaseEdit {
         let mut instrs = vec![DrawInstruction::Move(self.behave.inner_pos())];
 
         let editor = self.editor.lock();
-        let layout = editor.layout();
 
-        let sel = editor.selection(1);
         let sel_color = self.hi_bg_color.get();
-        if !sel.is_collapsed() {
+        let sel_rects = editor.selection_rects();
+        if !sel_rects.is_empty() {
             let mut mesh = MeshBuilder::new(gfxtag!("chatedit_select_mesh"));
-            sel.geometry_with(layout, |rect: parley::BoundingBox, _| {
-                mesh.draw_filled_box(&rect.into(), sel_color);
-            });
+            for rect in sel_rects {
+                mesh.draw_filled_box(&rect, sel_color);
+            }
 
             instrs.push(DrawInstruction::Draw(mesh.alloc(renderer).draw_untextured()));
         }

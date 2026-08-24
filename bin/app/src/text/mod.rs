@@ -29,6 +29,8 @@ pub mod atlas;
 mod editor;
 pub use editor::Editor;
 mod render;
+#[cfg(not(target_os = "android"))]
+pub use render::render_raw_layout;
 pub use render::{render_backgrounds, render_layout, render_layout_with_opts, DebugRenderOptions};
 
 pub static GLOBAL_FONT_CTX: LazyLock<parley::FontContext> = LazyLock::new(|| {
@@ -56,6 +58,59 @@ const FONT_STACK: &[parley::FontFamilyName<'_>] = &[
     parley::FontFamilyName::named("Noto Color Emoji"),
 ];
 
+/// A parley layout paired with the window scale it was built with.
+///
+/// Parley bakes the builder scale into every coordinate (font size,
+/// advances, glyph positions), so the underlying layout is in physical
+/// pixels. The renderer applies the window scale again via `SetScale`,
+/// so geometry consumed in virtual units must be divided by the scale
+/// exactly once. The accessors below do that division. Rendering code
+/// in `render.rs` divides when emitting meshes. Glyph rasterization
+/// still happens at physical resolution so text stays crisp.
+#[derive(Clone)]
+pub struct TextLayout {
+    layout: parley::Layout<Color>,
+    /// Scale parley baked into `layout`. Divide physical coords by this
+    /// to get virtual units.
+    scale: f32,
+}
+
+impl std::ops::Deref for TextLayout {
+    type Target = parley::Layout<Color>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.layout
+    }
+}
+
+impl std::ops::DerefMut for TextLayout {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.layout
+    }
+}
+
+impl Default for TextLayout {
+    fn default() -> Self {
+        Self { layout: parley::Layout::default(), scale: 1. }
+    }
+}
+
+impl TextLayout {
+    pub fn scale(&self) -> f32 {
+        self.scale
+    }
+
+    /// Height in virtual units
+    pub fn height(&self) -> f32 {
+        self.layout.height() / self.scale
+    }
+
+    /// Width in virtual units
+    pub fn width(&self) -> f32 {
+        self.layout.width() / self.scale
+    }
+}
+
 pub fn make_layout(
     text: &str,
     text_color: Color,
@@ -64,7 +119,7 @@ pub fn make_layout(
     window_scale: f32,
     width: Option<f32>,
     underlines: &[Range<usize>],
-) -> parley::Layout<Color> {
+) -> TextLayout {
     make_layout2(
         text,
         text_color,
@@ -90,7 +145,7 @@ pub fn make_layout2(
     foreground_colors: &[(Range<usize>, Color)],
     text_align: &str,
     overflow_wrap: &str,
-) -> parley::Layout<Color> {
+) -> TextLayout {
     THREAD_LAYOUT_CTX.with(|layout_ctx| {
         let text_align = match text_align {
             "start" => parley::Alignment::Start,
@@ -127,8 +182,10 @@ pub fn make_layout2(
         }
 
         let mut layout: parley::Layout<Color> = builder.build(text);
-        layout.break_all_lines(width);
+        // The wrap width is given in virtual units while the layout
+        // coordinates are physical, so scale it up before breaking.
+        layout.break_all_lines(width.map(|w| w * window_scale));
         layout.align(text_align, parley::AlignmentOptions::default());
-        layout
+        TextLayout { layout, scale: window_scale }
     })
 }

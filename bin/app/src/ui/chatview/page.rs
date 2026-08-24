@@ -94,7 +94,7 @@ pub struct PrivMessage {
     is_selected: bool,
 
     mesh_cache: Option<Vec<DrawInstruction>>,
-    txt_layout: Option<parley::Layout<Color>>,
+    txt_layout: Option<text::TextLayout>,
 
     /// Bounding rects of this message's URL runs in message-local coordinates,
     /// each tagged with its URL string. Populated in `gen_mesh`, used by
@@ -358,12 +358,13 @@ impl PrivMessage {
         self.is_selected
     }
 
-    /// Build the URL hit-rectangles for this message, in message-local coordinates.
-    /// Each URL-colored glyph run (`style().brush == url_text_color`) becomes a rect
-    /// `(timestamp_width + run.offset, run.baseline - ascent, run.advance,
-    /// ascent + descent)`. The run is tagged with its URL string by intersecting its
-    /// (coarse) font-run `text_range()` with the message's URL byte ranges in
-    /// `linetext`, so wrapped URLs and multiple URLs are handled correctly.
+    /// Build the URL hit-rectangles for this message, in message-local
+    /// virtual coordinates. Each URL-colored glyph run (`style().brush ==
+    /// url_text_color`) becomes a rect `(timestamp_width + run.offset,
+    /// run.baseline - ascent, run.advance, ascent + descent)`. The run is
+    /// tagged with its URL string by intersecting its (coarse) font-run
+    /// `text_range()` with the message's URL byte ranges in `linetext`,
+    /// so wrapped URLs and multiple URLs are handled correctly.
     fn compute_url_click_rects(
         &self,
         timestamp_width: f32,
@@ -385,6 +386,9 @@ impl PrivMessage {
             return rects
         }
 
+        // Layout coordinates are physical so divide by the scale to get
+        // the virtual units the hit test positions use.
+        let scale = layout.scale();
         for line in layout.lines() {
             for item in line.items() {
                 let parley::PositionedLayoutItem::GlyphRun(glyph_run) = item else { continue };
@@ -404,10 +408,10 @@ impl PrivMessage {
                 let url_str = linetext[url_range.clone()].to_string();
 
                 let metrics = glyph_run.run().metrics();
-                let x = timestamp_width + glyph_run.offset();
-                let y = glyph_run.baseline() - metrics.ascent;
-                let w = glyph_run.advance();
-                let h = metrics.ascent + metrics.descent;
+                let x = timestamp_width + glyph_run.offset() / scale;
+                let y = (glyph_run.baseline() - metrics.ascent) / scale;
+                let w = glyph_run.advance() / scale;
+                let h = (metrics.ascent + metrics.descent) / scale;
                 rects.push((url_str, Rectangle::new(x, y, w, h)));
             }
         }

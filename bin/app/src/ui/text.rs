@@ -24,7 +24,7 @@ use tracing::instrument;
 
 use crate::{
     gfx::{gfxtag, DrawCall, DrawInstruction, Rectangle, RenderApi, Renderer},
-    mesh::{Color, MeshBuilder},
+    mesh::MeshBuilder,
     prop::{
         PropertyAtomicGuard, PropertyBool, PropertyColor, PropertyEnum, PropertyFloat32,
         PropertyRect, PropertyStr, PropertyUint32, Role,
@@ -64,7 +64,7 @@ pub struct Text {
     window_scale: PropertyFloat32,
     /// Cached layout + rendered instrs. `None` means stale: recompute in
     /// the draw pass. Layout is the expensive part (shaping, line breaks).
-    draw_cache: SyncMutex<Option<(parley::Layout<Color>, Vec<DrawInstruction>)>>,
+    draw_cache: SyncMutex<Option<(text::TextLayout, Vec<DrawInstruction>)>>,
 }
 
 impl Text {
@@ -118,7 +118,7 @@ impl Text {
         Pimpl::Text(self_)
     }
 
-    fn make_layout(&self) -> parley::Layout<Color> {
+    fn make_layout(&self) -> text::TextLayout {
         let text = self.text.get();
         let font_size = self.font_size.get();
         let lineheight = self.lineheight.get();
@@ -153,7 +153,7 @@ impl Text {
         )
     }
 
-    fn regen_mesh(&self, layout: &parley::Layout<Color>) -> Vec<DrawInstruction> {
+    fn regen_mesh(&self, layout: &text::TextLayout) -> Vec<DrawInstruction> {
         let mut debug_opts = text::DebugRenderOptions::OFF;
         if self.debug.get() {
             debug_opts |= text::DebugRenderOptions::BASELINE;
