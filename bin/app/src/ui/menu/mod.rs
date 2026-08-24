@@ -153,6 +153,7 @@ pub struct Menu {
     long_press_task: SyncMutex<Option<smol::Task<()>>>,
     scroll_start_accel: PropertyFloat32,
     scroll_resist: PropertyFloat32,
+    overscroll: PropertyFloat32,
     motion_cv: Arc<CondVar>,
     speed: AtomicF32,
     is_edit_mode: AtomicBool,
@@ -204,6 +205,7 @@ impl Menu {
             PropertyFloat32::wrap(node_ref, Role::Internal, "scroll_start_accel", 0).unwrap();
         let scroll_resist =
             PropertyFloat32::wrap(node_ref, Role::Internal, "scroll_resist", 0).unwrap();
+        let overscroll = PropertyFloat32::wrap(node_ref, Role::Internal, "overscroll", 0).unwrap();
 
         let motion_cv = Arc::new(CondVar::new());
 
@@ -243,6 +245,7 @@ impl Menu {
             long_press_task: SyncMutex::new(None),
             scroll_start_accel,
             scroll_resist,
+            overscroll,
             motion_cv,
             speed: AtomicF32::new(0.),
             is_edit_mode: AtomicBool::new(false),
@@ -578,7 +581,8 @@ impl Menu {
         let content_height = num_items * item_height;
 
         let rect = self.rect.get();
-        let max_scroll = (content_height - rect.h).max(0.);
+        let overscroll = self.overscroll.get();
+        let max_scroll = (overscroll + content_height - rect.h).max(0.);
         let scroll = scroll.clamp(0., max_scroll);
         self.scroll.store(scroll, Ordering::Relaxed);
     }

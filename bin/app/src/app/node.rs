@@ -822,6 +822,12 @@ pub fn create_menu(name: &str) -> SceneNode {
     prop.set_range_f32(0., 1.);
     node.add_property(prop).unwrap();
 
+    let mut prop = Property::new("overscroll", PropertyType::Float32, PropertySubType::Pixel);
+    prop.set_ui_text("Overscroll", "Extra scroll distance past the content bottom");
+    prop.set_defaults_f32(vec![400.]).unwrap();
+    prop.set_range_f32(0., f32::MAX);
+    node.add_property(prop).unwrap();
+
     let mut prop = Property::new("fade_zone", PropertyType::Float32, PropertySubType::Pixel);
     prop.set_ui_text("Fade Zone", "Fade out items in the last X pixels");
     prop.set_range_f32(0., f32::MAX);
