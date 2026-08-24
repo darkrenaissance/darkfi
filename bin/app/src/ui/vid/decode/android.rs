@@ -70,7 +70,7 @@ pub fn spawn_decoder_thread(
 
             if (frame_idx % 10) == 0 {
                 let pct_loaded = 100. * frame_idx as f32 / 150.0;
-                d!("Decoded video {pct_loaded:.2}%%");
+                d!("Decoded video {pct_loaded:.2}%");
             }
 
             assert!(frame_idx <= 150);

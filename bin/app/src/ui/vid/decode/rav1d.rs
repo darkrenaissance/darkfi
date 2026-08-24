@@ -204,7 +204,7 @@ fn process(
     };
     if (*frame_idx % 10) == 0 {
         let pct_loaded = 100. * *frame_idx as f32 / num_frames as f32;
-        d!("Decoded video {pct_loaded:.2}%%");
+        d!("Decoded video {pct_loaded:.2}%");
     }
     *frame_idx += 1;
     Ok(())

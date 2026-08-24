@@ -18,6 +18,7 @@
 
 use sled_overlay::sled;
 use smol::Task;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex as SyncMutex};
 
 #[cfg(target_os = "android")]
@@ -30,6 +31,7 @@ use crate::{
     gfx::{EpochIndex, GraphicsEventPublisherPtr, Renderer},
     prop::{PropertyAtomicGuard, PropertyValue, Role},
     scene::{Pimpl, SceneNode, SceneNodePtr, SceneNodeType},
+    sfx,
     ui::{RedrawTrigger, Window},
     util::i18n::I18nBabelFish,
     ExecutorPtr,
@@ -48,6 +50,8 @@ macro_rules! i { ($($arg:tt)*) => { info!(target: "app", $($arg)*); } }
 //macro_rules! w { ($($arg:tt)*) => { warn!(target: "app", $($arg)*); } }
 macro_rules! e { ($($arg:tt)*) => { error!(target: "app", $($arg)*); } }
 
+const IS_FIRST_TIME_KEY: &[u8] = b"is_first_time";
+
 //fn print_type_of<T>(_: &T) {
 //    println!("{}", std::any::type_name::<T>())
 //}
@@ -65,6 +69,9 @@ pub struct App {
     pub redraw_trigger: RedrawTrigger,
     /// Receiver side of the redraw queue, handed to the window in `setup()`.
     redraw_rx: async_channel::Receiver<()>,
+    /// True if this is the first time the app has ever been run.
+    /// Loaded from the sled DB in `setup()`.
+    pub is_first_time: AtomicBool,
 }
 
 impl App {
@@ -77,6 +84,7 @@ impl App {
             tasks: SyncMutex::new(vec![]),
             redraw_trigger,
             redraw_rx,
+            is_first_time: AtomicBool::new(false),
         })
     }
 
@@ -88,6 +96,14 @@ impl App {
         let setting_root = SceneNode::new("setting", SceneNodeType::SettingRoot);
         let setting_root = setting_root.setup_null();
         let settings_tree = db.open_tree("settings").unwrap();
+
+        let flags_tree = db.open_tree("app_flags").unwrap();
+        let is_first_time = !flags_tree.contains_key(IS_FIRST_TIME_KEY).unwrap();
+        if is_first_time {
+            flags_tree.insert(IS_FIRST_TIME_KEY, b"").unwrap();
+            flags_tree.flush().unwrap();
+        }
+        self.is_first_time.store(is_first_time, Ordering::Relaxed);
         // Commenting this out since it doesnt compile when enable-plugins isnt enabled.
         /*
         let settings = Arc::new(PluginSettings {
@@ -196,6 +212,9 @@ impl App {
     /// Begins the draw of the tree, and then starts the UI procs.
     pub async fn start(self: Arc<Self>, event_pub: GraphicsEventPublisherPtr, epoch: EpochIndex) {
         d!("Starting app epoch={epoch}");
+        if self.is_first_time.load(Ordering::Relaxed) {
+            sfx::play_commup();
+        }
         let mut atom = PropertyAtomicGuard::none();
 
         let window_node = self.sg_root.lookup_node("/window").unwrap();
