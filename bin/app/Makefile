@@ -47,33 +47,33 @@ linux-release: build-release
 linux-debug: build-debug
 	-mv darkfi-app darkfi-app_debug.linux
 win-release: $(SRC) $(PROOFS_BIN) fonts
-	$(CARGO) build --release $(RELEASE_FEATURES)
+	$(CARGO) build --no-default-features --release $(RELEASE_FEATURES)
 	-mv target/release/darkfi-app.exe .
 win-debug: $(SRC) $(PROOFS_BIN) fonts
-	$(CARGO) build $(DEBUG_FEATURES)
+	$(CARGO) build --no-default-features $(DEBUG_FEATURES)
 	-mv target/debug/darkfi-app.exe .
 android-release: $(SRC) $(PROOFS_BIN) fonts assets/forest_720x1280.mp4
-	podman run -v $(shell pwd)/../../:/root/darkfi -w /root/darkfi/bin/app/ -t apk cargo quad-apk build --release $(RELEASE_FEATURES)
+	podman run -v $(shell pwd)/../../:/root/darkfi -w /root/darkfi/bin/app/ -t apk cargo quad-apk build --no-default-features --release $(RELEASE_FEATURES)
 	-mv $(RELEASE_APK) darkfi-app.apk
 android-debug: $(SRC) $(PROOFS_BIN) fonts assets/forest_720x1280.mp4
-	podman run -v $(shell pwd)/../../:/root/darkfi -w /root/darkfi/bin/app/ -t apk cargo quad-apk build $(DEBUG_FEATURES)
+	podman run -v $(shell pwd)/../../:/root/darkfi -w /root/darkfi/bin/app/ -t apk cargo quad-apk build --no-default-features $(DEBUG_FEATURES)
 	-mv $(DEBUG_APK) darkfi-app_debug.apk
 
 # Windows cross-compilation using Docker/Podman
 win-docker-release: $(SRC)
 	podman run -v $(shell pwd):/root/build -w /root/build/ -t windows \
-		cargo build --release --target x86_64-pc-windows-gnu $(RELEASE_FEATURES)
+		cargo build --no-default-features --release --target x86_64-pc-windows-gnu $(RELEASE_FEATURES)
 	./release/win/package.sh release
 win-docker-debug: $(SRC)
 	podman run -v $(shell pwd):/root/build -w /root/build/ -t windows \
-		cargo build --target x86_64-pc-windows-gnu $(DEBUG_FEATURES)
+		cargo build --no-default-features --target x86_64-pc-windows-gnu $(DEBUG_FEATURES)
 	./release/win/package.sh debug
 
 build-release: $(SRC) $(PROOFS_BIN) fonts assets/forest_1920x1080.ivf
-	$(CARGO) build --release $(RELEASE_FEATURES)
+	$(CARGO) build --no-default-features --release $(RELEASE_FEATURES)
 	-mv target/release/darkfi-app .
 build-debug: $(SRC) $(PROOFS_BIN) fonts assets/forest_1920x1080.ivf
-	$(CARGO) build $(DEBUG_FEATURES)
+	$(CARGO) build --no-default-features $(DEBUG_FEATURES)
 	-mv target/debug/darkfi-app .
 
 # Download font data
