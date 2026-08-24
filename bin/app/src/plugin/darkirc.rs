@@ -197,7 +197,7 @@ impl DarkIrc {
 
         i!("Starting DarkIRC backend");
 
-        let setting_tree = evgr_db.open_tree_default("settings")?;
+        let setting_tree = db.open_tree_default("settings")?;
         i!("Opened darkirc_settings tree from unified db");
 
         // Use the unified db for reading channels (UI stores channels there)
@@ -983,9 +983,8 @@ impl DarkIrc {
         let mut on_modify = OnModify::new(ex.clone(), self.node.clone(), me.clone());
         async fn save_nick(self_: Arc<DarkIrc>, _batch: BatchGuardPtr) {
             if let Err(err) = self_.nick_tree.insert(b"value", self_.nick.get().as_bytes()) {
-                e!("Failed persisting nick to sled: {err}");
+                e!("Failed persisting nick to kvdb: {err}");
             }
-            let _ = self_.nick_tree.flush();
         }
         on_modify.when_change(self.nick.prop(), save_nick);
 

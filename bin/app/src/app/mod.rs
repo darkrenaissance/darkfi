@@ -72,7 +72,7 @@ pub struct App {
     /// Receiver side of the redraw queue, handed to the window in `setup()`.
     redraw_rx: async_channel::Receiver<()>,
     /// True if this is the first time the app has ever been run.
-    /// Loaded from the sled DB in `setup()`.
+    /// Loaded from the KVDB in `setup()`.
     pub is_first_time: AtomicBool,
 }
 
@@ -98,12 +98,10 @@ impl App {
         let setting_root = SceneNode::new("setting", SceneNodeType::SettingRoot);
         let setting_root = setting_root.setup_null();
         let settings_tree = db.open_tree_default("settings").unwrap();
-
-        let flags_tree = db.open_tree("app_flags").unwrap();
+        let flags_tree = db.open_tree_default("app_flags").unwrap();
         let is_first_time = !flags_tree.contains_key(IS_FIRST_TIME_KEY).unwrap();
         if is_first_time {
             flags_tree.insert(IS_FIRST_TIME_KEY, b"").unwrap();
-            flags_tree.flush().unwrap();
         }
         self.is_first_time.store(is_first_time, Ordering::Relaxed);
         // Commenting this out since it doesnt compile when enable-plugins isnt enabled.
