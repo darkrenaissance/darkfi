@@ -57,6 +57,9 @@ static MUTED_TARGETS: &[&'static str] = &[
     "turso_sqlite",
     "walletdb",
     "rpc::client",
+    // Bridged `log` crate records (pulseaudio protocol trace spam)
+    "log",
+    "pulseaudio",
 ];
 #[cfg(not(target_os = "android"))]
 static ALLOW_TRACE: &[&'static str] = &["ui", "app", "gfx", "plugin", "app", "main"];
@@ -126,6 +129,7 @@ pub fn setup_logging() -> Option<WorkerGuard> {
                         "walletdb",
                         "rpc::client",
                     ])
+                    .targets_level(["log", "pulseaudio"], Level::Warn)
                     .default_level(Level::Trace),
             );
 

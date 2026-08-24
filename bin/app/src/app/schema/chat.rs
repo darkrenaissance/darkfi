@@ -1285,17 +1285,32 @@ pub async fn make(
     layer_node.link(node);
 
     // Commands help hint
-    let cmd_layer_node = create_layer("cmd_hint_layer");
+    let mut cmd_layer_node = create_layer("cmd_hint_layer");
+
+    // Number of visible command rows (0, 1, or 2). Drives the popup height
+    // so it shrinks/grows as rows are filtered by the typed text.
+    let mut prop = Property::new("vis_rows", PropertyType::Float32, PropertySubType::Null);
+    prop.set_defaults_f32(vec![0.]).unwrap();
+    cmd_layer_node.add_property(prop).unwrap();
+    let cmd_vis_rows_prop = cmd_layer_node.get_property("vis_rows").unwrap();
+
+    // Whether the /nick row is visible (1.0/0.0). Positions the /me row
+    // below it when both rows are shown.
+    let mut prop = Property::new("nick_row_vis", PropertyType::Float32, PropertySubType::Null);
+    prop.set_defaults_f32(vec![0.]).unwrap();
+    cmd_layer_node.add_property(prop).unwrap();
+    let nick_row_vis_prop = cmd_layer_node.get_property("nick_row_vis").unwrap();
+
     let prop = cmd_layer_node.get_property("rect").unwrap();
     prop.set_f32(atom, Role::App, 0, 5.).unwrap();
-    let code = cc.compile("editz_bg_top_y - CMD_HELP_HEIGHT - CMD_HELP_GAP").unwrap();
-    //let code = cc.compile("h - 60 - 80").unwrap();
-    //let code = cc.compile("h - 60 - 300").unwrap();
+    let code = cc.compile("editz_bg_top_y - CMD_HELP_HEIGHT * vis_rows - CMD_HELP_GAP").unwrap();
     prop.set_expr(atom, Role::App, 1, code).unwrap();
     let code = cc.compile("w - 2 * CMD_HELP_GAP").unwrap();
     prop.set_expr(atom, Role::App, 2, code).unwrap();
-    prop.set_f32(atom, Role::App, 3, CMD_HELP_HEIGHT).unwrap();
+    let code = cc.compile("CMD_HELP_HEIGHT * vis_rows").unwrap();
+    prop.set_expr(atom, Role::App, 3, code).unwrap();
     prop.add_depend(&editbox_bg_rect_prop, 1, "editz_bg_top_y");
+    prop.add_depend(&cmd_vis_rows_prop, 0, "vis_rows");
     cmd_layer_node.set_property_bool(atom, Role::App, "is_visible", false).unwrap();
     cmd_layer_node.set_property_u32(atom, Role::App, "z_index", 3).unwrap();
     let cmd_layer_node =
@@ -1304,6 +1319,39 @@ pub async fn make(
 
     let cmd_hint_is_visible =
         PropertyBool::wrap(&cmd_layer_node, Role::App, "is_visible", 0).unwrap();
+
+    // The /nick row sits at the top of the popup
+    let nick_row_node = create_layer("nick_row");
+    let prop = nick_row_node.get_property("rect").unwrap();
+    prop.set_f32(atom, Role::App, 0, 0.).unwrap();
+    prop.set_f32(atom, Role::App, 1, 0.).unwrap();
+    let code = cc.compile("w").unwrap();
+    prop.set_expr(atom, Role::App, 2, code).unwrap();
+    prop.set_f32(atom, Role::App, 3, CMD_HELP_HEIGHT).unwrap();
+    nick_row_node.set_property_bool(atom, Role::App, "is_visible", false).unwrap();
+    let nick_row_node =
+        nick_row_node.setup(|me| Layer::new(me, renderer.clone(), redraw.clone())).await;
+    cmd_layer_node.link(nick_row_node.clone());
+
+    let nick_row_is_visible =
+        PropertyBool::wrap(&nick_row_node, Role::App, "is_visible", 0).unwrap();
+
+    // The /me row sits below the /nick row, or at the top when /nick is filtered out
+    let me_row_node = create_layer("me_row");
+    let prop = me_row_node.get_property("rect").unwrap();
+    prop.set_f32(atom, Role::App, 0, 0.).unwrap();
+    let code = cc.compile("CMD_HELP_HEIGHT * nick_row_vis").unwrap();
+    prop.set_expr(atom, Role::App, 1, code).unwrap();
+    let code = cc.compile("w").unwrap();
+    prop.set_expr(atom, Role::App, 2, code).unwrap();
+    prop.set_f32(atom, Role::App, 3, CMD_HELP_HEIGHT).unwrap();
+    prop.add_depend(&nick_row_vis_prop, 0, "nick_row_vis");
+    me_row_node.set_property_bool(atom, Role::App, "is_visible", false).unwrap();
+    let me_row_node =
+        me_row_node.setup(|me| Layer::new(me, renderer.clone(), redraw.clone())).await;
+    cmd_layer_node.link(me_row_node.clone());
+
+    let me_row_is_visible = PropertyBool::wrap(&me_row_node, Role::App, "is_visible", 0).unwrap();
 
     // Make nick label clickable
     let node = create_button("nickcmd_btn");
@@ -1330,9 +1378,36 @@ pub async fn make(
     layer_node.push_task(listen_click);
 
     let node = node.setup(|me| Button::new(me, renderer.clone(), redraw.clone())).await;
-    cmd_layer_node.link(node);
+    nick_row_node.link(node);
 
-    // Create the actionbar bg
+    // Make /me label clickable
+    let node = create_button("mecmd_btn");
+    node.set_property_bool(atom, Role::App, "is_active", true).unwrap();
+    let prop = node.get_property("rect").unwrap();
+    prop.set_f32(atom, Role::App, 0, 0.).unwrap();
+    prop.set_f32(atom, Role::App, 1, 0.).unwrap();
+    prop.set_f32(atom, Role::App, 2, CMD_HELP_NICK_CMD_WIDTH).unwrap();
+    prop.set_f32(atom, Role::App, 3, CMD_HELP_HEIGHT).unwrap();
+
+    let (slot, recvr) = Slot::new("mecmd_clicked");
+    node.register("click", slot).unwrap();
+    let editz_text2 = editz_text.clone();
+    let redraw2 = redraw.clone();
+    let listen_click = ex.spawn(async move {
+        while let Ok(_) = recvr.recv().await {
+            info!(target: "app::chat", "clicked /me");
+            let atom = &mut redraw2.make_guard(gfxtag!("mecmd_clicked action"));
+            // This will autohide this popup due to ending in a space.
+            // Setting the property will retrigger the logic whether to show popup.
+            editz_text2.set(atom, "/me ");
+        }
+    });
+    layer_node.push_task(listen_click);
+
+    let node = node.setup(|me| Button::new(me, renderer.clone(), redraw.clone())).await;
+    me_row_node.link(node);
+
+    // Create the /nick row actionbar bg
     let node = create_vector_art("cmd_hint_bg");
     let prop = node.get_property("rect").unwrap();
     prop.set_f32(atom, Role::App, 0, 0.).unwrap();
@@ -1373,7 +1448,7 @@ pub async fn make(
     );
 
     let node = node.setup(|me| VectorArt::new(me, shape, renderer.clone(), redraw.clone())).await;
-    cmd_layer_node.link(node);
+    nick_row_node.link(node);
 
     // Create some text
     let node = create_text("cmd_nick_label");
@@ -1398,7 +1473,7 @@ pub async fn make(
             Text::new(me, window_scale.clone(), renderer.clone(), i18n_fish.clone(), redraw.clone())
         })
         .await;
-    cmd_layer_node.link(node);
+    nick_row_node.link(node);
 
     // Create some text
     let node = create_text("cmd_nick_desc_label");
@@ -1423,7 +1498,96 @@ pub async fn make(
             Text::new(me, window_scale.clone(), renderer.clone(), i18n_fish.clone(), redraw.clone())
         })
         .await;
-    cmd_layer_node.link(node);
+    nick_row_node.link(node);
+
+    // Create the /me row actionbar bg
+    let node = create_vector_art("me_cmd_hint_bg");
+    let prop = node.get_property("rect").unwrap();
+    prop.set_f32(atom, Role::App, 0, 0.).unwrap();
+    prop.set_f32(atom, Role::App, 1, 0.).unwrap();
+    prop.set_expr(atom, Role::App, 2, expr::load_var("w")).unwrap();
+    prop.set_expr(atom, Role::App, 3, expr::load_var("h")).unwrap();
+    node.set_property_u32(atom, Role::App, "z_index", 0).unwrap();
+
+    let mut shape = VectorShape::new();
+    shape.add_filled_box(
+        expr::const_f32(CMD_HELP_GAP),
+        expr::const_f32(CMD_HELP_GAP),
+        cc.compile("w - CMD_HELP_GAP").unwrap(),
+        cc.compile("h - CMD_HELP_GAP").unwrap(),
+        [0., 0.11, 0.11, 0.4],
+    );
+    shape.add_filled_box(
+        expr::const_f32(CMD_HELP_GAP),
+        expr::const_f32(CMD_HELP_GAP),
+        expr::const_f32(CMD_HELP_NICK_CMD_WIDTH),
+        cc.compile("h - CMD_HELP_GAP").unwrap(),
+        [0., 0.3, 0.25, 1.],
+    );
+    shape.add_filled_box(
+        expr::const_f32(CMD_HELP_NICK_CMD_WIDTH),
+        expr::const_f32(CMD_HELP_GAP),
+        expr::const_f32(CMD_HELP_NICK_DESC_WIDTH),
+        cc.compile("h - CMD_HELP_GAP").unwrap(),
+        [0., 0.11, 0.11, 1.],
+    );
+    shape.add_outline(
+        expr::const_f32(0.),
+        expr::const_f32(0.),
+        expr::load_var("w"),
+        expr::load_var("h"),
+        1.,
+        [0.29, 0.51, 0.45, 1.],
+    );
+
+    let node = node.setup(|me| VectorArt::new(me, shape, renderer.clone(), redraw.clone())).await;
+    me_row_node.link(node);
+
+    // Create some text
+    let node = create_text("cmd_me_label");
+    let prop = node.get_property("rect").unwrap();
+    prop.set_f32(atom, Role::App, 0, CMD_HELP_CMD_LABEL_X_INSET).unwrap();
+    prop.set_f32(atom, Role::App, 1, CMD_HELP_LABEL_Y).unwrap();
+    prop.set_f32(atom, Role::App, 2, 1000.).unwrap();
+    prop.set_f32(atom, Role::App, 3, 1000.).unwrap();
+    node.set_property_f32(atom, Role::App, "font_size", CMD_HELP_CMD_FONTSIZE).unwrap();
+    node.set_property_str(atom, Role::App, "text", "/me").unwrap();
+    let prop = node.get_property("text_color").unwrap();
+    prop.set_f32(atom, Role::App, 0, 0.64).unwrap();
+    prop.set_f32(atom, Role::App, 1, 1.).unwrap();
+    prop.set_f32(atom, Role::App, 2, 0.83).unwrap();
+    prop.set_f32(atom, Role::App, 3, 1.).unwrap();
+    node.set_property_u32(atom, Role::App, "z_index", 1).unwrap();
+
+    let node = node
+        .setup(|me| {
+            Text::new(me, window_scale.clone(), renderer.clone(), i18n_fish.clone(), redraw.clone())
+        })
+        .await;
+    me_row_node.link(node);
+
+    // Create some text
+    let node = create_text("cmd_me_desc_label");
+    let prop = node.get_property("rect").unwrap();
+    prop.set_f32(atom, Role::App, 0, CMD_HELP_NICK_DESC_X).unwrap();
+    prop.set_f32(atom, Role::App, 1, CMD_HELP_LABEL_Y).unwrap();
+    prop.set_f32(atom, Role::App, 2, 1000.).unwrap();
+    prop.set_f32(atom, Role::App, 3, 1000.).unwrap();
+    node.set_property_f32(atom, Role::App, "font_size", FONTSIZE).unwrap();
+    node.set_property_str(atom, Role::App, "text", "Send an action message").unwrap();
+    let prop = node.get_property("text_color").unwrap();
+    prop.set_f32(atom, Role::App, 0, 0.).unwrap();
+    prop.set_f32(atom, Role::App, 1, 0.94).unwrap();
+    prop.set_f32(atom, Role::App, 2, 1.).unwrap();
+    prop.set_f32(atom, Role::App, 3, 1.).unwrap();
+    node.set_property_u32(atom, Role::App, "z_index", 1).unwrap();
+
+    let node = node
+        .setup(|me| {
+            Text::new(me, window_scale.clone(), renderer.clone(), i18n_fish.clone(), redraw.clone())
+        })
+        .await;
+    me_row_node.link(node);
 
     let editz_text_sub = editz_text.prop().subscribe_modify();
     let redraw = redraw.clone();
@@ -1436,15 +1600,33 @@ pub async fn make(
             // We want to avoid setting the property multiple times to the same value
             // because then it triggers unnecessary redraw work.
 
-            // Only show popup for "/ni", "/nick", but not for: "", "/nick ", "/nick foo"
-            if !text.is_empty() && "/nick".starts_with(&text) && text.len() <= "/nick".len() {
-                if !cmd_hint_is_visible.get() {
-                    cmd_hint_is_visible.set(atom, true);
-                }
-            } else {
-                if cmd_hint_is_visible.get() {
-                    cmd_hint_is_visible.set(atom, false);
-                }
+            // Show the /nick row for any prefix of "/nick", including the
+            // full command (it still needs an argument). Show the /me row
+            // only for strict prefixes ("/", "/m") — once "/me" is fully
+            // typed the popup hides.
+            let nick_vis = !text.is_empty() && "/nick".starts_with(&text);
+            let me_vis = !text.is_empty() && text != "/me" && "/me".starts_with(&text);
+            let popup_vis = nick_vis || me_vis;
+
+            if nick_vis != nick_row_is_visible.get() {
+                nick_row_is_visible.set(atom, nick_vis);
+            }
+            if me_vis != me_row_is_visible.get() {
+                me_row_is_visible.set(atom, me_vis);
+            }
+            if popup_vis != cmd_hint_is_visible.get() {
+                cmd_hint_is_visible.set(atom, popup_vis);
+            }
+
+            // Geometry inputs: the row count drives the popup height and
+            // the /me row sits below the /nick row when both are shown.
+            let vis_rows = (nick_vis as u8 + me_vis as u8) as f32;
+            if cmd_vis_rows_prop.get_f32(0).unwrap() != vis_rows {
+                cmd_vis_rows_prop.set_f32(atom, Role::App, 0, vis_rows).unwrap();
+            }
+            let nick_vis_f = nick_vis as u8 as f32;
+            if nick_row_vis_prop.get_f32(0).unwrap() != nick_vis_f {
+                nick_row_vis_prop.set_f32(atom, Role::App, 0, nick_vis_f).unwrap();
             }
         }
     });
