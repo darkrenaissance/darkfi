@@ -134,24 +134,29 @@ impl EmojiPicker {
         }
     }
 
-    fn emojis_per_line(&self) -> f32 {
+    /// Number of emoji cells that fit in a row (at least 1)
+    fn emojis_per_line(&self) -> usize {
         let cell = self.cell();
         let rect_w = self.rect.get().w;
-        //d!("rect_w = {rect_w}");
-        (rect_w / cell.w).floor()
+        ((rect_w / cell.w).floor() as usize).max(1)
     }
+
+    /// Horizontal pitch between cells. The row is spread evenly across the
+    /// full width, so leftover space is distributed into the gaps.
     fn calc_off_x(&self) -> f32 {
         let cell = self.cell();
         let rect_w = self.rect.get().w;
         let n = self.emojis_per_line();
-        let off_x = (rect_w - cell.w) / (n - 1.);
-        off_x
+        if n <= 1 {
+            return 0.
+        }
+        (rect_w - cell.w) / (n as f32 - 1.)
     }
 
     fn max_scroll(&self) -> f32 {
         let emojis_len = DEFAULT_EMOJI_LIST.len() as f32;
         let cell = self.cell();
-        let cols = self.emojis_per_line();
+        let cols = self.emojis_per_line() as f32;
         let rows = (emojis_len / cols).ceil();
 
         let rect_h = self.rect.get().h;
@@ -165,22 +170,24 @@ impl EmojiPicker {
     async fn click_emoji(&self, pos: Point) {
         let n_cols = self.emojis_per_line();
         let cell = self.cell();
+        let off_x = self.calc_off_x();
         let scroll = self.scroll.get();
 
-        // Emojis have spacing along the x axis.
-        // If the screen width is 2000, and the cell is 30, then that's 66 emojis.
-        // But that's 66.66px per cell.
-        let real_width = self.rect.get().w / n_cols;
-        //d!("click_emoji({pos:?})");
-        let col = (pos.x / real_width).floor();
+        // Icons are spread with pitch `off_x` and width `cell.w`. The gap
+        // between two neighboring cells is `off_x - cell.w`, and the
+        // boundary between them sits in the middle of that gap.
+        let col = if off_x > 0. {
+            let gap = off_x - cell.w;
+            let shifted_x = pos.x - gap / 2.;
+            (shifted_x / off_x).floor()
+        } else {
+            0.
+        };
 
         let y = pos.y + scroll;
         let row = (y / cell.h).floor();
-        //d!("emoji_size = {emoji_size}, col = {col}, row = {row}");
 
-        //d!("idx = col + row * n_cols = {col} + {row} * {n_cols}");
-        let idx = (col + row * n_cols).round() as usize;
-        //d!("    = {idx}, emoji_len = {}", emoji::EMOJI_LIST.len());
+        let idx = (col + row * n_cols as f32).round() as usize;
 
         let emoji_selected = {
             if idx < DEFAULT_EMOJI_LIST.len() {
@@ -234,10 +241,18 @@ impl EmojiPicker {
 
             let off_x = self.calc_off_x();
             let cell = self.cell();
+            let n_cols = self.emojis_per_line();
+            let scroll = self.scroll.get();
 
-            let mut x = 0.;
-            let mut y = -self.scroll.get();
             for i in 0..DEFAULT_EMOJI_LIST.len() {
+                let col = (i % n_cols) as f32;
+                let row = (i / n_cols) as f32;
+                let x = col * off_x;
+                let y = row * cell.h - scroll;
+                if y > rect.h + cell.h {
+                    break
+                }
+
                 let (mesh, ink) = self.emoji_meshes.lock().get(i);
                 // Center the emoji's ink inside its cell so the margin pads
                 // it evenly on all sides. The ink origin sits above the
@@ -250,17 +265,6 @@ impl EmojiPicker {
                     DrawInstruction::SetPos(pos),
                     DrawInstruction::Draw(mesh),
                 ]);
-
-                x += off_x;
-                if x + cell.w > rect.w {
-                    x = 0.;
-                    y += cell.h;
-                    //d!("Line break after idx={i}");
-                }
-
-                if y > rect.h + cell.h {
-                    break
-                }
             }
 
             instrs
