@@ -212,7 +212,10 @@ impl App {
     /// Begins the draw of the tree, and then starts the UI procs.
     pub async fn start(self: Arc<Self>, event_pub: GraphicsEventPublisherPtr, epoch: EpochIndex) {
         d!("Starting app epoch={epoch}");
-        if self.is_first_time.load(Ordering::Relaxed) {
+        // On Android the foreground service keeps the process alive across
+        // UI restarts, so start() runs on every relaunch. swap() consumes
+        // the flag so the sound only plays on the very first launch.
+        if self.is_first_time.swap(false, Ordering::Relaxed) {
             sfx::play_commup();
         }
         let mut atom = PropertyAtomicGuard::none();
