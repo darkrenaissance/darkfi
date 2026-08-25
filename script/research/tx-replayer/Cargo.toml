@@ -3,7 +3,7 @@ name = "tx-replayer"
 version = "0.1.0"
 description = "CLI-utility to replay transactions for analysis"
 authors = ["Dyne.org foundation <foundation@dyne.org>"]
-repository = "https://codeberg.org/darkrenaissance/darkfi"
+repository = "https://git.dark.fi/darkrenaissance/darkfi"
 license = "AGPL-3.0-only"
 edition = "2024"
 

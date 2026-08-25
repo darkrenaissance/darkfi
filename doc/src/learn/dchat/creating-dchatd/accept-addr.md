@@ -3,7 +3,7 @@
 To start receiving `JSON-RPC` requests, we'll need to configure a
 `JSON-RPC` accept address.
 
-We'll add a `rpc` struct ([RpcSettingsOpt](https://codeberg.org/darkrenaissance/darkfi/src/branch/master/src/rpc/settings.rs))
+We'll add a `rpc` struct ([RpcSettingsOpt](https://git.dark.fi/darkrenaissance/darkfi/src/master/src/rpc/settings.rs))
 containing a `rpc_listen` address to our `Args` struct. It will look
 like this:
 

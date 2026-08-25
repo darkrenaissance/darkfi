@@ -6,7 +6,7 @@ Genesis Generator, a command-line utility to generate,\
 display and verify a base64 encoded Darkfi genesis block\
 """
 authors = ["Dyne.org foundation <foundation@dyne.org>"]
-repository = "https://codeberg.org/darkrenaissance/darkfi"
+repository = "https://git.dark.fi/darkrenaissance/darkfi"
 license = "AGPL-3.0-only"
 edition = "2021"
 

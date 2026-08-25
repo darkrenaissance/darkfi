@@ -55,12 +55,12 @@ us see people can actually write code. It's the only thing we care about.
 Finally here we discuss specifics. You will have been assigned a team leader who
 will arrange with you the details.
 
-We offer fully anon employment. Make sure you make an
-[anon account on codeberg][codeberg-anon] over Tor, and also connect to the
+We offer fully anon employment. Make sure you protect your repo by
+executing git actions over [Tor][tor-anon], and also connect to the
 DarkIRC chat over Tor too. You can even make an anon email with
-[onionmail.org](https://onionmail.org) to email us with. We pay in Monero (XMR)
-or stablecoin USDT. You are responsible for any legal obligations incurred by
-your host country.
+[onionmail.org](https://onionmail.org) to email us with. We pay in
+Monero (XMR) or stablecoin USDT. You are responsible for any legal
+obligations incurred by your host country.
 
 We value people who have initiative. We value this so highly in fact that even
 if someone is less skilled but shows the ability to learn, we will welcome them
@@ -91,5 +91,5 @@ topics to discuss.
 [DarkIRC chat]: ../../misc/darkirc/darkirc.md
 [tau]: ../../misc/tau.md
 [contribute]: contrib.md
-[codeberg-anon]: tor.md
+[tor-anon]: tor.md
 

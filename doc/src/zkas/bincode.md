@@ -43,7 +43,7 @@ NUM_LITERALS [LITERAL_NAME] ...
 ```
 
 Integers in the binary are encoded using variable-integer encoding.
-See the [`serial`](https://codeberg.org/darkrenaissance/darkfi/src/branch/master/src/serial/src/lib.rs)
+See the [`serial`](https://git.dark.fi/darkrenaissance/darkfi/src/master/src/serial/src/lib.rs)
 crate and module for our Rust implementation.
 
 ## Sections
@@ -245,5 +245,5 @@ Line   Source       Opcode                 Variable             Value
 ## Decoding the bincode
 
 An example decoder implementation can be found in zkas'
-[`decoder.rs`](https://codeberg.org/darkrenaissance/darkfi/src/branch/master/src/zkas/decoder.rs)
+[`decoder.rs`](https://git.dark.fi/darkrenaissance/darkfi/src/master/src/zkas/decoder.rs)
 module.

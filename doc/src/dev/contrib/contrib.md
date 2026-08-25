@@ -95,7 +95,7 @@ This process will run infinitely until a crash occurs or until it is cancelled b
 
 If you are able to trigger a crash, get in touch with the DarkFi team via irc.
 
-Further information on fuzzing in DarkFi is available [here](https://codeberg.org/darkrenaissance/darkfi/src/branch/master/fuzz/README.md).
+Further information on fuzzing in DarkFi is available [here](https://git.dark.fi/darkrenaissance/darkfi/src/master/fuzz/README.md).
 
 ## Troubleshooting
 

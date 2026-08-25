@@ -15,4 +15,4 @@ the p2p network, in particular:
 * Creating and subscribing to a custom `Message` type.
 
 The source code for this tutorial can be found at
-[example/dchat](https://codeberg.org/darkrenaissance/darkfi/src/branch/master/example/dchat).
+[example/dchat](https://git.dark.fi/darkrenaissance/darkfi/src/master/example/dchat).

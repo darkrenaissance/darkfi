@@ -2,11 +2,11 @@
 
 ... or how to setup Tor git access with darkfi repo.
 
-We assume you have tor installed locally and access to Tor browser.
-You can check your tor daemon is running by running this command:
+We assume you have tor installed locally. You can check your tor daemon
+is running by running this command:
 
-```
-curl --socks5-hostname 127.0.0.1:9050 https://myip.wtf/text
+```shell
+$ curl --socks5-hostname 127.0.0.1:9050 https://myip.wtf/text
 ```
 
 <!--
@@ -22,87 +22,109 @@ print(response.content)
 ```
 -->
 
-## Setting Up Codeberg
+## Setting Up Git Repo
 
-Follow these steps:
+Generate a brand new SSH key using the command:
 
-1. Generate a new SSH key using the command:
-   `ssh-keygen -o -a 100 -t ed25519 -f ~/.ssh/id_tor -C foo@foo`
-2. Next use Tor Browser to make a codeberg account, and get this added to the
-   darkfi repo.
-3. Add your key `.ssh/id_tor.pub` to your account on codeberg.
-4. Verify your key by signing the message:
-   `echo -n 'XXX' | ssh-keygen -Y sign -n gitea -f ~/.ssh/id_tor`
-   where XXX is the string given on codeberg.
-
-## SSH Config
-
-You will need BSD netcat installed. Optionally you could use GNU netcat, but
-the flags are different; replace `-x` with `--proxy ... --proxy-type=socks5`.
-
-Add a section in `~/.ssh/config` like this:
-
+```shell
+$ ssh-keygen -o -a 100 -t ed25519 -f ~/.ssh/anon_tor -C x@x
 ```
-Host codeberg-tor
+
+Configure a new SSH host by adding a section in `~/.ssh/config` like
+this:
+
+```text
+Host darkfi-git-tor
     # Use this for debugging errors
     #LogLevel VERBOSE
     User git
-    HostName codeberg.org
+    HostName moxcgg4oghre3tphoxzkywoutcyqogzntb7webitaxzqtd6i43gkjcqd.onion
     IdentitiesOnly yes
-    IdentityFile ~/.ssh/id_tor
+    IdentityFile ~/.ssh/anon_tor
     ProxyCommand nc -x 127.0.0.1:9050 %h %p
 ```
 
-Then test it is working with `ssh -T git@codeberg-tor -vvv`.
-Be sure to verify the signatures match those on the codeberg website.
-To see them, copy this link into Tor Browser:
-https://docs.codeberg.org/security/ssh-fingerprint/
+> Note:
+>
+> You will need BSD netcat installed. Optionally you could use GNU
+> netcat, but the flags are different; replace `-x` with
+> `--proxy ... --proxy-type=socks5`.
 
-## Adding the Git Remote
+Clone a fresh repo:
 
-The last step is routine:
-
-```
-git remote add codeberg git@codeberg-tor:darkrenaissance/darkfi.git
-# Optionally delete the github origin:
-git remote rm origin
+```shell
+$ git clone git@darkfi-git-tor:darkrenaissance/darkfi
+$ cd darkfi
 ```
 
-And then finally it should work. Make sure you use `git push -u codeb master`
-to update your main source to codeberg over Tor. You don't want to accidentally
-git push to github and dox yourself.
+It is highly recomended to remove older repo folders. You don't want to
+accidentally `git push` to a clearnet remote and dox yourself.
 
 ## Git Config
 
-Lastly you can still be identified by your machine's Git config, if pushing
-to external repos on clearnet.
-However we can set per project settings, so inside the darkfi repo, run
-these commands:
+You can still be identified by your machine's Git config, if pushing to
+external repos on clearnet. However, we can set per project settings,
+so inside the darkfi repo, run these commands:
 
-```
-git config user.name darkfi
-git config user.email darkfi@darkfi
+```shell
+$ git config --local user.name x
+$ git config --local user.email x@x
+$ git config --local commit.gpgsign false
 ```
 
-Verify it has been set with `cat .git/config`.
+Verify it has been set with:
+
+```shell
+$ cat .git/config
+```
 
 ### Commit Timestamps
 
-`git` commits contain two timestamps, the `AuthodDate` and the `CommitDate`.
-These timestamps are retrieved from the system and contain the configured
-timezone. If you want to exclude the timezone information from your commits,
-you may create a `git` alias to use:
+`git` commits contain two timestamps, the `AuthodDate` and the
+`CommitDate`. These timestamps are retrieved from the system and
+contain the configured timezone. If you want to exclude the timezone
+information from your commits, you may create a `git` alias to use:
 
-```
-git config --global alias.utc-commit \
+```shell
+$ git config --global alias.utc-commit \
 '!GIT_COMMITTER_DATE="$(date --utc +%Y-%m-%dT%H:%M:%S%z)" git commit --date="$(date --utc +%Y-%m-%dT%H:%M:%S%z)"'
 ```
 
 This allows to explictly use `UTC` date on commits by executing:
 
-```
-git utc-commit -m "{Commit message}"
+```shell
+$ git utc-commit -m "{Commit message}"
 ```
 
 Alternative, you can use the same alias in your shell configuration for
 `git commit` to always use `UTC` date on all your repos commits.
+
+In order to ensure that all `git` operations are using a `UTC`
+timestamp you can set your terminal to `UTC` date by executing:
+
+```shell
+$ export TZ=UTC0
+```
+
+Alternative, add the command in your shell configuration so all your
+terminal instances always use `UTC` date by default.
+
+## Cargo config
+
+When building `rust` projects `cargo` is used to fetch external crates.
+To configure it to use tor add a section in `~/.cargo/config` like
+this:
+
+```toml
+[http]
+proxy = "socks5h://localhost:9050"
+```
+
+Now even building goes through tor and a developer never touches
+clearnet at any point.
+
+> Note:
+>
+> If you are using VMs/containers for building, ensure that they also
+> go through tor, as above configuration is only relevant for native
+> system building.

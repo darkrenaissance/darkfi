@@ -3,7 +3,7 @@ name = "damd"
 version = "0.4.1"
 description = "Denial-of-service Analysis Multitool daemon."
 authors = ["Dyne.org foundation <foundation@dyne.org>"]
-repository = "https://codeberg.org/darkrenaissance/darkfi"
+repository = "https://git.dark.fi/darkrenaissance/darkfi"
 license = "AGPL-3.0-only"
 edition = "2021"
 

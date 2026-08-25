@@ -59,7 +59,7 @@ The probability of a pool of N% stake to win the leadership at any slot is:
 \end{align*}
 
 
-![alt text](https://codeberg.org/darkrenaissance/darkfi/src/branch/master/script/research/lotterysim/reports/stake.png?raw=true)
+![alt text](https://git.dark.fi/darkrenaissance/darkfi/src/master/script/research/lotterysim/reports/stake.png?raw=true)
 
 ## Example
 

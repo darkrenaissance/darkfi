@@ -3,7 +3,7 @@ name = "generic-node"
 version = "0.4.1"
 description = "Generic node daemon to test out design choices before integrating them to core nodes."
 authors = ["Dyne.org foundation <foundation@dyne.org>"]
-repository = "https://codeberg.org/darkrenaissance/darkfi"
+repository = "https://git.dark.fi/darkrenaissance/darkfi"
 license = "AGPL-3.0-only"
 edition = "2021"
 

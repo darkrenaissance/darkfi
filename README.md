@@ -64,7 +64,7 @@ First you need to clone DarkFi repo and enter its root folder, if
 you haven't already done it:
 
 ```shell
-% git clone https://codeberg.org/darkrenaissance/darkfi
+% git clone https://git.dark.fi/darkrenaissance/darkfi
 % cd darkfi
 ```
 

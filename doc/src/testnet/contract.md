@@ -18,7 +18,7 @@ First, open another terminal, clone the template repository and enter
 its directory:
 
 ```shell
-$ git clone https://codeberg.org/darkrenaissance/smart-contract
+$ git clone https://git.dark.fi/darkrenaissance/smart-contract
 $ cd smart-contract
 ```
 
@@ -308,7 +308,7 @@ with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
 
 [1]: ../zkas/index.md
 [2]: ../arch/sc/sc.md
-[3]: https://codeberg.org/darkrenaissance/smart-contract
+[3]: https://git.dark.fi/darkrenaissance/smart-contract
 [4]: ../spec/crypto-schemes.md#poseidonhash-function
 [5]: ../zkas/zkas.md
 [6]: ../clients/darkfid_jsonrpc.md

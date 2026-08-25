@@ -6,7 +6,7 @@ edition = "2021"
 authors = ["Dyne.org foundation <foundation@dyne.org>"]
 license = "AGPL-3.0-only"
 homepage = "https://dark.fi"
-repository = "https://codeberg.org/darkrenaissance/darkfi"
+repository = "https://git.dark.fi/darkrenaissance/darkfi"
 
 [dependencies]
 darkfi = {path = "../../", features = ["toml", "async-daemonize", "rpc"]}

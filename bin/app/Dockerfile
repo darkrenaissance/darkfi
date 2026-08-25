@@ -57,7 +57,7 @@ RUN cargo install --path /root/cargo-apk
 ENV PATH="/opt/android-sdk-linux/build-tools/36.0.0-rc5/:${PATH}"
 
 # Lets cache packages for faster builds
-RUN git clone --depth=1 https://codeberg.org/darkrenaissance/darkfi
+RUN git clone --depth=1 https://git.dark.fi/darkrenaissance/darkfi
 COPY Cargo.lock darkfi/bin/app/
 WORKDIR /root/darkfi/bin/app/
 RUN cargo fetch

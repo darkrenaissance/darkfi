@@ -3433,9 +3433,9 @@ checksum = "aa9a19cbb55df58761df49b23516a86d432839add4af60fc256da840f66ed35b"
 [[package]]
 name = "form_urlencoded"
 version = "1.2.2"
-source = "git+https://github.com/darkrenaissance/rust-url?branch=v258#d1644eb500f98add06f6092e0c8437140122cbce"
+source = "git+https://git.dark.fi/darkrenaissance/rust-url?branch=v258#d1644eb500f98add06f6092e0c8437140122cbce"
 dependencies = [
- "percent-encoding 2.3.2 (git+https://github.com/darkrenaissance/rust-url?branch=v258)",
+ "percent-encoding 2.3.2 (git+https://git.dark.fi/darkrenaissance/rust-url?branch=v258)",
 ]
 
 [[package]]
@@ -4307,7 +4307,7 @@ checksum = "b9e0384b61958566e926dc50660321d12159025e767c18e043daf26b70104c39"
 [[package]]
 name = "idna"
 version = "1.1.0"
-source = "git+https://github.com/darkrenaissance/rust-url?branch=v258#d1644eb500f98add06f6092e0c8437140122cbce"
+source = "git+https://git.dark.fi/darkrenaissance/rust-url?branch=v258#d1644eb500f98add06f6092e0c8437140122cbce"
 dependencies = [
  "idna_adapter",
  "smallvec",
@@ -4697,7 +4697,7 @@ dependencies = [
 [[package]]
 name = "kvdb-overlay"
 version = "0.1.0"
-source = "git+https://git.dark.fi/darkrenaissance/kvdb-overlay#52ff2bf06e800e098b32089acff7e2fa1dcfa30d"
+source = "git+https://git.dark.fi/darkrenaissance/kvdb-overlay#accd2689f42e17d8db05294fbe9c3dac1ef307f4"
 dependencies = [
  "fjall",
  "tempfile",
@@ -5821,7 +5821,7 @@ checksum = "9b4f627cb1b25917193a259e49bdad08f671f8d9708acfd5fe0a8c1455d87220"
 [[package]]
 name = "percent-encoding"
 version = "2.3.2"
-source = "git+https://github.com/darkrenaissance/rust-url?branch=v258#d1644eb500f98add06f6092e0c8437140122cbce"
+source = "git+https://git.dark.fi/darkrenaissance/rust-url?branch=v258#d1644eb500f98add06f6092e0c8437140122cbce"
 
 [[package]]
 name = "phf"
@@ -6577,7 +6577,7 @@ dependencies = [
 [[package]]
 name = "randomx"
 version = "1.2.1"
-source = "git+https://codeberg.org/darkrenaissance/RandomX?rev=0e31d5a#0e31d5a23983164a171276dea7bea94dc58ca8ed"
+source = "git+https://git.dark.fi/darkrenaissance/RandomX?rev=0e31d5a#0e31d5a23983164a171276dea7bea94dc58ca8ed"
 dependencies = [
  "bindgen 0.72.1",
  "bitflags 2.12.1",
@@ -10042,11 +10042,11 @@ checksum = "6d49784317cd0d1ee7ec5c716dd598ec5b4483ea832a2dced265471cc0f690ae"
 [[package]]
 name = "url"
 version = "2.5.8"
-source = "git+https://github.com/darkrenaissance/rust-url?branch=v258#d1644eb500f98add06f6092e0c8437140122cbce"
+source = "git+https://git.dark.fi/darkrenaissance/rust-url?branch=v258#d1644eb500f98add06f6092e0c8437140122cbce"
 dependencies = [
  "form_urlencoded",
  "idna",
- "percent-encoding 2.3.2 (git+https://github.com/darkrenaissance/rust-url?branch=v258)",
+ "percent-encoding 2.3.2 (git+https://git.dark.fi/darkrenaissance/rust-url?branch=v258)",
  "serde",
  "serde_derive",
 ]

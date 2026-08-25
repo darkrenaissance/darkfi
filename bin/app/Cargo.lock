@@ -4482,7 +4482,7 @@ dependencies = [
 [[package]]
 name = "kvdb-overlay"
 version = "0.1.0"
-source = "git+https://git.dark.fi/darkrenaissance/kvdb-overlay#52ff2bf06e800e098b32089acff7e2fa1dcfa30d"
+source = "git+https://git.dark.fi/darkrenaissance/kvdb-overlay#accd2689f42e17d8db05294fbe9c3dac1ef307f4"
 dependencies = [
  "fjall",
  "tempfile",

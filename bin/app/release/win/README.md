@@ -157,7 +157,7 @@ Then proceed with the installation (option 1).
 
 ## Building the DarkFi App
 
-Go to the [codeberg repo] and select "⋯", then Download ZIP. Unzip the folder
+Go to the [git repo] and select "⋯", then Download ZIP. Unzip the folder
 in an accessible place.
 
 Open cmd and navigate to the folder. Now run `cargo build`.
