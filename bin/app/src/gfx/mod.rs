@@ -58,7 +58,7 @@ mod favico;
 mod prune;
 use prune::PruneMethodHeap;
 mod linalg;
-pub use linalg::{Dimension, Point, Rectangle, Segment, Vector};
+pub use linalg::{Dimension, Point, Rectangle, RectangleUnion, Segment, Vector};
 mod shader;
 
 use crate::{

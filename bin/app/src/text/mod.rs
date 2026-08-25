@@ -31,7 +31,10 @@ pub use editor::Editor;
 mod render;
 #[cfg(not(target_os = "android"))]
 pub use render::render_raw_layout;
-pub use render::{render_backgrounds, render_layout, render_layout_with_opts, DebugRenderOptions};
+pub use render::{
+    render_backgrounds, render_layout, render_layout_with_bounds, render_layout_with_opts,
+    DebugRenderOptions,
+};
 
 pub static GLOBAL_FONT_CTX: LazyLock<parley::FontContext> = LazyLock::new(|| {
     let mut font_ctx = parley::FontContext {
@@ -45,6 +48,9 @@ pub static GLOBAL_FONT_CTX: LazyLock<parley::FontContext> = LazyLock::new(|| {
     let font_data = include_bytes!("../../NotoColorEmoji.ttf") as &[u8];
     font_ctx.collection.register_fonts(peniko::Blob::new(Arc::new(font_data)), None);
 
+    //let font_data = include_bytes!("../../darkfi-custom-emoji.ttf") as &[u8];
+    //font_ctx.collection.register_fonts(peniko::Blob::new(Arc::new(font_data)), None);
+
     font_ctx
 });
 
@@ -56,6 +62,7 @@ thread_local! {
 const FONT_STACK: &[parley::FontFamilyName<'_>] = &[
     parley::FontFamilyName::named("IBM Plex Mono"),
     parley::FontFamilyName::named("Noto Color Emoji"),
+    //parley::FontFamilyName::named("DarkIRC Emoji"),
 ];
 
 /// A parley layout paired with the window scale it was built with.

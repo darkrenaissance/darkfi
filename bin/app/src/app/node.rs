@@ -720,6 +720,13 @@ pub fn create_emoji_picker(name: &str) -> SceneNode {
     prop.set_range_f32(0., f32::MAX);
     node.add_property(prop).unwrap();
 
+    let mut prop = Property::new("emoji_margin", PropertyType::Float32, PropertySubType::Pixel);
+    prop.set_array_len(2);
+    prop.set_ui_text("Emoji Margin", "Horizontal and vertical padding around each emoji icon");
+    prop.set_range_f32(0., f32::MAX);
+    prop.set_defaults_f32(vec![10., 10.]).unwrap();
+    node.add_property(prop).unwrap();
+
     node.add_signal("emoji_select", "Emoji selected", vec![("text", "Text", CallArgType::Str)])
         .unwrap();
 

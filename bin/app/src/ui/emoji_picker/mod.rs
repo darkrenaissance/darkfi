@@ -27,8 +27,11 @@ use std::sync::{
 };
 
 use crate::{
-    gfx::{gfxtag, DrawCall, DrawInstruction, EpochCache, Point, Rectangle, RenderApi, Renderer},
-    prop::{PropertyAtomicGuard, PropertyFloat32, PropertyRect, PropertyUint32, Role},
+    gfx::{
+        gfxtag, Dimension, DrawCall, DrawInstruction, EpochCache, Point, Rectangle, RenderApi,
+        Renderer,
+    },
+    prop::{PropertyAtomicGuard, PropertyFloat32, PropertyPtr, PropertyRect, PropertyUint32, Role},
     scene::{Pimpl, SceneNodeWeak},
     ExecutorPtr,
 };
@@ -65,6 +68,8 @@ pub struct EmojiPicker {
     priority: PropertyUint32,
     scroll: PropertyFloat32,
     emoji_size: PropertyFloat32,
+    /// `[x, y]` padding around each emoji icon
+    emoji_margin: PropertyPtr,
     mouse_scroll_speed: PropertyFloat32,
 
     redraw: RedrawTrigger,
@@ -90,6 +95,7 @@ impl EmojiPicker {
         let priority = PropertyUint32::wrap(node_ref, Role::Internal, "priority", 0).unwrap();
         let scroll = PropertyFloat32::wrap(node_ref, Role::Internal, "scroll", 0).unwrap();
         let emoji_size = PropertyFloat32::wrap(node_ref, Role::Internal, "emoji_size", 0).unwrap();
+        let emoji_margin = node_ref.get_property("emoji_margin").unwrap();
         let mouse_scroll_speed =
             PropertyFloat32::wrap(node_ref, Role::Internal, "mouse_scroll_speed", 0).unwrap();
 
@@ -108,6 +114,7 @@ impl EmojiPicker {
             priority,
             scroll,
             emoji_size,
+            emoji_margin,
             mouse_scroll_speed,
 
             redraw,
@@ -119,28 +126,36 @@ impl EmojiPicker {
         Pimpl::EmojiPicker(self_)
     }
 
+    /// Size of a grid cell, i.e. the emoji icon plus its surrounding margin
+    fn cell(&self) -> Dimension {
+        Dimension {
+            w: self.emoji_size.get() + self.emoji_margin.get_f32(0).unwrap(),
+            h: self.emoji_size.get() + self.emoji_margin.get_f32(1).unwrap(),
+        }
+    }
+
     fn emojis_per_line(&self) -> f32 {
-        let emoji_size = self.emoji_size.get();
+        let cell = self.cell();
         let rect_w = self.rect.get().w;
         //d!("rect_w = {rect_w}");
-        (rect_w / emoji_size).floor()
+        (rect_w / cell.w).floor()
     }
     fn calc_off_x(&self) -> f32 {
-        let emoji_size = self.emoji_size.get();
+        let cell = self.cell();
         let rect_w = self.rect.get().w;
         let n = self.emojis_per_line();
-        let off_x = (rect_w - emoji_size) / (n - 1.);
+        let off_x = (rect_w - cell.w) / (n - 1.);
         off_x
     }
 
     fn max_scroll(&self) -> f32 {
         let emojis_len = DEFAULT_EMOJI_LIST.len() as f32;
-        let emoji_size = self.emoji_size.get();
+        let cell = self.cell();
         let cols = self.emojis_per_line();
         let rows = (emojis_len / cols).ceil();
 
         let rect_h = self.rect.get().h;
-        let height = rows * emoji_size;
+        let height = rows * cell.h;
         if height < rect_h {
             return 0.
         }
@@ -149,18 +164,18 @@ impl EmojiPicker {
 
     async fn click_emoji(&self, pos: Point) {
         let n_cols = self.emojis_per_line();
-        let emoji_size = self.emoji_size.get();
+        let cell = self.cell();
         let scroll = self.scroll.get();
 
         // Emojis have spacing along the x axis.
-        // If the screen width is 2000, and emoji_size is 30, then that's 66 emojis.
-        // But that's 66.66px per emoji.
+        // If the screen width is 2000, and the cell is 30, then that's 66 emojis.
+        // But that's 66.66px per cell.
         let real_width = self.rect.get().w / n_cols;
         //d!("click_emoji({pos:?})");
         let col = (pos.x / real_width).floor();
 
         let y = pos.y + scroll;
-        let row = (y / emoji_size).floor();
+        let row = (y / cell.h).floor();
         //d!("emoji_size = {emoji_size}, col = {col}, row = {row}");
 
         //d!("idx = col + row * n_cols = {col} + {row} * {n_cols}");
@@ -218,26 +233,32 @@ impl EmojiPicker {
             let mut instrs = vec![DrawInstruction::ApplyView(rect)];
 
             let off_x = self.calc_off_x();
-            let emoji_size = self.emoji_size.get();
+            let cell = self.cell();
 
             let mut x = 0.;
             let mut y = -self.scroll.get();
             for i in 0..DEFAULT_EMOJI_LIST.len() {
-                let pos = Point::new(x, y);
-                let mesh = self.emoji_meshes.lock().get(i);
+                let (mesh, ink) = self.emoji_meshes.lock().get(i);
+                // Center the emoji's ink inside its cell so the margin pads
+                // it evenly on all sides. The ink origin sits above the
+                // mesh origin (text baseline), hence the -ink.x/-ink.y.
+                let pos = Point::new(
+                    x + (cell.w - ink.w) / 2. - ink.x,
+                    y + (cell.h - ink.h) / 2. - ink.y,
+                );
                 instrs.extend_from_slice(&[
                     DrawInstruction::SetPos(pos),
                     DrawInstruction::Draw(mesh),
                 ]);
 
                 x += off_x;
-                if x > rect.w {
+                if x + cell.w > rect.w {
                     x = 0.;
-                    y += emoji_size;
+                    y += cell.h;
                     //d!("Line break after idx={i}");
                 }
 
-                if y > rect.h + emoji_size {
+                if y > rect.h + cell.h {
                     break
                 }
             }
@@ -272,6 +293,16 @@ impl UIObject for EmojiPicker {
             self_.redraw.trigger();
         });
         on_modify.when_change_external(self.z_index.prop(), |self_, _| async move {
+            self_.draw_cache.clear();
+            self_.redraw.trigger();
+        });
+        on_modify.when_change_external(self.emoji_size.prop(), |self_, _| async move {
+            let emoji_size = self_.emoji_size.get();
+            self_.emoji_meshes.lock().set_size(emoji_size);
+            self_.draw_cache.clear();
+            self_.redraw.trigger();
+        });
+        on_modify.when_change_external(self.emoji_margin.clone(), |self_, _| async move {
             self_.draw_cache.clear();
             self_.redraw.trigger();
         });

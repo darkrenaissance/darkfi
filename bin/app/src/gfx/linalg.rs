@@ -173,6 +173,44 @@ pub struct Rectangle {
     pub h: f32,
 }
 
+/// Accumulates the union of many rectangles. Starts empty; `get()` returns
+/// `None` until something has been added.
+#[derive(Clone, Copy)]
+pub struct RectangleUnion {
+    bounds: Option<Rectangle>,
+}
+
+impl RectangleUnion {
+    pub fn new() -> Self {
+        Self { bounds: None }
+    }
+
+    pub fn add(&mut self, rect: Rectangle) {
+        self.bounds = Some(match self.bounds {
+            Some(bounds) => bounds.union(&rect),
+            None => rect,
+        });
+    }
+
+    /// Fold another union into this one
+    pub fn join(&mut self, other: Self) {
+        if let Some(rect) = other.bounds {
+            self.add(rect);
+        }
+    }
+
+    /// The union of everything added so far, or `None` if empty
+    pub fn get(&self) -> Option<Rectangle> {
+        self.bounds
+    }
+}
+
+impl Default for RectangleUnion {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl Rectangle {
     pub const fn new(x: f32, y: f32, w: f32, h: f32) -> Self {
         Self { x, y, w, h }
@@ -213,6 +251,15 @@ impl Rectangle {
             clipped.h = self.y + self.h - clipped.y;
         }
         Some(clipped)
+    }
+
+    /// Smallest rectangle covering both `self` and `other`
+    pub fn union(&self, other: &Self) -> Self {
+        let x1 = self.x.min(other.x);
+        let y1 = self.y.min(other.y);
+        let x2 = (self.x + self.w).max(other.x + other.w);
+        let y2 = (self.y + self.h).max(other.y + other.h);
+        Self::new(x1, y1, x2 - x1, y2 - y1)
     }
 
     pub fn with_zero_pos(&self) -> Self {

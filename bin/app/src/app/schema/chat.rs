@@ -168,7 +168,7 @@ mod ui_consts {
     pub const BACK_SEP_W: f32 = 0.5;
 }
 
-use super::EMOJI_PICKER_ICON_SIZE;
+use super::{EMOJI_PICKER_ICON_MARGIN_X, EMOJI_PICKER_ICON_MARGIN_Y, EMOJI_PICKER_ICON_SIZE};
 use ui_consts::*;
 
 fn android_keyboard_height() -> f32 {
@@ -434,6 +434,9 @@ pub async fn make(
     let emoji_h_prop = PropertyFloat32::wrap(&node, Role::App, "dynamic_h", 0).unwrap();
     //node.set_property_f32(atom, Role::App, "font_size", FONTSIZE).unwrap();
     node.set_property_f32(atom, Role::App, "emoji_size", EMOJI_PICKER_ICON_SIZE).unwrap();
+    let prop = node.get_property("emoji_margin").unwrap();
+    prop.set_f32(atom, Role::App, 0, EMOJI_PICKER_ICON_MARGIN_X).unwrap();
+    prop.set_f32(atom, Role::App, 1, EMOJI_PICKER_ICON_MARGIN_Y).unwrap();
     node.set_property_u32(atom, Role::App, "z_index", 2).unwrap();
     let node =
         node.setup(|me| EmojiPicker::new(me, renderer.clone(), emoji_meshes, redraw.clone())).await;

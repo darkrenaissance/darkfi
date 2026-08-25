@@ -119,7 +119,7 @@ impl App {
         let window_scale = {
             let screen_density = miniquad::window::dpi_scale();
             i!("Android screen density: {screen_density}");
-            screen_density / 2.8
+            screen_density / 3.5
         };
         #[cfg(not(target_os = "android"))]
         let window_scale = 1.;

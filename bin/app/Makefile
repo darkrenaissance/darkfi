@@ -29,7 +29,7 @@ DEBUG_FEATURES = --features=schema-app,enable-filelog,enable-plugin-darkirc,enab
 
 #DEV_FEATURES = --features=enable-filelog,enable-netdebug,emulate-android
 #DEV_FEATURES = --features=enable-filelog,enable-netdebug,enable-plugins
-DEV_FEATURES = --features=schema-app,enable-filelog,enable-netdebug,enable-plugin-darkirc
+DEV_FEATURES = --features=schema-app,enable-filelog,enable-netdebug
 
 default: build-release
 	./darkfi-app
@@ -78,23 +78,29 @@ build-debug: $(SRC) $(PROOFS_BIN) fonts assets/forest_1920x1080.ivf
 
 # Download font data
 
-fonts: ibm-plex-mono-regular.otf NotoColorEmoji.ttf
+fonts: data/font/ibm-plex-mono-regular.otf data/font/NotoColorEmoji.ttf
 
-ibm-plex-mono-regular.otf:
-	wget -c https://dark.fi/assets/ibm-plex-mono-regular.otf
+data/font/ibm-plex-mono-regular.otf:
+	mkdir -p data/font/
+	wget -P data/font/ -c https://dark.fi/assets/ibm-plex-mono-regular.otf
 
-NotoColorEmoji.ttf:
-	wget -c https://dark.fi/assets/NotoColorEmoji.ttf
+data/font/NotoColorEmoji.ttf:
+	mkdir -p data/font/
+	wget -P data/font/ -c https://dark.fi/assets/NotoColorEmoji.ttf
 
 # App data
 
-assets/forest_1920x1080.ivf:
+data/forest_1920x1080.ivf:
+	wget -P data/ -c https://dark.fi/assets/forest_1920x1080.ivf
+assets/forest_1920x1080.ivf: data/forest_1920x1080.ivf
 	rm -f assets/forest_720x1280.mp4
-	wget -P assets/ -c https://dark.fi/assets/forest_1920x1080.ivf
+	cp data/forest_1920x1080.ivf assets/
 
-assets/forest_720x1280.mp4:
+data/forest_720x1280.mp4:
+	wget -P data/ -c https://dark.fi/assets/forest_720x1280.mp4
+assets/forest_720x1280.mp4: data/forest_720x1280.mp4
 	rm -f assets/forest_1920x1080.ivf
-	wget -P assets/ -c https://dark.fi/assets/forest_720x1280.mp4
+	cp data/forest_720x1280.mp4 assets/
 
 # zkas circuits (needed for darkirc plugin crate)
 

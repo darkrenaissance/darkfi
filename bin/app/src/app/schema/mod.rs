@@ -58,6 +58,8 @@ mod android_ui_consts {
     pub const SETTINGS_ICON_SIZE: f32 = 140.;
     pub const NETLOGO_SCALE: f32 = 50.;
     pub const EMOJI_PICKER_ICON_SIZE: f32 = 120.;
+    pub const EMOJI_PICKER_ICON_MARGIN_X: f32 = 20.;
+    pub const EMOJI_PICKER_ICON_MARGIN_Y: f32 = 20.;
 
     pub const NETSTAT_OVERLAY_MARGIN: f32 = 20.;
     pub const NETSTAT_OVERLAY_BTN_W: f32 = 200.;
@@ -128,7 +130,9 @@ mod ui_consts {
     pub const NETSTATUS_ICON_SIZE: f32 = 60.;
     pub const SETTINGS_ICON_SIZE: f32 = 60.;
     pub const NETLOGO_SCALE: f32 = 25.;
-    pub const EMOJI_PICKER_ICON_SIZE: f32 = 50.;
+    pub const EMOJI_PICKER_ICON_SIZE: f32 = 40.;
+    pub const EMOJI_PICKER_ICON_MARGIN_X: f32 = 8.;
+    pub const EMOJI_PICKER_ICON_MARGIN_Y: f32 = 8.;
 
     pub const NETSTAT_OVERLAY_MARGIN: f32 = 10.;
     pub const NETSTAT_OVERLAY_BTN_W: f32 = 100.;

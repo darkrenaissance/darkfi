@@ -20,7 +20,7 @@ use parking_lot::Mutex as SyncMutex;
 use std::sync::Arc;
 
 use crate::{
-    gfx::{gfxtag, DrawInstruction, DrawMesh, EpochTracker, Renderer},
+    gfx::{gfxtag, DrawInstruction, DrawMesh, EpochTracker, Rectangle, Renderer},
     mesh::COLOR_WHITE,
     text,
 };
@@ -33,7 +33,7 @@ pub struct EmojiMeshes {
     renderer: Renderer,
     emoji_size: f32,
     epoch_tracker: EpochTracker,
-    meshes: Vec<DrawMesh>,
+    meshes: Vec<(DrawMesh, Rectangle)>,
 }
 
 impl EmojiMeshes {
@@ -42,11 +42,16 @@ impl EmojiMeshes {
         Arc::new(SyncMutex::new(Self { renderer, emoji_size, epoch_tracker, meshes: vec![] }))
     }
 
+    pub fn set_size(&mut self, emoji_size: f32) {
+        self.emoji_size = emoji_size;
+        self.meshes.clear();
+    }
+
     pub fn clear(&mut self) {
         self.meshes.clear();
     }
 
-    pub fn get(&mut self, i: usize) -> DrawMesh {
+    pub fn get(&mut self, i: usize) -> (DrawMesh, Rectangle) {
         assert!(i < DEFAULT_EMOJI_LIST.len());
 
         // Meshes hold epoch-scoped buffers; after a UI restart they are
@@ -69,13 +74,16 @@ impl EmojiMeshes {
         self.meshes[i].clone()
     }
 
-    /// Make mesh for this emoji centered at (0, 0)
-    fn gen_emoji_mesh(&self, emoji: &str) -> DrawMesh {
+    /// Make the mesh for this emoji, plus its ink bounds relative to the
+    /// mesh origin (the text baseline), so callers can center the visible
+    /// glyph inside a cell.
+    fn gen_emoji_mesh(&self, emoji: &str) -> (DrawMesh, Rectangle) {
         //d!("rendering emoji: '{emoji}'");
         // The params here don't actually matter since we're talking about BMP fixed sizes
         let layout = text::make_layout(emoji, COLOR_WHITE, self.emoji_size, 1., 1., None, &[]);
 
-        let instrs = text::render_layout(&layout, &self.renderer, gfxtag!("emoji_mesh"));
+        let (instrs, bounds) =
+            text::render_layout_with_bounds(&layout, &self.renderer, gfxtag!("emoji_mesh"));
 
         // Extract the mesh from the draw instructions
         // For a single emoji, we should get exactly one Draw instruction with a mesh
@@ -84,7 +92,6 @@ impl EmojiMeshes {
             _ => panic!("Expected Draw instruction for emoji"),
         };
 
-        // For now, just return the original mesh since scaling is complex with textures
-        mesh
+        (mesh, bounds)
     }
 }

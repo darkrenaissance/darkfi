@@ -17,7 +17,7 @@
  */
 
 use crate::{
-    gfx::{DebugTag, DrawInstruction, DrawMesh, Point, Rectangle, Renderer},
+    gfx::{DebugTag, DrawInstruction, DrawMesh, Point, Rectangle, RectangleUnion, Renderer},
     mesh::{Color, MeshBuilder, COLOR_WHITE},
 };
 
@@ -69,7 +69,7 @@ pub fn render_raw_layout(
     renderer: &Renderer,
     tag: DebugTag,
 ) -> Vec<DrawInstruction> {
-    render_raw_layout_with_opts(layout, scale, DebugRenderOptions::OFF, renderer, tag)
+    render_raw_layout_impl(layout, scale, DebugRenderOptions::OFF, renderer, tag).0
 }
 
 /// Draw a filled (and optionally outlined) background box behind every glyph run
@@ -135,7 +135,18 @@ pub fn render_layout_with_opts(
     renderer: &Renderer,
     tag: DebugTag,
 ) -> Vec<DrawInstruction> {
-    render_raw_layout_with_opts(layout, layout.scale(), opts, renderer, tag)
+    render_raw_layout_impl(layout, layout.scale(), opts, renderer, tag).0
+}
+
+/// Render a layout and also return the union of the glyph ink bounds in
+/// virtual units, relative to the layout origin. Used by callers that
+/// position the mesh by its ink, e.g. centering emoji icons in grid cells.
+pub fn render_layout_with_bounds(
+    layout: &TextLayout,
+    renderer: &Renderer,
+    tag: DebugTag,
+) -> (Vec<DrawInstruction>, Rectangle) {
+    render_raw_layout_impl(layout, layout.scale(), DebugRenderOptions::OFF, renderer, tag)
 }
 
 /// Layout coordinates are physical (scale is baked in by parley) while
@@ -143,13 +154,13 @@ pub fn render_layout_with_opts(
 /// renderer's `SetScale`. So every emitted coordinate is divided by
 /// `scale` here. Glyphs are still rasterized at physical resolution so
 /// the final on-screen texel mapping stays crisp.
-fn render_raw_layout_with_opts(
+fn render_raw_layout_impl(
     layout: &parley::Layout<Color>,
     scale: f32,
     opts: DebugRenderOptions,
     renderer: &Renderer,
     tag: DebugTag,
-) -> Vec<DrawInstruction> {
+) -> (Vec<DrawInstruction>, Rectangle) {
     // First pass to create atlas
     let mut scale_ctx = swash::scale::ScaleContext::new();
     let mut atlas = Atlas::new(renderer, tag);
@@ -172,12 +183,14 @@ fn render_raw_layout_with_opts(
     // Second pass to draw glyphs
     let mut run_idx = 0;
     let mut instrs = vec![];
+    let mut bounds = RectangleUnion::new();
     for line in layout.lines() {
         for item in line.items() {
             match item {
                 parley::PositionedLayoutItem::GlyphRun(glyph_run) => {
-                    let mesh =
+                    let (mesh, run_bounds) =
                         render_glyph_run(&glyph_run, run_idx, opts, &atlas, scale, renderer, tag);
+                    bounds.join(run_bounds);
                     instrs.push(DrawInstruction::Draw(mesh));
                     run_idx += 1;
                 }
@@ -185,7 +198,7 @@ fn render_raw_layout_with_opts(
             }
         }
     }
-    instrs
+    (instrs, bounds.get().unwrap_or(Rectangle::zero()))
 }
 
 fn push_glyphs(
@@ -220,7 +233,7 @@ fn render_glyph_run(
     scale: f32,
     renderer: &Renderer,
     tag: DebugTag,
-) -> DrawMesh {
+) -> (DrawMesh, RectangleUnion) {
     let mut run_x = glyph_run.offset();
     let run_y = glyph_run.baseline();
     let style = glyph_run.style();
@@ -228,6 +241,7 @@ fn render_glyph_run(
     //trace!(target: "text::render", "render_glyph_run run_idx={run_idx} baseline={run_y}");
 
     let mut mesh = MeshBuilder::new(tag);
+    let mut bounds = RectangleUnion::new();
 
     if let Some(underline) = &style.underline {
         render_underline(underline, glyph_run, scale, &mut mesh);
@@ -247,6 +261,8 @@ fn render_glyph_run(
             glyph_inf.place.height as f32 / scale,
         );
 
+        bounds.add(glyph_rect);
+
         if opts.has(DebugRenderOptions::GLYPH) {
             mesh.draw_outline(&glyph_rect, [0., 1., 0., 0.7], 1.);
         }
@@ -262,7 +278,7 @@ fn render_glyph_run(
         mesh.draw_filled_box(&rect, [0., 0., 1., 0.7]);
     }
 
-    mesh.alloc(renderer).draw_with_textures(vec![atlas.texture.clone()])
+    (mesh.alloc(renderer).draw_with_textures(vec![atlas.texture.clone()]), bounds)
 }
 
 fn render_underline(
