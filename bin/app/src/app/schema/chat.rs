@@ -171,12 +171,17 @@ mod ui_consts {
 use super::{EMOJI_PICKER_ICON_MARGIN_X, EMOJI_PICKER_ICON_MARGIN_Y, EMOJI_PICKER_ICON_SIZE};
 use ui_consts::*;
 
-fn android_keyboard_height() -> f32 {
+/// Height the keyboard occupies, in virtual units. Android reports it in
+/// physical pixels, so divide by the window scale like every other inset.
+fn android_keyboard_height(window_scale: f32) -> f32 {
     #[cfg(target_os = "android")]
-    return crate::android::get_keyboard_height() as f32;
+    return crate::android::get_keyboard_height() as f32 / window_scale;
 
     #[cfg(not(target_os = "android"))]
-    unreachable!()
+    {
+        let _ = window_scale;
+        unreachable!()
+    }
 }
 
 fn is_ime_visible() -> bool {
@@ -465,7 +470,7 @@ pub async fn make(
     );
     // Top line
     shape.add_filled_box(
-        expr::const_f32(EMOJI_BG_W),
+        expr::const_f32(0.),
         expr::const_f32(0.),
         expr::load_var("w"),
         expr::const_f32(1.),
@@ -1229,9 +1234,10 @@ pub async fn make(
     let chatedit_node2 = chatedit_node.clone();
     node.register("click", slot).unwrap();
     let redraw2 = redraw.clone();
+    let window_scale2 = window_scale.clone();
     let listen_click = ex.spawn(async move {
         let mut panel_height = if cfg!(target_os = "android") {
-            let keyb_height = android_keyboard_height();
+            let keyb_height = android_keyboard_height(window_scale2.get());
             if keyb_height > 0. {
                 keyb_height
             } else {
@@ -1246,7 +1252,7 @@ pub async fn make(
             let atom = &mut redraw2.make_guard(gfxtag!("emoji click action"));
 
             if cfg!(target_os = "android") {
-                let keyb_height = android_keyboard_height();
+                let keyb_height = android_keyboard_height(window_scale2.get());
                 if keyb_height > panel_height {
                     panel_height = keyb_height
                 }
