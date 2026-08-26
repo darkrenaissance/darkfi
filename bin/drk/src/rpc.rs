@@ -183,7 +183,7 @@ impl Drk {
 
     /// `scan_block` will go over over transactions in a block and handle their calls
     /// based on the called contract.
-    async fn scan_block(&self, scan_cache: &mut ScanCache, block: &BlockInfo) -> Result<()> {
+    pub async fn scan_block(&self, scan_cache: &mut ScanCache, block: &BlockInfo) -> Result<()> {
         // Keep track of our wallet transactions.
         let mut wallet_txs = vec![];
 
