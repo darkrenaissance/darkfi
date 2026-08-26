@@ -16,22 +16,31 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use darkfi::{
-    system::{sleep, Publisher, PublisherPtr, StoppableTask},
-    tx::Transaction,
-    Result as DarkFiResult,
-};
-use darkfi_money_contract::model::TokenId;
-use darkfi_sdk::crypto::keypair::{Address, Network, PublicKey, StandardAddress};
-use darkfi_serial::{serialize, Decodable, Encodable};
-use drk::{rpc::subscribe_blocks, Drk};
-use parking_lot::Mutex as SyncMutex;
-use smol::{channel::unbounded, lock::RwLock};
 use std::{
     io::Cursor,
     sync::{Arc, OnceLock, Weak},
 };
+
+use parking_lot::Mutex as SyncMutex;
+use smol::lock::RwLock;
 use url::Url;
+
+use darkfi::{
+    blockchain::BlockInfo,
+    rpc::{
+        client::RpcClient,
+        jsonrpc::{ErrorCode, JsonError, JsonRequest, JsonResult},
+        util::JsonValue,
+    },
+    system::{sleep, Publisher, StoppableTask, StoppableTaskPtr},
+    tx::Transaction,
+    util::encoding::base64,
+    Error as DarkFiError, Result as DarkFiResult,
+};
+use darkfi_money_contract::model::TokenId;
+use darkfi_sdk::crypto::keypair::{Address, Network, PublicKey, StandardAddress};
+use darkfi_serial::{deserialize_async, serialize, Decodable, Encodable};
+use drk::Drk;
 
 use crate::{
     error::{Error, Result},
@@ -47,6 +56,7 @@ const DARKFID_ENDPOINT_TCP: &str = "tcp+tls://node0.testnet.dark.fi:18345";
 /// TODO: replace with the real darkfid tor endpoint
 const DARKFID_ENDPOINT_TOR: &str = "tor://darkfid-tor-placeholder.onion:18345";
 const DARKFID_RETRY_TIME: u64 = 20;
+const BLOCK_BATCHES_BUFFER: usize = 3;
 
 #[cfg(target_os = "android")]
 mod paths {
@@ -125,12 +135,12 @@ pub struct DrkPlugin {
     node: SceneNodeWeak,
     sg_root: SceneNodePtr,
     tasks: OnceLock<Vec<smol::Task<()>>>,
-    scan_progress_pub: PublisherPtr<(u32, u32)>,
     net_transport: PropertyEnum,
 
     drk: Arc<RwLock<Drk>>,
     build_tx_channel: smol::channel::Sender<BuildTxRequest>,
     last_balances: SyncMutex<Option<Vec<(String, TokenId, u64)>>>,
+    ex: ExecutorPtr,
 }
 
 impl DrkPlugin {
@@ -212,9 +222,9 @@ impl DrkPlugin {
             tasks: OnceLock::new(),
             drk: drk.into_ptr(),
             build_tx_channel: build_tx_tx,
-            scan_progress_pub: Publisher::new(),
             net_transport,
             last_balances: SyncMutex::new(None),
+            ex: ex.clone(),
         });
 
         // Start background task to process build_tx requests from channel
@@ -280,7 +290,7 @@ impl DrkPlugin {
             broadcast_tx_task,
             build_tx_processor,
         ];
-        self_.clone().start(ex.clone(), tasks).await;
+        self_.clone().start(tasks).await;
 
         Ok(Pimpl::Drk(self_))
     }
@@ -341,6 +351,405 @@ impl DrkPlugin {
         Ok(result)
     }
 
+    /// Get a batch of blocks from darkfid starting at `height` using the provided client.
+    async fn fetch_blocks(rpc_client: &RpcClient, height: u32) -> DarkFiResult<Vec<BlockInfo>> {
+        let req = JsonRequest::new(
+            "blockchain.get_blocks",
+            JsonValue::Array(vec![JsonValue::Number(height as f64)]),
+        );
+
+        let rep = rpc_client.request(req).await?;
+        let params_array = rep.get::<Vec<JsonValue>>().unwrap();
+        let mut blocks = Vec::with_capacity(params_array.len());
+        for param in params_array {
+            let param_str = param.get::<String>().unwrap();
+            let bytes = base64::decode(param_str).unwrap();
+            let block = deserialize_async(&bytes).await?;
+            blocks.push(block);
+        }
+        Ok(blocks)
+    }
+
+    /// Fetch and scan blocks starting from the last scanned block.
+    async fn scan_blocks(&self) -> DarkFiResult<()> {
+        let drk = self.drk.read().await;
+
+        // Grab last scanned block height
+        let (mut height, hash) = drk
+            .get_last_scanned_block()
+            .map_err(|e| DarkFiError::Custom(format!("Could not get last scanned block: {e}")))?;
+
+        // Grab our last scanned block from darkfid
+        let block = match drk.get_block_by_height(height).await {
+            Ok(b) => Some(b),
+            Err(darkfi::Error::JsonRpcError((-32121, _))) => None,
+            Err(e) => return Err(e),
+        };
+
+        // Check if a reorg has happened
+        if block.is_none() || hash != block.unwrap().hash().to_string() {
+            height = self
+                .handle_reorg(&drk, height)
+                .await
+                .map_err(|e| DarkFiError::Custom(format!("Could not find common ancestor: {e}")))?;
+        }
+
+        // If last scanned block is genesis(0) we reset,
+        // otherwise continue with the next block height.
+        if height == 0 {
+            let _ = drk.reset(&mut vec![]).await;
+        } else {
+            height += 1;
+        }
+
+        // Grab last confirmed block height
+        let (mut last_height, _) = drk.get_last_confirmed_block().await?;
+        drop(drk);
+
+        // Already scanned last confirmed block
+        if height > last_height {
+            return Ok(())
+        }
+
+        // Generate a new scan cache
+        let mut cache = self.drk.read().await.scan_cache(false).await?;
+
+        // Save starting height to report progress
+        let start_height = height;
+
+        // Create RPC client for block fetching
+        let endpoint = self.endpoint();
+        let rpc_client = match RpcClient::new(endpoint, self.ex.clone()).await {
+            Ok(client) => client,
+            Err(e) => return Err(DarkFiError::Custom(format!("Failed to create RPC client: {e}"))),
+        };
+        let rpc_client = Arc::new(rpc_client);
+        let rpc_client_ = rpc_client.clone();
+
+        // Bounded channel limits block fetches
+        let (block_tx, block_rx) = smol::channel::bounded(BLOCK_BATCHES_BUFFER);
+
+        // Fetcher task: fetches blocks continuously, blocks when channel is full
+        let fetcher_task = StoppableTask::new();
+        let fetcher_task_ = fetcher_task.clone();
+        fetcher_task.start(
+            async move {
+                let mut fetch_height = height;
+                while fetch_height <= last_height {
+                    match Self::fetch_blocks(&rpc_client_, fetch_height).await {
+                        Ok(blocks) => {
+                            let len = blocks.len() as u32;
+                            if block_tx.send(blocks).await.is_err() {
+                                // Channel closed, receiver is done
+                                break;
+                            }
+                            fetch_height += len;
+                        }
+                        Err(e) => {
+                            e!("Error fetching blocks: {e}");
+                            break;
+                        }
+                    }
+                }
+                Ok(())
+            },
+            |_result| async move {
+                // Cleanup: stop the RPC client
+                rpc_client.stop().await;
+            },
+            DarkFiError::DetachedTaskStopped,
+            self.ex.clone(),
+        );
+
+        // Update scan progress
+        self.emit_progress_update(height - start_height, last_height - start_height).await;
+
+        // Process blocks from the channel until we've reached last_height
+        let mut processing_error = None;
+        while height < last_height {
+            let blocks = match block_rx.recv().await {
+                Ok(b) => b,
+                Err(e) => {
+                    processing_error =
+                        Some(DarkFiError::Custom(format!("Block channel error: {e}")));
+                    break;
+                }
+            };
+
+            if blocks.is_empty() {
+                e!("Received empty block batch from fetcher");
+                break;
+            }
+
+            let old_nullifiers = cache.owncoins_nullifiers.clone();
+
+            // Scan each block and stop on error
+            for block in blocks {
+                let drk = self.drk.read().await;
+                if let Err(e) = drk.scan_block(&mut cache, &block).await {
+                    processing_error = Some(e);
+                    break;
+                }
+
+                height += 1;
+            }
+
+            if height > last_height {
+                last_height = height;
+            }
+
+            // Update balances if they changed
+            if cache.owncoins_nullifiers != old_nullifiers {
+                self.emit_balances_updated().await;
+            }
+
+            // Update scan progress
+            self.emit_progress_update(height - start_height, last_height - start_height).await;
+
+            // Break on processing error
+            if processing_error.is_some() {
+                break;
+            }
+        }
+
+        // Stop the fetcher gracefully before dropping the receiver
+        fetcher_task_.stop().await;
+
+        // Drop the receiver (now that fetcher is stopped)
+        drop(block_rx);
+
+        // Return any processing error that occurred
+        if let Some(e) = processing_error {
+            return Err(e);
+        }
+
+        Ok(())
+    }
+
+    /// Subscribe to blocks from darkfid and scan them individually.
+    async fn subscribe_blocks(
+        &self,
+        rpc_task: StoppableTaskPtr,
+        endpoint: Url,
+    ) -> DarkFiResult<()> {
+        let mut last_scanned_height = loop {
+            // First we do a clean scan
+            if let Err(e) = self.scan_blocks().await {
+                return Err(DarkFiError::Custom(format!("Failed during scanning: {e}")))
+            }
+
+            // Grab last confirmed block height
+            let drk = self.drk.read().await;
+            let (last_confirmed_height, _) = drk.get_last_confirmed_block().await?;
+            drop(drk);
+
+            // Handle genesis(0) block
+            if last_confirmed_height == 0 {
+                if let Err(e) = self.scan_blocks().await {
+                    return Err(DarkFiError::Custom(format!(
+                        "Scanning from genesis block failed: {e}"
+                    )))
+                }
+            }
+
+            // Grab last confirmed block again
+            let drk = self.drk.read().await;
+            let (last_confirmed_height, last_confirmed_hash) =
+                drk.get_last_confirmed_block().await?;
+
+            // Grab last scanned block
+            let (last_scanned_height, last_scanned_hash) = match drk.get_last_scanned_block() {
+                Ok(last) => last,
+                Err(e) => {
+                    return Err(DarkFiError::Custom(format!(
+                        "Retrieving last scanned block failed: {e}"
+                    )))
+                }
+            };
+            drop(drk);
+
+            // Rescan if other blocks have been created while we were scanning
+            if last_confirmed_height != last_scanned_height ||
+                last_confirmed_hash != last_scanned_hash
+            {
+                continue
+            }
+
+            break last_scanned_height
+        };
+
+        let publisher = Publisher::new();
+        let subscription = publisher.clone().subscribe().await;
+        let _publisher = publisher.clone();
+        let rpc_client = Arc::new(RpcClient::new(endpoint.clone(), self.ex.clone()).await?);
+        let rpc_client_ = rpc_client.clone();
+
+        rpc_task.start(
+            async move {
+                let req = JsonRequest::new("blockchain.subscribe_blocks", JsonValue::Array(vec![]));
+                rpc_client_.subscribe(req, _publisher).await
+            },
+            |res| async move {
+                rpc_client.stop().await;
+                match res {
+                    Ok(()) |
+                    Err(DarkFiError::DetachedTaskStopped) |
+                    Err(DarkFiError::RpcServerStopped) => { /* Do nothing */ }
+                    Err(e) => {
+                        e!("JSON-RPC server error: {e}");
+                        publisher
+                            .notify(JsonResult::Error(JsonError::new(
+                                ErrorCode::InternalError,
+                                None,
+                                0,
+                            )))
+                            .await;
+                    }
+                }
+            },
+            DarkFiError::RpcServerStopped,
+            self.ex.clone(),
+        );
+
+        // Set the blockchain indicator to fully scanned status and remove the progress text
+        if let Some(node) = self.node.upgrade() {
+            let _ = node.trigger("connect", serialize(&(3u8, String::new()))).await;
+        }
+
+        // Handle block from darkfid
+        let mut on_block = async |block: BlockInfo| -> DarkFiResult<()> {
+            i!("Received block {}", block.header.height);
+
+            let drk = self.drk.read().await;
+            if block.header.height <= last_scanned_height {
+                let reset_height = block.header.height.saturating_sub(1);
+                if let Err(e) = drk.reset_to_height(reset_height, &mut vec![]).await {
+                    return Err(DarkFiError::Custom(format!("Wallet state reset failed: {e}")))
+                }
+
+                // Scan genesis again if needed
+                if reset_height == 0 {
+                    let genesis = match drk.get_block_by_height(reset_height).await {
+                        Ok(b) => b,
+                        Err(e) => {
+                            return Err(DarkFiError::Custom(format!(
+                                "RPC client request failed: {e}"
+                            )))
+                        }
+                    };
+                    let mut scan_cache = drk.scan_cache(false).await?;
+                    if let Err(e) = drk.scan_block(&mut scan_cache, &genesis).await {
+                        return Err(DarkFiError::Custom(format!("Scanning block failed: {e}")))
+                    };
+                }
+            }
+
+            let mut scan_cache = drk.scan_cache(false).await?;
+            let old_nullifiers = scan_cache.owncoins_nullifiers.clone();
+
+            if let Err(e) = drk.scan_block(&mut scan_cache, &block).await {
+                return Err(DarkFiError::Custom(format!("Scanning block failed: {e}")))
+            }
+
+            if scan_cache.owncoins_nullifiers != old_nullifiers {
+                self.emit_balances_updated().await;
+            }
+
+            // Set new last scanned block height
+            last_scanned_height = block.header.height;
+
+            Ok(())
+        };
+
+        // Wait for blocks from darkfid
+        i!("Blockchain is fully scanned, waiting for blocks...");
+        let e = 'outer: loop {
+            match subscription.receive().await {
+                JsonResult::Notification(n) => {
+                    if n.method != "blockchain.subscribe_blocks" {
+                        break DarkFiError::UnexpectedJsonRpc(format!(
+                            "Got foreign notification from darkfid: {}",
+                            n.method
+                        ))
+                    }
+
+                    // Verify parameters
+                    if !n.params.is_array() {
+                        break DarkFiError::UnexpectedJsonRpc(
+                            "Received notification params are not an array".to_string(),
+                        )
+                    }
+                    let params = n.params.get::<Vec<JsonValue>>().unwrap();
+                    if params.is_empty() {
+                        break DarkFiError::UnexpectedJsonRpc(
+                            "Notification parameters are empty".to_string(),
+                        )
+                    }
+
+                    for param in params {
+                        let param = param.get::<String>().unwrap();
+                        let bytes = base64::decode(param).unwrap();
+                        let block: BlockInfo = deserialize_async(&bytes).await?;
+
+                        if let Err(e) = on_block(block).await {
+                            break 'outer e
+                        }
+                    }
+                }
+
+                JsonResult::Error(e) => {
+                    // Some error happened in the transmission
+                    break DarkFiError::UnexpectedJsonRpc(format!("Got error from JSON-RPC: {e:?}"))
+                }
+
+                x => {
+                    // And this is weird
+                    break DarkFiError::UnexpectedJsonRpc(format!(
+                        "Got unexpected data from JSON-RPC: {x:?}"
+                    ))
+                }
+            }
+        };
+
+        e!("Subscription closed: {e}");
+        Err(e)
+    }
+
+    /// Find the exact block height the reorg happened
+    async fn handle_reorg(&self, drk: &Drk, mut height: u32) -> DarkFiResult<u32> {
+        i!("Reorg detected, finding common ancestor...");
+        height = height.saturating_sub(1);
+        while height != 0 {
+            // Grab our scanned block hash for that height
+            let (scanned_block_hash, _) =
+                drk.get_scanned_block(&height).map_err(|e| DarkFiError::Custom(e.to_string()))?;
+
+            // Grab the block from darkfid for that height
+            let block = match drk.get_block_by_height(height).await {
+                Ok(b) => Some(b),
+                // Check if block was found
+                Err(DarkFiError::JsonRpcError((-32121, _))) => None,
+                Err(e) => {
+                    e!("Error getting block {height} while finding common ancestor: {e}");
+                    return Err(DarkFiError::Custom(e.to_string()))
+                }
+            };
+
+            // Continue to previous one if they don't match
+            if block.is_none() || scanned_block_hash != block.unwrap().hash().to_string() {
+                height = height.saturating_sub(1);
+                continue
+            }
+
+            // Reset to its height
+            drk.reset_to_height(height, &mut vec![])
+                .await
+                .map_err(|e| DarkFiError::Custom(e.to_string()))?;
+            break
+        }
+        Ok(height)
+    }
+
     /// Emit balances_updated signal with the balances encoded in the payload.
     /// Only emits when the encoded balances differ from the last emitted ones.
     async fn emit_balances_updated(&self) {
@@ -369,6 +778,20 @@ impl DrkPlugin {
         *last = Some(balances);
 
         let _ = node.trigger("balances_updated", data).await;
+    }
+
+    /// Emit a progress update
+    async fn emit_progress_update(&self, blocks_scanned: u32, total_blocks: u32) {
+        let Some(node) = self.node.upgrade() else { return };
+
+        let percentage = if total_blocks > 0 { blocks_scanned * 100 / total_blocks } else { 0 };
+        let status = if percentage > 50 { 2u8 } else { 1u8 };
+        let _ = node
+            .trigger(
+                "connect",
+                serialize(&(status, format!("{blocks_scanned}/{total_blocks} [{percentage}%]"))),
+            )
+            .await;
     }
 
     /// Emit tx_updated signal
@@ -696,136 +1119,35 @@ impl DrkPlugin {
         true
     }
 
-    async fn start(self: Arc<Self>, ex: ExecutorPtr, tasks: Vec<smol::Task<()>>) {
+    async fn start(self: Arc<Self>, tasks: Vec<smol::Task<()>>) {
         let me2 = Arc::downgrade(&self);
-        let drk = self.drk.clone();
-        let (shell_sender, shell_receiver) = unbounded();
-        let ex_ = ex.clone();
-        let progress_sub = self.scan_progress_pub.clone().subscribe().await;
-
-        let scan_progress_task = ex.spawn(async move {
-            let mut first_height = None;
-            loop {
-                let (height, final_height) = progress_sub.receive().await;
-                if first_height.is_none() {
-                    first_height = Some(height);
-                }
-                let progress: f64 = match final_height - first_height.unwrap() {
-                    0 => 0.,
-                    _ => {
-                        (height - first_height.unwrap()) as f64 /
-                            (final_height - first_height.unwrap()) as f64
-                    }
-                };
-                let status: u8 = if progress > 0.5 { 2 } else { 1 };
-                let Some(self2) = me2.upgrade() else { break };
-                let Some(node) = self2.node.upgrade() else { continue };
-                let start_height = first_height.unwrap();
-                let blocks_scanned = height - start_height;
-                let total_blocks = final_height - start_height;
-                let percentage = if total_blocks > 0 {
-                    (blocks_scanned as f32 / total_blocks as f32 * 100.0) as u32
-                } else {
-                    0
-                };
-                let desc = format!("{}/{} [{}%]", blocks_scanned, total_blocks, percentage);
-                let _ = node.trigger("connect", serialize(&(status, desc))).await;
-            }
-        });
-
-        let me2 = Arc::downgrade(&self);
-
-        // Task that handles the RPC subscription with retry logic
-        let subscribe_task = ex.spawn(async move {
+        let subscribe_task = self.ex.spawn(async move {
             loop {
                 let Some(self2) = me2.upgrade() else { break };
                 let endpoint = self2.endpoint();
                 i!("Attempting to connect to darkfid daemon at {}", endpoint);
                 let subscribe_rpc_task = StoppableTask::new();
-                let shell_sender = shell_sender.clone();
-                let drk = drk.clone();
-                let ex = ex_.clone();
-                let progress_pub = self2.scan_progress_pub.clone();
 
-                let _ = self2
-                    .node
-                    .upgrade()
-                    .unwrap()
-                    .trigger("connect", serialize(&(0u8, String::new())))
-                    .await;
+                if let Some(node) = self2.node.upgrade() {
+                    let _ = node.trigger("connect", serialize(&(0u8, String::new()))).await;
+                }
 
-                if let Err(e) = drk
-                    .read()
-                    .await
-                    .scan_blocks(&mut vec![], Some(&shell_sender), &false, Some(progress_pub))
-                    .await
-                {
+                if let Err(e) = self2.subscribe_blocks(subscribe_rpc_task, endpoint).await {
                     e!("Failed during drk scanning: {e}");
-                    let _ = self2
-                        .node
-                        .upgrade()
-                        .unwrap()
-                        .trigger("connect", serialize(&(0u8, String::new())))
-                        .await;
-
-                    // Wait before retrying
+                    if let Some(node) = self2.node.upgrade() {
+                        let _ = node.trigger("connect", serialize(&(0u8, String::new()))).await;
+                    }
                     i!("Retrying connection to darkfid in {} seconds...", DARKFID_RETRY_TIME);
                     sleep(DARKFID_RETRY_TIME).await;
                     continue
                 }
 
-                let _ = self2
-                    .node
-                    .upgrade()
-                    .unwrap()
-                    .trigger("connect", serialize(&(3u8, String::new())))
-                    .await;
-
-                self2.emit_balances_updated().await;
-
-                match subscribe_blocks(
-                    &drk,
-                    subscribe_rpc_task,
-                    shell_sender.clone(),
-                    endpoint,
-                    &ex,
-                )
-                .await
-                {
-                    Ok(()) => {
-                        i!("darkfid subscription closed normally (detached task stopped)");
-                    }
-                    Err(e) => {
-                        e!("darkfid connection failed: {e}");
-                    }
+                if let Some(node) = self2.node.upgrade() {
+                    let _ = node.trigger("connect", serialize(&(0u8, String::new()))).await;
                 }
 
-                let _ = self2
-                    .node
-                    .upgrade()
-                    .unwrap()
-                    .trigger("connect", serialize(&(0u8, String::new())))
-                    .await;
-
-                // Wait before retrying
                 i!("Retrying connection to darkfid in {} seconds...", DARKFID_RETRY_TIME);
                 sleep(DARKFID_RETRY_TIME).await;
-            }
-        });
-
-        let me2 = Arc::downgrade(&self);
-        let subscribe_recv_task = ex.spawn(async move {
-            loop {
-                let Some(self2) = me2.upgrade() else { break };
-                let recv = shell_receiver.recv().await;
-
-                if let Ok(lines) = recv {
-                    self2.emit_balances_updated().await;
-
-                    for line in lines.iter() {
-                        i!(line);
-                    }
-                }
             }
         });
 
@@ -857,7 +1179,7 @@ impl DrkPlugin {
         //    }
         //});
 
-        let mut all_tasks = vec![scan_progress_task, subscribe_task, subscribe_recv_task];
+        let mut all_tasks = vec![subscribe_task];
         all_tasks.extend(tasks);
         self.tasks.set(all_tasks).unwrap();
     }
