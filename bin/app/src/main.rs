@@ -357,10 +357,10 @@ async fn load_plugins(
         let sg_root2 = sg_root.clone();
         let redraw2 = redraw.clone();
         let listen_connect = ex.spawn(async move {
-            let net0 = sg_root2.lookup_node("/window/content/netstatus_layer/net0").unwrap();
-            let net1 = sg_root2.lookup_node("/window/content/netstatus_layer/net1").unwrap();
-            let net2 = sg_root2.lookup_node("/window/content/netstatus_layer/net2").unwrap();
-            let net3 = sg_root2.lookup_node("/window/content/netstatus_layer/net3").unwrap();
+            let net0 = sg_root2.lookup_node("/window/content/chat/netstatus_layer/net0").unwrap();
+            let net1 = sg_root2.lookup_node("/window/content/chat/netstatus_layer/net1").unwrap();
+            let net2 = sg_root2.lookup_node("/window/content/chat/netstatus_layer/net2").unwrap();
+            let net3 = sg_root2.lookup_node("/window/content/chat/netstatus_layer/net3").unwrap();
 
             let net0_is_visible = PropertyBool::wrap(&net0, Role::App, "is_visible", 0).unwrap();
             let net1_is_visible = PropertyBool::wrap(&net1, Role::App, "is_visible", 0).unwrap();

@@ -673,7 +673,7 @@ pub async fn make(
     // the netstatus layer, so its single background box draws over the netstatus
     // icons and its buttons win click hit-testing. It carries `unselect_btn`
     // (over `back_btn`) and `copy_btn` (over the reconnect button).
-    let select_layer = create_layer("select_layer");
+    let select_layer = create_layer(&(channel.to_string() + "_select_layer"));
     let prop = select_layer.get_property("rect").unwrap();
     prop.set_f32(atom, Role::App, 0, 0.).unwrap();
     prop.set_f32(atom, Role::App, 1, 0.).unwrap();
@@ -770,7 +770,7 @@ pub async fn make(
             let atom = &mut redraw2.make_guard(gfxtag!("select_changed"));
             select_is_visible.set(atom, selected);
             back_btn_bg_node2.set_property_bool(atom, Role::App, "is_visible", !selected).unwrap();
-            if let Some(netstatus_layer) = sg_root2.lookup_node("/window/content/netstatus_layer") {
+            if let Some(netstatus_layer) = sg_root2.lookup_node("/window/content/chat/netstatus_layer") {
                 netstatus_layer
                     .set_property_bool(atom, Role::App, "is_visible", !selected)
                     .unwrap();

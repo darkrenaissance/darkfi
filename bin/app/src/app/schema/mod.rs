@@ -694,7 +694,7 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish, db
             /*
             // Show netstat-klik icon
             let netstat_klik =
-                sg_root.lookup_node("/window/content/netstatus_layer/netstat_klik").unwrap();
+                sg_root.lookup_node("/window/content/chat/netstatus_layer/netstat_klik").unwrap();
 
             {
                 let atom = &mut redraw.make_guard(gfxtag!("netstat_klik_show"));
