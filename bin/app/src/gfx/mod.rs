@@ -24,8 +24,8 @@ use darkfi_serial::{
 use miniquad::native::egl;
 use miniquad::{
     conf, window, Bindings, BufferSource, BufferType, BufferUsage, EventHandler, KeyCode, KeyMods,
-    MouseButton, PassAction, Pipeline, RenderingBackend, TextureFormat, TextureKind, TextureParams,
-    TextureWrap, TouchPhase, UniformType,
+    MouseButton, PassAction, Pipeline, RenderPass, RenderingBackend, TextureFormat, TextureKind,
+    TextureParams, TextureWrap, TouchPhase, UniformType,
 };
 use std::{
     collections::HashMap,
@@ -588,6 +588,27 @@ impl<'a> RenderContext<'a> {
 
 type DcId = u64;
 
+/// CRT post-processing parameters as set at app start. They are faded to
+/// zero (brightness to 1.0) over CRT_FADE_SECS and the pass is then dropped.
+#[derive(Clone, Copy, Debug)]
+struct CrtParams {
+    chromatic_aberration: f32,
+    blur_amount: f32,
+    blur_radius: f32,
+    glow_intensity: f32,
+    brightness: f32,
+}
+
+const CRT_START: CrtParams = CrtParams {
+    chromatic_aberration: 0.008,
+    blur_amount: 4.,
+    blur_radius: 8.,
+    glow_intensity: 10.,
+    brightness: 4.08,
+};
+
+const CRT_FADE_SECS: f32 = 1.;
+
 struct Stage {
     ctx: Box<dyn RenderingBackend>,
     #[cfg(target_os = "android")]
@@ -595,6 +616,15 @@ struct Stage {
     loaded_pipelines: [Pipeline; 2],
     white_texture: miniquad::TextureId,
     draw_calls: HashMap<DcId, GfxDrawCall>,
+
+    /// CRT post-processing
+    crt_pipeline: Pipeline,
+    crt_pass: Option<RenderPass>,
+    crt_texture: Option<miniquad::TextureId>,
+    crt_vertex_buffer: Option<miniquad::BufferId>,
+    crt_index_buffer: Option<miniquad::BufferId>,
+    crt_size: (u32, u32),
+    crt_start: Option<std::time::Instant>,
 
     textures: Box<HashMap<TextureId, miniquad::TextureId>>,
     buffers: Box<HashMap<BufferId, miniquad::BufferId>>,
@@ -632,6 +662,7 @@ impl Stage {
 
         let rgb_pipeline = shader::create_rgb_pipeline(&mut ctx);
         let yuv_pipeline = shader::create_yuv_pipeline(&mut ctx);
+        let crt_pipeline = shader::create_crt_pipeline(&mut ctx);
 
         #[cfg(target_os = "android")]
         let libegl = egl::LibEgl::try_load().expect("Cant load LibEGL");
@@ -642,6 +673,13 @@ impl Stage {
             libegl,
             loaded_pipelines: [rgb_pipeline, yuv_pipeline],
             white_texture,
+            crt_pipeline,
+            crt_pass: None,
+            crt_texture: None,
+            crt_vertex_buffer: None,
+            crt_index_buffer: None,
+            crt_size: (0, 0),
+            crt_start: None,
             draw_calls: HashMap::from([(
                 0,
                 GfxDrawCall { instrs: vec![], dcs: vec![], z_index: 0 },
@@ -908,6 +946,129 @@ impl Stage {
             crate::android::request_apply_insets();
         }
     }
+
+    /// Release the offscreen render target and quad of the CRT pass
+    fn free_crt_resources(&mut self) {
+        if let Some(pass) = self.crt_pass.take() {
+            self.ctx.delete_render_pass(pass);
+        }
+        if let Some(texture) = self.crt_texture.take() {
+            self.ctx.delete_texture(texture);
+        }
+        if let Some(buffer) = self.crt_vertex_buffer.take() {
+            self.ctx.delete_buffer(buffer);
+        }
+        if let Some(buffer) = self.crt_index_buffer.take() {
+            self.ctx.delete_buffer(buffer);
+        }
+        self.crt_size = (0, 0);
+    }
+
+    /// Current CRT parameters, interpolated from CRT_START towards zero with
+    /// smoothstep easing. None once the fade has finished.
+    fn crt_current_params(&mut self) -> Option<CrtParams> {
+        let start = *self.crt_start.get_or_insert_with(std::time::Instant::now);
+        let t = (start.elapsed().as_secs_f32() / CRT_FADE_SECS).clamp(0., 1.);
+        if t >= 1. {
+            return None
+        }
+        let s = 1. - t * t * (3. - 2. * t);
+        Some(CrtParams {
+            chromatic_aberration: CRT_START.chromatic_aberration * s,
+            blur_amount: CRT_START.blur_amount * s,
+            blur_radius: CRT_START.blur_radius * s,
+            glow_intensity: CRT_START.glow_intensity * s,
+            brightness: 1. + (CRT_START.brightness - 1.) * s,
+        })
+    }
+
+    /// (Re)create the offscreen render target and fullscreen quad used by
+    /// the CRT post-processing pass. Recreates on window resize.
+    fn ensure_crt_pass(&mut self) {
+        let (w, h) = window::screen_size();
+        let w = (w.round() as u32).max(1);
+        let h = (h.round() as u32).max(1);
+
+        if self.crt_size == (w, h) && self.crt_pass.is_some() {
+            return
+        }
+
+        self.free_crt_resources();
+
+        let texture = self.ctx.new_render_texture(TextureParams {
+            width: w,
+            height: h,
+            format: TextureFormat::RGBA8,
+            wrap: TextureWrap::Clamp,
+            min_filter: miniquad::FilterMode::Linear,
+            mag_filter: miniquad::FilterMode::Linear,
+            ..Default::default()
+        });
+        let pass = self.ctx.new_render_pass(texture, None);
+
+        // Screen resolution is passed to the shader via vertex colors.
+        // GL render targets store the first row at v=0 (bottom) so flip v,
+        // Metal stores it at v=0 (top) so keep it as-is.
+        let is_gl = self.ctx.info().backend == miniquad::Backend::OpenGl;
+        let (v_top, v_bottom) = if is_gl { (1., 0.) } else { (0., 1.) };
+        let verts = [
+            Vertex { pos: [0., 0.], color: [w as f32, h as f32, 0., 1.], uv: [0., v_top] },
+            Vertex { pos: [1., 0.], color: [w as f32, h as f32, 0., 1.], uv: [1., v_top] },
+            Vertex { pos: [1., 1.], color: [w as f32, h as f32, 0., 1.], uv: [1., v_bottom] },
+            Vertex { pos: [0., 1.], color: [w as f32, h as f32, 0., 1.], uv: [0., v_bottom] },
+        ];
+        let vertex_buffer = self.ctx.new_buffer(
+            BufferType::VertexBuffer,
+            BufferUsage::Immutable,
+            BufferSource::slice(&verts),
+        );
+
+        let indices: [u16; 6] = [0, 1, 2, 0, 2, 3];
+        let index_buffer = self.ctx.new_buffer(
+            BufferType::IndexBuffer,
+            BufferUsage::Immutable,
+            BufferSource::slice(&indices),
+        );
+
+        self.crt_texture = Some(texture);
+        self.crt_pass = Some(pass);
+        self.crt_vertex_buffer = Some(vertex_buffer);
+        self.crt_index_buffer = Some(index_buffer);
+        self.crt_size = (w, h);
+    }
+
+    /// Blit the offscreen scene to the screen through the CRT shader
+    fn draw_crt(&mut self, params: CrtParams) {
+        self.ctx.begin_default_pass(PassAction::clear_color(0., 0., 0., 1.));
+        self.ctx.apply_pipeline(&self.crt_pipeline);
+
+        // Same top-left (0, 0) bottom-right (1, 1) projection, identity model
+        let proj = glam::Mat4::from_translation(glam::Vec3::new(-1., 1., 0.)) *
+            glam::Mat4::from_scale(glam::Vec3::new(2., -2., 1.));
+        let model = glam::Mat4::IDENTITY;
+
+        // Two mat4s followed by the five CRT parameter floats
+        let mut uniforms_data = [0u8; 148];
+        let data: [u8; 64] = unsafe { std::mem::transmute_copy(&proj) };
+        uniforms_data[0..64].copy_from_slice(&data);
+        let data: [u8; 64] = unsafe { std::mem::transmute_copy(&model) };
+        uniforms_data[64..128].copy_from_slice(&data);
+        uniforms_data[128..132].copy_from_slice(&params.chromatic_aberration.to_ne_bytes());
+        uniforms_data[132..136].copy_from_slice(&params.blur_amount.to_ne_bytes());
+        uniforms_data[136..140].copy_from_slice(&params.blur_radius.to_ne_bytes());
+        uniforms_data[140..144].copy_from_slice(&params.glow_intensity.to_ne_bytes());
+        uniforms_data[144..148].copy_from_slice(&params.brightness.to_ne_bytes());
+        self.ctx.apply_uniforms_from_bytes(uniforms_data.as_ptr(), uniforms_data.len());
+
+        let bindings = Bindings {
+            vertex_buffers: vec![self.crt_vertex_buffer.unwrap()],
+            index_buffer: self.crt_index_buffer.unwrap(),
+            images: vec![self.crt_texture.unwrap()],
+        };
+        self.ctx.apply_bindings(&bindings);
+        self.ctx.draw(0, 6, 1);
+        self.ctx.end_render_pass();
+    }
 }
 
 #[derive(Copy, Clone, Debug, PartialEq)]
@@ -998,7 +1159,24 @@ impl EventHandler for Stage {
     }
 
     fn draw(&mut self) {
-        self.ctx.begin_default_pass(PassAction::clear_color(0., 0., 0., 1.));
+        let crt_params = self.crt_current_params();
+
+        // Keep the offscreen pass alive only while the effect is fading in
+        // strength; drop it once the parameters have reached zero
+        if crt_params.is_some() {
+            self.ensure_crt_pass();
+        } else if self.crt_pass.is_some() {
+            self.free_crt_resources();
+        }
+        let crt_pass = self.crt_pass;
+
+        // Render the scene into the offscreen CRT render target when available,
+        // otherwise straight to the default framebuffer
+        if let Some(pass) = crt_pass {
+            self.ctx.begin_pass(Some(pass), PassAction::clear_color(0., 0., 0., 1.));
+        } else {
+            self.ctx.begin_default_pass(PassAction::clear_color(0., 0., 0., 1.));
+        }
 
         // Apply default RGB pipeline
         self.ctx.apply_pipeline(&self.loaded_pipelines[GraphicPipeline::RGB as usize]);
@@ -1038,6 +1216,12 @@ impl EventHandler for Stage {
         render_ctx.draw();
 
         self.ctx.end_render_pass();
+
+        // Post-process the offscreen scene through the CRT shader
+        if let (Some(_), Some(params)) = (crt_pass, crt_params) {
+            self.draw_crt(params);
+        }
+
         self.ctx.commit_frame();
     }
 
