@@ -493,7 +493,7 @@ async fn create_chat_btn(
     let sg_root = app.sg_root.clone();
     let redraw = app.redraw_trigger.clone();
     let menu_is_visible = PropertyBool::wrap(
-        &sg_root.lookup_node("/window/content/chat/menu_layer").unwrap(),
+        &sg_root.lookup_node("/window/content/chat").unwrap(),
         Role::App,
         "is_visible",
         0,

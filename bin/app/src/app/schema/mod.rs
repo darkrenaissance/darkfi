@@ -32,6 +32,7 @@ use crate::{
     gfx::gfxtag,
     prop::{PropertyAtomicGuard, PropertyFloat32, Role},
     scene::{SceneNodePtr, Slot},
+    sfx,
     shape,
     ui::{emoji_picker, Button, Layer, Text, VectorArt, VectorShape, Video},
     util::i18n::I18nBabelFish,
@@ -423,297 +424,6 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish, db
         window.link(node);
     }
 
-    let netlayer_node = create_layer("netstatus_layer");
-    let prop = netlayer_node.get_property("rect").unwrap();
-    let code = cc.compile("w - NETSTATUS_ICON_SIZE").unwrap();
-    prop.set_expr(atom, Role::App, 0, code).unwrap();
-    prop.set_f32(atom, Role::App, 1, 0.).unwrap();
-    //prop.set_f32(atom, Role::App, 2, NETSTATUS_ICON_SIZE).unwrap();
-    //prop.set_f32(atom, Role::App, 3, NETSTATUS_ICON_SIZE).unwrap();
-    prop.set_f32(atom, Role::App, 2, 1000.).unwrap();
-    prop.set_f32(atom, Role::App, 3, 1000.).unwrap();
-    netlayer_node.set_property_bool(atom, Role::App, "is_visible", true).unwrap();
-    netlayer_node.set_property_u32(atom, Role::App, "z_index", 2).unwrap();
-    netlayer_node.set_property_u32(atom, Role::App, "priority", 1).unwrap();
-    let netlayer_node = netlayer_node
-        .setup(|me| Layer::new(me, app.renderer.clone(), app.redraw_trigger.clone()))
-        .await;
-    content.link(netlayer_node.clone());
-
-    let node = create_vector_art("net0");
-    let prop = node.get_property("rect").unwrap();
-    prop.set_f32(atom, Role::App, 0, NETSTATUS_ICON_SIZE / 2.).unwrap();
-    prop.set_f32(atom, Role::App, 1, NETSTATUS_ICON_SIZE / 2.).unwrap();
-    prop.set_expr(atom, Role::App, 2, expr::load_var("w")).unwrap();
-    prop.set_expr(atom, Role::App, 3, expr::load_var("h")).unwrap();
-    node.set_property_bool(atom, Role::App, "is_visible", true).unwrap();
-    node.set_property_u32(atom, Role::App, "z_index", 0).unwrap();
-    node.set_property_f32(atom, Role::App, "scale", NETLOGO_SCALE).unwrap();
-    let mut shape = shape::create_netlogo1([1., 0., 0.25, 1.]);
-    shape.join(shape::create_netlogo2([0.27, 0.4, 0.4, 1.]));
-    shape.join(shape::create_netlogo3([0.27, 0.4, 0.4, 1.]));
-    let net0_node = node
-        .setup(|me| VectorArt::new(me, shape, app.renderer.clone(), app.redraw_trigger.clone()))
-        .await;
-    netlayer_node.link(net0_node);
-
-    let node = create_vector_art("net1");
-    let prop = node.get_property("rect").unwrap();
-    prop.set_f32(atom, Role::App, 0, NETSTATUS_ICON_SIZE / 2.).unwrap();
-    prop.set_f32(atom, Role::App, 1, NETSTATUS_ICON_SIZE / 2.).unwrap();
-    prop.set_expr(atom, Role::App, 2, expr::load_var("w")).unwrap();
-    prop.set_expr(atom, Role::App, 3, expr::load_var("h")).unwrap();
-    node.set_property_bool(atom, Role::App, "is_visible", false).unwrap();
-    node.set_property_u32(atom, Role::App, "z_index", 0).unwrap();
-    node.set_property_f32(atom, Role::App, "scale", NETLOGO_SCALE).unwrap();
-    let mut shape = shape::create_netlogo1([0.49, 0.57, 1., 1.]);
-    shape.join(shape::create_netlogo2([0.49, 0.57, 1., 1.]));
-    shape.join(shape::create_netlogo3([0.27, 0.4, 0.4, 1.]));
-    let net1_node = node
-        .setup(|me| VectorArt::new(me, shape, app.renderer.clone(), app.redraw_trigger.clone()))
-        .await;
-    netlayer_node.link(net1_node);
-
-    let node = create_vector_art("net2");
-    let prop = node.get_property("rect").unwrap();
-    prop.set_f32(atom, Role::App, 0, NETSTATUS_ICON_SIZE / 2.).unwrap();
-    prop.set_f32(atom, Role::App, 1, NETSTATUS_ICON_SIZE / 2.).unwrap();
-    prop.set_expr(atom, Role::App, 2, expr::load_var("w")).unwrap();
-    prop.set_expr(atom, Role::App, 3, expr::load_var("h")).unwrap();
-    node.set_property_bool(atom, Role::App, "is_visible", false).unwrap();
-    node.set_property_u32(atom, Role::App, "z_index", 0).unwrap();
-    node.set_property_f32(atom, Role::App, "scale", NETLOGO_SCALE).unwrap();
-    let mut shape = shape::create_netlogo1([0., 0.94, 1., 1.]);
-    shape.join(shape::create_netlogo2([0., 0.94, 1., 1.]));
-    shape.join(shape::create_netlogo3([0., 0.94, 1., 1.]));
-    let net2_node = node
-        .setup(|me| VectorArt::new(me, shape, app.renderer.clone(), app.redraw_trigger.clone()))
-        .await;
-    netlayer_node.link(net2_node);
-
-    let node = create_vector_art("net3");
-    let prop = node.get_property("rect").unwrap();
-    prop.set_f32(atom, Role::App, 0, NETSTATUS_ICON_SIZE / 2.).unwrap();
-    prop.set_f32(atom, Role::App, 1, NETSTATUS_ICON_SIZE / 2.).unwrap();
-    prop.set_expr(atom, Role::App, 2, expr::load_var("w")).unwrap();
-    prop.set_expr(atom, Role::App, 3, expr::load_var("h")).unwrap();
-    node.set_property_bool(atom, Role::App, "is_visible", false).unwrap();
-    node.set_property_u32(atom, Role::App, "z_index", 0).unwrap();
-    node.set_property_f32(atom, Role::App, "scale", NETLOGO_SCALE).unwrap();
-    let mut shape = shape::create_netlogo1([0., 0.94, 1., 1.]);
-    shape.join(shape::create_netlogo2([0., 0.94, 1., 1.]));
-    shape.join(shape::create_netlogo3([0., 0.94, 1., 1.]));
-    let net3_node = node
-        .setup(|me| VectorArt::new(me, shape, app.renderer.clone(), app.redraw_trigger.clone()))
-        .await;
-    netlayer_node.link(net3_node);
-
-    // netstat-klik icon (visual feedback when reconnect button is clicked)
-    let klik_color = [0., 0.5, 1., 1.]; // Blue
-    let node = create_vector_art("netstat_klik");
-    let prop = node.get_property("rect").unwrap();
-    prop.set_f32(atom, Role::App, 0, 0.).unwrap();
-    prop.set_f32(atom, Role::App, 1, 0.).unwrap();
-    prop.set_f32(atom, Role::App, 2, NETSTATUS_ICON_SIZE).unwrap();
-    prop.set_f32(atom, Role::App, 3, NETSTATUS_ICON_SIZE).unwrap();
-    node.set_property_bool(atom, Role::App, "is_visible", false).unwrap();
-    // Above other icons
-    node.set_property_u32(atom, Role::App, "z_index", 1).unwrap();
-    let mut shape = VectorShape::new();
-    shape.add_filled_box(
-        expr::const_f32(0.),
-        expr::const_f32(0.),
-        expr::const_f32(NETSTATUS_ICON_SIZE),
-        expr::const_f32(NETSTATUS_ICON_SIZE),
-        klik_color,
-    );
-    let netstat_klik_node = node
-        .setup(|me| VectorArt::new(me, shape, app.renderer.clone(), app.redraw_trigger.clone()))
-        .await;
-    netlayer_node.link(netstat_klik_node.clone());
-
-    // Reconnect Button (overlaid on netstatus icons)
-    let node = create_button("reconnect_btn");
-    node.set_property_bool(atom, Role::App, "is_active", true).unwrap();
-    let prop = node.get_property("rect").unwrap();
-    prop.set_f32(atom, Role::App, 0, 0.).unwrap();
-    prop.set_f32(atom, Role::App, 1, 0.).unwrap();
-    prop.set_f32(atom, Role::App, 2, NETSTATUS_ICON_SIZE).unwrap();
-    prop.set_f32(atom, Role::App, 3, NETSTATUS_ICON_SIZE).unwrap();
-
-    let sg_root = app.sg_root.clone();
-    let redraw = app.redraw_trigger.clone();
-    let (slot, recvr) = Slot::new("reconnect_clicked");
-    node.register("click", slot).unwrap();
-    let reconnect_task = app.ex.spawn(async move {
-        while let Ok(_) = recvr.recv().await {
-            i!("Reconnect button clicked");
-
-            /*
-            // Toggle the overlay layer
-            let overlay = sg_root.lookup_node("/window/content/netstatus_overlay").unwrap();
-            let visible = !overlay.get_property_bool("is_visible").unwrap();
-            let atom = &mut redraw.make_guard(gfxtag!("netstatus overlay toggle"));
-            overlay.set_property_bool(atom, Role::App, "is_visible", visible).unwrap();
-            */
-
-            // Show netstat-klik icon
-            let netstat_klik =
-                sg_root.lookup_node("/window/content/netstatus_layer/netstat_klik").unwrap();
-
-            {
-                let atom = &mut redraw.make_guard(gfxtag!("netstat_klik_show"));
-                if let Err(e) = netstat_klik.set_property_bool(atom, Role::App, "is_visible", true)
-                {
-                    e!("Failed to show netstat_klik: {e}");
-                }
-            }
-
-            // Trigger reconnect
-            match sg_root.lookup_node("/plugin/darkirc") {
-                Some(darkirc) => {
-                    if let Err(e) = darkirc.call_method("reconnect", vec![]).await {
-                        e!("Failed to trigger reconnect: {e}");
-                    }
-                }
-                None => {
-                    e!("DarkIrc plugin has not been loaded");
-                }
-            }
-
-            msleep(200).await;
-
-            // Hide netstat-klik icon
-            {
-                let atom = &mut redraw.make_guard(gfxtag!("netstat_klik_hide"));
-                if let Err(e) = netstat_klik.set_property_bool(atom, Role::App, "is_visible", false)
-                {
-                    e!("Failed to hide netstat_klik: {e}");
-                }
-            }
-        }
-    });
-    app.tasks.lock().unwrap().push(reconnect_task);
-
-    let node =
-        node.setup(|me| Button::new(me, app.renderer.clone(), app.redraw_trigger.clone())).await;
-    netlayer_node.link(node);
-
-    // Overlay layer toggled by the netstatus logo. Sits on top of everything
-    // except the header strip, so the logo stays visible and clickable.
-    let overlay_node = create_layer("netstatus_overlay");
-    let prop = overlay_node.get_property("rect").unwrap();
-    prop.set_f32(atom, Role::App, 0, NETSTAT_OVERLAY_MARGIN).unwrap();
-    prop.set_f32(atom, Role::App, 1, NETSTATUS_ICON_SIZE + NETSTAT_OVERLAY_MARGIN).unwrap();
-    let code = cc.compile("w - 2 * NETSTAT_OVERLAY_MARGIN").unwrap();
-    prop.set_expr(atom, Role::App, 2, code).unwrap();
-    let code = cc.compile("h - NETSTATUS_ICON_SIZE - 2 * NETSTAT_OVERLAY_MARGIN").unwrap();
-    prop.set_expr(atom, Role::App, 3, code).unwrap();
-    overlay_node.set_property_bool(atom, Role::App, "is_visible", false).unwrap();
-    overlay_node.set_property_u32(atom, Role::App, "z_index", 2).unwrap();
-    let overlay_node = overlay_node
-        .setup(|me| Layer::new(me, app.renderer.clone(), app.redraw_trigger.clone()))
-        .await;
-    content.link(overlay_node.clone());
-
-    // Placeholder single-color background filling the whole overlay
-    let node = create_vector_art("overlay_bg");
-    let prop = node.get_property("rect").unwrap();
-    prop.set_f32(atom, Role::App, 0, 0.).unwrap();
-    prop.set_f32(atom, Role::App, 1, 0.).unwrap();
-    prop.set_expr(atom, Role::App, 2, expr::load_var("w")).unwrap();
-    prop.set_expr(atom, Role::App, 3, expr::load_var("h")).unwrap();
-    node.set_property_bool(atom, Role::App, "is_visible", true).unwrap();
-    node.set_property_u32(atom, Role::App, "z_index", 0).unwrap();
-    let overlay_color = [0.05, 0.25, 0.3, 0.8];
-    let mut shape = VectorShape::new();
-    shape.add_filled_box(
-        expr::const_f32(0.),
-        expr::const_f32(0.),
-        expr::load_var("w"),
-        expr::load_var("h"),
-        overlay_color,
-    );
-    let node = node
-        .setup(|me| VectorArt::new(me, shape, app.renderer.clone(), app.redraw_trigger.clone()))
-        .await;
-    overlay_node.link(node);
-
-    let node = create_text("info");
-    prop.set_f32(atom, Role::App, 0, 0.).unwrap();
-    prop.set_f32(atom, Role::App, 1, 0.).unwrap();
-    prop.set_expr(atom, Role::App, 2, expr::load_var("w")).unwrap();
-    prop.set_expr(atom, Role::App, 3, expr::load_var("h")).unwrap();
-    node.set_property_f32(atom, Role::App, "font_size", NETSTAT_OVERLAY_BTN_FONTSIZE).unwrap();
-    /*
-    #[cfg(target_os = "android")]
-    {
-        let info = crate::android::get_display_debug_info();
-        i!("Display debug report:\n{info}");
-        node.set_property_str(atom, Role::App, "text", info).unwrap();
-    }
-    #[cfg(not(target_os = "android"))]
-    {
-        let info = indoc! {"
-            nothing to see here
-            folx
-            hello
-        "};
-        node.set_property_str(atom, Role::App, "text", info).unwrap();
-    }
-    */
-    node.set_property_enum(atom, Role::App, "text_align", "center").unwrap();
-    let prop = node.get_property("text_color").unwrap();
-    prop.set_f32(atom, Role::App, 0, 1.).unwrap();
-    prop.set_f32(atom, Role::App, 1, 1.).unwrap();
-    prop.set_f32(atom, Role::App, 2, 1.).unwrap();
-    prop.set_f32(atom, Role::App, 3, 1.).unwrap();
-    node.set_property_u32(atom, Role::App, "z_index", 2).unwrap();
-    let node = node
-        .setup(|me| {
-            Text::new(
-                me,
-                window_scale.clone(),
-                app.renderer.clone(),
-                i18n_fish.clone(),
-                app.redraw_trigger.clone(),
-            )
-        })
-        .await;
-    overlay_node.link(node);
-
-    // Stop/start p2p button
-    let node = create_button("copy_btn");
-    node.set_property_bool(atom, Role::App, "is_active", true).unwrap();
-    let prop = node.get_property("rect").unwrap();
-    prop.set_f32(atom, Role::App, 0, 0.).unwrap();
-    prop.set_f32(atom, Role::App, 1, 0.).unwrap();
-    prop.set_expr(atom, Role::App, 2, expr::load_var("w")).unwrap();
-    prop.set_expr(atom, Role::App, 3, expr::load_var("h")).unwrap();
-
-    let sg_root = app.sg_root.clone();
-    let redraw = app.redraw_trigger.clone();
-    let (slot, recvr) = Slot::new("stop_btn_clicked");
-    node.register("click", slot).unwrap();
-    let stop_task = app.ex.spawn(async move {
-        let mut p2p_running = true;
-        while let Ok(_) = recvr.recv().await {
-            /*
-            #[cfg(target_os = "android")]
-            {
-                let info = crate::android::get_display_debug_info();
-                crate::clipboard::set(&info);
-                i!("Copied report!");
-            }
-            */
-        }
-    });
-    app.tasks.lock().unwrap().push(stop_task);
-
-    let node =
-        node.setup(|me| Button::new(me, app.renderer.clone(), app.redraw_trigger.clone())).await;
-    overlay_node.link(node);
-
     // Navbar Settings Button
 
     /*
@@ -832,9 +542,317 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish, db
     // Seed the joined-channels file with defaults on first run.
     ensure_joined_channels_seeded();
 
+    // Create chat container layer
+    let chat_layer = create_layer("chat");
+    let prop = chat_layer.get_property("rect").unwrap();
+    prop.set_f32(atom, Role::App, 0, 0.).unwrap();
+    prop.set_f32(atom, Role::App, 1, 0.).unwrap();
+    prop.set_expr(atom, Role::App, 2, expr::load_var("w")).unwrap();
+    prop.set_expr(atom, Role::App, 3, expr::load_var("h")).unwrap();
+    chat_layer.set_property_bool(atom, Role::App, "is_visible", false).unwrap();
+    chat_layer.set_property_u32(atom, Role::App, "z_index", 1).unwrap();
+    let chat_layer = chat_layer
+        .setup(|me| Layer::new(me, app.renderer.clone(), app.redraw_trigger.clone()))
+        .await;
+    content.link(chat_layer.clone());
+
+    let netlayer_node = create_layer("netstatus_layer");
+    let prop = netlayer_node.get_property("rect").unwrap();
+    let code = cc.compile("w - NETSTATUS_ICON_SIZE").unwrap();
+    prop.set_expr(atom, Role::App, 0, code).unwrap();
+    prop.set_f32(atom, Role::App, 1, 0.).unwrap();
+    //prop.set_f32(atom, Role::App, 2, NETSTATUS_ICON_SIZE).unwrap();
+    //prop.set_f32(atom, Role::App, 3, NETSTATUS_ICON_SIZE).unwrap();
+    prop.set_f32(atom, Role::App, 2, 1000.).unwrap();
+    prop.set_f32(atom, Role::App, 3, 1000.).unwrap();
+    netlayer_node.set_property_bool(atom, Role::App, "is_visible", true).unwrap();
+    netlayer_node.set_property_u32(atom, Role::App, "z_index", 2).unwrap();
+    netlayer_node.set_property_u32(atom, Role::App, "priority", 1).unwrap();
+    let netlayer_node = netlayer_node
+        .setup(|me| Layer::new(me, app.renderer.clone(), app.redraw_trigger.clone()))
+        .await;
+    chat_layer.link(netlayer_node.clone());
+
+    let node = create_vector_art("net0");
+    let prop = node.get_property("rect").unwrap();
+    prop.set_f32(atom, Role::App, 0, NETSTATUS_ICON_SIZE / 2.).unwrap();
+    prop.set_f32(atom, Role::App, 1, NETSTATUS_ICON_SIZE / 2.).unwrap();
+    prop.set_expr(atom, Role::App, 2, expr::load_var("w")).unwrap();
+    prop.set_expr(atom, Role::App, 3, expr::load_var("h")).unwrap();
+    node.set_property_bool(atom, Role::App, "is_visible", true).unwrap();
+    node.set_property_u32(atom, Role::App, "z_index", 0).unwrap();
+    node.set_property_f32(atom, Role::App, "scale", NETLOGO_SCALE).unwrap();
+    let mut shape = shape::create_netlogo1([1., 0., 0.25, 1.]);
+    shape.join(shape::create_netlogo2([0.27, 0.4, 0.4, 1.]));
+    shape.join(shape::create_netlogo3([0.27, 0.4, 0.4, 1.]));
+    let net0_node = node
+        .setup(|me| VectorArt::new(me, shape, app.renderer.clone(), app.redraw_trigger.clone()))
+        .await;
+    netlayer_node.link(net0_node);
+
+    let node = create_vector_art("net1");
+    let prop = node.get_property("rect").unwrap();
+    prop.set_f32(atom, Role::App, 0, NETSTATUS_ICON_SIZE / 2.).unwrap();
+    prop.set_f32(atom, Role::App, 1, NETSTATUS_ICON_SIZE / 2.).unwrap();
+    prop.set_expr(atom, Role::App, 2, expr::load_var("w")).unwrap();
+    prop.set_expr(atom, Role::App, 3, expr::load_var("h")).unwrap();
+    node.set_property_bool(atom, Role::App, "is_visible", false).unwrap();
+    node.set_property_u32(atom, Role::App, "z_index", 0).unwrap();
+    node.set_property_f32(atom, Role::App, "scale", NETLOGO_SCALE).unwrap();
+    let mut shape = shape::create_netlogo1([0.49, 0.57, 1., 1.]);
+    shape.join(shape::create_netlogo2([0.49, 0.57, 1., 1.]));
+    shape.join(shape::create_netlogo3([0.27, 0.4, 0.4, 1.]));
+    let net1_node = node
+        .setup(|me| VectorArt::new(me, shape, app.renderer.clone(), app.redraw_trigger.clone()))
+        .await;
+    netlayer_node.link(net1_node);
+
+    let node = create_vector_art("net2");
+    let prop = node.get_property("rect").unwrap();
+    prop.set_f32(atom, Role::App, 0, NETSTATUS_ICON_SIZE / 2.).unwrap();
+    prop.set_f32(atom, Role::App, 1, NETSTATUS_ICON_SIZE / 2.).unwrap();
+    prop.set_expr(atom, Role::App, 2, expr::load_var("w")).unwrap();
+    prop.set_expr(atom, Role::App, 3, expr::load_var("h")).unwrap();
+    node.set_property_bool(atom, Role::App, "is_visible", false).unwrap();
+    node.set_property_u32(atom, Role::App, "z_index", 0).unwrap();
+    node.set_property_f32(atom, Role::App, "scale", NETLOGO_SCALE).unwrap();
+    let mut shape = shape::create_netlogo1([0., 0.94, 1., 1.]);
+    shape.join(shape::create_netlogo2([0., 0.94, 1., 1.]));
+    shape.join(shape::create_netlogo3([0., 0.94, 1., 1.]));
+    let net2_node = node
+        .setup(|me| VectorArt::new(me, shape, app.renderer.clone(), app.redraw_trigger.clone()))
+        .await;
+    netlayer_node.link(net2_node);
+
+    let node = create_vector_art("net3");
+    let prop = node.get_property("rect").unwrap();
+    prop.set_f32(atom, Role::App, 0, NETSTATUS_ICON_SIZE / 2.).unwrap();
+    prop.set_f32(atom, Role::App, 1, NETSTATUS_ICON_SIZE / 2.).unwrap();
+    prop.set_expr(atom, Role::App, 2, expr::load_var("w")).unwrap();
+    prop.set_expr(atom, Role::App, 3, expr::load_var("h")).unwrap();
+    node.set_property_bool(atom, Role::App, "is_visible", false).unwrap();
+    node.set_property_u32(atom, Role::App, "z_index", 0).unwrap();
+    node.set_property_f32(atom, Role::App, "scale", NETLOGO_SCALE).unwrap();
+    let mut shape = shape::create_netlogo1([0., 0.94, 1., 1.]);
+    shape.join(shape::create_netlogo2([0., 0.94, 1., 1.]));
+    shape.join(shape::create_netlogo3([0., 0.94, 1., 1.]));
+    let net3_node = node
+        .setup(|me| VectorArt::new(me, shape, app.renderer.clone(), app.redraw_trigger.clone()))
+        .await;
+    netlayer_node.link(net3_node);
+
+    // netstat-klik icon (visual feedback when reconnect button is clicked)
+    let klik_color = [0., 0.5, 1., 1.]; // Blue
+    let node = create_vector_art("netstat_klik");
+    let prop = node.get_property("rect").unwrap();
+    prop.set_f32(atom, Role::App, 0, 0.).unwrap();
+    prop.set_f32(atom, Role::App, 1, 0.).unwrap();
+    prop.set_f32(atom, Role::App, 2, NETSTATUS_ICON_SIZE).unwrap();
+    prop.set_f32(atom, Role::App, 3, NETSTATUS_ICON_SIZE).unwrap();
+    node.set_property_bool(atom, Role::App, "is_visible", false).unwrap();
+    // Above other icons
+    node.set_property_u32(atom, Role::App, "z_index", 1).unwrap();
+    let mut shape = VectorShape::new();
+    shape.add_filled_box(
+        expr::const_f32(0.),
+        expr::const_f32(0.),
+        expr::const_f32(NETSTATUS_ICON_SIZE),
+        expr::const_f32(NETSTATUS_ICON_SIZE),
+        klik_color,
+    );
+    let netstat_klik_node = node
+        .setup(|me| VectorArt::new(me, shape, app.renderer.clone(), app.redraw_trigger.clone()))
+        .await;
+    netlayer_node.link(netstat_klik_node.clone());
+
+    // Reconnect Button (overlaid on netstatus icons)
+    let node = create_button("reconnect_btn");
+    node.set_property_bool(atom, Role::App, "is_active", true).unwrap();
+    let prop = node.get_property("rect").unwrap();
+    prop.set_f32(atom, Role::App, 0, 0.).unwrap();
+    prop.set_f32(atom, Role::App, 1, 0.).unwrap();
+    prop.set_f32(atom, Role::App, 2, NETSTATUS_ICON_SIZE).unwrap();
+    prop.set_f32(atom, Role::App, 3, NETSTATUS_ICON_SIZE).unwrap();
+
+    let sg_root = app.sg_root.clone();
+    let redraw = app.redraw_trigger.clone();
+    let (slot, recvr) = Slot::new("reconnect_clicked");
+    node.register("click", slot).unwrap();
+    let reconnect_task = app.ex.spawn(async move {
+        while let Ok(_) = recvr.recv().await {
+            i!("Reconnect button clicked");
+
+            // Toggle the overlay layer
+            let overlay = sg_root.lookup_node("/window/content/chat/netstatus_overlay").unwrap();
+            let is_visible = overlay.get_property_bool("is_visible").unwrap();
+            if !is_visible {
+                sfx::play_cloak();
+            }
+            let atom = &mut redraw.make_guard(gfxtag!("netstatus overlay toggle"));
+            overlay.set_property_bool(atom, Role::App, "is_visible", !is_visible).unwrap();
+
+            /*
+            // Show netstat-klik icon
+            let netstat_klik =
+                sg_root.lookup_node("/window/content/netstatus_layer/netstat_klik").unwrap();
+
+            {
+                let atom = &mut redraw.make_guard(gfxtag!("netstat_klik_show"));
+                if let Err(e) = netstat_klik.set_property_bool(atom, Role::App, "is_visible", true)
+                {
+                    e!("Failed to show netstat_klik: {e}");
+                }
+            }
+
+            // Trigger reconnect
+            match sg_root.lookup_node("/plugin/darkirc") {
+                Some(darkirc) => {
+                    if let Err(e) = darkirc.call_method("reconnect", vec![]).await {
+                        e!("Failed to trigger reconnect: {e}");
+                    }
+                }
+                None => {
+                    e!("DarkIrc plugin has not been loaded");
+                }
+            }
+
+            msleep(200).await;
+
+            // Hide netstat-klik icon
+            {
+                let atom = &mut redraw.make_guard(gfxtag!("netstat_klik_hide"));
+                if let Err(e) = netstat_klik.set_property_bool(atom, Role::App, "is_visible", false)
+                {
+                    e!("Failed to hide netstat_klik: {e}");
+                }
+            }
+            */
+        }
+    });
+    app.tasks.lock().unwrap().push(reconnect_task);
+
+    let node =
+        node.setup(|me| Button::new(me, app.renderer.clone(), app.redraw_trigger.clone())).await;
+    netlayer_node.link(node);
+
+    // Overlay layer toggled by the netstatus logo. Sits on top of everything
+    // except the header strip, so the logo stays visible and clickable.
+    let overlay_node = create_layer("netstatus_overlay");
+    let prop = overlay_node.get_property("rect").unwrap();
+    prop.set_f32(atom, Role::App, 0, NETSTAT_OVERLAY_MARGIN).unwrap();
+    prop.set_f32(atom, Role::App, 1, NETSTATUS_ICON_SIZE + NETSTAT_OVERLAY_MARGIN).unwrap();
+    let code = cc.compile("w - 2 * NETSTAT_OVERLAY_MARGIN").unwrap();
+    prop.set_expr(atom, Role::App, 2, code).unwrap();
+    let code = cc.compile("h - NETSTATUS_ICON_SIZE - 2 * NETSTAT_OVERLAY_MARGIN").unwrap();
+    prop.set_expr(atom, Role::App, 3, code).unwrap();
+    overlay_node.set_property_bool(atom, Role::App, "is_visible", false).unwrap();
+    overlay_node.set_property_u32(atom, Role::App, "z_index", 2).unwrap();
+    let overlay_node = overlay_node
+        .setup(|me| Layer::new(me, app.renderer.clone(), app.redraw_trigger.clone()))
+        .await;
+    chat_layer.link(overlay_node.clone());
+
+    // Placeholder single-color background filling the whole overlay
+    let node = create_vector_art("overlay_bg");
+    let prop = node.get_property("rect").unwrap();
+    prop.set_f32(atom, Role::App, 0, 0.).unwrap();
+    prop.set_f32(atom, Role::App, 1, 0.).unwrap();
+    prop.set_expr(atom, Role::App, 2, expr::load_var("w")).unwrap();
+    prop.set_expr(atom, Role::App, 3, expr::load_var("h")).unwrap();
+    node.set_property_bool(atom, Role::App, "is_visible", true).unwrap();
+    node.set_property_u32(atom, Role::App, "z_index", 0).unwrap();
+    let overlay_color = [0.05, 0.25, 0.3, 0.8];
+    let mut shape = VectorShape::new();
+    shape.add_filled_box(
+        expr::const_f32(0.),
+        expr::const_f32(0.),
+        expr::load_var("w"),
+        expr::load_var("h"),
+        overlay_color,
+    );
+    let node = node
+        .setup(|me| VectorArt::new(me, shape, app.renderer.clone(), app.redraw_trigger.clone()))
+        .await;
+    overlay_node.link(node);
+
+    let node = create_text("info");
+    prop.set_f32(atom, Role::App, 0, 0.).unwrap();
+    prop.set_f32(atom, Role::App, 1, 0.).unwrap();
+    prop.set_expr(atom, Role::App, 2, expr::load_var("w")).unwrap();
+    prop.set_expr(atom, Role::App, 3, expr::load_var("h")).unwrap();
+    node.set_property_f32(atom, Role::App, "font_size", NETSTAT_OVERLAY_BTN_FONTSIZE).unwrap();
+    /*
+    #[cfg(target_os = "android")]
+    {
+        let info = crate::android::get_display_debug_info();
+        i!("Display debug report:\n{info}");
+        node.set_property_str(atom, Role::App, "text", info).unwrap();
+    }
+    #[cfg(not(target_os = "android"))]
+    {
+        let info = indoc! {"
+            nothing to see here
+            folx
+            hello
+        "};
+        node.set_property_str(atom, Role::App, "text", info).unwrap();
+    }
+    */
+    node.set_property_enum(atom, Role::App, "text_align", "center").unwrap();
+    let prop = node.get_property("text_color").unwrap();
+    prop.set_f32(atom, Role::App, 0, 1.).unwrap();
+    prop.set_f32(atom, Role::App, 1, 1.).unwrap();
+    prop.set_f32(atom, Role::App, 2, 1.).unwrap();
+    prop.set_f32(atom, Role::App, 3, 1.).unwrap();
+    node.set_property_u32(atom, Role::App, "z_index", 2).unwrap();
+    let node = node
+        .setup(|me| {
+            Text::new(
+                me,
+                window_scale.clone(),
+                app.renderer.clone(),
+                i18n_fish.clone(),
+                app.redraw_trigger.clone(),
+            )
+        })
+        .await;
+    overlay_node.link(node);
+
+    // Stop/start p2p button
+    let node = create_button("copy_btn");
+    node.set_property_bool(atom, Role::App, "is_active", true).unwrap();
+    let prop = node.get_property("rect").unwrap();
+    prop.set_f32(atom, Role::App, 0, 0.).unwrap();
+    prop.set_f32(atom, Role::App, 1, 0.).unwrap();
+    prop.set_expr(atom, Role::App, 2, expr::load_var("w")).unwrap();
+    prop.set_expr(atom, Role::App, 3, expr::load_var("h")).unwrap();
+
+    let sg_root = app.sg_root.clone();
+    let redraw = app.redraw_trigger.clone();
+    let (slot, recvr) = Slot::new("stop_btn_clicked");
+    node.register("click", slot).unwrap();
+    let stop_task = app.ex.spawn(async move {
+        let mut p2p_running = true;
+        while let Ok(_) = recvr.recv().await {
+            /*
+            #[cfg(target_os = "android")]
+            {
+                let info = crate::android::get_display_debug_info();
+                crate::clipboard::set(&info);
+                i!("Copied report!");
+            }
+            */
+        }
+    });
+    app.tasks.lock().unwrap().push(stop_task);
+
+    let node =
+        node.setup(|me| Button::new(me, app.renderer.clone(), app.redraw_trigger.clone())).await;
+    overlay_node.link(node);
+
     menu::make(
         app,
-        content.clone(),
+        chat_layer.clone(),
         i18n_fish,
         channels_tree.clone(),
         contacts_tree.clone(),
@@ -842,7 +860,6 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish, db
         emoji_meshes.clone(),
     )
     .await;
-    let chat_layer = app.sg_root.lookup_node("/window/content/chat").unwrap();
 
     // Create chat layers only for joined channels/contacts, in joined order.
     for name in read_joined_channels() {
@@ -870,11 +887,11 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish, db
         )
         .await;
     }
+
     wallet::make(app, content.clone(), i18n_fish).await;
 
     // Setup wallet button after wallet layer is created
-    let menu_layer = app.sg_root.lookup_node("/window/content/chat/menu_layer").unwrap();
-    menu::setup_wallet_button(app, menu_layer, i18n_fish).await;
+    menu::setup_wallet_button(app, chat_layer, i18n_fish).await;
 
     // @@@ Debug stuff @@@
     //let chatview_node = app.sg_root.lookup_node("/window/content/chat/dev_chat_layer").unwrap();

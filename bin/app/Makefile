@@ -88,6 +88,10 @@ data/font/NotoColorEmoji.ttf:
 	mkdir -p data/font/
 	wget -P data/font/ -c https://dark.fi/assets/NotoColorEmoji.ttf
 
+data/font/darkfi-custom-emoji.ttf:
+	mkdir -p data/font/
+	wget -P data/font/ -c https://dark.fi/assets/darkfi-custom-emoji.ttf
+
 # App data
 
 data/forest_1920x1080.ivf:

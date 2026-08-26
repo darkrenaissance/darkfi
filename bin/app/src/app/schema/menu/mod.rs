@@ -111,7 +111,7 @@ mod edit_switch;
 
 pub async fn make(
     app: &App,
-    content: SceneNodePtr,
+    chat_layer: SceneNodePtr,
     i18n_fish: &I18nBabelFish,
     channels_tree: Tree,
     contacts_tree: Tree,
@@ -127,20 +127,6 @@ pub async fn make(
     .unwrap();
 
     let atom = &mut PropertyAtomicGuard::none();
-
-    // Create chat container layer
-    let chat_layer = create_layer("chat");
-    let prop = chat_layer.get_property("rect").unwrap();
-    prop.set_f32(atom, Role::App, 0, 0.).unwrap();
-    prop.set_f32(atom, Role::App, 1, 0.).unwrap();
-    prop.set_expr(atom, Role::App, 2, expr::load_var("w")).unwrap();
-    prop.set_expr(atom, Role::App, 3, expr::load_var("h")).unwrap();
-    chat_layer.set_property_bool(atom, Role::App, "is_visible", true).unwrap();
-    chat_layer.set_property_u32(atom, Role::App, "z_index", 1).unwrap();
-    let chat_layer = chat_layer
-        .setup(|me| Layer::new(me, app.renderer.clone(), app.redraw_trigger.clone()))
-        .await;
-    content.link(chat_layer.clone());
 
     // Create contact screen
     let contact_layer = create_layer("contact_screen_layer");
@@ -194,7 +180,7 @@ pub async fn make(
     prop.set_f32(atom, Role::App, 1, 0.).unwrap();
     prop.set_expr(atom, Role::App, 2, expr::load_var("w")).unwrap();
     prop.set_expr(atom, Role::App, 3, expr::load_var("h")).unwrap();
-    layer_node.set_property_bool(atom, Role::App, "is_visible", false).unwrap();
+    layer_node.set_property_bool(atom, Role::App, "is_visible", true).unwrap();
     layer_node.set_property_u32(atom, Role::App, "z_index", 1).unwrap();
     let layer_node = layer_node
         .setup(|me| Layer::new(me, app.renderer.clone(), app.redraw_trigger.clone()))
@@ -526,7 +512,7 @@ pub async fn make(
     btns.connect_edit_handlers(app, &menu_node, Some(mainlayer_is_visible.clone()));
 }
 
-pub async fn setup_wallet_button(app: &App, menu_layer: SceneNodePtr, i18n_fish: &I18nBabelFish) {
+pub async fn setup_wallet_button(app: &App, chat_layer: SceneNodePtr, i18n_fish: &I18nBabelFish) {
     let atom = &mut PropertyAtomicGuard::none();
     let mut cc = expr::Compiler::new();
     cc.add_const_f32("MENU_BTN_W_R", MENU_BTN_W_R);
@@ -541,7 +527,8 @@ pub async fn setup_wallet_button(app: &App, menu_layer: SceneNodePtr, i18n_fish:
     )
     .unwrap();
 
-    let menulayer_is_visible = PropertyBool::wrap(&menu_layer, Role::App, "is_visible", 0).unwrap();
+    let chat_is_visible = PropertyBool::wrap(&chat_layer, Role::App, "is_visible", 0).unwrap();
+    let menu_layer = chat_layer.lookup_node("/menu_layer").unwrap();
 
     // Wallet status icon (blockchain netlogo, all cyan = fully connected)
     // Positioned at center of wallet button area, above write_btn
@@ -587,12 +574,11 @@ pub async fn setup_wallet_button(app: &App, menu_layer: SceneNodePtr, i18n_fish:
     )
     .unwrap();
     let redraw = app.redraw_trigger.clone();
-    let menulayer_is_visible2 = menulayer_is_visible.clone();
     let listen_click = app.ex.spawn(async move {
         while let Ok(_) = recvr.recv().await {
             let atom = &mut redraw.make_guard(gfxtag!("wallet_click"));
             wallet_is_visible.set(atom, true);
-            menulayer_is_visible2.set(atom, false);
+            chat_is_visible.set(atom, false);
         }
     });
     app.tasks.lock().unwrap().push(listen_click);

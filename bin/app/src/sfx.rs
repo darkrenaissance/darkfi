@@ -30,6 +30,7 @@ macro_rules! e { ($($arg:tt)*) => { error!(target: "app::sfx", $($arg)*); } }
 
 static CLICK_OGA: &[u8] = include_bytes!("../data/sfx/click.oga");
 static COMMUP_OGA: &[u8] = include_bytes!("../data/sfx/commup.oga");
+static CLOAK_OGA: &[u8] = include_bytes!("../data/sfx/cloak.oga");
 
 struct Sfx {
     /// Keeps the output stream alive for the process lifetime
@@ -40,6 +41,8 @@ struct Sfx {
     click: rodio::buffer::SamplesBuffer,
     /// Decoded startup sound
     commup: rodio::buffer::SamplesBuffer,
+    /// Used for showing p2p overlay
+    cloak: rodio::buffer::SamplesBuffer,
 }
 
 static SFX: LazyLock<Option<Sfx>> = LazyLock::new(|| match init() {
@@ -58,7 +61,8 @@ fn init() -> Result<Sfx, Box<dyn std::error::Error>> {
     let mixer = output.mixer().clone();
     let click = rodio::Decoder::try_from(Cursor::new(CLICK_OGA))?.record();
     let commup = rodio::Decoder::try_from(Cursor::new(COMMUP_OGA))?.record();
-    Ok(Sfx { _output: output, mixer, click, commup })
+    let cloak = rodio::Decoder::try_from(Cursor::new(CLOAK_OGA))?.record();
+    Ok(Sfx { _output: output, mixer, click, commup, cloak })
 }
 
 /// cpal's AAudio backend fetches the JavaVM and Activity from the
@@ -79,13 +83,19 @@ fn init_android_context() {
 }
 
 pub fn play_click() {
-    if let Some(sfx) = SFX.as_ref() {
+    if let Some(sfx) = &*SFX {
         sfx.mixer.add(sfx.click.clone());
     }
 }
 
 pub fn play_commup() {
-    if let Some(sfx) = SFX.as_ref() {
+    if let Some(sfx) = &*SFX {
         sfx.mixer.add(sfx.commup.clone());
+    }
+}
+
+pub fn play_cloak() {
+    if let Some(sfx) = &*SFX {
+        sfx.mixer.add(sfx.cloak.clone());
     }
 }
