@@ -66,6 +66,7 @@ use crate::{
     error::{WalletDbError, WalletDbResult},
     params,
     rpc::ScanCache,
+    scan_cache_log,
     walletdb::Value,
     Drk,
 };
@@ -771,7 +772,7 @@ impl Drk {
         let data = &call.data.data;
         match MoneyFunction::try_from(data[0])? {
             MoneyFunction::FeeV1 => {
-                scan_cache.log(String::from("[parse_money_call] Found Money::FeeV1 call"));
+                scan_cache_log!(scan_cache, "[parse_money_call] Found Money::FeeV1 call");
                 let params: MoneyFeeParamsV1 = deserialize_async(&data[9..]).await?;
                 nullifiers.push(params.input.nullifier);
                 if !params.output.tx_local {
@@ -779,7 +780,7 @@ impl Drk {
                 }
             }
             MoneyFunction::GenesisMintV1 => {
-                scan_cache.log(String::from("[parse_money_call] Found Money::GenesisMintV1 call"));
+                scan_cache_log!(scan_cache, "[parse_money_call] Found Money::GenesisMintV1 call");
                 let params: MoneyGenesisMintParamsV1 = deserialize_async(&data[1..]).await?;
                 for output in params.outputs {
                     if !output.tx_local {
@@ -788,14 +789,14 @@ impl Drk {
                 }
             }
             MoneyFunction::PoWRewardV1 => {
-                scan_cache.log(String::from("[parse_money_call] Found Money::PoWRewardV1 call"));
+                scan_cache_log!(scan_cache, "[parse_money_call] Found Money::PoWRewardV1 call");
                 let params: MoneyPoWRewardParamsV1 = deserialize_async(&data[1..]).await?;
                 if !params.output.tx_local {
                     coins.push((params.output.coin, params.output.note, true));
                 }
             }
             MoneyFunction::TransferV1 => {
-                scan_cache.log(String::from("[parse_money_call] Found Money::TransferV1 call"));
+                scan_cache_log!(scan_cache, "[parse_money_call] Found Money::TransferV1 call");
                 let params: MoneyTransferParamsV1 = deserialize_async(&data[1..]).await?;
 
                 for input in params.inputs {
@@ -809,23 +810,24 @@ impl Drk {
                 }
             }
             MoneyFunction::AuthTokenMintV1 => {
-                scan_cache
-                    .log(String::from("[parse_money_call] Found Money::AuthTokenMintV1 call"));
+                scan_cache_log!(scan_cache, "[parse_money_call] Found Money::AuthTokenMintV1 call");
                 // Handled in TokenMint
             }
             MoneyFunction::AuthTokenFreezeV1 => {
-                scan_cache
-                    .log(String::from("[parse_money_call] Found Money::AuthTokenFreezeV1 call"));
+                scan_cache_log!(
+                    scan_cache,
+                    "[parse_money_call] Found Money::AuthTokenFreezeV1 call"
+                );
                 let params: MoneyAuthTokenFreezeParamsV1 = deserialize_async(&data[1..]).await?;
                 freezes.push(params.token_id);
             }
             MoneyFunction::TokenMintV1 => {
-                scan_cache.log(String::from("[parse_money_call] Found Money::TokenMintV1 call"));
+                scan_cache_log!(scan_cache, "[parse_money_call] Found Money::TokenMintV1 call");
                 let params: MoneyTokenMintParamsV1 = deserialize_async(&data[1..]).await?;
                 coins.push((params.coin, params.enc_note, false))
             }
             MoneyFunction::BurnV1 => {
-                scan_cache.log(String::from("[parse_money_call] Found Money::BurnV1 call"));
+                scan_cache_log!(scan_cache, "[parse_money_call] Found Money::BurnV1 call");
                 let params: MoneyBurnParamsV1 = deserialize_async(&data[1..]).await?;
                 for input in params.inputs {
                     nullifiers.push(input.nullifier);
@@ -844,7 +846,7 @@ impl Drk {
         &self,
         tree: &mut MerkleTree,
         secrets: &[SecretKey],
-        messages_buffer: &mut Vec<String>,
+        mut messages_buffer: Option<&mut Vec<String>>,
         coins: &[(Coin, AeadEncryptedNote, bool)],
     ) -> Result<(Vec<OwnCoin>, Option<SecretKey>)> {
         // Keep track of our own coins found in the vec
@@ -868,15 +870,21 @@ impl Drk {
             // Attempt to decrypt the note
             for secret in secrets {
                 let Ok(note) = note.decrypt::<MoneyNote>(secret) else { continue };
-                messages_buffer.push(String::from(
-                    "[handle_money_call_coins] Successfully decrypted a Money Note",
-                ));
-                messages_buffer
-                    .push(String::from("[handle_money_call_coins] Witnessing coin in Merkle tree"));
+                if let Some(buffer) = messages_buffer.as_deref_mut() {
+                    buffer.push(String::from(
+                        "[handle_money_call_coins] Successfully decrypted a Money Note",
+                    ));
+                    buffer.push(String::from(
+                        "[handle_money_call_coins] Witnessing coin in Merkle tree",
+                    ));
+                }
                 let leaf_position = tree.mark().unwrap();
                 if *is_block_reward {
-                    messages_buffer
-                        .push(String::from("[handle_money_call_coins] Grabing block signing key"));
+                    if let Some(buffer) = messages_buffer.as_deref_mut() {
+                        buffer.push(String::from(
+                            "[handle_money_call_coins] Grabing block signing key",
+                        ));
+                    }
                     block_signing_key = Some(deserialize(&note.memo)?);
                 }
                 let owncoin = OwnCoin { coin: *coin, note, secret: *secret, leaf_position };
@@ -896,7 +904,7 @@ impl Drk {
         coins: &[OwnCoin],
         creation_height: &u32,
     ) -> Result<()> {
-        scan_cache.log(format!("Found {} OwnCoin(s) in transaction", coins.len()));
+        scan_cache_log!(scan_cache, "Found {} OwnCoin(s) in transaction", coins.len());
 
         // Check if we have any owncoins to process
         if coins.is_empty() {
@@ -926,7 +934,7 @@ impl Drk {
         // Handle our own coins
         let spent_height: Option<u32> = None;
         for coin in coins {
-            scan_cache.log(format!("OwnCoin: {:?}", coin.coin));
+            scan_cache_log!(scan_cache, "OwnCoin: {:?}", coin.coin);
             // Grab coin record key
             let key = coin.coin.to_bytes();
 
@@ -1035,7 +1043,7 @@ impl Drk {
         let (owncoins, block_signing_key) = self.handle_money_call_coins(
             &mut scan_cache.money_tree,
             &scan_cache.notes_secrets,
-            &mut scan_cache.messages_buffer,
+            scan_cache.messages_buffer.as_mut(),
             &coins,
         )?;
 

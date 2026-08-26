@@ -103,26 +103,35 @@ pub struct ScanCache {
     pub own_proposals: HashMap<DaoProposalBulla, DaoBulla>,
     /// Our own deploy authorities
     pub own_deploy_auths: HashMap<[u8; 32], SecretKey>,
-    /// Messages buffer for better downstream prints handling
-    pub messages_buffer: Vec<String>,
+    /// Optional messages buffer for better downstream prints handling
+    pub messages_buffer: Option<Vec<String>>,
 }
 
 impl ScanCache {
-    /// Auxiliary function to append messages to the buffer.
-    pub fn log(&mut self, msg: String) {
-        self.messages_buffer.push(msg);
-    }
-
     /// Auxiliary function to consume the messages buffer.
     pub fn flush_messages(&mut self) -> Vec<String> {
-        self.messages_buffer.drain(..).collect()
+        self.messages_buffer.as_mut().map_or(vec![], std::mem::take)
     }
+}
+
+/// Guard to push a message into the provided [`ScanCache`] optional
+/// messages buffer. The format arguments are only evaluated when the
+/// buffer is enabled, so no string formatting happens when logging
+/// is disabled.
+#[macro_export]
+macro_rules! scan_cache_log {
+    ($cache:expr, $($arg:tt)*) => {
+        if let Some(ref mut buffer) = $cache.messages_buffer {
+            buffer.push(format!($($arg)*));
+        }
+    };
 }
 
 impl Drk {
     /// Auxiliary function to generate a new [`ScanCache`] for the
-    /// wallet.
-    pub async fn scan_cache(&self) -> Result<ScanCache> {
+    /// wallet. The provided flag controls whether the messages
+    /// buffer is enabled.
+    pub async fn scan_cache(&self, verbose: bool) -> Result<ScanCache> {
         let money_tree = self.get_money_tree().await?;
         let smt_store = CacheSmtStorage::new(CacheOverlay::new(&self.cache)?, KVDB_MONEY_SMT_TREE);
         let money_smt = CacheSmt::new(smt_store, PoseidonFp::new(), &EMPTY_NODES_FP);
@@ -155,6 +164,7 @@ impl Drk {
             own_proposals.insert(proposal.bulla(), proposal.proposal.dao_bulla);
         }
         let own_deploy_auths = self.get_deploy_auths_keys_map().await?;
+        let messages_buffer = if verbose { Some(vec![]) } else { None };
 
         Ok(ScanCache {
             money_tree,
@@ -167,7 +177,7 @@ impl Drk {
             own_daos,
             own_proposals,
             own_deploy_auths,
-            messages_buffer: vec![],
+            messages_buffer,
         })
     }
 
@@ -183,19 +193,19 @@ impl Drk {
         scan_cache.dao_proposals_tree.checkpoint(block.header.height as usize);
 
         // Scan the block
-        scan_cache.log(String::from("======================================="));
-        scan_cache.log(format!("{}", block.header));
-        scan_cache.log(String::from("======================================="));
-        scan_cache.log(format!("[scan_block] Iterating over {} transactions", block.txs.len()));
+        scan_cache_log!(scan_cache, "=======================================");
+        scan_cache_log!(scan_cache, "{}", block.header);
+        scan_cache_log!(scan_cache, "=======================================");
+        scan_cache_log!(scan_cache, "[scan_block] Iterating over {} transactions", block.txs.len());
         let mut block_signing_key = None;
         for tx in block.txs.iter() {
             let tx_hash = tx.hash();
             let tx_hash_string = tx_hash.to_string();
             let mut wallet_tx = false;
-            scan_cache.log(format!("[scan_block] Processing transaction: {tx_hash_string}"));
+            scan_cache_log!(scan_cache, "[scan_block] Processing transaction: {tx_hash_string}");
             for (i, call) in tx.calls.iter().enumerate() {
                 if call.data.contract_id == *MONEY_CONTRACT_ID {
-                    scan_cache.log(format!("[scan_block] Found Money contract in call {i}"));
+                    scan_cache_log!(scan_cache, "[scan_block] Found Money contract in call {i}");
                     let (is_wallet_tx, signing_key) = self
                         .apply_tx_money_data(
                             scan_cache,
@@ -216,7 +226,7 @@ impl Drk {
                 }
 
                 if call.data.contract_id == *DAO_CONTRACT_ID {
-                    scan_cache.log(format!("[scan_block] Found DAO contract in call {i}"));
+                    scan_cache_log!(scan_cache, "[scan_block] Found DAO contract in call {i}");
                     if self
                         .apply_tx_dao_data(
                             scan_cache,
@@ -233,7 +243,10 @@ impl Drk {
                 }
 
                 if call.data.contract_id == *DEPLOYOOOR_CONTRACT_ID {
-                    scan_cache.log(format!("[scan_block] Found DeployoOor contract in call {i}"));
+                    scan_cache_log!(
+                        scan_cache,
+                        "[scan_block] Found DeployoOor contract in call {i}"
+                    );
                     if self
                         .apply_tx_deploy_data(
                             scan_cache,
@@ -249,8 +262,10 @@ impl Drk {
                 }
 
                 // TODO: For now we skip non-native contract calls
-                scan_cache
-                    .log(format!("[scan_block] Found non-native contract in call {i}, skipping."));
+                scan_cache_log!(
+                    scan_cache,
+                    "[scan_block] Found non-native contract in call {i}, skipping."
+                );
             }
 
             // If this is our wallet tx we mark it for update
@@ -374,7 +389,7 @@ impl Drk {
         }
 
         // Generate a new scan cache
-        let mut scan_cache = match self.scan_cache().await {
+        let mut scan_cache = match self.scan_cache(true).await {
             Ok(c) => c,
             Err(e) => {
                 append_or_print(
@@ -775,7 +790,7 @@ pub async fn subscribe_blocks(
                                     ))
                                 }
                             };
-                            let mut scan_cache = lock.scan_cache().await?;
+                            let mut scan_cache = lock.scan_cache(true).await?;
                             if let Err(e) = lock.scan_block(&mut scan_cache, &genesis).await {
                                 shell_sender.send(shell_message).await?;
                                 break 'outer Error::Custom(format!(
@@ -788,7 +803,7 @@ pub async fn subscribe_blocks(
                         }
                     }
 
-                    let mut scan_cache = lock.scan_cache().await?;
+                    let mut scan_cache = lock.scan_cache(true).await?;
                     if let Err(e) = lock.scan_block(&mut scan_cache, &block).await {
                         shell_sender.send(shell_message).await?;
                         break 'outer Error::Custom(format!(

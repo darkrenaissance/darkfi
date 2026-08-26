@@ -82,6 +82,7 @@ use crate::{
     money::BALANCE_BASE10_DECIMALS,
     params,
     rpc::ScanCache,
+    scan_cache_log,
     walletdb::Value,
     Drk,
 };
@@ -1200,9 +1201,10 @@ impl Drk {
         }
 
         // Confirm it
-        scan_cache.log(format!(
+        scan_cache_log!(
+            scan_cache,
             "[apply_dao_mint_data] Found minted DAO {new_bulla}, noting down for wallet update"
-        ));
+        );
         if let Err(e) = self
             .confirm_dao(
                 new_bulla,
@@ -1249,9 +1251,10 @@ impl Drk {
             };
 
             // We managed to decrypt it. Let's place this in a proper ProposalRecord object
-            scan_cache.messages_buffer.push(format!(
+            scan_cache_log!(
+                scan_cache,
                 "[apply_dao_propose_data] Managed to decrypt proposal note for DAO: {dao}"
-            ));
+            );
 
             // Check if we already got the record
             let our_proposal = if scan_cache.own_proposals.contains_key(&params.proposal_bulla) {
@@ -1426,7 +1429,7 @@ impl Drk {
         // Run through the transaction call data and see what we got:
         match DaoFunction::try_from(data[0])? {
             DaoFunction::Mint => {
-                scan_cache.log(String::from("[apply_tx_dao_data] Found Dao::Mint call"));
+                scan_cache_log!(scan_cache, "[apply_tx_dao_data] Found Dao::Mint call");
                 let params: DaoMintParams = deserialize_async(&data[1..]).await?;
                 self.apply_dao_mint_data(
                     scan_cache,
@@ -1438,24 +1441,26 @@ impl Drk {
                 .await
             }
             DaoFunction::Propose => {
-                scan_cache.log(String::from("[apply_tx_dao_data] Found Dao::Propose call"));
+                scan_cache_log!(scan_cache, "[apply_tx_dao_data] Found Dao::Propose call");
                 let params: DaoProposeParams = deserialize_async(&data[1..]).await?;
                 self.apply_dao_propose_data(scan_cache, &params, tx_hash, call_idx, block_height)
                     .await
             }
             DaoFunction::Vote => {
-                scan_cache.log(String::from("[apply_tx_dao_data] Found Dao::Vote call"));
+                scan_cache_log!(scan_cache, "[apply_tx_dao_data] Found Dao::Vote call");
                 let params: DaoVoteParams = deserialize_async(&data[1..]).await?;
                 self.apply_dao_vote_data(scan_cache, &params, tx_hash, call_idx, block_height).await
             }
             DaoFunction::Exec => {
-                scan_cache.log(String::from("[apply_tx_dao_data] Found Dao::Exec call"));
+                scan_cache_log!(scan_cache, "[apply_tx_dao_data] Found Dao::Exec call");
                 let params: DaoExecParams = deserialize_async(&data[1..]).await?;
                 self.apply_dao_exec_data(scan_cache, &params, tx_hash, block_height).await
             }
             DaoFunction::AuthMoneyTransfer => {
-                scan_cache
-                    .log(String::from("[apply_tx_dao_data] Found Dao::AuthMoneyTransfer call"));
+                scan_cache_log!(
+                    scan_cache,
+                    "[apply_tx_dao_data] Found Dao::AuthMoneyTransfer call"
+                );
                 // Does nothing, just verifies the other calls are correct
                 Ok(false)
             }

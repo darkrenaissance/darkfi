@@ -44,7 +44,8 @@ use darkfi_sdk::{
 use darkfi_serial::{deserialize_async, serialize, serialize_async, AsyncEncodable};
 
 use crate::{
-    convert_named_params, error::WalletDbResult, params, rpc::ScanCache, walletdb::Value, Drk,
+    convert_named_params, error::WalletDbResult, params, rpc::ScanCache, scan_cache_log,
+    walletdb::Value, Drk,
 };
 
 // Wallet SQL table constant names. These have to represent the `wallet.sql`
@@ -516,12 +517,12 @@ impl Drk {
         // Run through the transaction call data and see what we got:
         match DeployFunction::try_from(data[0])? {
             DeployFunction::DeployV1 => {
-                scan_cache.log(String::from("[apply_tx_deploy_data] Found Deploy::DeployV1 call"));
+                scan_cache_log!(scan_cache, "[apply_tx_deploy_data] Found Deploy::DeployV1 call");
                 let params: DeployParamsV1 = deserialize_async(&data[1..]).await?;
                 self.apply_deploy_deploy_data(scan_cache, &params, tx_hash, block_height).await
             }
             DeployFunction::LockV1 => {
-                scan_cache.log(String::from("[apply_tx_deploy_data] Found Deploy::LockV1 call"));
+                scan_cache_log!(scan_cache, "[apply_tx_deploy_data] Found Deploy::LockV1 call");
                 let params: LockParamsV1 = deserialize_async(&data[1..]).await?;
                 self.apply_deploy_lock_data(scan_cache, &params.public_key, tx_hash, block_height)
                     .await
