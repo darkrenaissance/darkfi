@@ -36,7 +36,6 @@ use crate::{
     prop::{PropertyAtomicGuard, PropertyFloat32, Role},
     scene::{SceneNodePtr, Slot},
     sfx, shape,
-    shape,
     ui::{emoji_picker, Button, Layer, Text, TextScramble, VectorArt, VectorShape, Video},
     util::i18n::I18nBabelFish,
 };

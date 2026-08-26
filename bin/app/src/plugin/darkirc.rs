@@ -351,6 +351,19 @@ impl DarkIrc {
                 // Wait until we have enough connections
                 if peers_count < SYNC_MIN_PEERS {
                     i!("Connected to {peers_count} peers. Waiting for more connections.");
+                    let conn_sub = self.p2p.hosts().subscribe_channel().await;
+                    loop {
+                        if let Err(err) = conn_sub.receive().await {
+                            w!("Error while waiting for new connections: {err}");
+                            continue
+                        }
+
+                        if self.p2p.peers_count() >= SYNC_MIN_PEERS {
+                            break
+                        }
+                    }
+
+                    drop(conn_sub);
                     continue
                 }
 
