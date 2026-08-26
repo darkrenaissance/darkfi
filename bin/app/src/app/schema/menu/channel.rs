@@ -612,7 +612,8 @@ pub async fn make(
             contact_vis.set(atom, false);
             channel_vis.set(atom, true);
 
-            let netstatus_layer = sg_root.lookup_node("/window/content/chat/netstatus_layer").unwrap();
+            let netstatus_layer =
+                sg_root.lookup_node("/window/content/chat/netstatus_layer").unwrap();
             netstatus_layer.set_property_bool(atom, Role::App, "is_visible", true).unwrap();
 
             debug!("channels btn click - switching to channels");
@@ -707,7 +708,8 @@ pub async fn make(
             channel_vis.set(atom, false);
             contact_vis.set(atom, true);
 
-            let netstatus_layer = sg_root.lookup_node("/window/content/chat/netstatus_layer").unwrap();
+            let netstatus_layer =
+                sg_root.lookup_node("/window/content/chat/netstatus_layer").unwrap();
             netstatus_layer.set_property_bool(atom, Role::App, "is_visible", true).unwrap();
 
             debug!("contacts btn click - switching to contacts");

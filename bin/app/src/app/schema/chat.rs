@@ -770,7 +770,9 @@ pub async fn make(
             let atom = &mut redraw2.make_guard(gfxtag!("select_changed"));
             select_is_visible.set(atom, selected);
             back_btn_bg_node2.set_property_bool(atom, Role::App, "is_visible", !selected).unwrap();
-            if let Some(netstatus_layer) = sg_root2.lookup_node("/window/content/chat/netstatus_layer") {
+            if let Some(netstatus_layer) =
+                sg_root2.lookup_node("/window/content/chat/netstatus_layer")
+            {
                 netstatus_layer
                     .set_property_bool(atom, Role::App, "is_visible", !selected)
                     .unwrap();
