@@ -120,6 +120,7 @@ pub enum SceneNodeType {
     Setting = 21,
     Menu = 22,
     TokenTable = 23,
+    TextScramble = 24,
     PluginRoot = 100,
     Plugin = 101,
 }
@@ -599,6 +600,7 @@ pub enum Pimpl {
     Menu(ui::MenuPtr),
     TokenTable(ui::TokenTablePtr),
     Setting(SettingPtr),
+    TextScramble(ui::TextScramblePtr),
     #[cfg(feature = "enable-plugin-darkirc")]
     DarkIrc(plugin::DarkIrcPtr),
     #[cfg(feature = "enable-plugin-fud")]

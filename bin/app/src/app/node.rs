@@ -276,6 +276,70 @@ pub fn create_text(name: &str) -> SceneNode {
     node
 }
 
+pub fn create_text_scramble(name: &str) -> SceneNode {
+    let mut node = SceneNode::new(name, SceneNodeType::TextScramble);
+
+    let mut prop = Property::new("rect", PropertyType::Float32, PropertySubType::Pixel);
+    prop.set_array_len(4);
+    prop.allow_exprs();
+    node.add_property(prop).unwrap();
+
+    let mut prop = Property::new("height", PropertyType::Float32, PropertySubType::Pixel);
+    node.add_property(prop).unwrap();
+
+    let mut prop = Property::new("lineheight", PropertyType::Float32, PropertySubType::Pixel);
+    prop.set_ui_text("Line Height", "Line height/lead (em)");
+    prop.set_defaults_f32(vec![1.2]).unwrap();
+    prop.set_range_f32(0., f32::MAX);
+    node.add_property(prop).unwrap();
+
+    let mut prop = Property::new("text_align", PropertyType::Enum, PropertySubType::Null);
+    prop.set_enum_items(vec!["start", "end", "left", "center", "right", "justify"]).unwrap();
+    prop.set_defaults_str(vec!["start".to_string()]).unwrap();
+    node.add_property(prop).unwrap();
+
+    let prop = Property::new("font_size", PropertyType::Float32, PropertySubType::Pixel);
+    node.add_property(prop).unwrap();
+
+    let prop = Property::new("text", PropertyType::Str, PropertySubType::Null);
+    node.add_property(prop).unwrap();
+
+    let mut prop = Property::new("text_color", PropertyType::Float32, PropertySubType::Color);
+    prop.set_array_len(4);
+    prop.set_range_f32(0., 1.);
+    node.add_property(prop).unwrap();
+
+    let mut prop = Property::new("overflow_wrap", PropertyType::Enum, PropertySubType::Null);
+    prop.set_enum_items(vec!["normal", "anywhere", "break-word"]).unwrap();
+    prop.set_defaults_str(vec!["normal".to_string()]).unwrap();
+    node.add_property(prop).unwrap();
+
+    let prop = Property::new("z_index", PropertyType::Uint32, PropertySubType::Null);
+    node.add_property(prop).unwrap();
+
+    let prop = Property::new("priority", PropertyType::Uint32, PropertySubType::Null);
+    node.add_property(prop).unwrap();
+
+    let prop = Property::new("use_i18n", PropertyType::Bool, PropertySubType::Null);
+    node.add_property(prop).unwrap();
+
+    let prop = Property::new("debug", PropertyType::Bool, PropertySubType::Null);
+    node.add_property(prop).unwrap();
+
+    let mut prop = Property::new("solve_probability", PropertyType::Float32, PropertySubType::Null);
+    prop.set_ui_text("Solve Probability", "Chance per tick that an unsolved character locks in");
+    prop.set_defaults_f32(vec![0.1]).unwrap();
+    prop.set_range_f32(0., 1.);
+    node.add_property(prop).unwrap();
+
+    let mut prop = Property::new("tick_interval", PropertyType::Uint32, PropertySubType::Null);
+    prop.set_ui_text("Tick Interval", "Milliseconds between scramble animation ticks");
+    prop.set_defaults_u32(vec![50]).unwrap();
+    node.add_property(prop).unwrap();
+
+    node
+}
+
 pub fn create_baseedit(name: &str) -> SceneNode {
     let mut node = SceneNode::new(name, SceneNodeType::Edit);
 

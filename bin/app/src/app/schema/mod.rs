@@ -25,7 +25,10 @@ use kvdb_overlay::Database;
 
 use crate::{
     app::{
-        node::{create_button, create_layer, create_text, create_vector_art, create_video},
+        node::{
+            create_button, create_layer, create_text, create_text_scramble, create_vector_art,
+            create_video,
+        },
         App,
     },
     expr::{self, Compiler},
@@ -33,7 +36,8 @@ use crate::{
     prop::{PropertyAtomicGuard, PropertyFloat32, Role},
     scene::{SceneNodePtr, Slot},
     sfx, shape,
-    ui::{emoji_picker, Button, Layer, Text, VectorArt, VectorShape, Video},
+    shape,
+    ui::{emoji_picker, Button, Layer, Text, TextScramble, VectorArt, VectorShape, Video},
     util::i18n::I18nBabelFish,
 };
 
@@ -64,6 +68,9 @@ mod android_ui_consts {
     pub const NETSTAT_OVERLAY_BTN_W: f32 = 200.;
     pub const NETSTAT_OVERLAY_BTN_H: f32 = 90.;
     pub const NETSTAT_OVERLAY_BTN_FONTSIZE: f32 = 40.;
+
+    pub const SPLASH_FONTSIZE: f32 = 52.;
+    pub const SPLASH_MARGIN: f32 = 40.;
 }
 
 #[cfg(target_os = "android")]
@@ -129,6 +136,9 @@ mod ui_consts {
     pub const NETSTAT_OVERLAY_BTN_W: f32 = 100.;
     pub const NETSTAT_OVERLAY_BTN_H: f32 = 45.;
     pub const NETSTAT_OVERLAY_BTN_FONTSIZE: f32 = 20.;
+
+    pub const SPLASH_FONTSIZE: f32 = 26.;
+    pub const SPLASH_MARGIN: f32 = 20.;
 
     pub use super::desktop_paths::*;
 }
@@ -237,6 +247,61 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish, db
     let content =
         content.setup(|me| Layer::new(me, app.renderer.clone(), app.redraw_trigger.clone())).await;
     window.link(content.clone());
+
+    // Splash layer with the scramble message
+    cc.add_const_f32("SPLASH_FONTSIZE", SPLASH_FONTSIZE);
+    cc.add_const_f32("SPLASH_MARGIN", SPLASH_MARGIN);
+    let splash_layer = create_layer("splash_layer");
+    let prop = splash_layer.get_property("rect").unwrap();
+    prop.set_f32(atom, Role::App, 0, 0.).unwrap();
+    prop.set_f32(atom, Role::App, 1, 0.).unwrap();
+    prop.set_expr(atom, Role::App, 2, expr::load_var("w")).unwrap();
+    prop.set_expr(atom, Role::App, 3, expr::load_var("h")).unwrap();
+    splash_layer.set_property_bool(atom, Role::App, "is_visible", true).unwrap();
+    splash_layer.set_property_u32(atom, Role::App, "z_index", 2).unwrap();
+    let splash_layer = splash_layer
+        .setup(|me| Layer::new(me, app.renderer.clone(), app.redraw_trigger.clone()))
+        .await;
+    content.link(splash_layer.clone());
+
+    let node = create_text_scramble("splash_msg");
+    let prop = node.get_property("rect").unwrap();
+    prop.set_f32(atom, Role::App, 0, SPLASH_MARGIN).unwrap();
+    let code = cc.compile("h * 0.4").unwrap();
+    prop.set_expr(atom, Role::App, 1, code).unwrap();
+    let code = cc.compile("w - 2 * SPLASH_MARGIN").unwrap();
+    prop.set_expr(atom, Role::App, 2, code).unwrap();
+    prop.set_f32(atom, Role::App, 3, SPLASH_FONTSIZE * 1.2).unwrap();
+    node.set_property_u32(atom, Role::App, "z_index", 0).unwrap();
+    node.set_property_f32(atom, Role::App, "font_size", SPLASH_FONTSIZE).unwrap();
+    node.set_property_enum(atom, Role::App, "text_align", "center").unwrap();
+    let prop = node.get_property("text_color").unwrap();
+    prop.set_f32(atom, Role::App, 0, 1.).unwrap();
+    prop.set_f32(atom, Role::App, 1, 1.).unwrap();
+    prop.set_f32(atom, Role::App, 2, 1.).unwrap();
+    prop.set_f32(atom, Role::App, 3, 1.).unwrap();
+    node.set_property_str(atom, Role::App, "text", "welcome back commander").unwrap();
+    let node = node
+        .setup(|me| {
+            TextScramble::new(
+                me,
+                window_scale.clone(),
+                app.renderer.clone(),
+                i18n_fish.clone(),
+                app.redraw_trigger.clone(),
+            )
+        })
+        .await;
+    splash_layer.link(node);
+
+    // Hide the splash layer after 3s
+    let redraw = app.redraw_trigger.clone();
+    let hide_task = app.ex.spawn(async move {
+        msleep(3000).await;
+        let atom = &mut redraw.make_guard(gfxtag!("splash_layer hide"));
+        splash_layer.set_property_bool(atom, Role::App, "is_visible", false).unwrap();
+    });
+    app.tasks.lock().unwrap().push(hide_task);
 
     if COLOR_SCHEME == ColorScheme::DarkMode {
         let node = create_video("king");

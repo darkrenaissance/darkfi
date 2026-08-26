@@ -80,6 +80,8 @@ mod menu;
 pub use menu::{Menu, MenuPtr};
 mod text;
 pub use text::{Text, TextPtr};
+mod text_scramble;
+pub use text_scramble::{TextScramble, TextScramblePtr};
 mod win;
 pub use win::{GestureAction, Window, WindowPtr};
 
@@ -317,6 +319,7 @@ pub fn get_ui_object_ptr(node: &SceneNode3) -> Arc<dyn UIObject + Send> {
         Pimpl::ScrollLayer(obj) => obj.clone(),
         Pimpl::VectorArt(obj) => obj.clone(),
         Pimpl::Text(obj) => obj.clone(),
+        Pimpl::TextScramble(obj) => obj.clone(),
         Pimpl::Edit(obj) => obj.clone(),
         Pimpl::ChatView(obj) => obj.clone(),
         Pimpl::Image(obj) => obj.clone(),
@@ -336,6 +339,7 @@ pub fn get_ui_object3<'a>(node: &'a SceneNode3) -> &'a dyn UIObject {
         Pimpl::ScrollLayer(obj) => obj.as_ref(),
         Pimpl::VectorArt(obj) => obj.as_ref(),
         Pimpl::Text(obj) => obj.as_ref(),
+        Pimpl::TextScramble(obj) => obj.as_ref(),
         Pimpl::Edit(obj) => obj.as_ref(),
         Pimpl::ChatView(obj) => obj.as_ref(),
         Pimpl::Image(obj) => obj.as_ref(),
