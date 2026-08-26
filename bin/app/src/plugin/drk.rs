@@ -35,8 +35,7 @@ use url::Url;
 
 use crate::{
     error::{Error, Result},
-    prop::BatchGuardPtr,
-    scene::{MethodCallSub, Pimpl, SceneNode, SceneNodePtr, SceneNodeType, SceneNodeWeak},
+    scene::{MethodCallSub, Pimpl, SceneNodePtr, SceneNodeWeak},
     ExecutorPtr,
 };
 
@@ -132,9 +131,6 @@ pub struct DrkPlugin {
 impl DrkPlugin {
     pub async fn new(node: SceneNodeWeak, sg_root: SceneNodePtr, ex: ExecutorPtr) -> Result<Pimpl> {
         let node_ref = node.upgrade().unwrap();
-
-        let setting_root = Arc::new(SceneNode::new("setting", SceneNodeType::SettingRoot));
-        node_ref.link(setting_root.clone());
 
         let endpoint = Url::parse(DARKFID_ENDPOINT).unwrap();
 
@@ -278,10 +274,6 @@ impl DrkPlugin {
         self_.clone().start(ex.clone(), tasks).await;
 
         Ok(Pimpl::Drk(self_))
-    }
-
-    async fn apply_settings(_self: Arc<Self>, _batch: BatchGuardPtr) {
-        // TODO
     }
 
     pub async fn get_default_address(&self) -> Result<String> {

@@ -81,7 +81,6 @@ impl Window {
         node: SceneNodeWeak,
         renderer: Renderer,
         i18n_fish: I18nBabelFish,
-        _setting_root: SceneNodePtr,
         redraw_tx: RedrawTrigger,
         redraw_rx: async_channel::Receiver<()>,
     ) -> Pimpl {

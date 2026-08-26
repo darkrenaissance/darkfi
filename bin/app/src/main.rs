@@ -48,6 +48,7 @@ mod pubsub;
 //mod py;
 //mod ringbuf;
 mod scene;
+mod setting;
 mod sfx;
 mod shape;
 mod text;

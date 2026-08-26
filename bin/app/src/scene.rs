@@ -34,6 +34,7 @@ use crate::{
     plugin,
     prop::{Property, PropertyAtomicGuard, PropertyPtr, Role},
     pubsub::{Publisher, PublisherPtr, Subscription},
+    setting::SettingPtr,
     ui,
 };
 
@@ -116,7 +117,6 @@ pub enum SceneNodeType {
     Shortcut = 17,
     Gesture = 18,
     EmojiPicker = 19,
-    SettingRoot = 20,
     Setting = 21,
     Menu = 22,
     TokenTable = 23,
@@ -598,6 +598,7 @@ pub enum Pimpl {
     EmojiPicker(ui::EmojiPickerPtr),
     Menu(ui::MenuPtr),
     TokenTable(ui::TokenTablePtr),
+    Setting(SettingPtr),
     #[cfg(feature = "enable-plugin-darkirc")]
     DarkIrc(plugin::DarkIrcPtr),
     #[cfg(feature = "enable-plugin-fud")]

@@ -45,15 +45,11 @@ use url::Url;
 
 use crate::{
     error::{Error, Result},
-    prop::{BatchGuardPtr, PropertyAtomicGuard, PropertyBool, Role},
-    scene::{
-        MethodCall, MethodCallSub, Pimpl, SceneNode, SceneNodePtr, SceneNodeType, SceneNodeWeak,
-    },
-    ui::{chatview::FileMessageStatus, OnModify},
+    prop::{PropertyAtomicGuard, PropertyBool, Role},
+    scene::{MethodCall, MethodCallSub, Pimpl, SceneNodePtr, SceneNodeWeak},
+    ui::chatview::FileMessageStatus,
     ExecutorPtr,
 };
-
-use super::PluginSettings;
 
 const P2P_RETRY_TIME: u64 = 20;
 
@@ -127,8 +123,6 @@ pub struct FudPlugin {
     fud: Arc<Fud>,
 
     tracked_files: Arc<Mutex<HashSet<Url>>>,
-
-    settings: PluginSettings,
 }
 
 impl FudPlugin {
@@ -137,9 +131,6 @@ impl FudPlugin {
         // let fud_node_id = PropertyStr::wrap(node_ref, Role::Internal, "node_id", 0).unwrap();
         let fud_ready = PropertyBool::wrap(node_ref, Role::Internal, "ready", 0).unwrap();
         fud_ready.set(&mut PropertyAtomicGuard::none(), false);
-
-        let setting_root = Arc::new(SceneNode::new("setting", SceneNodeType::SettingRoot));
-        node_ref.clone().link(setting_root.clone());
 
         let basedir = get_base_path();
 
@@ -152,9 +143,6 @@ impl FudPlugin {
                 return Err(Error::KvdbErr)
             }
         };
-
-        let setting_tree = db.open_tree_default("settings")?;
-        let settings = PluginSettings { setting_root, kvdb_tree: setting_tree };
 
         let mut fud_settings: FudSettings = Default::default();
         fud_settings.base_dir = basedir.to_string_lossy().to_string();
@@ -242,12 +230,6 @@ impl FudPlugin {
         p2p_settings.p2p_datastore = p2p_datastore_path().into_os_string().into_string().ok();
         p2p_settings.hostlist = hostlist_path().into_os_string().into_string().ok();
 
-        settings.add_p2p_settings(&p2p_settings);
-        // TODO: add other fud settings
-
-        settings.load_settings();
-        settings.update_p2p_settings(&mut p2p_settings);
-
         let p2p = match P2p::new(p2p_settings.clone(), ex.clone()).await {
             Ok(p2p) => p2p,
             Err(err) => {
@@ -276,20 +258,9 @@ impl FudPlugin {
             event_pub,
             fud,
             tracked_files: Arc::new(Mutex::new(HashSet::new())),
-            settings,
         });
         self_.clone().start(ex).await;
         Ok(Pimpl::Fud(self_))
-    }
-
-    async fn apply_settings(self_: Arc<Self>, _batch: BatchGuardPtr) {
-        self_.settings.save_settings();
-
-        let p2p_settings = self_.p2p.settings();
-        let mut write_guard = p2p_settings.write().await;
-        self_.settings.update_p2p_settings(&mut write_guard);
-
-        // TODO: add other fud settings
     }
 
     async fn start(self: Arc<Self>, ex: ExecutorPtr) {
@@ -325,16 +296,6 @@ impl FudPlugin {
             Self::process_events(&me2, event_pub).await;
         });
 
-        let mut on_modify = OnModify::new(ex.clone(), self.node.clone(), me.clone());
-
-        // `apply_settings` is triggered if any setting changes
-        for setting_node in self.settings.setting_root.get_children().iter() {
-            on_modify.when_change(
-                setting_node.get_property("value").clone().unwrap(),
-                Self::apply_settings,
-            );
-        }
-
         let fud = self.fud.clone();
         let start_task = ex.spawn(async move {
             while fud.start().await.is_err() {
@@ -342,8 +303,7 @@ impl FudPlugin {
             }
         });
 
-        let mut tasks = vec![get_method_task, track_file_method_task, ev_task, start_task];
-        tasks.append(&mut on_modify.tasks);
+        let tasks = vec![get_method_task, track_file_method_task, ev_task, start_task];
         self.tasks.set(tasks).unwrap();
 
         i!("Starting Fud P2P");

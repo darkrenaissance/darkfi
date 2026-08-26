@@ -201,6 +201,7 @@ pub enum ModifyAction {
     Set(usize),
     SetVec,
     SetCache(Vec<usize>),
+    Unset(usize),
     Push(usize),
     Insert(usize),
     Remove(usize, PropertyValue),
@@ -402,7 +403,7 @@ impl Property {
             }
             vals[i] = PropertyValue::Unset;
         }
-        atom.add(self.clone(), role, ModifyAction::Set(i));
+        atom.add(self.clone(), role, ModifyAction::Unset(i));
         Ok(())
     }
 
@@ -978,7 +979,7 @@ impl Property {
         for i in 0..self.get_len() {
             if self.get_str(i).unwrap() == item {
                 self.remove_str(atom, role, i).unwrap();
-                return Some(i);
+                return Some(i)
             }
         }
         None
@@ -1189,7 +1190,7 @@ impl Property {
         for i in 0..self.get_len() {
             if let Ok(item) = self.get_str(i) {
                 if item == s {
-                    return true;
+                    return true
                 }
             }
         }

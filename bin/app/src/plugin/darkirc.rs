@@ -59,15 +59,13 @@ use crate::{
     },
     error::{Error, Result},
     prop::{BatchGuardPtr, PropertyAtomicGuard, PropertyPtr, PropertyStr, Role},
-    scene::{MethodCallSub, Pimpl, SceneNode, SceneNodePtr, SceneNodeType, SceneNodeWeak, Slot},
+    scene::{MethodCallSub, Pimpl, SceneNodePtr, SceneNodeWeak, Slot},
     ui::{
         chatview::{MessageId, Timestamp},
         OnModify,
     },
     ExecutorPtr,
 };
-
-use super::PluginSettings;
 
 const P2P_RETRY_TIME: u64 = 20;
 const COOLOFF_SLEEP_TIME: u64 = 20;
@@ -178,7 +176,6 @@ pub struct DarkIrc {
     contacts_tree: Tree,
     nick_tree: Tree,
     dm_secret: SecretKey,
-    settings: PluginSettings,
     ex: ExecutorPtr,
 }
 
@@ -192,13 +189,7 @@ impl DarkIrc {
         let node_ref = &node.upgrade().unwrap();
         let nick = PropertyStr::wrap(node_ref, Role::Internal, "nick", 0).unwrap();
 
-        let setting_root = Arc::new(SceneNode::new("setting", SceneNodeType::SettingRoot));
-        node_ref.link(setting_root.clone());
-
         i!("Starting DarkIRC backend");
-
-        let setting_tree = db.open_tree_default("settings")?;
-        i!("Opened darkirc_settings tree from unified db");
 
         // Use the unified db for reading channels (UI stores channels there)
         let channels_tree = db.open_tree_default("channels")?;
@@ -222,8 +213,6 @@ impl DarkIrc {
             )
             .unwrap();
         i!("DM identity public key (share with contacts): {dm_public_b58}");
-
-        let settings = PluginSettings { setting_root, kvdb_tree: setting_tree };
 
         let mut p2p_settings: NetSettings = Default::default();
         p2p_settings.magic_bytes = MagicBytes([251, 229, 199, 181]);
@@ -265,11 +254,6 @@ impl DarkIrc {
         }
         p2p_settings.p2p_datastore = p2p_datastore_path().into_os_string().into_string().ok();
         p2p_settings.hostlist = hostlist_path().into_os_string().into_string().ok();
-
-        settings.add_p2p_settings(&p2p_settings);
-
-        settings.load_settings();
-        settings.update_p2p_settings(&mut p2p_settings);
 
         let p2p = match P2p::new(p2p_settings.clone(), ex.clone()).await {
             Ok(p2p) => p2p,
@@ -331,7 +315,6 @@ impl DarkIrc {
             nick_tree,
             dm_secret,
 
-            settings,
             ex: ex.clone(),
         });
 
@@ -887,14 +870,6 @@ impl DarkIrc {
         true
     }
 
-    async fn apply_settings(self_: Arc<Self>, _: BatchGuardPtr) {
-        self_.settings.save_settings();
-
-        let p2p_settings = self_.p2p.settings();
-        let mut write_guard = p2p_settings.write().await;
-        self_.settings.update_p2p_settings(&mut write_guard);
-    }
-
     async fn process_reconnect(me: &Weak<Self>, sub: &MethodCallSub) -> bool {
         let Ok(method_call) = sub.receive().await else {
             d!("Reconnect method closed");
@@ -936,16 +911,6 @@ impl DarkIrc {
 
         p2p_settings.write().await.outbound_connections = count;
         self.p2p.clone().reload().await;
-
-        let setting = self.settings.get_setting("net.outbound_connections").unwrap();
-        setting
-            .set_property_u32(
-                &mut PropertyAtomicGuard::none(),
-                Role::Internal,
-                "value",
-                count as u32,
-            )
-            .unwrap();
     }
 
     async fn start(self: Arc<Self>, sg_root: SceneNodePtr, ex: ExecutorPtr) {
@@ -987,14 +952,6 @@ impl DarkIrc {
             }
         }
         on_modify.when_change(self.nick.prop(), save_nick);
-
-        // `apply_settings` is triggered if any setting changes
-        for setting_node in self.settings.setting_root.get_children().iter() {
-            on_modify.when_change(
-                setting_node.get_property("value").clone().unwrap(),
-                Self::apply_settings,
-            );
-        }
 
         let ev_sub = self.event_graph.event_subscribe().await;
         let ev_task = ex.spawn(self.clone().relay_events(ev_sub));

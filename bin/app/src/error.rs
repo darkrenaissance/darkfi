@@ -140,10 +140,19 @@ pub enum Error {
 
     #[error("Contact not found")]
     ContactNotFound = 47,
+
+    #[error("Serialization error")]
+    SerialErr = 48,
 }
 
 impl From<kvdb_overlay::Error> for Error {
     fn from(_: kvdb_overlay::Error) -> Error {
         Error::KvdbErr
+    }
+}
+
+impl From<std::io::Error> for Error {
+    fn from(_: std::io::Error) -> Error {
+        Error::SerialErr
     }
 }

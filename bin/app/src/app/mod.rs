@@ -25,14 +25,12 @@ use std::sync::{
 
 #[cfg(target_os = "android")]
 use crate::android;
-
-#[cfg(any(feature = "enable-plugin-darkirc", feature = "enable-plugin-fud"))]
-use crate::plugin::PluginSettings;
 use crate::{
     error::Error,
     gfx::{EpochIndex, GraphicsEventPublisherPtr, Renderer},
-    prop::{PropertyAtomicGuard, PropertyValue, Role},
-    scene::{Pimpl, SceneNode, SceneNodePtr, SceneNodeType},
+    prop::{PropertyAtomicGuard, Role},
+    scene::{Pimpl, SceneNodePtr},
+    setting::{create_setting, Setting},
     sfx,
     ui::{RedrawTrigger, Window},
     util::i18n::I18nBabelFish,
@@ -44,7 +42,6 @@ use locale::read_locale_ftl;
 mod node;
 use node::create_window;
 pub mod schema;
-use schema::get_settingsdb_path;
 
 macro_rules! d { ($($arg:tt)*) => { debug!(target: "app", $($arg)*); } }
 macro_rules! t { ($($arg:tt)*) => { trace!(target: "app", $($arg)*); } }
@@ -95,8 +92,6 @@ impl App {
     pub async fn setup(&self, db: Database) -> Result<Option<i32>, Error> {
         t!("App::setup()");
 
-        let setting_root = SceneNode::new("setting", SceneNodeType::SettingRoot);
-        let setting_root = setting_root.setup_null();
         let settings_tree = db.open_tree_default("settings").unwrap();
         let flags_tree = db.open_tree_default("app_flags").unwrap();
         let is_first_time = !flags_tree.contains_key(IS_FIRST_TIME_KEY).unwrap();
@@ -104,13 +99,12 @@ impl App {
             flags_tree.insert(IS_FIRST_TIME_KEY, b"").unwrap();
         }
         self.is_first_time.store(is_first_time, Ordering::Relaxed);
-        // Commenting this out since it doesnt compile when enable-plugins isnt enabled.
-        /*
-        let settings = Arc::new(PluginSettings {
-            setting_root: setting_root.clone(),
-            kvdb_tree: settings_tree,
-        });
-        */
+
+        let ex = self.ex.clone();
+        let setting = create_setting("setting");
+        let setting =
+            setting.setup(|me| async move { Setting::new(me, settings_tree, ex).await }).await;
+        self.sg_root.link(setting);
 
         let i18n_fish = self.setup_locale();
 
@@ -144,7 +138,6 @@ impl App {
                     me,
                     self.renderer.clone(),
                     i18n_fish.clone(),
-                    setting_root.clone(),
                     self.redraw_trigger.clone(),
                     self.redraw_rx.clone(),
                 )
@@ -152,7 +145,6 @@ impl App {
             .await;
 
         self.sg_root.link(window.clone());
-        self.sg_root.link(setting_root.clone());
 
         #[cfg(feature = "schema-app")]
         schema::make(&self, window.clone(), &i18n_fish, db).await;
@@ -168,8 +160,6 @@ impl App {
 
         #[cfg(all(feature = "schema-app", feature = "schema-test"))]
         compile_error!("Only one schema can be selected");
-
-        //settings::make(&self, window, self.ex.clone()).await;
 
         d!("Schema loaded");
 

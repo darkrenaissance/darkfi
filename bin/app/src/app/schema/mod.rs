@@ -40,7 +40,6 @@ use crate::{
 mod chat;
 pub mod menu;
 use menu::channel::Channel;
-//mod settings;
 pub mod test;
 pub mod test_edit;
 pub mod test_scroll_layer;
@@ -80,10 +79,6 @@ mod ui_consts {
         get_external_storage_path().join("chatdb")
     }
 
-    pub fn get_settingsdb_path() -> PathBuf {
-        get_appdata_path().join("settings")
-    }
-
     pub fn get_main_db_path() -> PathBuf {
         get_appdata_path().join("db")
     }
@@ -102,10 +97,6 @@ mod desktop_paths {
 
     pub fn get_chatdb_path() -> PathBuf {
         dirs::data_local_dir().unwrap().join("darkfi/app/chatdb")
-    }
-
-    pub fn get_settingsdb_path() -> PathBuf {
-        dirs::cache_dir().unwrap().join("darkfi/app/settings")
     }
 
     pub fn get_main_db_path() -> PathBuf {
@@ -226,93 +217,6 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish, db
         0,
     )
     .unwrap();
-    /*
-    let node = create_shortcut("zoom_out_shortcut");
-    node.set_property_str(atom, Role::App, "key", "ctrl+-").unwrap();
-    // Not sure what was eating my keys. This is a workaround.
-    node.set_property_u32(atom, Role::App, "priority", 10).unwrap();
-    let (slot, recvr) = Slot::new("zoom_out_pressed");
-    node.register("shortcut", slot).unwrap();
-    let window_scale = app.sg_root.lookup_node("/setting/scale").unwrap();
-    let window_scale2 = window_scale.clone();
-    let redraw = app.redraw_trigger.clone();
-    let listen_zoom = app.ex.spawn(async move {
-        while let Ok(_) = recvr.recv().await {
-            let scale = 0.9 * window_scale2.get_property_f32("value").unwrap();
-
-            let filename = get_window_scale_filename();
-            if let Some(parent) = filename.parent() {
-                let _ = std::fs::create_dir_all(parent);
-            }
-            if let Ok(mut file) = File::create(filename) {
-                scale.encode(&mut file).unwrap();
-            }
-
-            let atom = &mut redraw.make_guard(gfxtag!("zoom_out shortcut"));
-            window_scale2.set_property_f32(atom, Role::User, "value", scale).unwrap();
-        }
-    });
-    app.tasks.lock().unwrap().push(listen_zoom);
-    let node = node.setup(|me| Shortcut::new(me)).await;
-    window.link(node);
-
-    let node = create_shortcut("zoom_in_shortcut");
-    node.set_property_str(atom, Role::App, "key", "ctrl+=").unwrap();
-    // Not sure what was eating my keys. This is a workaround.
-    node.set_property_u32(atom, Role::App, "priority", 10).unwrap();
-    let (slot, recvr) = Slot::new("zoom_in_pressed");
-    node.register("shortcut", slot).unwrap();
-    let window_scale2 = window_scale.clone();
-    let redraw = app.redraw_trigger.clone();
-    let listen_zoom = app.ex.spawn(async move {
-        while let Ok(_) = recvr.recv().await {
-            let scale = 1.1 * window_scale2.get_property_f32("value").unwrap();
-
-            let filename = get_window_scale_filename();
-            if let Some(parent) = filename.parent() {
-                let _ = std::fs::create_dir_all(parent);
-            }
-            if let Ok(mut file) = File::create(filename) {
-                scale.encode(&mut file).unwrap();
-            }
-
-            let atom = &mut redraw.make_guard(gfxtag!("zoom_in shortcut"));
-            window_scale2.set_property_f32(atom, Role::User, "value", scale).unwrap();
-        }
-    });
-    app.tasks.lock().unwrap().push(listen_zoom);
-    let node = node.setup(|me| Shortcut::new(me)).await;
-    window.link(node);
-    */
-
-    /*
-    let node = create_gesture("zoom_gesture");
-    node.set_property_u32(atom, Role::App, "priority", 10).unwrap();
-    let (slot, recvr) = Slot::new("zoom_gesture");
-    node.register("gesture", slot).unwrap();
-    let listen_zoom = app.ex.spawn(async move {
-        while let Ok(data) = recvr.recv().await {
-            let distance: f32 = deserialize(&data).unwrap();
-            // Dampen it a little
-            let r = (distance - 1.) / 2. + 1.;
-            let scale = r * window_scale.get_property_f32("value").unwrap();
-
-            let filename = get_window_scale_filename();
-            if let Some(parent) = filename.parent() {
-                let _ = std::fs::create_dir_all(parent);
-            }
-            if let Ok(mut file) = File::create(filename) {
-                scale.encode(&mut file).unwrap();
-            }
-
-            let atom = &mut PropertyAtomicGuard::new();
-            window_scale.set_property_f32(atom, Role::User, "value", scale);
-        }
-    });
-    app.tasks.lock().unwrap().push(listen_zoom);
-    let node = node.setup(|me| Gesture::new(me)).await;
-    window.link(node);
-    */
 
     // Root content layer
     let content = create_layer("content");
@@ -422,97 +326,6 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish, db
             .await;
         window.link(node);
     }
-
-    // Navbar Settings Button
-
-    /*
-    // Layer
-    let settingslayer_node = create_layer("settings_button_layer");
-    let prop = settingslayer_node.get_property("rect").unwrap();
-    let code = cc.compile("w - NETSTATUS_ICON_SIZE - SETTINGS_ICON_SIZE").unwrap();
-    prop.set_expr(atom, Role::App, 0, code).unwrap();
-    prop.set_f32(atom, Role::App, 1, 0.).unwrap();
-    prop.set_f32(atom, Role::App, 2, 1000.).unwrap();
-    prop.set_f32(atom, Role::App, 3, 1000.).unwrap();
-    settingslayer_node.set_property_bool(atom, Role::App, "is_visible", true).unwrap();
-    settingslayer_node.set_property_u32(atom, Role::App, "z_index", 2).unwrap();
-    let settingslayer_node =
-        settingslayer_node.setup(|me| Layer::new(me, app.renderer.clone(), app.redraw_trigger.clone())).await;
-    content.link(settingslayer_node.clone());
-
-    // Background
-    let node = create_vector_art("settings_btn_bg");
-    let prop = node.get_property("rect").unwrap();
-    prop.set_f32(atom, Role::App, 0, NETSTATUS_ICON_SIZE / 2.).unwrap();
-    prop.set_f32(atom, Role::App, 1, NETSTATUS_ICON_SIZE / 2.).unwrap();
-    prop.set_expr(atom, Role::App, 2, expr::load_var("w")).unwrap();
-    prop.set_expr(atom, Role::App, 3, expr::load_var("h")).unwrap();
-    node.set_property_bool(atom, Role::App, "is_visible", true).unwrap();
-    node.set_property_u32(atom, Role::App, "z_index", 0).unwrap();
-    let shape = shape::create_settings([0., 0.94, 1., 1.]).scaled(20.);
-    let node =
-        node.setup(|me| VectorArt::new(me, shape, app.renderer.clone(), app.redraw_trigger.clone())).await;
-    settingslayer_node.link(node);
-
-    // Button
-    let node = create_button("settings_btn");
-    node.set_property_bool(atom, Role::App, "is_active", true).unwrap();
-    let prop = node.get_property("rect").unwrap();
-    prop.set_f32(atom, Role::App, 0, 0.).unwrap();
-    prop.set_f32(atom, Role::App, 1, 0.).unwrap();
-    prop.set_f32(atom, Role::App, 2, NETSTATUS_ICON_SIZE).unwrap();
-    prop.set_f32(atom, Role::App, 3, NETSTATUS_ICON_SIZE).unwrap();
-
-    let sg_root = app.sg_root.clone();
-    let settings = move || {
-        info!(target: "app::chat", "clicked settings");
-        let atom = &mut PropertyAtomicGuard::new();
-
-        // Hide all relevant window children nodes
-        // Messy.
-        //
-        // Some suggestions:
-        //  1. Something closer to a router, that would be a accessible globally,
-        //  which essentially holds a vector of references to SceneNodes
-        //  representing the app navigation history.
-        //  When the user changes the route, it would make invisible (or later remove
-        //  elements from the tree for optimization purposes) the node of the last SceneNodes
-        //  in the vector and all its children, recursively;
-        //  and append a new SceneNode pointer, which is the new "route" chosen by the user,
-        //  and draw it and its children recursively.
-        //  Note that this would implicitly handle nested routes (like
-        //  /window/somewhere1/view1 to /window/somewhere1/view2, if the last element of the
-        //  router currently points to view1 and we call router.goto("./view2")).
-        //
-        //  2. Support of wildcard in lookups in .get_children() or another method, like this "*_chat_layer".
-        let windows = sg_root.lookup_node("/window/content/chat").unwrap().get_children();
-        let target_substrings = vec!["_chat_layer", "menu_layer"];
-        for node in windows.iter() {
-            if target_substrings.iter().any(|&s| node.name.contains(s)) {
-                if let Err(e) = node.set_property_bool(atom, Role::App, "is_visible", false) {
-                    debug!("Failed to set property 'is_visible' on node: {:?}", e);
-                }
-            }
-        }
-
-        // Show settings
-        let settings_node = sg_root.lookup_node("/window/content/settings_layer").unwrap();
-        settings_node.set_property_bool(atom, Role::App, "is_visible", true).unwrap();
-    };
-
-    let (slot, recvr) = Slot::new("settings_clicked");
-    node.register("click", slot).unwrap();
-    let settings2 = settings.clone();
-    let listen_click = app.ex.spawn(async move {
-        while let Ok(_) = recvr.recv().await {
-            settings2();
-        }
-    });
-    app.tasks.lock().unwrap().push(listen_click);
-
-    let node = node.setup(|me| Button::new(me, app.renderer.clone(), app.redraw_trigger.clone())).await;
-    settingslayer_node.link(node);
-    */
 
     let emoji_meshes = emoji_picker::EmojiMeshes::new(app.renderer.clone(), EMOJI_PICKER_ICON_SIZE);
 
