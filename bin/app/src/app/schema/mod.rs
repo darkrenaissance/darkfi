@@ -16,7 +16,7 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::{fs::File, io::Write};
+use std::{fs::File, io::Write, sync::atomic::Ordering};
 
 use darkfi::system::msleep;
 
@@ -254,60 +254,62 @@ pub async fn make(
         content.setup(|me| Layer::new(me, app.renderer.clone(), app.redraw_trigger.clone())).await;
     window.link(content.clone());
 
-    // Splash layer with the scramble message
-    cc.add_const_f32("SPLASH_FONTSIZE", SPLASH_FONTSIZE);
-    cc.add_const_f32("SPLASH_MARGIN", SPLASH_MARGIN);
-    let splash_layer = create_layer("splash_layer");
-    let prop = splash_layer.get_property("rect").unwrap();
-    prop.set_f32(atom, Role::App, 0, 0.).unwrap();
-    prop.set_f32(atom, Role::App, 1, 0.).unwrap();
-    prop.set_expr(atom, Role::App, 2, expr::load_var("w")).unwrap();
-    prop.set_expr(atom, Role::App, 3, expr::load_var("h")).unwrap();
-    splash_layer.set_property_bool(atom, Role::App, "is_visible", true).unwrap();
-    splash_layer.set_property_u32(atom, Role::App, "z_index", 2).unwrap();
-    let splash_layer = splash_layer
-        .setup(|me| Layer::new(me, app.renderer.clone(), app.redraw_trigger.clone()))
-        .await;
-    content.link(splash_layer.clone());
+    // Splash layer with the scramble message, shown only on first app launch
+    if app.is_first_time.load(Ordering::Relaxed) {
+        cc.add_const_f32("SPLASH_FONTSIZE", SPLASH_FONTSIZE);
+        cc.add_const_f32("SPLASH_MARGIN", SPLASH_MARGIN);
+        let splash_layer = create_layer("splash_layer");
+        let prop = splash_layer.get_property("rect").unwrap();
+        prop.set_f32(atom, Role::App, 0, 0.).unwrap();
+        prop.set_f32(atom, Role::App, 1, 0.).unwrap();
+        prop.set_expr(atom, Role::App, 2, expr::load_var("w")).unwrap();
+        prop.set_expr(atom, Role::App, 3, expr::load_var("h")).unwrap();
+        splash_layer.set_property_bool(atom, Role::App, "is_visible", true).unwrap();
+        splash_layer.set_property_u32(atom, Role::App, "z_index", 2).unwrap();
+        let splash_layer = splash_layer
+            .setup(|me| Layer::new(me, app.renderer.clone(), app.redraw_trigger.clone()))
+            .await;
+        content.link(splash_layer.clone());
 
-    let node = create_text_scramble("splash_msg");
-    let prop = node.get_property("rect").unwrap();
-    prop.set_f32(atom, Role::App, 0, SPLASH_MARGIN).unwrap();
-    let code = cc.compile("h * 0.4").unwrap();
-    prop.set_expr(atom, Role::App, 1, code).unwrap();
-    let code = cc.compile("w - 2 * SPLASH_MARGIN").unwrap();
-    prop.set_expr(atom, Role::App, 2, code).unwrap();
-    prop.set_f32(atom, Role::App, 3, SPLASH_FONTSIZE * 1.2).unwrap();
-    node.set_property_u32(atom, Role::App, "z_index", 0).unwrap();
-    node.set_property_f32(atom, Role::App, "font_size", SPLASH_FONTSIZE).unwrap();
-    node.set_property_enum(atom, Role::App, "text_align", "center").unwrap();
-    let prop = node.get_property("text_color").unwrap();
-    prop.set_f32(atom, Role::App, 0, 1.).unwrap();
-    prop.set_f32(atom, Role::App, 1, 1.).unwrap();
-    prop.set_f32(atom, Role::App, 2, 1.).unwrap();
-    prop.set_f32(atom, Role::App, 3, 1.).unwrap();
-    node.set_property_str(atom, Role::App, "text", "welcome back commander").unwrap();
-    let node = node
-        .setup(|me| {
-            TextScramble::new(
-                me,
-                window_scale.clone(),
-                app.renderer.clone(),
-                i18n_fish.clone(),
-                app.redraw_trigger.clone(),
-            )
-        })
-        .await;
-    splash_layer.link(node);
+        let node = create_text_scramble("splash_msg");
+        let prop = node.get_property("rect").unwrap();
+        prop.set_f32(atom, Role::App, 0, SPLASH_MARGIN).unwrap();
+        let code = cc.compile("h * 0.4").unwrap();
+        prop.set_expr(atom, Role::App, 1, code).unwrap();
+        let code = cc.compile("w - 2 * SPLASH_MARGIN").unwrap();
+        prop.set_expr(atom, Role::App, 2, code).unwrap();
+        prop.set_f32(atom, Role::App, 3, SPLASH_FONTSIZE * 1.2).unwrap();
+        node.set_property_u32(atom, Role::App, "z_index", 0).unwrap();
+        node.set_property_f32(atom, Role::App, "font_size", SPLASH_FONTSIZE).unwrap();
+        node.set_property_enum(atom, Role::App, "text_align", "center").unwrap();
+        let prop = node.get_property("text_color").unwrap();
+        prop.set_f32(atom, Role::App, 0, 1.).unwrap();
+        prop.set_f32(atom, Role::App, 1, 1.).unwrap();
+        prop.set_f32(atom, Role::App, 2, 1.).unwrap();
+        prop.set_f32(atom, Role::App, 3, 1.).unwrap();
+        node.set_property_str(atom, Role::App, "text", "welcome back commander").unwrap();
+        let node = node
+            .setup(|me| {
+                TextScramble::new(
+                    me,
+                    window_scale.clone(),
+                    app.renderer.clone(),
+                    i18n_fish.clone(),
+                    app.redraw_trigger.clone(),
+                )
+            })
+            .await;
+        splash_layer.link(node);
 
-    // Hide the splash layer after 3s
-    let redraw = app.redraw_trigger.clone();
-    let hide_task = app.ex.spawn(async move {
-        msleep(3000).await;
-        let atom = &mut redraw.make_guard(gfxtag!("splash_layer hide"));
-        splash_layer.set_property_bool(atom, Role::App, "is_visible", false).unwrap();
-    });
-    app.tasks.lock().unwrap().push(hide_task);
+        // Hide the splash layer after 3s
+        let redraw = app.redraw_trigger.clone();
+        let hide_task = app.ex.spawn(async move {
+            msleep(3000).await;
+            let atom = &mut redraw.make_guard(gfxtag!("splash_layer hide"));
+            splash_layer.set_property_bool(atom, Role::App, "is_visible", false).unwrap();
+        });
+        app.tasks.lock().unwrap().push(hide_task);
+    }
 
     if COLOR_SCHEME == ColorScheme::DarkMode {
         let node = create_video("king");
@@ -554,9 +556,12 @@ pub async fn make(
 
     let sg_root = app.sg_root.clone();
     let redraw = app.redraw_trigger.clone();
+    let ex = app.ex.clone();
+    let ex_fade = app.ex.clone();
     let (slot, recvr) = Slot::new("reconnect_clicked");
     node.register("click", slot).unwrap();
-    let reconnect_task = app.ex.spawn(async move {
+    let reconnect_task = ex.spawn(async move {
+        let mut _fade_task = None;
         while let Ok(_) = recvr.recv().await {
             i!("Reconnect button clicked");
 
@@ -568,6 +573,28 @@ pub async fn make(
             }
             let atom = &mut redraw.make_guard(gfxtag!("netstatus overlay toggle"));
             overlay.set_property_bool(atom, Role::App, "is_visible", !is_visible).unwrap();
+
+            if !is_visible {
+                // Start from fully transparent so the fade begins hidden
+                overlay.set_property_f32(atom, Role::App, "alpha", 0.).unwrap();
+
+                // Fade the overlay alpha from 0 to 1 over 1s
+                let overlay = overlay.clone();
+                let redraw = redraw.clone();
+                _fade_task = Some(ex_fade.spawn(async move {
+                    let steps = 50;
+                    for i in 1..=steps {
+                        msleep(1000 / steps as u64).await;
+                        let atom = &mut redraw.make_guard(gfxtag!("netstatus overlay fade"));
+                        overlay
+                            .set_property_f32(atom, Role::App, "alpha", i as f32 / steps as f32)
+                            .unwrap();
+                    }
+                }));
+            } else {
+                // Hiding cancels any in-flight fade
+                _fade_task = None;
+            }
 
             /*
             // Show netstat-klik icon

@@ -25,7 +25,9 @@ use tracing::instrument;
 
 use crate::{
     gfx::{DrawCall, DrawInstruction, Point, Rectangle, Renderer},
-    prop::{PropertyAtomicGuard, PropertyBool, PropertyRect, PropertyUint32, Role},
+    prop::{
+        PropertyAtomicGuard, PropertyBool, PropertyFloat32, PropertyRect, PropertyUint32, Role,
+    },
     scene::{Pimpl, SceneNodePtr, SceneNodeWeak},
     util::i18n::I18nBabelFish,
     ExecutorPtr,
@@ -48,6 +50,7 @@ pub struct Layer {
 
     is_visible: PropertyBool,
     rect: PropertyRect,
+    alpha: PropertyFloat32,
     z_index: PropertyUint32,
     priority: PropertyUint32,
 }
@@ -57,6 +60,7 @@ impl Layer {
         let node_ref = &_node.upgrade().unwrap();
         let is_visible = PropertyBool::wrap(node_ref, Role::Internal, "is_visible", 0).unwrap();
         let rect = PropertyRect::wrap(node_ref, Role::Internal, "rect").unwrap();
+        let alpha = PropertyFloat32::wrap(node_ref, Role::Internal, "alpha", 0).unwrap();
         let z_index = PropertyUint32::wrap(node_ref, Role::Internal, "z_index", 0).unwrap();
         let priority = PropertyUint32::wrap(node_ref, Role::Internal, "priority", 0).unwrap();
 
@@ -70,6 +74,7 @@ impl Layer {
 
             is_visible,
             rect,
+            alpha,
             z_index,
             priority,
         });
@@ -89,6 +94,8 @@ impl Layer {
     ) -> Option<DrawUpdate> {
         self.rect.eval(atom, &parent_rect).ok()?;
         let rect = self.rect.get();
+
+        let alpha = self.alpha.get();
 
         // Apply viewport
 
@@ -111,7 +118,7 @@ impl Layer {
         }
 
         let dc = DrawCall::new(
-            vec![DrawInstruction::ApplyView(rect)],
+            vec![DrawInstruction::ApplyView(rect), DrawInstruction::SetAlpha(alpha)],
             child_calls,
             self.z_index.get(),
             "layer",
@@ -146,6 +153,9 @@ impl UIObject for Layer {
             self_.redraw.trigger();
         });
         on_modify.when_change_external(self.rect.prop(), |self_, _| async move {
+            self_.redraw.trigger();
+        });
+        on_modify.when_change_external(self.alpha.prop(), |self_, _| async move {
             self_.redraw.trigger();
         });
         on_modify.when_change_external(self.z_index.prop(), |self_, _| async move {

@@ -5,6 +5,7 @@ varying lowp vec2 uv;
 uniform sampler2D tex_y;
 uniform sampler2D tex_u;
 uniform sampler2D tex_v;
+uniform lowp float Alpha;
 
 void main() {
     lowp float y = texture2D(tex_y, uv).r;
@@ -17,4 +18,5 @@ void main() {
     lowp float b = y + 1.772 * u;
 
     gl_FragColor = color * vec4(r, g, b, 1.0);
+    gl_FragColor.a *= Alpha;
 }

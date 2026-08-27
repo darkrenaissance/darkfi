@@ -228,6 +228,7 @@ impl AsyncEncodable for DrawMesh {
 #[derive(Debug, Clone)]
 pub enum DrawInstruction {
     SetScale(f32),
+    SetAlpha(f32),
     Move(Point),
     SetPos(Point),
     ApplyView(Rectangle),
@@ -247,6 +248,7 @@ impl DrawInstruction {
     ) -> GfxDrawInstruction {
         match self {
             Self::SetScale(scale) => GfxDrawInstruction::SetScale(scale),
+            Self::SetAlpha(alpha) => GfxDrawInstruction::SetAlpha(alpha),
             Self::Move(off) => GfxDrawInstruction::Move(off),
             Self::SetPos(pos) => GfxDrawInstruction::SetPos(pos),
             Self::ApplyView(view) => GfxDrawInstruction::ApplyView(view),
@@ -313,6 +315,7 @@ struct GfxDrawMesh {
 #[derive(Debug, Clone)]
 enum GfxDrawInstruction {
     SetScale(f32),
+    SetAlpha(f32),
     Move(Point),
     SetPos(Point),
     ApplyView(Rectangle),
@@ -333,13 +336,14 @@ struct GfxDrawCall {
 struct OverlayDefer {
     scale: f32,
     pos: Point,
+    alpha: f32,
     instrs: Vec<GfxDrawInstruction>,
 }
 
 struct RenderContext<'a> {
     ctx: &'a mut Box<dyn RenderingBackend>,
     draw_calls: &'a HashMap<DcId, GfxDrawCall>,
-    uniforms_data: [u8; 128],
+    uniforms_data: [u8; 132],
     white_texture: miniquad::TextureId,
     loaded_pipelines: &'a [Pipeline; 2],
 
@@ -347,6 +351,7 @@ struct RenderContext<'a> {
     view: Rectangle,
     cursor: Point,
     gfx_pipeline: GraphicPipeline,
+    alpha: f32,
 
     anims: &'a mut HashMap<AnimId, GfxSeqAnim>,
     overlays: Vec<OverlayDefer>,
@@ -378,6 +383,7 @@ impl<'a> RenderContext<'a> {
             self.apply_view();
 
             self.cursor = overlay.pos;
+            self.alpha = overlay.alpha;
             self.apply_model();
 
             for instr in overlay.instrs {
@@ -406,6 +412,8 @@ impl<'a> RenderContext<'a> {
                 }
             }
         }
+
+        self.alpha = 1.;
     }
 
     fn apply_view(&mut self) {
@@ -442,7 +450,8 @@ impl<'a> RenderContext<'a> {
             glam::Mat4::from_scale(glam::Vec3::new(scale_w, scale_h, 1.));
 
         let data: [u8; 64] = unsafe { std::mem::transmute_copy(&model) };
-        self.uniforms_data[64..].copy_from_slice(&data);
+        self.uniforms_data[64..128].copy_from_slice(&data);
+        self.uniforms_data[128..132].copy_from_slice(&self.alpha.to_ne_bytes());
         self.ctx.apply_uniforms_from_bytes(self.uniforms_data.as_ptr(), self.uniforms_data.len());
     }
 
@@ -453,6 +462,7 @@ impl<'a> RenderContext<'a> {
         let old_view = self.view;
         let old_cursor = self.cursor;
         let old_pipeline = self.gfx_pipeline;
+        let old_alpha = self.alpha;
 
         for (idx, instr) in draw_call.instrs.iter().enumerate() {
             match instr {
@@ -462,6 +472,17 @@ impl<'a> RenderContext<'a> {
                     self.view.h /= self.scale;
                     if is_debug {
                         d!("{ws}set_scale({scale})");
+                    }
+                }
+                GfxDrawInstruction::SetAlpha(alpha) => {
+                    self.alpha *= alpha;
+                    self.uniforms_data[128..132].copy_from_slice(&self.alpha.to_ne_bytes());
+                    self.ctx.apply_uniforms_from_bytes(
+                        self.uniforms_data.as_ptr(),
+                        self.uniforms_data.len(),
+                    );
+                    if is_debug {
+                        d!("{ws}set_alpha({alpha})  alpha={}", self.alpha);
                     }
                 }
                 GfxDrawInstruction::Move(off) => {
@@ -551,6 +572,7 @@ impl<'a> RenderContext<'a> {
                     self.overlays.push(OverlayDefer {
                         scale: self.scale,
                         pos,
+                        alpha: self.alpha,
                         instrs: instrs.clone(),
                     });
                 }
@@ -579,6 +601,7 @@ impl<'a> RenderContext<'a> {
 
         self.cursor = old_cursor;
         self.gfx_pipeline = old_pipeline;
+        self.alpha = old_alpha;
         let pipeline_idx = self.gfx_pipeline as usize;
         assert!(pipeline_idx < self.loaded_pipelines.len());
         self.ctx.apply_pipeline(&self.loaded_pipelines[pipeline_idx]);
@@ -1186,12 +1209,13 @@ impl EventHandler for Stage {
         let proj = glam::Mat4::from_translation(glam::Vec3::new(-1., 1., 0.)) *
             glam::Mat4::from_scale(glam::Vec3::new(2., -2., 1.));
 
-        let mut uniforms_data = [0u8; 128];
+        let mut uniforms_data = [0u8; 132];
         let data: [u8; 64] = unsafe { std::mem::transmute_copy(&proj) };
         uniforms_data[0..64].copy_from_slice(&data);
+        uniforms_data[128..132].copy_from_slice(&1.0f32.to_ne_bytes());
         //let data: [u8; 64] = unsafe { std::mem::transmute_copy(&model) };
         //uniforms_data[64..].copy_from_slice(&data);
-        assert_eq!(128, 2 * UniformType::Mat4.size());
+        assert_eq!(132, 2 * UniformType::Mat4.size() + UniformType::Float1.size());
 
         let (screen_w, screen_h) = miniquad::window::screen_size();
 
@@ -1210,6 +1234,7 @@ impl EventHandler for Stage {
             view: Rectangle::from([0., 0., screen_w, screen_h]),
             cursor: Point::zero(),
             gfx_pipeline: GraphicPipeline::RGB,
+            alpha: 1.,
             anims: &mut self.anims,
             overlays: vec![],
         };

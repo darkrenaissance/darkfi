@@ -6,6 +6,7 @@ struct Uniforms
 {
     float4x4 Projection;
     float4x4 Model;
+    float Alpha;
 };
 
 struct Vertex
@@ -39,7 +40,8 @@ fragment float4 fragmentShader(RasterizerData in [[stage_in]],
                                 texture2d<float> tex_v [[texture(2)]],
                                 sampler tex_y_smplr [[sampler(0)]],
                                 sampler tex_u_smplr [[sampler(1)]],
-                                sampler tex_v_smplr [[sampler(2)]])
+                                sampler tex_v_smplr [[sampler(2)]],
+                                constant Uniforms& uniforms [[buffer(0)]])
 {
     float y = tex_y.sample(tex_y_smplr, in.uv).r;
     float u = tex_u.sample(tex_u_smplr, in.uv).r - 0.5;
@@ -50,5 +52,7 @@ fragment float4 fragmentShader(RasterizerData in [[stage_in]],
     float g = y - 0.344 * u - 0.714 * v;
     float b = y + 1.772 * u;
 
-    return in.color * float4(r, g, b, 1.0);
+    float4 out = in.color * float4(r, g, b, 1.0);
+    out.a *= uniforms.Alpha;
+    return out
 }

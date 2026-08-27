@@ -124,6 +124,7 @@ fn create_pipeline_with_meta(
 ) -> Pipeline {
     shader_meta.uniforms.uniforms.push(UniformDesc::new("Projection", UniformType::Mat4));
     shader_meta.uniforms.uniforms.push(UniformDesc::new("Model", UniformType::Mat4));
+    shader_meta.uniforms.uniforms.push(UniformDesc::new("Alpha", UniformType::Float1));
 
     let shader = ctx.new_shader(shader_source, shader_meta).unwrap();
 

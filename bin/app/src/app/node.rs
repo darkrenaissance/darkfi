@@ -71,6 +71,12 @@ pub fn create_layer(name: &str) -> SceneNode {
     prop.allow_exprs();
     node.add_property(prop).unwrap();
 
+    let mut prop = Property::new("alpha", PropertyType::Float32, PropertySubType::Null);
+    prop.set_ui_text("Alpha", "Layer transparency for all drawn content (0.0-1.0)");
+    prop.set_range_f32(0., 1.);
+    prop.set_defaults_f32(vec![1.0]).unwrap();
+    node.add_property(prop).unwrap();
+
     let prop = Property::new("z_index", PropertyType::Uint32, PropertySubType::Null);
     node.add_property(prop).unwrap();
 
