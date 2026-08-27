@@ -521,6 +521,7 @@ impl DarkIrc {
 
     /// Update the `outbound_peers` property with the outgoing connection slots addrs.
     /// Allows us to monitor the network state of our p2p node.
+    /// Intermediate states append ` (status)` to the addr.
     async fn relay_outbound_slots(dnet_sub: Subscription<DnetEvent>, prop: PropertyPtr) {
         loop {
             let event = dnet_sub.receive().await;
@@ -528,7 +529,9 @@ impl DarkIrc {
                 DnetEvent::OutboundSlotConnected(info) => {
                     (info.slot, "connected", Some(info.addr.to_string()))
                 }
-                DnetEvent::OutboundSlotConnecting(info) => (info.slot, "connecting", None),
+                DnetEvent::OutboundSlotConnecting(info) => {
+                    (info.slot, "connecting", Some(info.addr.to_string()))
+                }
                 DnetEvent::OutboundSlotDisconnected(info) => (info.slot, "disconnected", None),
                 DnetEvent::OutboundSlotSleeping(info) => (info.slot, "sleeping", None),
                 _ => continue,
@@ -538,7 +541,13 @@ impl DarkIrc {
             let idx = slot as usize;
             assert!(idx < prop.get_len());
             match addr {
-                Some(addr) => prop.set_str(&mut atom, Role::Internal, idx, addr).unwrap(),
+                Some(addr) if kind == "connected" => {
+                    prop.set_str(&mut atom, Role::Internal, idx, addr).unwrap();
+                }
+                Some(addr) => {
+                    let val = format!("{addr} ({kind})");
+                    prop.set_str(&mut atom, Role::Internal, idx, val).unwrap();
+                }
                 None => prop.set_null(&mut atom, Role::Internal, idx).unwrap(),
             }
         }
@@ -847,28 +856,27 @@ impl DarkIrc {
         true
     }
 
-    async fn process_reconnect(me: &Weak<Self>, sub: &MethodCallSub) -> bool {
+    async fn process_start(me: &Weak<Self>, sub: &MethodCallSub) -> bool {
         let Ok(method_call) = sub.receive().await else {
-            d!("Reconnect method closed");
+            d!("Start method closed");
             return false
         };
 
-        t!("method called: reconnect({method_call:?})");
+        t!("method called: start({method_call:?})");
 
         let Some(self_) = me.upgrade() else {
-            e!("DarkIrc destroyed before reconnect completed");
+            e!("DarkIrc destroyed before start completed");
             return false
         };
 
-        self_.handle_reconnect().await;
+        self_.handle_start().await;
 
         true
     }
 
-    /// User requested to reconnect
-    async fn handle_reconnect(&self) {
-        i!("Manual P2P reconnection triggered");
-        self.p2p.clone().stop().await;
+    /// User requested to start the P2P network
+    async fn handle_start(&self) {
+        i!("Manual P2P start triggered");
 
         while let Err(err) = self.p2p.clone().start().await {
             e!("Failed to start P2P network: {err}!");
@@ -876,7 +884,45 @@ impl DarkIrc {
             sleep(P2P_RETRY_TIME).await;
         }
 
-        i!("P2P reconnection completed");
+        let peers_count = self.p2p.peers_count();
+        self.notify_connect(peers_count, self.event_graph.is_synced()).await;
+
+        i!("P2P start completed");
+    }
+
+    async fn process_stop(me: &Weak<Self>, sub: &MethodCallSub) -> bool {
+        let Ok(method_call) = sub.receive().await else {
+            d!("Stop method closed");
+            return false
+        };
+
+        t!("method called: stop({method_call:?})");
+
+        let Some(self_) = me.upgrade() else {
+            e!("DarkIrc destroyed before stop completed");
+            return false
+        };
+
+        self_.handle_stop().await;
+
+        true
+    }
+
+    /// User requested to stop the P2P network
+    async fn handle_stop(&self) {
+        i!("Manual P2P stop triggered");
+        self.p2p.clone().stop().await;
+
+        // Stopped outbound slots emit no dnet events, so clear the property here
+        let node = self.node.upgrade().unwrap();
+        let prop = node.get_property("outbound_peers").unwrap();
+        let mut atom = PropertyAtomicGuard::none();
+        for idx in 0..prop.get_len() {
+            prop.set_null(&mut atom, Role::Internal, idx).unwrap();
+        }
+
+        self.notify_connect(0, self.event_graph.is_synced()).await;
+        i!("P2P stop completed");
     }
 
     async fn set_outbound_connections(&self, count: usize) {
@@ -910,12 +956,15 @@ impl DarkIrc {
         let send_method_task =
             ex.spawn(async move { while Self::process_send(&me2, &method_sub).await {} });
 
-        let reconnect_method_sub = node.subscribe_method_call("reconnect").unwrap();
+        let start_method_sub = node.subscribe_method_call("start").unwrap();
         let me2 = me.clone();
-        let reconnect_method_task =
-            ex.spawn(
-                async move { while Self::process_reconnect(&me2, &reconnect_method_sub).await {} },
-            );
+        let start_method_task =
+            ex.spawn(async move { while Self::process_start(&me2, &start_method_sub).await {} });
+
+        let stop_method_sub = node.subscribe_method_call("stop").unwrap();
+        let me2 = me.clone();
+        let stop_method_task =
+            ex.spawn(async move { while Self::process_stop(&me2, &stop_method_sub).await {} });
 
         let rescan_method_sub = node.subscribe_method_call("rescan").unwrap();
         let me2 = me.clone();
@@ -984,7 +1033,8 @@ impl DarkIrc {
 
         let mut tasks = vec![
             send_method_task,
-            reconnect_method_task,
+            start_method_task,
+            stop_method_task,
             rescan_method_task,
             ev_task,
             dag_task,

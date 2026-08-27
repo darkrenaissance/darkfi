@@ -796,7 +796,8 @@ pub fn create_darkirc(name: &str) -> SceneNode {
     )
     .unwrap();
 
-    node.add_method("reconnect", vec![], None).unwrap();
+    node.add_method("start", vec![], None).unwrap();
+    node.add_method("stop", vec![], None).unwrap();
     node.add_method("rescan", vec![("channel", "Channel", CallArgType::Str)], None).unwrap();
 
     node

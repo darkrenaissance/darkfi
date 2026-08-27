@@ -49,8 +49,6 @@ macro_rules! i { ($($arg:tt)*) => { info!(target: "app", $($arg)*); } }
 //macro_rules! w { ($($arg:tt)*) => { warn!(target: "app", $($arg)*); } }
 macro_rules! e { ($($arg:tt)*) => { error!(target: "app", $($arg)*); } }
 
-const IS_FIRST_TIME_KEY: &str = "is_first_time";
-
 //fn print_type_of<T>(_: &T) {
 //    println!("{}", std::any::type_name::<T>())
 //}
@@ -68,8 +66,8 @@ pub struct App {
     pub redraw_trigger: RedrawTrigger,
     /// Receiver side of the redraw queue, handed to the window in `setup()`.
     redraw_rx: async_channel::Receiver<()>,
-    /// True if this is the first time the app has ever been run.
-    /// Loaded from the KVDB in `setup()`.
+    /// True on the first run of a new app version, i.e. when no version
+    /// or a different one is recorded in the app DB. Loaded in `setup()`.
     pub is_first_time: AtomicBool,
 }
 
@@ -92,9 +90,11 @@ impl App {
     pub async fn setup(&self, kv_db: KvDb, app_db: AppDbPtr) {
         t!("App::setup()");
 
-        let is_first_time = !app_db.flag_contains(IS_FIRST_TIME_KEY).await.unwrap();
+        let app_version = env!("CARGO_PKG_VERSION");
+        let is_first_time = app_db.app_version_get().await.unwrap().as_deref() != Some(app_version);
         if is_first_time {
-            app_db.flag_set(IS_FIRST_TIME_KEY).await.unwrap();
+            i!("First run of app version {app_version}");
+            app_db.app_version_set(app_version).await.unwrap();
         }
         self.is_first_time.store(is_first_time, Ordering::Relaxed);
 
@@ -200,7 +200,8 @@ impl App {
         d!("Starting app epoch={epoch}");
         // On Android the foreground service keeps the process alive across
         // UI restarts, so start() runs on every relaunch. swap() consumes
-        // the flag so the sound only plays on the very first launch.
+        // the flag so the sound only plays on the first launch of a new
+        // app version.
         if self.is_first_time.swap(false, Ordering::Relaxed) {
             sfx::play_commup();
         }

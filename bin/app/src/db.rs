@@ -28,6 +28,8 @@ use crate::{
 
 pub type AppDbPtr = Arc<AppDb>;
 
+const APP_VERSION_KEY: &str = "app_version";
+
 /// Single turso SQL database owning all app persistent state: channels,
 /// contacts, darkirc identity, settings, and app flags. The kvdb-overlay
 /// database remains exclusively for the event graph and chat history trees.
@@ -220,18 +222,23 @@ impl AppDb {
         Ok(())
     }
 
-    pub async fn flag_contains(&self, name: &str) -> Result<bool> {
+    /// Semver version of the app build that last ran, or `None` on a
+    /// fresh database.
+    pub async fn app_version_get(&self) -> Result<Option<String>> {
         let conn = self.conn.lock().await;
-        let mut stmt = conn.prepare("SELECT 1 FROM flags WHERE name = ?1").await?;
-        let mut rows = stmt.query(vec![Value::Text(name.to_string())]).await?;
-        Ok(rows.next().await?.is_some())
+        let mut stmt = conn.prepare("SELECT value FROM flags WHERE name = ?1").await?;
+        let mut rows = stmt.query(vec![Value::Text(APP_VERSION_KEY.to_string())]).await?;
+        match rows.next().await? {
+            Some(row) => Ok(Some(row.get_value(0)?.as_text().ok_or(Error::TursoErr)?.to_string())),
+            None => Ok(None),
+        }
     }
 
-    pub async fn flag_set(&self, name: &str) -> Result<()> {
+    pub async fn app_version_set(&self, version: &str) -> Result<()> {
         let conn = self.conn.lock().await;
         conn.execute(
             "INSERT OR REPLACE INTO flags (name, value) VALUES (?1, ?2)",
-            vec![Value::Text(name.to_string()), Value::Blob(vec![])],
+            vec![Value::Text(APP_VERSION_KEY.to_string()), Value::Text(version.to_string())],
         )
         .await?;
         Ok(())
@@ -261,7 +268,7 @@ mod tests {
     }
 
     /// Covers the app-storage spec: fresh start creates schema + seeds,
-    /// channels/contacts/settings/flags roundtrip, identity (nick + DM
+    /// channels/contacts/settings/version roundtrip, identity (nick + DM
     /// secret) survives a reopen.
     #[test]
     fn app_db_persistence() {
@@ -290,8 +297,8 @@ mod tests {
             smol::block_on(db.setting_put("net.localnet", 0, "bool", &[1])).unwrap();
             smol::block_on(db.setting_put("net.localnet", 2, "bool", &[0])).unwrap();
 
-            assert!(!smol::block_on(db.flag_contains("is_first_time")).unwrap());
-            smol::block_on(db.flag_set("is_first_time")).unwrap();
+            assert_eq!(smol::block_on(db.app_version_get()).unwrap(), None);
+            smol::block_on(db.app_version_set(env!("CARGO_PKG_VERSION"))).unwrap();
 
             let secret = smol::block_on(db.dm_secret()).unwrap();
             SecretKey::from_bytes(secret).public_key().to_bytes()
@@ -325,7 +332,10 @@ mod tests {
             assert_eq!(smol::block_on(db.setting_get("net.localnet", 2)).unwrap(), None);
             assert_eq!(smol::block_on(db.settings_all()).unwrap().len(), 1);
 
-            assert!(smol::block_on(db.flag_contains("is_first_time")).unwrap());
+            assert_eq!(
+                smol::block_on(db.app_version_get()).unwrap(),
+                Some(env!("CARGO_PKG_VERSION").to_string())
+            );
 
             // DM identity must be stable across reopen
             let secret = smol::block_on(db.dm_secret()).unwrap();

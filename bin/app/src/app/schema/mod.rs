@@ -34,7 +34,7 @@ use crate::{
     db::AppDbPtr,
     expr::{self, Compiler},
     gfx::gfxtag,
-    prop::{PropertyAtomicGuard, PropertyFloat32, Role},
+    prop::{PropertyAtomicGuard, PropertyFloat32, PropertyStr, Role},
     scene::{SceneNodePtr, Slot},
     sfx, shape,
     ui::{emoji_picker, Button, Layer, Text, TextScramble, VectorArt, VectorShape, Video},
@@ -226,13 +226,9 @@ pub async fn make(
 
     let atom = &mut PropertyAtomicGuard::none();
 
-    let window_scale = PropertyFloat32::wrap(
-        &app.sg_root.lookup_node("/window").unwrap(),
-        Role::Internal,
-        "scale",
-        0,
-    )
-    .unwrap();
+    let window_scale =
+        PropertyFloat32::wrap(&app.sg_root.lookup_node("/window").unwrap(), Role::App, "scale", 0)
+            .unwrap();
 
     // Root content layer
     let content = create_layer("content");
@@ -254,7 +250,8 @@ pub async fn make(
         content.setup(|me| Layer::new(me, app.renderer.clone(), app.redraw_trigger.clone())).await;
     window.link(content.clone());
 
-    // Splash layer with the scramble message, shown only on first app launch
+    // Splash layer with the scramble message, shown on the first run of
+    // a new app version
     if app.is_first_time.load(Ordering::Relaxed) {
         cc.add_const_f32("SPLASH_FONTSIZE", SPLASH_FONTSIZE);
         cc.add_const_f32("SPLASH_MARGIN", SPLASH_MARGIN);
@@ -562,6 +559,7 @@ pub async fn make(
     node.register("click", slot).unwrap();
     let reconnect_task = ex.spawn(async move {
         let mut _fade_task = None;
+        let mut _conn_info_task = None;
         while let Ok(_) = recvr.recv().await {
             i!("Reconnect button clicked");
 
@@ -578,6 +576,39 @@ pub async fn make(
                 // Start from fully transparent so the fade begins hidden
                 overlay.set_property_f32(atom, Role::App, "alpha", 0.).unwrap();
 
+                // While the overlay is shown, keep the conn_info text in sync
+                // with the darkirc outbound peers
+                let sg_root2 = sg_root.clone();
+                let redraw2 = redraw.clone();
+                _conn_info_task = Some(ex_fade.spawn(async move {
+                    let Some(darkirc) = sg_root2.lookup_node("/plugin/darkirc") else {
+                        e!("DarkIrc plugin has not been loaded");
+                        return
+                    };
+                    let conn_info = sg_root2
+                        .lookup_node("/window/content/chat/netstatus_overlay/conn_info")
+                        .unwrap();
+                    let conn_info_text =
+                        PropertyStr::wrap(&conn_info, Role::App, "text", 0).unwrap();
+                    let outbound_peers = darkirc.get_property("outbound_peers").unwrap();
+                    let outbound_peers_sub = outbound_peers.subscribe_modify();
+
+                    loop {
+                        let mut lines = vec![];
+                        for idx in 0..outbound_peers.get_len() {
+                            match outbound_peers.get_str_opt(idx) {
+                                Ok(Some(url)) => lines.push(format!("{idx}  {url}")),
+                                _ => lines.push(format!("{idx}  sleeping")),
+                            }
+                        }
+
+                        let atom = &mut redraw2.make_guard(gfxtag!("conn_info update"));
+                        conn_info_text.set(atom, lines.join("\n"));
+
+                        let Ok(_) = outbound_peers_sub.receive().await else { break };
+                    }
+                }));
+
                 // Fade the overlay alpha from 0 to 1 over 1s
                 let overlay = overlay.clone();
                 let redraw = redraw.clone();
@@ -592,46 +623,10 @@ pub async fn make(
                     }
                 }));
             } else {
-                // Hiding cancels any in-flight fade
+                // Hiding cancels any in-flight fade and the conn_info listener
                 _fade_task = None;
+                _conn_info_task = None;
             }
-
-            /*
-            // Show netstat-klik icon
-            let netstat_klik =
-                sg_root.lookup_node("/window/content/chat/netstatus_layer/netstat_klik").unwrap();
-
-            {
-                let atom = &mut redraw.make_guard(gfxtag!("netstat_klik_show"));
-                if let Err(e) = netstat_klik.set_property_bool(atom, Role::App, "is_visible", true)
-                {
-                    e!("Failed to show netstat_klik: {e}");
-                }
-            }
-
-            // Trigger reconnect
-            match sg_root.lookup_node("/plugin/darkirc") {
-                Some(darkirc) => {
-                    if let Err(e) = darkirc.call_method("reconnect", vec![]).await {
-                        e!("Failed to trigger reconnect: {e}");
-                    }
-                }
-                None => {
-                    e!("DarkIrc plugin has not been loaded");
-                }
-            }
-
-            msleep(200).await;
-
-            // Hide netstat-klik icon
-            {
-                let atom = &mut redraw.make_guard(gfxtag!("netstat_klik_hide"));
-                if let Err(e) = netstat_klik.set_property_bool(atom, Role::App, "is_visible", false)
-                {
-                    e!("Failed to hide netstat_klik: {e}");
-                }
-            }
-            */
         }
     });
     app.tasks.lock().unwrap().push(reconnect_task);
@@ -648,10 +643,12 @@ pub async fn make(
     prop.set_f32(atom, Role::App, 1, NETSTATUS_ICON_SIZE + NETSTAT_OVERLAY_MARGIN).unwrap();
     let code = cc.compile("w - 2 * NETSTAT_OVERLAY_MARGIN").unwrap();
     prop.set_expr(atom, Role::App, 2, code).unwrap();
-    let code = cc.compile("h - NETSTATUS_ICON_SIZE - 2 * NETSTAT_OVERLAY_MARGIN").unwrap();
-    prop.set_expr(atom, Role::App, 3, code).unwrap();
+    //let code = cc.compile("h - NETSTATUS_ICON_SIZE - 2 * NETSTAT_OVERLAY_MARGIN").unwrap();
+    //prop.set_expr(atom, Role::App, 3, code).unwrap();
+    prop.set_f32(atom, Role::App, 3, 380.).unwrap();
     overlay_node.set_property_bool(atom, Role::App, "is_visible", false).unwrap();
     overlay_node.set_property_u32(atom, Role::App, "z_index", 2).unwrap();
+    overlay_node.set_property_u32(atom, Role::App, "priority", 2).unwrap();
     let overlay_node = overlay_node
         .setup(|me| Layer::new(me, app.renderer.clone(), app.redraw_trigger.clone()))
         .await;
@@ -673,37 +670,188 @@ pub async fn make(
         expr::const_f32(0.),
         expr::load_var("w"),
         expr::load_var("h"),
-        overlay_color,
+        [0., 0.1, 0.1, 0.7],
+    );
+    shape.add_filled_box(
+        expr::const_f32(1.),
+        expr::const_f32(120.),
+        expr::load_var("w"),
+        expr::const_f32(121.),
+        [0., 0.94, 1., 1.],
+    );
+    shape.add_outline(
+        expr::const_f32(0.),
+        expr::const_f32(0.),
+        expr::load_var("w"),
+        expr::load_var("h"),
+        2.,
+        [0., 0.94, 1., 1.],
+    );
+    shape.add_filled_box(
+        cc.compile("w - 120").unwrap(),
+        expr::const_f32(20.),
+        cc.compile("w - 20").unwrap(),
+        expr::const_f32(100.),
+        [0., 0.12, 0.08, 1.],
+    );
+    shape.add_outline(
+        cc.compile("w - 120").unwrap(),
+        expr::const_f32(20.),
+        cc.compile("w - 20").unwrap(),
+        expr::const_f32(100.),
+        1.,
+        [0.08, 0.68, 0.72, 1.],
     );
     let node = node
         .setup(|me| VectorArt::new(me, shape, app.renderer.clone(), app.redraw_trigger.clone()))
         .await;
     overlay_node.link(node);
 
-    let node = create_text("info");
-    prop.set_f32(atom, Role::App, 0, 0.).unwrap();
-    prop.set_f32(atom, Role::App, 1, 0.).unwrap();
-    prop.set_expr(atom, Role::App, 2, expr::load_var("w")).unwrap();
-    prop.set_expr(atom, Role::App, 3, expr::load_var("h")).unwrap();
+    let node = create_text("p2p_label");
+    let prop = node.get_property("rect").unwrap();
+    prop.set_f32(atom, Role::App, 0, 50.).unwrap();
+    prop.set_f32(atom, Role::App, 1, 50.).unwrap();
+    prop.set_f32(atom, Role::App, 2, 2000.).unwrap();
+    prop.set_f32(atom, Role::App, 3, 2000.).unwrap();
     node.set_property_f32(atom, Role::App, "font_size", NETSTAT_OVERLAY_BTN_FONTSIZE).unwrap();
-    /*
-    #[cfg(target_os = "android")]
-    {
-        let info = crate::android::get_display_debug_info();
-        i!("Display debug report:\n{info}");
-        node.set_property_str(atom, Role::App, "text", info).unwrap();
-    }
-    #[cfg(not(target_os = "android"))]
-    {
-        let info = indoc! {"
-            nothing to see here
-            folx
-            hello
-        "};
-        node.set_property_str(atom, Role::App, "text", info).unwrap();
-    }
-    */
+    node.set_property_str(atom, Role::App, "text", "P2P").unwrap();
+    node.set_property_enum(atom, Role::App, "text_align", "left").unwrap();
+    let prop = node.get_property("text_color").unwrap();
+    prop.set_f32(atom, Role::App, 0, 0.47).unwrap();
+    prop.set_f32(atom, Role::App, 1, 1.).unwrap();
+    prop.set_f32(atom, Role::App, 2, 0.75).unwrap();
+    prop.set_f32(atom, Role::App, 3, 1.).unwrap();
+    node.set_property_u32(atom, Role::App, "z_index", 2).unwrap();
+    let node = node
+        .setup(|me| {
+            Text::new(
+                me,
+                window_scale.clone(),
+                app.renderer.clone(),
+                i18n_fish.clone(),
+                app.redraw_trigger.clone(),
+            )
+        })
+        .await;
+    overlay_node.link(node);
+
+    let node = create_text("toggle_label");
+    let prop = node.get_property("rect").unwrap();
+    let code = cc.compile("w - 120").unwrap();
+    prop.set_expr(atom, Role::App, 0, code).unwrap();
+    prop.set_f32(atom, Role::App, 1, 45.).unwrap();
+    prop.set_f32(atom, Role::App, 2, 100.).unwrap();
+    prop.set_f32(atom, Role::App, 3, 2000.).unwrap();
+    node.set_property_f32(atom, Role::App, "font_size", NETSTAT_OVERLAY_BTN_FONTSIZE).unwrap();
+    node.set_property_str(atom, Role::App, "text", "on").unwrap();
     node.set_property_enum(atom, Role::App, "text_align", "center").unwrap();
+    let prop = node.get_property("text_color").unwrap();
+    prop.set_f32(atom, Role::App, 0, 0.08).unwrap();
+    prop.set_f32(atom, Role::App, 1, 0.68).unwrap();
+    prop.set_f32(atom, Role::App, 2, 0.72).unwrap();
+    prop.set_f32(atom, Role::App, 3, 1.).unwrap();
+    node.set_property_u32(atom, Role::App, "z_index", 2).unwrap();
+    let node = node
+        .setup(|me| {
+            Text::new(
+                me,
+                window_scale.clone(),
+                app.renderer.clone(),
+                i18n_fish.clone(),
+                app.redraw_trigger.clone(),
+            )
+        })
+        .await;
+    let toggle_text = PropertyStr::wrap(&node, Role::App, "text", 0).unwrap();
+    overlay_node.link(node);
+
+    // Create the p2p toggle button
+    let node = create_button("p2p_toggle_btn");
+    node.set_property_bool(atom, Role::App, "is_active", true).unwrap();
+    let prop = node.get_property("rect").unwrap();
+    let code = cc.compile("w - 120").unwrap();
+    prop.set_expr(atom, Role::App, 0, code).unwrap();
+    prop.set_f32(atom, Role::App, 1, 20.).unwrap();
+    prop.set_f32(atom, Role::App, 2, 100.).unwrap();
+    prop.set_f32(atom, Role::App, 3, 80.).unwrap();
+    let (slot, recvr) = Slot::new("toggle_p2p");
+    node.register("click", slot).unwrap();
+    let redraw = app.redraw_trigger.clone();
+    let sg_root = app.sg_root.clone();
+    let listen_click = ex.spawn(async move {
+        while let Ok(_) = recvr.recv().await {
+            let is_enabled = toggle_text.get() == "on";
+            i!("toggle_p2p from {is_enabled} to {}", !is_enabled);
+            let atom = &mut redraw.make_guard(gfxtag!("toggle_p2p"));
+            if is_enabled {
+                toggle_text.set(atom, "off");
+            } else {
+                toggle_text.set(atom, "on");
+            }
+            let Some(darkirc) = sg_root.lookup_node("/plugin/darkirc") else {
+                e!("DarkIrc plugin has not been loaded");
+                continue
+            };
+            if is_enabled {
+                darkirc.call_method("stop", vec![]).await.unwrap();
+            } else {
+                darkirc.call_method("start", vec![]).await.unwrap();
+            }
+        }
+    });
+    overlay_node.push_task(listen_click);
+    let node =
+        node.setup(|me| Button::new(me, app.renderer.clone(), app.redraw_trigger.clone())).await;
+    overlay_node.link(node);
+
+    let node = create_text("outbound_label");
+    let prop = node.get_property("rect").unwrap();
+    prop.set_f32(atom, Role::App, 0, 50.).unwrap();
+    prop.set_f32(atom, Role::App, 1, 170.).unwrap();
+    prop.set_f32(atom, Role::App, 2, 2000.).unwrap();
+    prop.set_f32(atom, Role::App, 3, 2000.).unwrap();
+    node.set_property_f32(atom, Role::App, "font_size", NETSTAT_OVERLAY_BTN_FONTSIZE).unwrap();
+    node.set_property_str(atom, Role::App, "text", "OUTBOUND").unwrap();
+    node.set_property_enum(atom, Role::App, "text_align", "left").unwrap();
+    let prop = node.get_property("text_color").unwrap();
+    prop.set_f32(atom, Role::App, 0, 0.47).unwrap();
+    prop.set_f32(atom, Role::App, 1, 1.).unwrap();
+    prop.set_f32(atom, Role::App, 2, 0.75).unwrap();
+    prop.set_f32(atom, Role::App, 3, 1.).unwrap();
+    node.set_property_u32(atom, Role::App, "z_index", 2).unwrap();
+    let node = node
+        .setup(|me| {
+            Text::new(
+                me,
+                window_scale.clone(),
+                app.renderer.clone(),
+                i18n_fish.clone(),
+                app.redraw_trigger.clone(),
+            )
+        })
+        .await;
+    overlay_node.link(node);
+
+    let node = create_text("conn_info");
+    let prop = node.get_property("rect").unwrap();
+    prop.set_f32(atom, Role::App, 0, 50.).unwrap();
+    prop.set_f32(atom, Role::App, 1, 230.).unwrap();
+    prop.set_f32(atom, Role::App, 2, 2000.).unwrap();
+    prop.set_f32(atom, Role::App, 3, 2000.).unwrap();
+    node.set_property_f32(atom, Role::App, "font_size", NETSTAT_OVERLAY_BTN_FONTSIZE).unwrap();
+    #[cfg(not(feature = "enable-plugin-darkirc"))]
+    node.set_property_str(
+        atom,
+        Role::App,
+        "text",
+        indoc! {"
+            0  tcp+tls://dasman.xyz:9600
+            1  tcp+tls://dasman.xyz:9600
+            2  tcp+tls://dasman.xyz:9600
+        "},
+    )
+    .unwrap();
+    node.set_property_enum(atom, Role::App, "text_align", "left").unwrap();
     let prop = node.get_property("text_color").unwrap();
     prop.set_f32(atom, Role::App, 0, 1.).unwrap();
     prop.set_f32(atom, Role::App, 1, 1.).unwrap();
@@ -721,38 +869,6 @@ pub async fn make(
             )
         })
         .await;
-    overlay_node.link(node);
-
-    // Stop/start p2p button
-    let node = create_button("copy_btn");
-    node.set_property_bool(atom, Role::App, "is_active", true).unwrap();
-    let prop = node.get_property("rect").unwrap();
-    prop.set_f32(atom, Role::App, 0, 0.).unwrap();
-    prop.set_f32(atom, Role::App, 1, 0.).unwrap();
-    prop.set_expr(atom, Role::App, 2, expr::load_var("w")).unwrap();
-    prop.set_expr(atom, Role::App, 3, expr::load_var("h")).unwrap();
-
-    let sg_root = app.sg_root.clone();
-    let redraw = app.redraw_trigger.clone();
-    let (slot, recvr) = Slot::new("stop_btn_clicked");
-    node.register("click", slot).unwrap();
-    let stop_task = app.ex.spawn(async move {
-        let mut p2p_running = true;
-        while let Ok(_) = recvr.recv().await {
-            /*
-            #[cfg(target_os = "android")]
-            {
-                let info = crate::android::get_display_debug_info();
-                clipboard::set(&info);
-                i!("Copied report!");
-            }
-            */
-        }
-    });
-    app.tasks.lock().unwrap().push(stop_task);
-
-    let node =
-        node.setup(|me| Button::new(me, app.renderer.clone(), app.redraw_trigger.clone())).await;
     overlay_node.link(node);
 
     menu::make(app, chat_layer.clone(), i18n_fish, app_db.clone(), &kv_db, emoji_meshes.clone())
