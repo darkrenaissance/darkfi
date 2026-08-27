@@ -48,13 +48,13 @@ use crate::{
 ///
 /// In both cases modifying the setting should propagate the changes to that node.
 ///
-/// Although the `/setting2` root has no knowledge of property paths underneath there
+/// Although the `/setting` root has no knowledge of property paths underneath there
 /// is a convention of using `foo.bar.baz` to namespace the settings.
 pub fn create_setting(name: &str) -> SceneNode {
     let mut node = SceneNode::new(name, SceneNodeType::Setting);
 
-    // Example
-    let prop = Property::new("net.enable_tor", PropertyType::Bool, PropertySubType::Null);
+    let mut prop = Property::new("chat.is_enabled", PropertyType::Bool, PropertySubType::Flag);
+    prop.set_defaults_bool(vec![true]).unwrap();
     node.add_property(prop).unwrap();
 
     let mut prop = Property::new("win.scale", PropertyType::Float32, PropertySubType::Null);

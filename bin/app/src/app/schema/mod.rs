@@ -763,6 +763,11 @@ pub async fn make(
         })
         .await;
     let toggle_text = PropertyStr::wrap(&node, Role::App, "text", 0).unwrap();
+    let setting_node = app.sg_root.lookup_node("/setting").unwrap();
+    let chat_is_enabled = setting_node.get_property("chat.is_enabled").unwrap();
+    if !chat_is_enabled.get_bool(0).unwrap() {
+        toggle_text.set(atom, "off");
+    }
     overlay_node.link(node);
 
     // Create the p2p toggle button
@@ -777,10 +782,9 @@ pub async fn make(
     let (slot, recvr) = Slot::new("toggle_p2p");
     node.register("click", slot).unwrap();
     let redraw = app.redraw_trigger.clone();
-    let sg_root = app.sg_root.clone();
     let listen_click = ex.spawn(async move {
         while let Ok(_) = recvr.recv().await {
-            let is_enabled = toggle_text.get() == "on";
+            let is_enabled = chat_is_enabled.get_bool(0).unwrap();
             i!("toggle_p2p from {is_enabled} to {}", !is_enabled);
             let atom = &mut redraw.make_guard(gfxtag!("toggle_p2p"));
             if is_enabled {
@@ -788,15 +792,7 @@ pub async fn make(
             } else {
                 toggle_text.set(atom, "on");
             }
-            let Some(darkirc) = sg_root.lookup_node("/plugin/darkirc") else {
-                e!("DarkIrc plugin has not been loaded");
-                continue
-            };
-            if is_enabled {
-                darkirc.call_method("stop", vec![]).await.unwrap();
-            } else {
-                darkirc.call_method("start", vec![]).await.unwrap();
-            }
+            chat_is_enabled.set_bool(atom, Role::User, 0, !is_enabled).unwrap();
         }
     });
     overlay_node.push_task(listen_click);

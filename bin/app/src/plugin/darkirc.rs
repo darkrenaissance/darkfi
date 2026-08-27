@@ -59,7 +59,7 @@ use crate::{
     },
     db::AppDbPtr,
     error::{Error, Result},
-    prop::{BatchGuardPtr, PropertyAtomicGuard, PropertyPtr, PropertyStr, Role},
+    prop::{BatchGuardPtr, PropertyAtomicGuard, PropertyBool, PropertyPtr, PropertyStr, Role},
     scene::{MethodCallSub, Pimpl, SceneNodePtr, SceneNodeWeak, Slot},
     ui::{
         chatview::{MessageId, Timestamp},
@@ -171,6 +171,7 @@ pub struct DarkIrc {
     event_graph: EventGraphPtr,
     seen_msgs: SyncMutex<SeenMessages>,
     nick: PropertyStr,
+    chat_is_enabled: PropertyBool,
     pub channels: RwLock<HashMap<String, IrcChannel>>,
     pub contacts: RwLock<HashMap<String, IrcContact>>,
     app_db: AppDbPtr,
@@ -188,6 +189,9 @@ impl DarkIrc {
     ) -> Result<Pimpl> {
         let node_ref = &node.upgrade().unwrap();
         let nick = PropertyStr::wrap(node_ref, Role::Internal, "nick", 0).unwrap();
+        let setting_node = sg_root.lookup_node("/setting").unwrap();
+        let chat_is_enabled =
+            PropertyBool::wrap(&setting_node, Role::User, "chat.is_enabled", 0).unwrap();
 
         i!("Starting DarkIRC backend");
 
@@ -296,6 +300,7 @@ impl DarkIrc {
 
             seen_msgs: SyncMutex::new(SeenMessages::new()),
             nick,
+            chat_is_enabled,
 
             channels: RwLock::new(HashMap::new()),
             contacts: RwLock::new(HashMap::new()),
@@ -315,15 +320,6 @@ impl DarkIrc {
     }
 
     async fn dag_sync(self: Arc<Self>, channel_sub: Subscription<DarkFiResult<ChannelPtr>>) {
-        i!("Starting p2p network");
-        while let Err(err) = self.p2p.clone().start().await {
-            // This usually means we cannot listen on the inbound ports
-            e!("Failed to start p2p network: {err}!");
-            e!("Usually this means there is another process listening on the same ports.");
-            e!("Trying again in {P2P_RETRY_TIME} secs");
-            sleep(P2P_RETRY_TIME).await;
-        }
-
         i!("Waiting for some P2P connections...");
 
         let mut sync_attempt = 0;
@@ -331,75 +327,67 @@ impl DarkIrc {
         let fast_mode = false;
         let mut newest_synced = false;
         loop {
-            if self.p2p.is_connected() {
-                let peers_count = self.p2p.peers_count();
-                self.notify_connect(peers_count, self.event_graph.is_synced()).await;
+            let peers_count = self.p2p.peers_count();
+            self.notify_connect(peers_count, self.event_graph.is_synced()).await;
 
-                // Wait until we have enough connections
-                if peers_count < SYNC_MIN_PEERS {
-                    i!("Connected to {peers_count} peers. Waiting for more connections.");
-                    let conn_sub = self.p2p.hosts().subscribe_channel().await;
-                    loop {
-                        if let Err(err) = conn_sub.receive().await {
-                            w!("Error while waiting for new connections: {err}");
-                            continue
-                        }
-
-                        if self.p2p.peers_count() >= SYNC_MIN_PEERS {
-                            break
-                        }
+            // Wait until we have enough connections
+            if peers_count < SYNC_MIN_PEERS {
+                i!("Connected to {peers_count} peers. Waiting for more connections.");
+                let conn_sub = self.p2p.hosts().subscribe_channel().await;
+                loop {
+                    if let Err(err) = conn_sub.receive().await {
+                        w!("Error while waiting for new connections: {err}");
+                        continue
                     }
 
-                    drop(conn_sub);
-                    continue
-                }
-
-                i!("Got peer connection");
-                sync_attempt += 1;
-                // Cool off periodically
-                if sync_attempt > COOLOFF_SYNC_ATTEMPTS {
-                    i!("Wasn't able to sync yet. Cooling off for {COOLOFF_SLEEP_TIME} then will try again.");
-                    sleep(COOLOFF_SLEEP_TIME).await;
-                    sync_attempt = 0;
-                }
-
-                i!("Syncing static DAG");
-                match self.event_graph.static_sync().await {
-                    Ok(()) => {
-                        i!("Static synced successfully");
-                        // log_memory("after static sync");
-                    }
-                    Err(e) => {
-                        e!("Failed syncing static graph: {e}");
-                        self.p2p.stop().await;
+                    if self.p2p.peers_count() >= SYNC_MIN_PEERS {
                         break
                     }
                 }
-                // Sync only the newest DAG first. Older DAGs are caught up in
-                // the background by `catch_up_sync`, so the `synced` flag (and
-                // the `connect` notification) is reached after the first DAG
-                // instead of after all `DAGS_COUNT` of them.
-                let latest_ts = self.event_graph.current_genesis.read().await.header.timestamp;
-                i!("Syncing newest event DAG ({latest_ts}) (attempt #{sync_attempt})");
-                let sync_result = self.sync_dag_slot(latest_ts, fast_mode).await;
-                match sync_result {
-                    Ok(()) => {
-                        i!(
-                            "Newest event DAG synced successfully ({} mode)",
-                            if fast_mode { "fast" } else { "full" },
-                        );
-                        newest_synced = true;
-                        break
-                    }
-                    Err(e) => {
-                        // TODO: Maybe at this point we should prune or something?
-                        // TODO: Or maybe just tell the user to delete the DAG from FS.
-                        e!("Failed syncing newest DAG ({e}), retrying...");
-                    }
-                }
-            } else {
-                i!("Waiting for some P2P connections...");
+            }
+
+            i!("Got peer connection");
+            sync_attempt += 1;
+            // Cool off periodically
+            if sync_attempt > COOLOFF_SYNC_ATTEMPTS {
+                i!("Wasn't able to sync yet. Cooling off for {COOLOFF_SLEEP_TIME} then will try again.");
                 sleep(COOLOFF_SLEEP_TIME).await;
+                sync_attempt = 0;
+            }
+
+            i!("Syncing static DAG");
+            match self.event_graph.static_sync().await {
+                Ok(()) => {
+                    i!("Static synced successfully");
+                    // log_memory("after static sync");
+                }
+                Err(e) => {
+                    e!("Failed syncing static graph: {e}");
+                    self.p2p.stop().await;
+                    break
+                }
+            }
+            // Sync only the newest DAG first. Older DAGs are caught up in
+            // the background by `catch_up_sync`, so the `synced` flag (and
+            // the `connect` notification) is reached after the first DAG
+            // instead of after all `DAGS_COUNT` of them.
+            let latest_ts = self.event_graph.current_genesis.read().await.header.timestamp;
+            i!("Syncing newest event DAG ({latest_ts}) (attempt #{sync_attempt})");
+            let sync_result = self.sync_dag_slot(latest_ts, fast_mode).await;
+            match sync_result {
+                Ok(()) => {
+                    i!(
+                        "Newest event DAG synced successfully ({} mode)",
+                        if fast_mode { "fast" } else { "full" },
+                    );
+                    newest_synced = true;
+                    break
+                }
+                Err(e) => {
+                    // TODO: Maybe at this point we should prune or something?
+                    // TODO: Or maybe just tell the user to delete the DAG from FS.
+                    e!("Failed syncing newest DAG ({e}), retrying...");
+                }
             }
         }
 
@@ -514,9 +502,16 @@ impl DarkIrc {
     }
 
     /// Send a notification when there's a change in number of peers or the DAG sync status
+    ///
+    /// The node is only borrowed to grab the signal, so no strong node reference
+    /// is held across the trigger below. Otherwise a notify racing `SceneNode::setup`'s
+    /// strong_count assertion would panic the app.
     pub async fn notify_connect(&self, peers_count: usize, is_dag_synced: bool) {
-        let node = self.node.upgrade().unwrap();
-        node.trigger("connect", serialize(&(peers_count as u32, is_dag_synced))).await.unwrap();
+        let sig = {
+            let node = self.node.upgrade().unwrap();
+            node.get_signal("connect").unwrap()
+        };
+        sig.trigger(serialize(&(peers_count as u32, is_dag_synced))).await;
     }
 
     /// Update the `outbound_peers` property with the outgoing connection slots addrs.
@@ -642,8 +637,11 @@ impl DarkIrc {
         nick.encode(&mut arg_data).unwrap();
         msg.encode(&mut arg_data).unwrap();
 
-        let node = self.node.upgrade().unwrap();
-        node.trigger("recv", arg_data).await.unwrap();
+        let sig = {
+            let node = self.node.upgrade().unwrap();
+            node.get_signal("recv").unwrap()
+        };
+        sig.trigger(arg_data).await;
     }
 
     async fn process_send(me: &Weak<Self>, sub: &MethodCallSub) -> bool {
@@ -856,25 +854,7 @@ impl DarkIrc {
         true
     }
 
-    async fn process_start(me: &Weak<Self>, sub: &MethodCallSub) -> bool {
-        let Ok(method_call) = sub.receive().await else {
-            d!("Start method closed");
-            return false
-        };
-
-        t!("method called: start({method_call:?})");
-
-        let Some(self_) = me.upgrade() else {
-            e!("DarkIrc destroyed before start completed");
-            return false
-        };
-
-        self_.handle_start().await;
-
-        true
-    }
-
-    /// User requested to start the P2P network
+    /// `chat.is_enabled` was switched on
     async fn handle_start(&self) {
         i!("Manual P2P start triggered");
 
@@ -890,25 +870,7 @@ impl DarkIrc {
         i!("P2P start completed");
     }
 
-    async fn process_stop(me: &Weak<Self>, sub: &MethodCallSub) -> bool {
-        let Ok(method_call) = sub.receive().await else {
-            d!("Stop method closed");
-            return false
-        };
-
-        t!("method called: stop({method_call:?})");
-
-        let Some(self_) = me.upgrade() else {
-            e!("DarkIrc destroyed before stop completed");
-            return false
-        };
-
-        self_.handle_stop().await;
-
-        true
-    }
-
-    /// User requested to stop the P2P network
+    /// `chat.is_enabled` was switched off
     async fn handle_stop(&self) {
         i!("Manual P2P stop triggered");
         self.p2p.clone().stop().await;
@@ -956,15 +918,25 @@ impl DarkIrc {
         let send_method_task =
             ex.spawn(async move { while Self::process_send(&me2, &method_sub).await {} });
 
-        let start_method_sub = node.subscribe_method_call("start").unwrap();
+        let chat_is_enabled = self.chat_is_enabled.clone();
+        let chat_is_enabled_sub = chat_is_enabled.prop().subscribe_modify();
         let me2 = me.clone();
-        let start_method_task =
-            ex.spawn(async move { while Self::process_start(&me2, &start_method_sub).await {} });
+        let setting_task = ex.spawn(async move {
+            if chat_is_enabled.get() {
+                let Some(self_) = me2.upgrade() else { return };
+                self_.handle_start().await;
+            }
 
-        let stop_method_sub = node.subscribe_method_call("stop").unwrap();
-        let me2 = me.clone();
-        let stop_method_task =
-            ex.spawn(async move { while Self::process_stop(&me2, &stop_method_sub).await {} });
+            while let Ok(_) = chat_is_enabled_sub.receive().await {
+                let Some(self_) = me2.upgrade() else { break };
+
+                if chat_is_enabled.get() {
+                    self_.handle_start().await;
+                } else {
+                    self_.handle_stop().await;
+                }
+            }
+        });
 
         let rescan_method_sub = node.subscribe_method_call("rescan").unwrap();
         let me2 = me.clone();
@@ -1033,8 +1005,7 @@ impl DarkIrc {
 
         let mut tasks = vec![
             send_method_task,
-            start_method_task,
-            stop_method_task,
+            setting_task,
             rescan_method_task,
             ev_task,
             dag_task,
