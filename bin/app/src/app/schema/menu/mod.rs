@@ -17,7 +17,7 @@
  */
 
 use darkfi_serial::deserialize;
-use kvdb_overlay::{Database, Tree};
+use kvdb_overlay::Database as KvDb;
 use std::io::Write;
 use ui_consts::*;
 
@@ -27,6 +27,7 @@ use crate::{
         node::{create_button, create_layer, create_menu, create_text, create_vector_art},
         App,
     },
+    db::AppDbPtr,
     expr,
     gfx::gfxtag,
     mesh::COLOR_CYAN,
@@ -113,9 +114,8 @@ pub async fn make(
     app: &App,
     chat_layer: SceneNodePtr,
     i18n_fish: &I18nBabelFish,
-    channels_tree: Tree,
-    contacts_tree: Tree,
-    db: &Database,
+    app_db: AppDbPtr,
+    kv_db: &KvDb,
     emoji_meshes: EmojiMeshesPtr,
 ) {
     let window_scale = PropertyFloat32::wrap(
@@ -197,8 +197,8 @@ pub async fn make(
         window_scale.clone(),
         contact_is_visible.clone(),
         channel_is_visible.clone(),
-        contacts_tree.clone(),
-        db,
+        app_db.clone(),
+        kv_db,
         emoji_meshes.clone(),
     )
     .await;
@@ -211,8 +211,8 @@ pub async fn make(
         window_scale.clone(),
         contact_is_visible.clone(),
         channel_is_visible.clone(),
-        channels_tree.clone(),
-        db,
+        app_db.clone(),
+        kv_db,
         emoji_meshes.clone(),
     )
     .await;

@@ -21,10 +21,10 @@ use std::{
     sync::{Arc, Mutex as SyncMutex},
 };
 
-use darkfi_serial::{Decodable, Encodable, VarInt};
-use kvdb_overlay::Tree;
+use darkfi_serial::{Decodable, Encodable};
 
 use crate::{
+    db::AppDbPtr,
     error::{Error, Result},
     prop::{
         Property, PropertyAtomicGuard, PropertyPtr, PropertySubType, PropertyType, PropertyValue,
@@ -79,26 +79,24 @@ pub struct Setting {
 }
 
 impl Setting {
-    pub async fn new(node: SceneNodeWeak, db_tree: Tree, ex: ExecutorPtr) -> Pimpl {
+    pub async fn new(node: SceneNodeWeak, app_db: AppDbPtr, ex: ExecutorPtr) -> Pimpl {
         let node_ref = node.upgrade().unwrap();
 
         // Load any persisted properties from the db.
-        for entry in db_tree.iter() {
-            let (key, data) = entry.unwrap();
-            let key = String::from_utf8(key).unwrap();
-            let prop = node_ref.get_property(&key).unwrap();
-            Self::load_prop(&prop, &data).unwrap();
+        for (name, idx, data) in app_db.settings_all().await.unwrap() {
+            let prop = node_ref.get_property(&name).unwrap();
+            Self::load_prop(&prop, idx, &data).unwrap();
         }
 
         // Spawn tasks persisting our properties to the db when they change.
         let mut tasks = vec![];
         for prop in &node_ref.props {
-            let db_tree2 = db_tree.clone();
+            let app_db2 = app_db.clone();
             let prop2 = prop.clone();
             let on_modify_sub = prop.subscribe_modify();
             let task = ex.spawn(async move {
                 while let Ok((_role, _action, _guard)) = on_modify_sub.receive().await {
-                    Self::save_prop(&prop2, &db_tree2).unwrap();
+                    Self::save_prop(&prop2, &app_db2).await.unwrap();
                 }
             });
             tasks.push(task);
@@ -107,31 +105,21 @@ impl Setting {
         Pimpl::Setting(Arc::new(Self { tasks: SyncMutex::new(tasks) }))
     }
 
-    /// Persist the state of a property under its name as the db key.
-    /// The db value is a list of (prop_idx, prop_value) pairs exactly
-    /// specifying which idxs inside the property are set. If none are
-    /// set the key is dropped.
-    fn save_prop(prop: &PropertyPtr, db_tree: &Tree) -> Result<()> {
+    /// Persist the state of a property: one row per set index keyed by
+    /// (prop name, idx). Unset indexes have their row deleted.
+    async fn save_prop(prop: &PropertyPtr, app_db: &AppDbPtr) -> Result<()> {
         assert!(prop.is_bounded());
-
-        let mut data = vec![];
-        let mut is_set = false;
 
         for i in 0..prop.get_len() {
             if prop.is_unset(i)? {
+                app_db.setting_remove_idx(&prop.name, i as u32).await?;
                 continue
             }
 
-            is_set = true;
             let val = prop.get_value(i)?;
-            VarInt(i as u64).encode(&mut data)?;
+            let mut data = vec![];
             Self::encode_value(prop, &val, &mut data)?;
-        }
-
-        if is_set {
-            db_tree.insert(prop.name.as_bytes(), &data)?;
-        } else {
-            db_tree.remove(prop.name.as_bytes())?;
+            app_db.setting_put(&prop.name, i as u32, "prop", &data).await?;
         }
 
         Ok(())
@@ -159,18 +147,15 @@ impl Setting {
         Ok(())
     }
 
-    /// Restore a property state previously written by `Self::save_prop()`.
-    fn load_prop(prop: &PropertyPtr, data: &[u8]) -> Result<()> {
+    /// Restore the value of a property at `idx` previously written by
+    /// `Self::save_prop()`.
+    fn load_prop(prop: &PropertyPtr, idx: u32, data: &[u8]) -> Result<()> {
         assert!(prop.is_bounded());
 
         let mut cur = Cursor::new(data);
         let atom = &mut PropertyAtomicGuard::none();
-
-        while (cur.position() as usize) < data.len() {
-            let i = VarInt::decode(&mut cur)?.0 as usize;
-            let val = Self::decode_value(prop, &mut cur)?;
-            Self::apply_value(prop, atom, i, val)?;
-        }
+        let val = Self::decode_value(prop, &mut cur)?;
+        Self::apply_value(prop, atom, idx as usize, val)?;
 
         Ok(())
     }

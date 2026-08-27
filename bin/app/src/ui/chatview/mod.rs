@@ -44,7 +44,6 @@ pub use page::FileMessageStatus;
 use page::MessageBuffer;
 
 use crate::{
-    clipboard,
     gfx::{gfxtag, DrawCall, DrawInstruction, Point, Rectangle, RenderApi, Renderer},
     mesh::{Color, MeshBuilder},
     prop::{
@@ -52,7 +51,9 @@ use crate::{
         PropertyUint32, Role,
     },
     scene::{MethodCallSub, Pimpl, SceneNodePtr, SceneNodeWeak},
-    text, ExecutorPtr,
+    text,
+    util::clipboard,
+    ExecutorPtr,
 };
 
 use super::{DrawUpdate, OnModify, RedrawTrigger, UIObject};

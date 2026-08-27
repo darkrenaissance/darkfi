@@ -143,6 +143,9 @@ pub enum Error {
 
     #[error("Serialization error")]
     SerialErr = 48,
+
+    #[error("SQL database error")]
+    TursoErr = 49,
 }
 
 impl From<kvdb_overlay::Error> for Error {
@@ -154,5 +157,11 @@ impl From<kvdb_overlay::Error> for Error {
 impl From<std::io::Error> for Error {
     fn from(_: std::io::Error) -> Error {
         Error::SerialErr
+    }
+}
+
+impl From<turso::Error> for Error {
+    fn from(_: turso::Error) -> Error {
+        Error::TursoErr
     }
 }

@@ -34,7 +34,7 @@ extern crate tracing;
 mod android;
 mod app;
 mod build_info;
-mod clipboard;
+mod db;
 mod error;
 mod expr;
 mod gfx;
@@ -57,19 +57,22 @@ mod util;
 
 use crate::{
     app::{App, AppPtr},
+    db::{AppDb, AppDbPtr},
     gfx::EpochIndex,
     prop::{Property, PropertySubType, PropertyType},
     scene::{CallArgType, SceneNode, SceneNodePtr, SceneNodeType},
+    ui::RedrawTrigger,
     util::AsyncRuntime,
 };
 #[cfg(feature = "enable-netdebug")]
 use net::ZeroMQAdapter;
 use {
-    // Local imports
     app::schema::get_main_db_path,
+    // Local imports
+    db::get_app_db_path,
     gfx::Renderer,
     // Global imports
-    kvdb_overlay::Database,
+    kvdb_overlay::Database as KvDb,
     prop::{PropertyBool, PropertyStr, Role},
     scene::Slot,
     std::io::Cursor,
@@ -157,7 +160,10 @@ impl God {
         std::env::set_current_dir(basename).unwrap();
 
         let db_path = get_main_db_path();
-        let db = Database::open_default(&db_path).expect("KVDB failed to open");
+        let kv_db = KvDb::open_default(&db_path).expect("KVDB failed to open");
+        let app_db_path = get_app_db_path();
+        let app_db = smol::block_on(AppDb::new(app_db_path.to_str().unwrap()))
+            .expect("turso app db failed to open");
 
         let bg_ex = Arc::new(smol::Executor::new());
         let fg_ex = Arc::new(smol::Executor::new());
@@ -179,9 +185,10 @@ impl God {
         let app2 = app.clone();
         let cv_app_is_setup = Arc::new(CondVar::new());
         let cv = cv_app_is_setup.clone();
-        let db2 = db.clone();
+        let kv_db2 = kv_db.clone();
+        let app_db2 = app_db.clone();
         let app_task = fg_ex.spawn(async move {
-            app2.setup(db2).await.unwrap();
+            app2.setup(kv_db2, app_db2).await;
             cv.notify();
         });
         fg_runtime.push_task(app_task);
@@ -204,7 +211,7 @@ impl God {
             let cv = cv_app_is_setup.clone();
             let redraw = app.redraw_trigger.clone();
             let plug_task = bg_ex.spawn(async move {
-                load_plugins(ex, sg_root, redraw, cv, db).await;
+                load_plugins(ex, sg_root, redraw, cv, kv_db, app_db).await;
             });
             bg_runtime.push_task(plug_task);
         }
@@ -276,9 +283,10 @@ static GOD: OnceLock<God> = OnceLock::new();
 async fn load_plugins(
     ex: ExecutorPtr,
     sg_root: SceneNodePtr,
-    redraw: crate::ui::RedrawTrigger,
+    redraw: RedrawTrigger,
     cv: Arc<CondVar>,
-    db: Database,
+    kv_db: KvDb,
+    app_db: AppDbPtr,
 ) {
     let plugin = SceneNode::new("plugin", SceneNodeType::PluginRoot);
     let plugin = plugin.setup_null();
@@ -294,7 +302,7 @@ async fn load_plugins(
         let darkirc = create_darkirc("darkirc");
         let darkirc = darkirc
             .setup(|me| async {
-                plugin::DarkIrc::new(me, sg_root.clone(), ex.clone(), db)
+                plugin::DarkIrc::new(me, sg_root.clone(), ex.clone(), kv_db, app_db)
                     .await
                     .expect("DarkIrc pimpl setup")
             })

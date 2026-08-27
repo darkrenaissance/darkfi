@@ -19,9 +19,9 @@
 use std::{fs::File, io::Write};
 
 use darkfi::system::msleep;
-use darkfi_serial::{deserialize, Encodable};
+
 use indoc::indoc;
-use kvdb_overlay::Database;
+use kvdb_overlay::Database as KvDb;
 
 use crate::{
     app::{
@@ -31,13 +31,14 @@ use crate::{
         },
         App,
     },
+    db::AppDbPtr,
     expr::{self, Compiler},
     gfx::gfxtag,
     prop::{PropertyAtomicGuard, PropertyFloat32, Role},
     scene::{SceneNodePtr, Slot},
     sfx, shape,
     ui::{emoji_picker, Button, Layer, Text, TextScramble, VectorArt, VectorShape, Video},
-    util::i18n::I18nBabelFish,
+    util::{clipboard, i18n::I18nBabelFish},
 };
 
 mod chat;
@@ -209,7 +210,13 @@ pub fn write_joined_channels(items: &[String]) {
     let _ = std::fs::write(get_joined_channels_filename(), items.join("\n"));
 }
 
-pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish, db: Database) {
+pub async fn make(
+    app: &App,
+    window: SceneNodePtr,
+    i18n_fish: &I18nBabelFish,
+    kv_db: KvDb,
+    app_db: AppDbPtr,
+) {
     let mut cc = Compiler::new();
     cc.add_const_f32("NETSTATUS_ICON_SIZE", NETSTATUS_ICON_SIZE);
     cc.add_const_f32("SETTINGS_ICON_SIZE", SETTINGS_ICON_SIZE);
@@ -402,16 +409,11 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish, db
         }
     });
 
-    let channels_tree = db.open_tree_default("channels").expect("cannot open channels tree");
-    let contacts_tree = db.open_tree_default("contacts").expect("cannot open contacts tree");
-
-    // Initialize default channels if tree is empty
-    if channels_tree.is_empty().unwrap() {
+    // Initialize default channels if the table is empty
+    if app_db.channels().await.expect("cannot read channels").is_empty() {
         for channel_name in DEFAULT_CHANNELS {
             let channel = Channel { name: channel_name.to_string(), secret: None };
-            let mut val = vec![];
-            channel.encode(&mut val).unwrap();
-            channels_tree.insert(channel_name.to_string().as_bytes(), &val).unwrap();
+            app_db.channel_insert(&channel).await.expect("cannot seed channel");
         }
     }
 
@@ -714,7 +716,7 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish, db
             #[cfg(target_os = "android")]
             {
                 let info = crate::android::get_display_debug_info();
-                crate::clipboard::set(&info);
+                clipboard::set(&info);
                 i!("Copied report!");
             }
             */
@@ -726,27 +728,19 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish, db
         node.setup(|me| Button::new(me, app.renderer.clone(), app.redraw_trigger.clone())).await;
     overlay_node.link(node);
 
-    menu::make(
-        app,
-        chat_layer.clone(),
-        i18n_fish,
-        channels_tree.clone(),
-        contacts_tree.clone(),
-        &db,
-        emoji_meshes.clone(),
-    )
-    .await;
+    menu::make(app, chat_layer.clone(), i18n_fish, app_db.clone(), &kv_db, emoji_meshes.clone())
+        .await;
 
     // Create chat layers only for joined channels/contacts, in joined order.
     for name in read_joined_channels() {
         let bare = if name.starts_with('#') || name.starts_with('@') { &name[1..] } else { &name };
-        let in_tree = match name.chars().next() {
-            Some('#') => channels_tree.contains_key(bare.to_string().as_bytes()).unwrap_or(false),
-            Some('@') => contacts_tree.contains_key(bare.to_string().as_bytes()).unwrap_or(false),
+        let in_db = match name.chars().next() {
+            Some('#') => app_db.channel_get(bare).await.ok().flatten().is_some(),
+            Some('@') => app_db.contact_get(bare).await.ok().flatten().is_some(),
             _ => false,
         };
-        if !in_tree {
-            warn!(target: "app::schema", "Joined entry '{name}' not found in tree; skipping");
+        if !in_db {
+            warn!(target: "app::schema", "Joined entry '{name}' not found in kv_db; skipping");
             continue
         }
 
@@ -756,7 +750,7 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish, db
             &app.ex,
             chat_layer.clone(),
             &name,
-            &db,
+            &kv_db,
             i18n_fish,
             emoji_meshes.clone(),
             app.redraw_trigger.clone(),

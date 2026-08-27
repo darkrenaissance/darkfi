@@ -48,7 +48,7 @@ use irc2::{
     irc::{server::MAX_NICK_LEN, IrcChannel, IrcContact},
     pad, unpad, Privmsg,
 };
-use kvdb_overlay::{Database, Tree};
+use kvdb_overlay::Database as KvDb;
 use parking_lot::Mutex as SyncMutex;
 
 use crate::{
@@ -57,6 +57,7 @@ use crate::{
         menu::{channel::Channel, contact::Contact},
         read_joined_channels,
     },
+    db::AppDbPtr,
     error::{Error, Result},
     prop::{BatchGuardPtr, PropertyAtomicGuard, PropertyPtr, PropertyStr, Role},
     scene::{MethodCallSub, Pimpl, SceneNodePtr, SceneNodeWeak, Slot},
@@ -172,9 +173,7 @@ pub struct DarkIrc {
     nick: PropertyStr,
     pub channels: RwLock<HashMap<String, IrcChannel>>,
     pub contacts: RwLock<HashMap<String, IrcContact>>,
-    channels_tree: Tree,
-    contacts_tree: Tree,
-    nick_tree: Tree,
+    app_db: AppDbPtr,
     dm_secret: SecretKey,
     ex: ExecutorPtr,
 }
@@ -184,24 +183,16 @@ impl DarkIrc {
         node: SceneNodeWeak,
         sg_root: SceneNodePtr,
         ex: ExecutorPtr,
-        db: Database,
+        kv_db: KvDb,
+        app_db: AppDbPtr,
     ) -> Result<Pimpl> {
         let node_ref = &node.upgrade().unwrap();
         let nick = PropertyStr::wrap(node_ref, Role::Internal, "nick", 0).unwrap();
 
         i!("Starting DarkIRC backend");
 
-        // Use the unified db for reading channels (UI stores channels there)
-        let channels_tree = db.open_tree_default("channels")?;
-        i!("Opened channels tree from unified db");
-
-        let contacts_tree = db.open_tree_default("contacts")?;
-        i!("Opened contacts tree from unified db");
-
-        let nick_tree = db.open_tree_default("nick")?;
-        i!("Opened nick tree from unified db");
-
-        let dm_secret = Self::load_or_create_dm_identity(&db);
+        let dm_secret_bytes = app_db.dm_secret().await?;
+        let dm_secret = SecretKey::from_bytes(dm_secret_bytes);
         let dm_public_b58 = bs58::encode(dm_secret.public_key().to_bytes()).into_string();
         // Expose our DM public key on the plugin node so it can be displayed/shared.
         node_ref
@@ -270,7 +261,7 @@ impl DarkIrc {
 
         let event_graph = match EventGraph::new(
             p2p.clone(),
-            db.clone(),
+            kv_db.clone(),
             std::path::PathBuf::new(),
             false,
             EventGraphConfig {
@@ -292,10 +283,8 @@ impl DarkIrc {
             }
         };
 
-        if let Ok(Some(nick_bytes)) = nick_tree.get(b"value") {
-            if let Ok(prev_nick) = String::from_utf8(nick_bytes.to_vec()) {
-                nick.set(&mut PropertyAtomicGuard::none(), prev_nick);
-            }
+        if let Some(prev_nick) = app_db.nick_get().await? {
+            nick.set(&mut PropertyAtomicGuard::none(), prev_nick);
         }
 
         let self_ = Arc::new(Self {
@@ -310,9 +299,7 @@ impl DarkIrc {
 
             channels: RwLock::new(HashMap::new()),
             contacts: RwLock::new(HashMap::new()),
-            channels_tree,
-            contacts_tree,
-            nick_tree,
+            app_db,
             dm_secret,
 
             ex: ex.clone(),
@@ -727,23 +714,19 @@ impl DarkIrc {
         }
     }
 
-    /// Load channels from UI database and populate encryption keys
+    /// Load channels from the app database and populate encryption keys
     pub async fn load_channels_from_db(&self) {
         let mut channels = self.channels.write().await;
         channels.clear();
 
         let joined: HashSet<String> = read_joined_channels().into_iter().collect();
 
-        for item in self.channels_tree.iter() {
-            let (key, val) = item.unwrap();
-            let channel_name = String::from_utf8_lossy(&key).to_string();
-            let full_name = format!("#{}", channel_name);
+        for ui_channel in self.app_db.channels().await.unwrap() {
+            let full_name = format!("#{}", ui_channel.name);
 
             if !joined.contains(&full_name) {
                 continue
             }
-
-            let ui_channel = deserialize_async::<Channel>(&val).await.unwrap();
 
             // Convert to IrcChannel with encryption
             let mut irc_channel =
@@ -762,48 +745,29 @@ impl DarkIrc {
 
             let is_encrypted = irc_channel.saltbox.is_some();
             channels.insert(full_name, irc_channel);
-            i!("Loaded channel: #{} (encrypted: {})", channel_name, is_encrypted);
+            i!("Loaded channel: #{} (encrypted: {})", ui_channel.name, is_encrypted);
         }
     }
 
-    /// Load (or generate on first run) the single global DM identity key.
-    fn load_or_create_dm_identity(db: &Database) -> SecretKey {
-        let tree = db.open_tree_default("dm_identity").expect("cannot open dm_identity tree");
-        if let Ok(Some(stored)) = tree.get(b"secret") {
-            if stored.len() == 32 {
-                let arr: [u8; 32] = stored.try_into().unwrap();
-                return SecretKey::from_bytes(arr);
-            }
-        }
-        let bytes: [u8; 32] = rand::random();
-        let _ = tree.insert(b"secret", &bytes);
-        SecretKey::from_bytes(bytes)
-    }
-
-    /// Load contacts from the UI database and build their encryption boxes.
+    /// Load contacts from the app database and build their encryption boxes.
     pub async fn load_contacts_from_db(&self) {
         let mut contacts = self.contacts.write().await;
         contacts.clear();
 
         let joined: HashSet<String> = read_joined_channels().into_iter().collect();
 
-        for item in self.contacts_tree.iter() {
-            let (key, val) = item.unwrap();
-            let name = String::from_utf8_lossy(&key).to_string();
-
-            if !joined.contains(&format!("@{}", name)) {
+        for contact in self.app_db.contacts().await.unwrap() {
+            if !joined.contains(&format!("@{}", contact.name)) {
                 continue
             }
-
-            let contact = deserialize_async::<Contact>(&val).await.unwrap();
 
             let their_public = PublicKey::from(contact.public);
             let saltbox = Arc::new(ChaChaBox::new(&their_public, &self.dm_secret));
             let self_saltbox =
                 Arc::new(ChaChaBox::new(&self.dm_secret.public_key(), &self.dm_secret));
 
-            contacts.insert(name.clone(), IrcContact { saltbox, self_saltbox });
-            i!("Loaded contact: {name}");
+            contacts.insert(contact.name.clone(), IrcContact { saltbox, self_saltbox });
+            i!("Loaded contact: {}", contact.name);
         }
     }
 
@@ -960,8 +924,8 @@ impl DarkIrc {
 
         let mut on_modify = OnModify::new(ex.clone(), self.node.clone(), me.clone());
         async fn save_nick(self_: Arc<DarkIrc>, _batch: BatchGuardPtr) {
-            if let Err(err) = self_.nick_tree.insert(b"value", self_.nick.get().as_bytes()) {
-                e!("Failed persisting nick to kvdb: {err}");
+            if let Err(err) = self_.app_db.nick_set(&self_.nick.get()).await {
+                e!("Failed persisting nick to app db: {err}");
             }
         }
         on_modify.when_change(self.nick.prop(), save_nick);

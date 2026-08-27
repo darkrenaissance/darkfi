@@ -22,14 +22,14 @@ use crate::{
         schema::COLOR_SCHEME,
         App,
     },
-    clipboard, expr,
+    expr,
     gfx::gfxtag,
     mesh::COLOR_CYAN,
     prop::{PropertyAtomicGuard, PropertyBool, PropertyFloat32, PropertyStr, Role},
     scene::{SceneNodePtr, Slot},
     shape,
     ui::{Button, Layer, Text, VectorArt},
-    util::i18n::I18nBabelFish,
+    util::{clipboard, i18n::I18nBabelFish},
 };
 
 use super::{super::ColorScheme, data::*, util::*};

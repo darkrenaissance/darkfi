@@ -38,7 +38,6 @@ use tracing::instrument;
 #[cfg(target_os = "android")]
 use crate::android::{is_ime_visible, textinput::AndroidTextInputState};
 use crate::{
-    clipboard,
     gfx::{
         anim::Frame as AnimFrame, gfxtag, DrawCall, DrawInstruction, DrawMesh, ManagedSeqAnimPtr,
         Point, Rectangle, RenderApi, Renderer, Vertex,
@@ -50,6 +49,7 @@ use crate::{
     },
     scene::{MethodCallSub, Pimpl, SceneNodePtr, SceneNodeWeak},
     text::{self, Editor},
+    util::clipboard,
     ExecutorPtr,
 };
 

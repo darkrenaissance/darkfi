@@ -16,7 +16,7 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use kvdb_overlay::Database;
+use kvdb_overlay::Database as KvDb;
 use smol::Task;
 use std::sync::{
     atomic::{AtomicBool, Ordering},
@@ -26,7 +26,7 @@ use std::sync::{
 #[cfg(target_os = "android")]
 use crate::android;
 use crate::{
-    error::Error,
+    db::AppDbPtr,
     gfx::{EpochIndex, GraphicsEventPublisherPtr, Renderer},
     prop::{PropertyAtomicGuard, Role},
     scene::{Pimpl, SceneNodePtr},
@@ -49,7 +49,7 @@ macro_rules! i { ($($arg:tt)*) => { info!(target: "app", $($arg)*); } }
 //macro_rules! w { ($($arg:tt)*) => { warn!(target: "app", $($arg)*); } }
 macro_rules! e { ($($arg:tt)*) => { error!(target: "app", $($arg)*); } }
 
-const IS_FIRST_TIME_KEY: &[u8] = b"is_first_time";
+const IS_FIRST_TIME_KEY: &str = "is_first_time";
 
 //fn print_type_of<T>(_: &T) {
 //    println!("{}", std::any::type_name::<T>())
@@ -89,21 +89,19 @@ impl App {
 
     /// Does not require miniquad to be init. Created the scene graph tree / schema and all
     /// the objects.
-    pub async fn setup(&self, db: Database) -> Result<Option<i32>, Error> {
+    pub async fn setup(&self, kv_db: KvDb, app_db: AppDbPtr) {
         t!("App::setup()");
 
-        let settings_tree = db.open_tree_default("settings").unwrap();
-        let flags_tree = db.open_tree_default("app_flags").unwrap();
-        let is_first_time = !flags_tree.contains_key(IS_FIRST_TIME_KEY).unwrap();
+        let is_first_time = !app_db.flag_contains(IS_FIRST_TIME_KEY).await.unwrap();
         if is_first_time {
-            flags_tree.insert(IS_FIRST_TIME_KEY, b"").unwrap();
+            app_db.flag_set(IS_FIRST_TIME_KEY).await.unwrap();
         }
         self.is_first_time.store(is_first_time, Ordering::Relaxed);
 
         let ex = self.ex.clone();
+        let app_db2 = app_db.clone();
         let setting = create_setting("setting");
-        let setting =
-            setting.setup(|me| async move { Setting::new(me, settings_tree, ex).await }).await;
+        let setting = setting.setup(|me| async move { Setting::new(me, app_db2, ex).await }).await;
         self.sg_root.link(setting);
 
         let i18n_fish = self.setup_locale();
@@ -147,7 +145,7 @@ impl App {
         self.sg_root.link(window.clone());
 
         #[cfg(feature = "schema-app")]
-        schema::make(&self, window.clone(), &i18n_fish, db).await;
+        schema::make(&self, window.clone(), &i18n_fish, kv_db, app_db).await;
 
         #[cfg(feature = "schema-test")]
         schema::test::make(&self, window.clone(), &i18n_fish).await;
@@ -162,8 +160,6 @@ impl App {
         compile_error!("Only one schema can be selected");
 
         d!("Schema loaded");
-
-        Ok(None)
     }
 
     fn setup_locale(&self) -> I18nBabelFish {

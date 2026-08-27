@@ -33,7 +33,7 @@ use fud::{
     util::{hash_to_string, FileSelection},
     Fud,
 };
-use kvdb_overlay::Database;
+use kvdb_overlay::Database as KvDb;
 use smol::lock::Mutex;
 use std::{
     collections::HashSet,
@@ -136,8 +136,8 @@ impl FudPlugin {
 
         i!("Starting Fud backend");
         let db_path = get_db_path();
-        let db = match Database::open_default(&db_path) {
-            Ok(db) => db,
+        let kv_db = match KvDb::open_default(&db_path) {
+            Ok(kv_db) => kv_db,
             Err(err) => {
                 e!("Kvdb database '{}' failed to open: {err}!", db_path.display());
                 return Err(Error::KvdbErr)
@@ -241,14 +241,21 @@ impl FudPlugin {
         p2p.session_direct().start_peer_discovery();
 
         let event_pub = Publisher::new();
-        let fud: Arc<Fud> =
-            match Fud::new(fud_settings, p2p.clone(), &db, event_pub.clone(), ex.clone()).await {
-                Ok(fud) => fud,
-                Err(err) => {
-                    e!("Cannot create fud instance: {err}");
-                    return Err(Error::ServiceFailed)
-                }
-            };
+        let fud: Arc<Fud> = match Fud::new(
+            fud_settings,
+            p2p.clone(),
+            &kv_db,
+            event_pub.clone(),
+            ex.clone(),
+        )
+        .await
+        {
+            Ok(fud) => fud,
+            Err(err) => {
+                e!("Cannot create fud instance: {err}");
+                return Err(Error::ServiceFailed)
+            }
+        };
 
         let self_ = Arc::new(Self {
             node: node.clone(),

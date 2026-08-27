@@ -17,6 +17,7 @@ ADB_DEVICE_INST =
 ADB_DEVICE_LOG  =
 
 SRC = \
+	app.sql \
 	build.rs \
 	Cargo.lock \
 	Cargo.toml \

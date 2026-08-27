@@ -31,6 +31,7 @@ use crate::{
     ui::{ChatView, Layer, Text, VectorArt, VectorShape, Video},
     util::i18n::I18nBabelFish,
 };
+use kvdb_overlay::Database as KvDb;
 
 const LIGHTMODE: bool = false;
 
@@ -370,8 +371,8 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish) {
         prop.set_f32(atom, Role::App, 3, 1.).unwrap();
     }
 
-    let db = kvdb_overlay::Database::open_default(&get_chatdb_path()).expect("cannot open kvdb");
-    let chat_tree = db.open_tree(b"chat").unwrap();
+    let kv_db = KvDb::open_default(&get_chatdb_path()).expect("cannot open kvdb");
+    let chat_tree = kv_db.open_tree(b"chat").unwrap();
     if chat_tree.is_empty() {
         populate_tree(&chat_tree);
     }

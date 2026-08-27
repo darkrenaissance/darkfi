@@ -19,7 +19,7 @@
 use darkfi_serial::{Decodable, Encodable};
 #[cfg(feature = "enable-plugin-darkirc")]
 use irc2::Privmsg;
-use kvdb_overlay::{Database, Tree};
+use kvdb_overlay::{Database as KvDb, Tree};
 use std::{sync::Arc, time::UNIX_EPOCH};
 
 #[cfg(feature = "enable-plugin-darkirc")]
@@ -198,7 +198,7 @@ pub async fn make(
     ex: &ExecutorPtr,
     content: SceneNodePtr,
     channel: &str,
-    db: &Database,
+    kv_db: &KvDb,
     i18n_fish: &I18nBabelFish,
     emoji_meshes: emoji_picker::EmojiMeshesPtr,
     redraw: RedrawTrigger,
@@ -624,7 +624,7 @@ pub async fn make(
     }
 
     let tree_name = channel.to_string() + "__chat_tree";
-    let chat_tree = db.open_tree_default(&tree_name).unwrap();
+    let chat_tree = kv_db.open_tree_default(&tree_name).unwrap();
     //if chat_tree.is_empty() {
     //    populate_tree(&chat_tree);
     //}

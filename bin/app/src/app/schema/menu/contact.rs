@@ -18,7 +18,7 @@
 
 use bs58;
 use darkfi_serial::{async_trait, deserialize, Encodable, SerialDecodable, SerialEncodable};
-use kvdb_overlay::{Database, Tree};
+use kvdb_overlay::Database as KvDb;
 use ui_consts::*;
 
 macro_rules! d { ($($arg:tt)*) => { debug!(target: "app::contact", $($arg)*); } }
@@ -47,6 +47,7 @@ use crate::{
         },
         App,
     },
+    db::AppDbPtr,
     expr,
     gfx::gfxtag,
     mesh::{COLOR_CYAN, COLOR_INACTIVE, COLOR_MINT, COLOR_MINT_OP, MINT_BTN_GRADIENT},
@@ -57,7 +58,7 @@ use crate::{
         emoji_picker::EmojiMeshesPtr, BaseEdit, BaseEditType, Button, Layer, Menu, ShapeVertex,
         Shortcut, Text, UIObject, VectorArt, VectorShape,
     },
-    util::i18n::I18nBabelFish,
+    util::{clipboard, i18n::I18nBabelFish},
 };
 
 #[cfg(any(target_os = "android", feature = "emulate-android"))]
@@ -168,8 +169,8 @@ pub async fn make(
     window_scale: PropertyFloat32,
     contact_is_visible: PropertyBool,
     channel_is_visible: PropertyBool,
-    contacts_tree: Tree,
-    db: &Database,
+    app_db: AppDbPtr,
+    kv_db: &KvDb,
     emoji_meshes: EmojiMeshesPtr,
 ) -> SceneNodePtr {
     let mut cc = expr::Compiler::new();
@@ -1267,7 +1268,7 @@ pub async fn make(
     let listen_click = app.ex.spawn(async move {
         while let Ok(_) = recvr.recv().await {
             debug!(target: "app::menu", "secret paste button clicked");
-            match crate::clipboard::get() {
+            match clipboard::get() {
                 Some(clipboard_text) => {
                     let text_prop = secedit_node2.get_property("text").unwrap();
                     let atom = &mut redraw_clone.make_guard(gfxtag!("secret paste"));
@@ -1437,9 +1438,7 @@ pub async fn make(
 
     let prop = node.get_property("items").unwrap();
     let mut contact_names: Vec<String> = vec![];
-    for item in contacts_tree.iter() {
-        let (_key, val) = item.unwrap();
-        let contact = deserialize::<Contact>(&val).unwrap();
+    for contact in app_db.contacts().await.unwrap() {
         contact_names.push(format!("@{}", contact.name));
     }
     contact_names.sort();
@@ -1464,7 +1463,7 @@ pub async fn make(
     btns.connect_edit_handlers(app, &menu_node, None);
 
     // "add contact" button handler: persist the contact and notify the plugin
-    let contacts_tree2 = contacts_tree.clone();
+    let app_db2 = app_db.clone();
     let nickedit2 = nickedit_node.clone();
     let secedit2 = secedit_node.clone();
     let menu_prop2 = menu_node.get_property("items").unwrap();
@@ -1500,9 +1499,7 @@ pub async fn make(
             public.copy_from_slice(&public_bytes);
 
             let contact = Contact { name: name.clone(), public };
-            let mut val = vec![];
-            contact.encode(&mut val).unwrap();
-            contacts_tree2.insert(name.as_bytes(), &val).unwrap();
+            app_db2.contact_insert(&contact).await.unwrap();
 
             let contact_name = format!("@{}", name);
             let atom = &mut redraw2.make_guard(gfxtag!("add_contact"));
@@ -1523,7 +1520,7 @@ pub async fn make(
     let sg_root = app.sg_root.clone();
     let renderer = app.renderer.clone();
     let ex = app.ex.clone();
-    let db2 = db.clone();
+    let kv_db2 = kv_db.clone();
     let i18n_fish2 = i18n_fish.clone();
     let emoji_meshes2 = emoji_meshes.clone();
     let redraw2 = app.redraw_trigger.clone();
@@ -1549,7 +1546,7 @@ pub async fn make(
                 &ex,
                 content,
                 &contact,
-                &db2,
+                &kv_db2,
                 &i18n_fish2,
                 emoji_meshes2.clone(),
                 redraw2.clone(),
