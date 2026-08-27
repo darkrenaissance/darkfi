@@ -38,7 +38,7 @@ pub use render::{
 
 pub static GLOBAL_FONT_CTX: LazyLock<parley::FontContext> = LazyLock::new(|| {
     let mut font_ctx = parley::FontContext {
-        collection: Collection::new(CollectionOptions { shared: true, system_fonts: false }),
+        collection: Collection::new(CollectionOptions { shared: true, system_fonts: true }),
         source_cache: SourceCache::new(SourceCacheOptions { shared: true }),
     };
 

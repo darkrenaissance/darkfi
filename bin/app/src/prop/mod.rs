@@ -74,7 +74,7 @@ pub enum PropertySubType {
     Pixel = 2,
     ResourceId = 3,
     Locale = 4,
-    Flag = 5
+    Flag = 5,
 }
 
 #[derive(Debug, Copy, Clone, PartialEq)]
