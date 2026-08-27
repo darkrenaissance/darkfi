@@ -40,7 +40,7 @@ pub fn spawn_decoder_thread(
     path: String,
     vid_data: Arc<SyncMutex<Option<Av1VideoData>>>,
     renderer: Renderer,
-) -> std::thread::JoinHandle<()> {
+) {
     #[cfg(target_os = "android")]
     return android::spawn_decoder_thread(path, vid_data, renderer);
 

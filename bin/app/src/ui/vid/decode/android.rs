@@ -38,19 +38,20 @@ pub fn spawn_decoder_thread(
     path: String,
     vid_data: Arc<SyncMutex<Option<Av1VideoData>>>,
     renderer: Renderer,
-) -> thread::JoinHandle<()> {
+) {
     *vid_data.lock() = Some(Av1VideoData::new(150, &renderer));
+
+    let (frame_tx, frame_rx) = mpsc::channel::<DecodedFrame>();
+
+    let decoder_id = vid::register(frame_tx);
 
     spawn_thread("video-decoder-android", move || {
         let now = std::time::Instant::now();
         d!("Decoding MP4 video file: {path}");
 
-        let (frame_tx, frame_rx) = mpsc::channel::<DecodedFrame>();
-
-        let decoder_id = vid::register(frame_tx);
-
         let Some(decoder_handle) = vid::videodecoder_init(&path) else {
             error!(target: "ui:video::decode", "Failed to initialize MediaCodec decoder for: {path}");
+            vid::unregister(decoder_id);
             return;
         };
 
@@ -60,10 +61,21 @@ pub fn spawn_decoder_thread(
 
         drop(decoder_handle);
 
+        // Dropping the sender disconnects the channel which ends the
+        // uploader loop once all queued frames are processed
+        vid::unregister(decoder_id);
+
+        d!("Finished decoding video: {path} in {:?}", now.elapsed());
+    });
+
+    // decodeAll() blocks until the whole video is decoded. Upload frames
+    // from a parallel thread so textures appear while decoding is still
+    // running, otherwise the video only shows up after the full decode.
+    spawn_thread("video-uploader-android", move || {
         let mut frame_idx = 0;
         while let Ok(frame) = frame_rx.recv() {
             if process_frame(frame_idx, frame, &vid_data, &renderer).is_err() {
-                d!("Video stopped, exiting decoder thread");
+                d!("Video stopped, exiting uploader thread");
                 return;
             }
             frame_idx += 1;
@@ -78,11 +90,7 @@ pub fn spawn_decoder_thread(
                 break
             }
         }
-
-        d!("Finished decoding video: {path} in {:?}", now.elapsed());
-
-        vid::unregister(decoder_id);
-    })
+    });
 }
 
 fn process_frame(

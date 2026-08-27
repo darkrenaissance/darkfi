@@ -78,8 +78,6 @@ pub struct Video {
     dc_key: u64,
 
     vid_data: Arc<SyncMutex<Option<Av1VideoData>>>,
-    _load_handle: SyncMutex<Option<std::thread::JoinHandle<()>>>,
-    _decoder_handle: SyncMutex<Option<std::thread::JoinHandle<()>>>,
 
     rect: PropertyRect,
     uv: PropertyRect,
@@ -120,8 +118,6 @@ impl Video {
             dc_key: OsRng.gen(),
 
             vid_data: Arc::new(SyncMutex::new(None)),
-            _load_handle: SyncMutex::new(None),
-            _decoder_handle: SyncMutex::new(None),
 
             rect,
             uv,
@@ -148,10 +144,7 @@ impl Video {
 
         // Decoder thread:
         // loads path, decodes AV1 -> RGB, creates textures directly
-        let decoder_handle =
-            spawn_decoder_thread(path, self.vid_data.clone(), self.renderer.clone());
-
-        *self._decoder_handle.lock() = Some(decoder_handle);
+        spawn_decoder_thread(path, self.vid_data.clone(), self.renderer.clone());
     }
 
     fn regen_mesh(&self) -> MeshInfo {
