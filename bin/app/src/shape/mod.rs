@@ -61,6 +61,11 @@ pub use blockchain_netlogo4::create_blockchain_netlogo4;
 mod x;
 pub use x::create_x;
 
+mod down_bgtab;
+pub use down_bgtab::create_down_bgtab;
+mod down_arrow;
+pub use down_arrow::create_down_arrow;
+
 //mod settings;
 //pub use settings::{create_right_border, create_settings};
 

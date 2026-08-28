@@ -673,6 +673,74 @@ pub async fn make(
     });
     layer_node.push_task(listen_file_download);
 
+    // Root content layer
+    let down_layer = create_layer("chat_down_arrow");
+    let prop = down_layer.get_property("rect").unwrap();
+    let code = cc.compile("w - 120").unwrap();
+    prop.set_expr(atom, Role::App, 0, code).unwrap();
+    let code = cc.compile("h / 2").unwrap();
+    prop.set_expr(atom, Role::App, 1, code).unwrap();
+    prop.set_f32(atom, Role::App, 2, 100.).unwrap();
+    prop.set_f32(atom, Role::App, 3, 100.).unwrap();
+    down_layer.set_property_bool(atom, Role::App, "is_visible", false).unwrap();
+    down_layer.set_property_u32(atom, Role::App, "z_index", 3).unwrap();
+    let down_layer = down_layer.setup(|me| Layer::new(me, renderer.clone(), redraw.clone())).await;
+    layer_node.link(down_layer.clone());
+
+    let down_layer_is_visible =
+        PropertyBool::wrap(&down_layer, Role::App, "is_visible", 0).unwrap();
+    let chatview_scroll = PropertyFloat32::wrap(&chatview_node, Role::App, "scroll", 0).unwrap();
+    let chatview_scroll_sub = chatview_scroll.prop().subscribe_modify();
+    let redraw2 = redraw.clone();
+    let chatview_scroll2 = chatview_scroll.clone();
+    let monitor_scroll_task = ex.spawn(async move {
+        while let Ok(_) = chatview_scroll_sub.receive().await {
+            let scroll = chatview_scroll2.get();
+            let atom = &mut redraw2.make_guard(gfxtag!("down arrow visibility change"));
+            if scroll > 0. {
+                down_layer_is_visible.set(atom, true);
+            } else {
+                down_layer_is_visible.set(atom, false);
+            }
+        }
+    });
+    down_layer.push_task(monitor_scroll_task);
+
+    // Placeholder single-color background filling the whole overlay
+    let node = create_vector_art("downbg");
+    let prop = node.get_property("rect").unwrap();
+    prop.set_f32(atom, Role::App, 0, 50.).unwrap();
+    prop.set_f32(atom, Role::App, 1, 50.).unwrap();
+    prop.set_f32(atom, Role::App, 2, 100.).unwrap();
+    prop.set_f32(atom, Role::App, 3, 100.).unwrap();
+    node.set_property_bool(atom, Role::App, "is_visible", true).unwrap();
+    node.set_property_u32(atom, Role::App, "z_index", 0).unwrap();
+    let mut shape = shape::create_down_bgtab(rgba!(0x003232ff), rgba!(0x294f60ff), 0.1).scaled(50.);
+    shape.join(shape::create_down_arrow(rgba!(0x00f0ffff), 1.));
+    let node = node.setup(|me| VectorArt::new(me, shape, renderer.clone(), redraw.clone())).await;
+    down_layer.link(node);
+
+    // Create the p2p toggle button
+    let node = create_button("scroll_bottom_btn");
+    node.set_property_bool(atom, Role::App, "is_active", true).unwrap();
+    let prop = node.get_property("rect").unwrap();
+    prop.set_f32(atom, Role::App, 0, 0.).unwrap();
+    prop.set_f32(atom, Role::App, 1, 0.).unwrap();
+    prop.set_f32(atom, Role::App, 2, 100.).unwrap();
+    prop.set_f32(atom, Role::App, 3, 100.).unwrap();
+    let (slot, recvr) = Slot::new("scroll_bottom");
+    node.register("click", slot).unwrap();
+    let redraw2 = redraw.clone();
+    let listen_click = ex.spawn(async move {
+        while let Ok(_) = recvr.recv().await {
+            let atom = &mut redraw2.make_guard(gfxtag!("down arrow clicked"));
+            chatview_scroll.set(atom, 0.);
+        }
+    });
+    down_layer.push_task(listen_click);
+    let node = node.setup(|me| Button::new(me, renderer.clone(), redraw.clone())).await;
+    down_layer.link(node);
+
     // Selection overlay: shown only while the chatview has selected lines. It's
     // a child of `content` (not the chat layer) with z_index and priority above
     // the netstatus layer, so its single background box draws over the netstatus
