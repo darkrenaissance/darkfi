@@ -75,36 +75,6 @@ pub async fn make(
     create_bg_mesh(app, atom, &main_layer, "wallet_bg").await;
     create_header_bg(app, atom, &main_layer, "wallet_header_bg").await;
 
-    // Back arrow
-    let node = create_vector_art("wallet_back_btn_bg");
-    let prop = node.get_property("rect").unwrap();
-    prop.set_f32(atom, Role::App, 0, BACKARROW_X).unwrap();
-    prop.set_f32(atom, Role::App, 1, BACKARROW_Y).unwrap();
-    prop.set_f32(atom, Role::App, 2, BACKARROW_SCALE).unwrap();
-    prop.set_f32(atom, Role::App, 3, BACKARROW_SCALE).unwrap();
-    node.set_property_u32(atom, Role::App, "z_index", 3).unwrap();
-    let arrow_shape = shape::create_back_arrow().scaled(BACKARROW_SCALE);
-    let node = node
-        .setup(|me| {
-            VectorArt::new(me, arrow_shape, app.renderer.clone(), app.redraw_trigger.clone())
-        })
-        .await;
-    main_layer.link(node);
-
-    // Back button
-    let node = create_button("wallet_back_btn");
-    node.set_property_bool(atom, Role::App, "is_active", true).unwrap();
-    node.set_property_u32(atom, Role::App, "z_index", 10).unwrap();
-    node.set_property_u32(atom, Role::App, "priority", 10).unwrap();
-    let prop = node.get_property("rect").unwrap();
-    prop.set_f32(atom, Role::App, 0, 0.).unwrap();
-    prop.set_f32(atom, Role::App, 1, 0.).unwrap();
-    prop.set_f32(atom, Role::App, 2, BACKARROW_BG_W).unwrap();
-    prop.set_f32(atom, Role::App, 3, HEADER_HEIGHT).unwrap();
-    let node =
-        node.setup(|me| Button::new(me, app.renderer.clone(), app.redraw_trigger.clone())).await;
-    main_layer.link(node);
-
     create_chat_btn(app, atom, &cc, &main_layer).await;
 
     let mut y = HEADER_HEIGHT;

@@ -34,7 +34,7 @@ use crate::{
     mesh::{COLOR_CYAN, COLOR_TEAL},
     prop::{PropertyAtomicGuard, PropertyFloat32, Role},
     scene::{Pimpl, SceneNodePtr},
-    text,
+    shape, text,
     ui::{Button, Layer, RedrawTrigger, Text, VectorArt, VectorShape},
     util::i18n::I18nBabelFish,
 };
@@ -293,13 +293,6 @@ pub async fn create_header_bg(
         expr::load_var("w"),
         expr::load_var("h"),
         bg_color,
-    );
-    shape.add_filled_box(
-        expr::const_f32(0.),
-        expr::const_f32(0.),
-        expr::const_f32(BACKARROW_BG_W),
-        expr::load_var("h"),
-        [0.0, 0.106, 0.114, 1.0],
     );
     shape.add_filled_box(
         expr::const_f32(BACKARROW_BG_W),
@@ -755,4 +748,64 @@ pub async fn create_tooltip(
     }));
 
     (tooltip_layer, width)
+}
+
+/// Creates a back button with back arrow shape, colored background, and button.
+/// Returns the button node after setup, linked to the layer.
+pub async fn create_back_btn(
+    app: &App,
+    atom: &mut PropertyAtomicGuard,
+    layer: &SceneNodePtr,
+    name: &str,
+) -> SceneNodePtr {
+    // Colored background box
+    let bg_node = create_vector_art(&format!("{}_colored_bg", name));
+    let prop = bg_node.get_property("rect").unwrap();
+    prop.set_f32(atom, Role::App, 0, 0.).unwrap();
+    prop.set_f32(atom, Role::App, 1, 0.).unwrap();
+    prop.set_f32(atom, Role::App, 2, BACKARROW_BG_W).unwrap();
+    prop.set_f32(atom, Role::App, 3, HEADER_HEIGHT).unwrap();
+    bg_node.set_property_u32(atom, Role::App, "z_index", 2).unwrap();
+    let mut shape = VectorShape::new();
+    shape.add_filled_box(
+        expr::const_f32(0.),
+        expr::const_f32(0.),
+        expr::const_f32(BACKARROW_BG_W),
+        expr::load_var("h"),
+        [0.0, 0.106, 0.114, 1.0],
+    );
+    let bg_node = bg_node
+        .setup(|me| VectorArt::new(me, shape, app.renderer.clone(), app.redraw_trigger.clone()))
+        .await;
+    layer.link(bg_node);
+
+    // Back arrow shape
+    let arrow_node = create_vector_art(&format!("{}_arrow", name));
+    let prop = arrow_node.get_property("rect").unwrap();
+    prop.set_f32(atom, Role::App, 0, BACKARROW_X).unwrap();
+    prop.set_f32(atom, Role::App, 1, BACKARROW_Y).unwrap();
+    prop.set_f32(atom, Role::App, 2, BACKARROW_SCALE).unwrap();
+    prop.set_f32(atom, Role::App, 3, BACKARROW_SCALE).unwrap();
+    arrow_node.set_property_u32(atom, Role::App, "z_index", 3).unwrap();
+    let arrow_shape = shape::create_back_arrow().scaled(BACKARROW_SCALE);
+    let arrow_node = arrow_node
+        .setup(|me| {
+            VectorArt::new(me, arrow_shape, app.renderer.clone(), app.redraw_trigger.clone())
+        })
+        .await;
+    layer.link(arrow_node);
+
+    let node = create_button(name);
+    node.set_property_bool(atom, Role::App, "is_active", true).unwrap();
+    node.set_property_u32(atom, Role::App, "z_index", 10).unwrap();
+    node.set_property_u32(atom, Role::App, "priority", 10).unwrap();
+    let prop = node.get_property("rect").unwrap();
+    prop.set_f32(atom, Role::App, 0, 0.).unwrap();
+    prop.set_f32(atom, Role::App, 1, 0.).unwrap();
+    prop.set_f32(atom, Role::App, 2, BACKARROW_BG_W).unwrap();
+    prop.set_f32(atom, Role::App, 3, HEADER_HEIGHT).unwrap();
+    let node =
+        node.setup(|me| Button::new(me, app.renderer.clone(), app.redraw_trigger.clone())).await;
+    layer.link(node.clone());
+    node
 }
