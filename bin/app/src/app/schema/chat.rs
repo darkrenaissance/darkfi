@@ -101,6 +101,23 @@ mod android_ui_consts {
     pub const ACTION_PADDING: f32 = 32.;
     pub const ACTION_SPACING: f32 = 8.;
     pub const BACK_SEP_W: f32 = 1.;
+
+    pub const COPY_BTN_SCALE: f32 = 40.;
+    pub const COPY_BTN_X_OFF: f32 = 60.;
+    pub const COPY_BTN_Y: f32 = 70.;
+
+    pub const SELECT_CLOSE_X: f32 = 70.;
+    pub const SELECT_CLOSE_Y: f32 = 70.;
+    pub const SELECT_CLOSE_SCALE: f32 = 20.;
+
+    // Down arrow (scroll to bottom) overlay
+    pub const DOWNARROW_NEG_X: f32 = 240.;
+    pub const DOWNARROW_NEG_Y: f32 = 450.;
+    pub const DOWNARROW_W: f32 = 200.;
+    pub const DOWNARROW_H: f32 = 200.;
+    pub const DOWNBG_X: f32 = 100.;
+    pub const DOWNBG_Y: f32 = 100.;
+    pub const DOWNARROW_SCALE: f32 = 100.;
 }
 
 #[cfg(target_os = "android")]
@@ -170,6 +187,20 @@ mod ui_consts {
 
     pub const COPY_BTN_SCALE: f32 = 20.;
     pub const COPY_BTN_X_OFF: f32 = 30.;
+    pub const COPY_BTN_Y: f32 = 27.;
+
+    pub const SELECT_CLOSE_X: f32 = 40.;
+    pub const SELECT_CLOSE_Y: f32 = 30.;
+    pub const SELECT_CLOSE_SCALE: f32 = 10.;
+
+    // Down arrow (scroll to bottom) overlay
+    pub const DOWNARROW_NEG_X: f32 = 120.;
+    pub const DOWNARROW_NEG_Y: f32 = 250.;
+    pub const DOWNARROW_W: f32 = 100.;
+    pub const DOWNARROW_H: f32 = 100.;
+    pub const DOWNBG_X: f32 = 50.;
+    pub const DOWNBG_Y: f32 = 50.;
+    pub const DOWNARROW_SCALE: f32 = 50.;
 }
 
 use super::{EMOJI_PICKER_ICON_MARGIN_X, EMOJI_PICKER_ICON_MARGIN_Y, EMOJI_PICKER_ICON_SIZE};
@@ -227,6 +258,8 @@ pub async fn make(
     cc.add_const_f32("SENDBTN_BOX_1", SENDBTN_BOX[1]);
     cc.add_const_f32("CMD_HELP_HEIGHT", CMD_HELP_HEIGHT);
     cc.add_const_f32("CMD_HELP_GAP", CMD_HELP_GAP);
+    cc.add_const_f32("DOWNARROW_NEG_X", DOWNARROW_NEG_X);
+    cc.add_const_f32("DOWNARROW_NEG_Y", DOWNARROW_NEG_Y);
     cc.add_const_f32("NETSTATUS_ICON_SIZE", super::NETSTATUS_ICON_SIZE);
 
     // Main view
@@ -673,15 +706,14 @@ pub async fn make(
     });
     layer_node.push_task(listen_file_download);
 
-    // Root content layer
     let down_layer = create_layer("chat_down_arrow");
     let prop = down_layer.get_property("rect").unwrap();
-    let code = cc.compile("w - 120").unwrap();
+    let code = cc.compile("w - DOWNARROW_NEG_X").unwrap();
     prop.set_expr(atom, Role::App, 0, code).unwrap();
-    let code = cc.compile("h / 2").unwrap();
+    let code = cc.compile("h - DOWNARROW_NEG_Y").unwrap();
     prop.set_expr(atom, Role::App, 1, code).unwrap();
-    prop.set_f32(atom, Role::App, 2, 100.).unwrap();
-    prop.set_f32(atom, Role::App, 3, 100.).unwrap();
+    prop.set_f32(atom, Role::App, 2, DOWNARROW_W).unwrap();
+    prop.set_f32(atom, Role::App, 3, DOWNARROW_H).unwrap();
     down_layer.set_property_bool(atom, Role::App, "is_visible", false).unwrap();
     down_layer.set_property_u32(atom, Role::App, "z_index", 3).unwrap();
     let down_layer = down_layer.setup(|me| Layer::new(me, renderer.clone(), redraw.clone())).await;
@@ -709,13 +741,14 @@ pub async fn make(
     // Placeholder single-color background filling the whole overlay
     let node = create_vector_art("downbg");
     let prop = node.get_property("rect").unwrap();
-    prop.set_f32(atom, Role::App, 0, 50.).unwrap();
-    prop.set_f32(atom, Role::App, 1, 50.).unwrap();
-    prop.set_f32(atom, Role::App, 2, 100.).unwrap();
-    prop.set_f32(atom, Role::App, 3, 100.).unwrap();
+    prop.set_f32(atom, Role::App, 0, DOWNBG_X).unwrap();
+    prop.set_f32(atom, Role::App, 1, DOWNBG_Y).unwrap();
+    prop.set_f32(atom, Role::App, 2, DOWNARROW_W).unwrap();
+    prop.set_f32(atom, Role::App, 3, DOWNARROW_H).unwrap();
     node.set_property_bool(atom, Role::App, "is_visible", true).unwrap();
     node.set_property_u32(atom, Role::App, "z_index", 0).unwrap();
-    let mut shape = shape::create_down_bgtab(rgba!(0x003232ff), rgba!(0x294f60ff), 0.1).scaled(50.);
+    let mut shape =
+        shape::create_down_bgtab(rgba!(0x003232ff), rgba!(0x294f60ff), 0.1).scaled(DOWNARROW_SCALE);
     shape.join(shape::create_down_arrow(rgba!(0x00f0ffff), 1.));
     let node = node.setup(|me| VectorArt::new(me, shape, renderer.clone(), redraw.clone())).await;
     down_layer.link(node);
@@ -726,8 +759,8 @@ pub async fn make(
     let prop = node.get_property("rect").unwrap();
     prop.set_f32(atom, Role::App, 0, 0.).unwrap();
     prop.set_f32(atom, Role::App, 1, 0.).unwrap();
-    prop.set_f32(atom, Role::App, 2, 100.).unwrap();
-    prop.set_f32(atom, Role::App, 3, 100.).unwrap();
+    prop.set_f32(atom, Role::App, 2, DOWNARROW_W).unwrap();
+    prop.set_f32(atom, Role::App, 3, DOWNARROW_H).unwrap();
     let (slot, recvr) = Slot::new("scroll_bottom");
     node.register("click", slot).unwrap();
     let redraw2 = redraw.clone();
@@ -771,11 +804,16 @@ pub async fn make(
     shape.add_filled_box(
         expr::const_f32(0.),
         expr::const_f32(0.),
-        expr::const_f32(EMOJI_BG_W),
+        expr::const_f32(BACKARROW_BG_W),
         expr::load_var("h"),
         rgba!(0x1e0000ff),
     );
-    shape.join(shape::create_x(Point::new(40., 30.), 10., 1., COLOR_RED));
+    shape.join(shape::create_x(
+        Point::new(SELECT_CLOSE_X, SELECT_CLOSE_Y),
+        SELECT_CLOSE_SCALE,
+        1.,
+        COLOR_RED,
+    ));
     let node = node.setup(|me| VectorArt::new(me, shape, renderer.clone(), redraw.clone())).await;
     select_layer.link(node);
 
@@ -783,7 +821,7 @@ pub async fn make(
     let prop = node.get_property("rect").unwrap();
     let code = cc.compile("w - COPY_BTN_X_OFF").unwrap();
     prop.set_expr(atom, Role::App, 0, code).unwrap();
-    prop.set_f32(atom, Role::App, 1, 27.).unwrap();
+    prop.set_f32(atom, Role::App, 1, COPY_BTN_Y).unwrap();
     prop.set_f32(atom, Role::App, 2, 400.).unwrap();
     prop.set_f32(atom, Role::App, 3, CHATEDIT_HEIGHT).unwrap();
     node.set_property_u32(atom, Role::App, "z_index", 1).unwrap();

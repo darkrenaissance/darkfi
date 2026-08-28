@@ -22,7 +22,7 @@ use darkfi_serial::{Decodable, Encodable};
 
 use crate::{
     app::{
-        node::{create_button, create_layer, create_text, create_vector_art},
+        node::{create_layer, create_text},
         schema::COLOR_SCHEME,
         App,
     },
@@ -30,8 +30,7 @@ use crate::{
     gfx::gfxtag,
     prop::{PropertyAtomicGuard, PropertyBool, PropertyFloat32, Role},
     scene::{SceneNodePtr, Slot},
-    shape,
-    ui::{Button, Layer, Text, VectorArt},
+    ui::{Layer, Text},
     util::i18n::I18nBabelFish,
 };
 
@@ -43,7 +42,6 @@ pub async fn make(
     i18n_fish: &I18nBabelFish,
     window_scale: PropertyFloat32,
     send_tx_data: Arc<std::sync::Mutex<SendTxData>>,
-    step3_is_visible: PropertyBool,
 ) -> SceneNodePtr {
     let atom = &mut PropertyAtomicGuard::none();
 
@@ -80,47 +78,7 @@ pub async fn make(
     create_bg_mesh(app, atom, &send_step4_layer, "send_bg4").await;
     create_header_bg(app, atom, &send_step4_layer, "send_header_bg4").await;
 
-    // Back button
-    let node = create_vector_art("send_back_btn_bg4");
-    let prop = node.get_property("rect").unwrap();
-    prop.set_f32(atom, Role::App, 0, BACKARROW_X).unwrap();
-    prop.set_f32(atom, Role::App, 1, BACKARROW_Y).unwrap();
-    prop.set_f32(atom, Role::App, 2, 500.).unwrap();
-    prop.set_f32(atom, Role::App, 3, 500.).unwrap();
-    node.set_property_u32(atom, Role::App, "z_index", 2).unwrap();
-    let shape = shape::create_back_arrow().scaled(BACKARROW_SCALE);
-    let node = node
-        .setup(|me| VectorArt::new(me, shape, app.renderer.clone(), app.redraw_trigger.clone()))
-        .await;
-    send_step4_layer.link(node);
-
     let mut y = 0.;
-
-    let node = create_button("send_back_btn4");
-    node.set_property_bool(atom, Role::App, "is_active", true).unwrap();
-    let prop = node.get_property("rect").unwrap();
-    prop.set_f32(atom, Role::App, 0, 0.).unwrap();
-    prop.set_f32(atom, Role::App, 1, y).unwrap();
-    prop.set_f32(atom, Role::App, 2, WALLET_BTN_SIZE * 2.).unwrap();
-    prop.set_f32(atom, Role::App, 3, HEADER_HEIGHT).unwrap();
-
-    let step3_is_visible2 = step3_is_visible.clone();
-    let step4_is_visible1 = step4_is_visible.clone();
-    let redraw = app.redraw_trigger.clone();
-    let (slot, recvr) = Slot::new("send_back_clicked4");
-    node.register("click", slot).unwrap();
-    let listen_click = app.ex.spawn(async move {
-        while let Ok(_) = recvr.recv().await {
-            let atom = &mut redraw.make_guard(gfxtag!("send step4 back button"));
-            step4_is_visible1.set(atom, false);
-            step3_is_visible2.set(atom, true);
-        }
-    });
-    app.tasks.lock().unwrap().push(listen_click);
-
-    let node =
-        node.setup(|me| Button::new(me, app.renderer.clone(), app.redraw_trigger.clone())).await;
-    send_step4_layer.link(node);
 
     y += HEADER_HEIGHT;
 

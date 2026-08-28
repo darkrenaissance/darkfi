@@ -72,7 +72,6 @@ pub async fn make(
     i18n_fish: &I18nBabelFish,
     window_scale: PropertyFloat32,
     send_tx_data: Arc<std::sync::Mutex<SendTxData>>,
-    step1_is_visible: PropertyBool,
 ) -> SceneNodePtr {
     let atom = &mut PropertyAtomicGuard::none();
 
@@ -110,47 +109,7 @@ pub async fn make(
     create_bg_mesh(app, atom, &send_step2_layer, "send_bg2").await;
     create_header_bg(app, atom, &send_step2_layer, "send_header_bg2").await;
 
-    // Back button
-    let node = create_vector_art("send_back_btn_bg2");
-    let prop = node.get_property("rect").unwrap();
-    prop.set_f32(atom, Role::App, 0, BACKARROW_X).unwrap();
-    prop.set_f32(atom, Role::App, 1, BACKARROW_Y).unwrap();
-    prop.set_f32(atom, Role::App, 2, 500.).unwrap();
-    prop.set_f32(atom, Role::App, 3, 500.).unwrap();
-    node.set_property_u32(atom, Role::App, "z_index", 2).unwrap();
-    let shape = shape::create_back_arrow().scaled(BACKARROW_SCALE);
-    let node = node
-        .setup(|me| VectorArt::new(me, shape, app.renderer.clone(), app.redraw_trigger.clone()))
-        .await;
-    send_step2_layer.link(node);
-
     let mut y = 0.;
-
-    let node = create_button("send_back_btn2");
-    node.set_property_bool(atom, Role::App, "is_active", true).unwrap();
-    let prop = node.get_property("rect").unwrap();
-    prop.set_f32(atom, Role::App, 0, 0.).unwrap();
-    prop.set_f32(atom, Role::App, 1, y).unwrap();
-    prop.set_f32(atom, Role::App, 2, WALLET_BTN_SIZE * 2.).unwrap();
-    prop.set_f32(atom, Role::App, 3, HEADER_HEIGHT).unwrap();
-
-    let step1_is_visible2 = step1_is_visible.clone();
-    let step2_is_visible1 = step2_is_visible.clone();
-    let redraw = app.redraw_trigger.clone();
-    let (slot, recvr) = Slot::new("send_back_clicked2");
-    node.register("click", slot).unwrap();
-    let listen_click = app.ex.spawn(async move {
-        while let Ok(_) = recvr.recv().await {
-            let atom = &mut redraw.make_guard(gfxtag!("send step2 back button"));
-            step2_is_visible1.set(atom, false);
-            step1_is_visible2.set(atom, true);
-        }
-    });
-    app.tasks.lock().unwrap().push(listen_click);
-
-    let node =
-        node.setup(|me| Button::new(me, app.renderer.clone(), app.redraw_trigger.clone())).await;
-    send_step2_layer.link(node);
 
     y += HEADER_HEIGHT;
 

@@ -296,20 +296,6 @@ pub async fn create_header_bg(
     );
     shape.add_filled_box(
         expr::const_f32(0.),
-        expr::const_f32(0.),
-        expr::const_f32(BACKARROW_BG_W),
-        expr::load_var("h"),
-        [0.0, 0.106, 0.114, 1.0],
-    );
-    shape.add_filled_box(
-        expr::const_f32(BACKARROW_BG_W),
-        expr::const_f32(0.),
-        expr::const_f32(BACKARROW_BG_W + BACK_SEP_W),
-        expr::load_var("h"),
-        sep_color,
-    );
-    shape.add_filled_box(
-        expr::const_f32(0.),
         expr::load_var("h"),
         expr::load_var("w"),
         cc.compile("h + 0.5").unwrap(),
@@ -318,7 +304,7 @@ pub async fn create_header_bg(
     let color1 = [0., 0.17, 0.18, 0.5];
     let color2 = [0., 0.88, 1., 0.];
     shape.add_smooth_vertical_gradient(
-        expr::const_f32(BACKARROW_BG_W + 1.),
+        expr::const_f32(0.),
         expr::const_f32(0.),
         expr::load_var("w"),
         cc.compile("h / 2").unwrap(),

@@ -48,6 +48,16 @@ impl ShapeVertex {
         y.push(Op::Mul((Box::new(Op::ConstFloat32(scale)), Box::new(last_y))));
         Self { x, y, color: self.color }
     }
+
+    pub fn offset(mut self, off: Point) -> Self {
+        let last_x = self.x.pop().unwrap();
+        let last_y = self.y.pop().unwrap();
+        let mut x = self.x;
+        x.push(Op::Add((Box::new(last_x), Box::new(Op::ConstFloat32(off.x)))));
+        let mut y = self.y;
+        y.push(Op::Add((Box::new(last_y), Box::new(Op::ConstFloat32(off.y)))));
+        Self { x, y, color: self.color }
+    }
 }
 
 // This is bullshit. We need something in expr to support joining exprs somehow. Subroutines.
@@ -329,6 +339,13 @@ impl VectorShape {
     pub fn scaled(self, scale: f32) -> Self {
         Self {
             verts: self.verts.into_iter().map(|v| v.scale(scale)).collect(),
+            indices: self.indices,
+        }
+    }
+
+    pub fn offset(self, off: Point) -> Self {
+        Self {
+            verts: self.verts.into_iter().map(|v| v.offset(off)).collect(),
             indices: self.indices,
         }
     }

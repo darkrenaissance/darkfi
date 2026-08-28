@@ -50,34 +50,26 @@ pub async fn make(
     )
     .await;
 
-    let step1_is_visible =
-        PropertyBool::wrap(&send_step1_layer, Role::App, "is_visible", 0).unwrap();
-
     let send_step2_layer = send_step2::make(
         app,
         wallet_layer.clone(),
         i18n_fish,
         window_scale.clone(),
         send_tx_data.clone(),
-        step1_is_visible.clone(),
     )
     .await;
 
     let step2_is_visible =
         PropertyBool::wrap(&send_step2_layer, Role::App, "is_visible", 0).unwrap();
 
-    let send_step3_layer = send_step3::make(
+    let _send_step3_layer = send_step3::make(
         app,
         wallet_layer.clone(),
         i18n_fish,
         window_scale.clone(),
         send_tx_data.clone(),
-        step2_is_visible.clone(),
     )
     .await;
-
-    let step3_is_visible =
-        PropertyBool::wrap(&send_step3_layer, Role::App, "is_visible", 0).unwrap();
 
     let _send_step4_layer = send_step4::make(
         app,
@@ -85,7 +77,6 @@ pub async fn make(
         i18n_fish,
         window_scale.clone(),
         send_tx_data.clone(),
-        step3_is_visible.clone(),
     )
     .await;
 

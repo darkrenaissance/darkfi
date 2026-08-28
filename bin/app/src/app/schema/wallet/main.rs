@@ -25,7 +25,7 @@ use crate::{
         App,
     },
     expr,
-    gfx::gfxtag,
+    gfx::{gfxtag, Point},
     mesh::{COLOR_CYAN, COLOR_TEAL},
     prop::{PropertyAtomicGuard, PropertyBool, PropertyFloat32, Role},
     scene::{SceneNodePtr, Slot},
@@ -78,22 +78,45 @@ pub async fn make(
     // Back arrow
     let node = create_vector_art("wallet_back_btn_bg");
     let prop = node.get_property("rect").unwrap();
-    prop.set_f32(atom, Role::App, 0, BACKARROW_X).unwrap();
-    prop.set_f32(atom, Role::App, 1, BACKARROW_Y).unwrap();
-    prop.set_f32(atom, Role::App, 2, BACKARROW_SCALE).unwrap();
-    prop.set_f32(atom, Role::App, 3, BACKARROW_SCALE).unwrap();
+    prop.set_f32(atom, Role::App, 0, 0.).unwrap();
+    prop.set_f32(atom, Role::App, 1, 0.).unwrap();
+    prop.set_f32(atom, Role::App, 2, BACKARROW_BG_W + BACK_SEP_W).unwrap();
+    prop.set_f32(atom, Role::App, 3, HEADER_HEIGHT).unwrap();
     node.set_property_u32(atom, Role::App, "z_index", 3).unwrap();
-    let arrow_shape = shape::create_back_arrow().scaled(BACKARROW_SCALE);
+    node.set_property_bool(atom, Role::App, "is_visible", false).unwrap();
+    let mut shape = VectorShape::new();
+    let (_bg_color, sep_color) = match COLOR_SCHEME {
+        ColorScheme::DarkMode => ([0., 0., 0., 1.], [0.41, 0.6, 0.65, 1.]),
+        ColorScheme::PaperLight => ([1., 1., 1., 1.], [0., 0.6, 0.65, 1.]),
+    };
+    shape.add_filled_box(
+        expr::const_f32(0.),
+        expr::const_f32(0.),
+        expr::const_f32(BACKARROW_BG_W),
+        expr::load_var("h"),
+        [0.0, 0.106, 0.114, 1.0],
+    );
+    shape.add_filled_box(
+        expr::const_f32(BACKARROW_BG_W),
+        expr::const_f32(0.),
+        expr::const_f32(BACKARROW_BG_W + BACK_SEP_W),
+        expr::load_var("h"),
+        sep_color,
+    );
+    shape.join(
+        shape::create_back_arrow()
+            .scaled(BACKARROW_SCALE)
+            .offset(Point::new(BACKARROW_X, BACKARROW_Y)),
+    );
     let node = node
-        .setup(|me| {
-            VectorArt::new(me, arrow_shape, app.renderer.clone(), app.redraw_trigger.clone())
-        })
+        .setup(|me| VectorArt::new(me, shape, app.renderer.clone(), app.redraw_trigger.clone()))
         .await;
-    main_layer.link(node);
+    wallet_layer.link(node.clone());
+    let back_bg_is_visible = PropertyBool::wrap(&node, Role::App, "is_visible", 0).unwrap();
 
     // Back button
     let node = create_button("wallet_back_btn");
-    node.set_property_bool(atom, Role::App, "is_active", true).unwrap();
+    node.set_property_bool(atom, Role::App, "is_active", false).unwrap();
     node.set_property_u32(atom, Role::App, "z_index", 10).unwrap();
     node.set_property_u32(atom, Role::App, "priority", 10).unwrap();
     let prop = node.get_property("rect").unwrap();
@@ -101,9 +124,119 @@ pub async fn make(
     prop.set_f32(atom, Role::App, 1, 0.).unwrap();
     prop.set_f32(atom, Role::App, 2, BACKARROW_BG_W).unwrap();
     prop.set_f32(atom, Role::App, 3, HEADER_HEIGHT).unwrap();
+
+    let redraw = app.redraw_trigger.clone();
+    let sg_root = app.sg_root.clone();
+    let main_is_visible1 = main_is_visible.clone();
+    let (slot, recvr) = Slot::new("wallet_back_clicked");
+    node.register("click", slot).unwrap();
+    let listen_click = app.ex.spawn(async move {
+        while recvr.recv().await.is_ok() {
+            let atom = &mut redraw.make_guard(gfxtag!("wallet back button"));
+            let tx_status_is_visible = PropertyBool::wrap(
+                &sg_root.lookup_node("/window/content/wallet/tx_status_layer").unwrap(),
+                Role::App,
+                "is_visible",
+                0,
+            )
+            .unwrap();
+            let step4_is_visible = PropertyBool::wrap(
+                &sg_root.lookup_node("/window/content/wallet/send_step4_layer").unwrap(),
+                Role::App,
+                "is_visible",
+                0,
+            )
+            .unwrap();
+            let step3_is_visible = PropertyBool::wrap(
+                &sg_root.lookup_node("/window/content/wallet/send_step3_layer").unwrap(),
+                Role::App,
+                "is_visible",
+                0,
+            )
+            .unwrap();
+            let step2_is_visible = PropertyBool::wrap(
+                &sg_root.lookup_node("/window/content/wallet/send_step2_layer").unwrap(),
+                Role::App,
+                "is_visible",
+                0,
+            )
+            .unwrap();
+            let step1_is_visible = PropertyBool::wrap(
+                &sg_root.lookup_node("/window/content/wallet/send_step1_layer").unwrap(),
+                Role::App,
+                "is_visible",
+                0,
+            )
+            .unwrap();
+            let receive_is_visible = PropertyBool::wrap(
+                &sg_root.lookup_node("/window/content/wallet/receive_layer").unwrap(),
+                Role::App,
+                "is_visible",
+                0,
+            )
+            .unwrap();
+
+            if tx_status_is_visible.get() {
+                tx_status_is_visible.set(atom, false);
+                main_is_visible1.set(atom, true);
+                continue
+            }
+
+            if step4_is_visible.get() {
+                step4_is_visible.set(atom, false);
+                step3_is_visible.set(atom, true);
+                continue
+            }
+
+            if step3_is_visible.get() {
+                if let Some(error_node) =
+                    sg_root.lookup_node("/window/content/wallet/send_step3_layer/error")
+                {
+                    error_node.set_property_str(atom, Role::App, "text", "").unwrap();
+                }
+                step3_is_visible.set(atom, false);
+                step2_is_visible.set(atom, true);
+                continue
+            }
+
+            if step2_is_visible.get() {
+                step2_is_visible.set(atom, false);
+                step1_is_visible.set(atom, true);
+                continue
+            }
+
+            if step1_is_visible.get() {
+                step1_is_visible.set(atom, false);
+                main_is_visible1.set(atom, true);
+                continue
+            }
+
+            if receive_is_visible.get() {
+                receive_is_visible.set(atom, false);
+                main_is_visible1.set(atom, true);
+            }
+        }
+    });
+    app.tasks.lock().unwrap().push(listen_click);
+
     let node =
         node.setup(|me| Button::new(me, app.renderer.clone(), app.redraw_trigger.clone())).await;
-    main_layer.link(node);
+    wallet_layer.link(node.clone());
+    let back_btn_is_active = PropertyBool::wrap(&node, Role::App, "is_active", 0).unwrap();
+
+    // Show the back button whenever the main wallet screen is hidden
+    let redraw = app.redraw_trigger.clone();
+    let main_is_visible2 = main_is_visible.clone();
+    let main_is_visible_sub = main_is_visible.prop().subscribe_modify();
+    let listen_main_visible = app.ex.spawn(async move {
+        while let Ok(_) = main_is_visible_sub.receive().await {
+            let atom = &mut redraw.make_guard(gfxtag!("wallet back button visibility"));
+            let visible = !main_is_visible2.get();
+            back_bg_is_visible.set(atom, visible);
+            back_btn_is_active.set(atom, visible);
+        }
+    });
+    app.tasks.lock().unwrap().push(listen_main_visible);
 
     create_chat_btn(app, atom, &cc, &main_layer).await;
 
