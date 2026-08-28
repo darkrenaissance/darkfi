@@ -22,6 +22,21 @@ use crate::gfx::{
 
 pub type Color = [f32; 4];
 
+// rgba!(0xRRGGBBAA) expands to a [f32; 4] with each channel normalized to 0. .. 1.
+#[macro_export]
+macro_rules! rgba {
+    ($c:expr) => {{
+        let c: u32 = $c;
+        [
+            ((c >> 24) & 0xFF) as f32 / 255.,
+            ((c >> 16) & 0xFF) as f32 / 255.,
+            ((c >> 8) & 0xFF) as f32 / 255.,
+            (c & 0xFF) as f32 / 255.,
+        ]
+    }};
+}
+pub use crate::rgba;
+
 #[allow(dead_code)]
 pub const COLOR_RED: Color = [1., 0., 0., 1.];
 #[allow(dead_code)]

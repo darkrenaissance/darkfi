@@ -71,6 +71,24 @@ mod android_ui_consts {
 
     pub const SPLASH_FONTSIZE: f32 = 52.;
     pub const SPLASH_MARGIN: f32 = 40.;
+
+    pub const NETSTAT_OVERLAY_HEIGHT: f32 = 760.;
+    pub const NETSTAT_OVERLAY_SEP_X: f32 = 2.;
+    pub const NETSTAT_OVERLAY_SEP_Y: f32 = 240.;
+    pub const NETSTAT_OVERLAY_SEP_H: f32 = 2.;
+    pub const NETSTAT_OVERLAY_OUTLINE_W: f32 = 4.;
+    pub const NETSTAT_OVERLAY_TEXT_X: f32 = 100.;
+    pub const NETSTAT_OVERLAY_TEXT_MAX: f32 = 4000.;
+    pub const NETSTAT_OVERLAY_P2P_LABEL_Y: f32 = 100.;
+    pub const NETSTAT_OVERLAY_OUTBOUND_LABEL_Y: f32 = 340.;
+    pub const NETSTAT_OVERLAY_CONN_INFO_Y: f32 = 460.;
+    pub const NETSTAT_OVERLAY_TOGGLE_NEG_X: f32 = 240.;
+    pub const NETSTAT_OVERLAY_TOGGLE_R_PAD: f32 = 40.;
+    pub const NETSTAT_OVERLAY_TOGGLE_Y: f32 = 40.;
+    pub const NETSTAT_OVERLAY_TOGGLE_W: f32 = 200.;
+    pub const NETSTAT_OVERLAY_TOGGLE_H: f32 = 160.;
+    pub const NETSTAT_OVERLAY_TOGGLE_OUTLINE_W: f32 = 2.;
+    pub const NETSTAT_OVERLAY_TOGGLE_LABEL_Y: f32 = 90.;
 }
 
 #[cfg(target_os = "android")]
@@ -139,6 +157,24 @@ mod ui_consts {
 
     pub const SPLASH_FONTSIZE: f32 = 26.;
     pub const SPLASH_MARGIN: f32 = 20.;
+
+    pub const NETSTAT_OVERLAY_HEIGHT: f32 = 380.;
+    pub const NETSTAT_OVERLAY_SEP_X: f32 = 1.;
+    pub const NETSTAT_OVERLAY_SEP_Y: f32 = 120.;
+    pub const NETSTAT_OVERLAY_SEP_H: f32 = 1.;
+    pub const NETSTAT_OVERLAY_OUTLINE_W: f32 = 2.;
+    pub const NETSTAT_OVERLAY_TEXT_X: f32 = 50.;
+    pub const NETSTAT_OVERLAY_TEXT_MAX: f32 = 2000.;
+    pub const NETSTAT_OVERLAY_P2P_LABEL_Y: f32 = 50.;
+    pub const NETSTAT_OVERLAY_OUTBOUND_LABEL_Y: f32 = 170.;
+    pub const NETSTAT_OVERLAY_CONN_INFO_Y: f32 = 230.;
+    pub const NETSTAT_OVERLAY_TOGGLE_NEG_X: f32 = 120.;
+    pub const NETSTAT_OVERLAY_TOGGLE_R_PAD: f32 = 20.;
+    pub const NETSTAT_OVERLAY_TOGGLE_Y: f32 = 20.;
+    pub const NETSTAT_OVERLAY_TOGGLE_W: f32 = 100.;
+    pub const NETSTAT_OVERLAY_TOGGLE_H: f32 = 80.;
+    pub const NETSTAT_OVERLAY_TOGGLE_OUTLINE_W: f32 = 1.;
+    pub const NETSTAT_OVERLAY_TOGGLE_LABEL_Y: f32 = 45.;
 
     pub use super::desktop_paths::*;
 }
@@ -223,6 +259,8 @@ pub async fn make(
     cc.add_const_f32("NETSTAT_OVERLAY_MARGIN", NETSTAT_OVERLAY_MARGIN);
     cc.add_const_f32("NETSTAT_OVERLAY_BTN_W", NETSTAT_OVERLAY_BTN_W);
     cc.add_const_f32("NETSTAT_OVERLAY_BTN_H", NETSTAT_OVERLAY_BTN_H);
+    cc.add_const_f32("NETSTAT_OVERLAY_TOGGLE_NEG_X", NETSTAT_OVERLAY_TOGGLE_NEG_X);
+    cc.add_const_f32("NETSTAT_OVERLAY_TOGGLE_R_PAD", NETSTAT_OVERLAY_TOGGLE_R_PAD);
 
     let atom = &mut PropertyAtomicGuard::none();
 
@@ -645,7 +683,7 @@ pub async fn make(
     prop.set_expr(atom, Role::App, 2, code).unwrap();
     //let code = cc.compile("h - NETSTATUS_ICON_SIZE - 2 * NETSTAT_OVERLAY_MARGIN").unwrap();
     //prop.set_expr(atom, Role::App, 3, code).unwrap();
-    prop.set_f32(atom, Role::App, 3, 380.).unwrap();
+    prop.set_f32(atom, Role::App, 3, NETSTAT_OVERLAY_HEIGHT).unwrap();
     overlay_node.set_property_bool(atom, Role::App, "is_visible", false).unwrap();
     overlay_node.set_property_u32(atom, Role::App, "z_index", 2).unwrap();
     overlay_node.set_property_u32(atom, Role::App, "priority", 2).unwrap();
@@ -663,7 +701,6 @@ pub async fn make(
     prop.set_expr(atom, Role::App, 3, expr::load_var("h")).unwrap();
     node.set_property_bool(atom, Role::App, "is_visible", true).unwrap();
     node.set_property_u32(atom, Role::App, "z_index", 0).unwrap();
-    let overlay_color = [0.05, 0.25, 0.3, 0.8];
     let mut shape = VectorShape::new();
     shape.add_filled_box(
         expr::const_f32(0.),
@@ -673,10 +710,10 @@ pub async fn make(
         [0., 0.1, 0.1, 0.7],
     );
     shape.add_filled_box(
-        expr::const_f32(1.),
-        expr::const_f32(120.),
+        expr::const_f32(NETSTAT_OVERLAY_SEP_X),
+        expr::const_f32(NETSTAT_OVERLAY_SEP_Y),
         expr::load_var("w"),
-        expr::const_f32(121.),
+        expr::const_f32(NETSTAT_OVERLAY_SEP_Y + NETSTAT_OVERLAY_SEP_H),
         [0., 0.94, 1., 1.],
     );
     shape.add_outline(
@@ -684,22 +721,22 @@ pub async fn make(
         expr::const_f32(0.),
         expr::load_var("w"),
         expr::load_var("h"),
-        2.,
+        NETSTAT_OVERLAY_OUTLINE_W,
         [0., 0.94, 1., 1.],
     );
     shape.add_filled_box(
-        cc.compile("w - 120").unwrap(),
-        expr::const_f32(20.),
-        cc.compile("w - 20").unwrap(),
-        expr::const_f32(100.),
+        cc.compile("w - NETSTAT_OVERLAY_TOGGLE_NEG_X").unwrap(),
+        expr::const_f32(NETSTAT_OVERLAY_TOGGLE_Y),
+        cc.compile("w - NETSTAT_OVERLAY_TOGGLE_R_PAD").unwrap(),
+        expr::const_f32(NETSTAT_OVERLAY_TOGGLE_Y + NETSTAT_OVERLAY_TOGGLE_H),
         [0., 0.12, 0.08, 1.],
     );
     shape.add_outline(
-        cc.compile("w - 120").unwrap(),
-        expr::const_f32(20.),
-        cc.compile("w - 20").unwrap(),
-        expr::const_f32(100.),
-        1.,
+        cc.compile("w - NETSTAT_OVERLAY_TOGGLE_NEG_X").unwrap(),
+        expr::const_f32(NETSTAT_OVERLAY_TOGGLE_Y),
+        cc.compile("w - NETSTAT_OVERLAY_TOGGLE_R_PAD").unwrap(),
+        expr::const_f32(NETSTAT_OVERLAY_TOGGLE_Y + NETSTAT_OVERLAY_TOGGLE_H),
+        NETSTAT_OVERLAY_TOGGLE_OUTLINE_W,
         [0.08, 0.68, 0.72, 1.],
     );
     let node = node
@@ -709,10 +746,10 @@ pub async fn make(
 
     let node = create_text("p2p_label");
     let prop = node.get_property("rect").unwrap();
-    prop.set_f32(atom, Role::App, 0, 50.).unwrap();
-    prop.set_f32(atom, Role::App, 1, 50.).unwrap();
-    prop.set_f32(atom, Role::App, 2, 2000.).unwrap();
-    prop.set_f32(atom, Role::App, 3, 2000.).unwrap();
+    prop.set_f32(atom, Role::App, 0, NETSTAT_OVERLAY_TEXT_X).unwrap();
+    prop.set_f32(atom, Role::App, 1, NETSTAT_OVERLAY_P2P_LABEL_Y).unwrap();
+    prop.set_f32(atom, Role::App, 2, NETSTAT_OVERLAY_TEXT_MAX).unwrap();
+    prop.set_f32(atom, Role::App, 3, NETSTAT_OVERLAY_TEXT_MAX).unwrap();
     node.set_property_f32(atom, Role::App, "font_size", NETSTAT_OVERLAY_BTN_FONTSIZE).unwrap();
     node.set_property_str(atom, Role::App, "text", "P2P").unwrap();
     node.set_property_enum(atom, Role::App, "text_align", "left").unwrap();
@@ -737,11 +774,11 @@ pub async fn make(
 
     let node = create_text("toggle_label");
     let prop = node.get_property("rect").unwrap();
-    let code = cc.compile("w - 120").unwrap();
+    let code = cc.compile("w - NETSTAT_OVERLAY_TOGGLE_NEG_X").unwrap();
     prop.set_expr(atom, Role::App, 0, code).unwrap();
-    prop.set_f32(atom, Role::App, 1, 45.).unwrap();
-    prop.set_f32(atom, Role::App, 2, 100.).unwrap();
-    prop.set_f32(atom, Role::App, 3, 2000.).unwrap();
+    prop.set_f32(atom, Role::App, 1, NETSTAT_OVERLAY_TOGGLE_LABEL_Y).unwrap();
+    prop.set_f32(atom, Role::App, 2, NETSTAT_OVERLAY_TOGGLE_W).unwrap();
+    prop.set_f32(atom, Role::App, 3, NETSTAT_OVERLAY_TEXT_MAX).unwrap();
     node.set_property_f32(atom, Role::App, "font_size", NETSTAT_OVERLAY_BTN_FONTSIZE).unwrap();
     node.set_property_str(atom, Role::App, "text", "on").unwrap();
     node.set_property_enum(atom, Role::App, "text_align", "center").unwrap();
@@ -774,11 +811,11 @@ pub async fn make(
     let node = create_button("p2p_toggle_btn");
     node.set_property_bool(atom, Role::App, "is_active", true).unwrap();
     let prop = node.get_property("rect").unwrap();
-    let code = cc.compile("w - 120").unwrap();
+    let code = cc.compile("w - NETSTAT_OVERLAY_TOGGLE_NEG_X").unwrap();
     prop.set_expr(atom, Role::App, 0, code).unwrap();
-    prop.set_f32(atom, Role::App, 1, 20.).unwrap();
-    prop.set_f32(atom, Role::App, 2, 100.).unwrap();
-    prop.set_f32(atom, Role::App, 3, 80.).unwrap();
+    prop.set_f32(atom, Role::App, 1, NETSTAT_OVERLAY_TOGGLE_Y).unwrap();
+    prop.set_f32(atom, Role::App, 2, NETSTAT_OVERLAY_TOGGLE_W).unwrap();
+    prop.set_f32(atom, Role::App, 3, NETSTAT_OVERLAY_TOGGLE_H).unwrap();
     let (slot, recvr) = Slot::new("toggle_p2p");
     node.register("click", slot).unwrap();
     let redraw = app.redraw_trigger.clone();
@@ -802,10 +839,10 @@ pub async fn make(
 
     let node = create_text("outbound_label");
     let prop = node.get_property("rect").unwrap();
-    prop.set_f32(atom, Role::App, 0, 50.).unwrap();
-    prop.set_f32(atom, Role::App, 1, 170.).unwrap();
-    prop.set_f32(atom, Role::App, 2, 2000.).unwrap();
-    prop.set_f32(atom, Role::App, 3, 2000.).unwrap();
+    prop.set_f32(atom, Role::App, 0, NETSTAT_OVERLAY_TEXT_X).unwrap();
+    prop.set_f32(atom, Role::App, 1, NETSTAT_OVERLAY_OUTBOUND_LABEL_Y).unwrap();
+    prop.set_f32(atom, Role::App, 2, NETSTAT_OVERLAY_TEXT_MAX).unwrap();
+    prop.set_f32(atom, Role::App, 3, NETSTAT_OVERLAY_TEXT_MAX).unwrap();
     node.set_property_f32(atom, Role::App, "font_size", NETSTAT_OVERLAY_BTN_FONTSIZE).unwrap();
     node.set_property_str(atom, Role::App, "text", "OUTBOUND").unwrap();
     node.set_property_enum(atom, Role::App, "text_align", "left").unwrap();
@@ -830,10 +867,10 @@ pub async fn make(
 
     let node = create_text("conn_info");
     let prop = node.get_property("rect").unwrap();
-    prop.set_f32(atom, Role::App, 0, 50.).unwrap();
-    prop.set_f32(atom, Role::App, 1, 230.).unwrap();
-    prop.set_f32(atom, Role::App, 2, 2000.).unwrap();
-    prop.set_f32(atom, Role::App, 3, 2000.).unwrap();
+    prop.set_f32(atom, Role::App, 0, NETSTAT_OVERLAY_TEXT_X).unwrap();
+    prop.set_f32(atom, Role::App, 1, NETSTAT_OVERLAY_CONN_INFO_Y).unwrap();
+    prop.set_f32(atom, Role::App, 2, NETSTAT_OVERLAY_TEXT_MAX).unwrap();
+    prop.set_f32(atom, Role::App, 3, NETSTAT_OVERLAY_TEXT_MAX).unwrap();
     node.set_property_f32(atom, Role::App, "font_size", NETSTAT_OVERLAY_BTN_FONTSIZE).unwrap();
     #[cfg(not(feature = "enable-plugin-darkirc"))]
     node.set_property_str(

@@ -19,7 +19,7 @@
 use crate::{
     error::Result,
     expr::{Op, SExprCode, SExprMachine, SExprVal},
-    gfx::Vertex,
+    gfx::{Point, Vertex},
     mesh::Color,
 };
 
@@ -251,6 +251,28 @@ impl VectorShape {
             y2.clone(),
             color.clone(),
         );
+    }
+
+    /// Draw a line of a certain thickness between two points.
+    /// Coordinates are constants, so this does not track expressions like `w` or `h`.
+    pub fn add_line(&mut self, from: Point, to: Point, thickness: f32, color: Color) {
+        let dx = to.x - from.x;
+        let dy = to.y - from.y;
+        let length = (dx * dx + dy * dy).sqrt();
+        if length == 0. {
+            return
+        }
+
+        let half = thickness / 2.;
+        let px = -dy / length * half;
+        let py = dx / length * half;
+
+        let i = self.verts.len() as u16;
+        self.verts.push(ShapeVertex::from_xy(from.x + px, from.y + py, color.clone()));
+        self.verts.push(ShapeVertex::from_xy(to.x + px, to.y + py, color.clone()));
+        self.verts.push(ShapeVertex::from_xy(from.x - px, from.y - py, color.clone()));
+        self.verts.push(ShapeVertex::from_xy(to.x - px, to.y - py, color));
+        self.indices.extend([i, i + 2, i + 1, i + 1, i + 2, i + 3]);
     }
 
     pub fn add_radial_glow(

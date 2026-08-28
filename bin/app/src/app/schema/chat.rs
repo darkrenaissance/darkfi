@@ -33,7 +33,8 @@ use crate::{
         App,
     },
     expr::{self, Compiler},
-    gfx::{gfxtag, Renderer},
+    gfx::{gfxtag, Point, Renderer},
+    mesh::{rgba, COLOR_RED, COLOR_WHITE},
     prop::{
         Property, PropertyAtomicGuard, PropertyBool, PropertyFloat32, PropertyStr, PropertySubType,
         PropertyType, Role,
@@ -166,6 +167,9 @@ mod ui_consts {
     pub const ACTION_PADDING: f32 = 8.;
     pub const ACTION_SPACING: f32 = 4.;
     pub const BACK_SEP_W: f32 = 0.5;
+
+    pub const COPY_BTN_SCALE: f32 = 20.;
+    pub const COPY_BTN_X_OFF: f32 = 30.;
 }
 
 use super::{EMOJI_PICKER_ICON_MARGIN_X, EMOJI_PICKER_ICON_MARGIN_Y, EMOJI_PICKER_ICON_SIZE};
@@ -217,6 +221,7 @@ pub async fn make(
     cc.add_const_f32("SENDARROW_NEG_X", SENDARROW_NEG_X);
     cc.add_const_f32("SENDARROW_NEG_Y", SENDARROW_NEG_Y);
     cc.add_const_f32("EMOJI_NEG_Y", EMOJI_NEG_Y);
+    cc.add_const_f32("COPY_BTN_X_OFF", COPY_BTN_X_OFF);
     cc.add_const_f32("EMOJIBTN_BOX_1", EMOJIBTN_BOX[1]);
     cc.add_const_f32("SENDBTN_BOX_0", SENDBTN_BOX[0]);
     cc.add_const_f32("SENDBTN_BOX_1", SENDBTN_BOX[1]);
@@ -686,7 +691,7 @@ pub async fn make(
         select_layer.setup(|me| Layer::new(me, renderer.clone(), redraw.clone())).await;
     content.link(select_layer.clone());
 
-    // Single background box covering both buttons (the whole top strip).
+    // Background box covering the back button
     let node = create_vector_art("select_bg");
     let prop = node.get_property("rect").unwrap();
     prop.set_f32(atom, Role::App, 0, 0.).unwrap();
@@ -694,20 +699,27 @@ pub async fn make(
     prop.set_expr(atom, Role::App, 2, expr::load_var("w")).unwrap();
     prop.set_f32(atom, Role::App, 3, CHATEDIT_HEIGHT).unwrap();
     node.set_property_u32(atom, Role::App, "z_index", 0).unwrap();
-    let bg_color = match COLOR_SCHEME {
-        ColorScheme::DarkMode => [0., 0.11, 0.11, 1.],
-        ColorScheme::PaperLight => [1., 1., 1., 1.],
-    };
     let mut shape = VectorShape::new();
-    /*
     shape.add_filled_box(
         expr::const_f32(0.),
         expr::const_f32(0.),
-        expr::load_var("w"),
+        expr::const_f32(EMOJI_BG_W),
         expr::load_var("h"),
-        bg_color,
+        rgba!(0x1e0000ff),
     );
-    */
+    shape.join(shape::create_x(Point::new(40., 30.), 10., 1., COLOR_RED));
+    let node = node.setup(|me| VectorArt::new(me, shape, renderer.clone(), redraw.clone())).await;
+    select_layer.link(node);
+
+    let node = create_vector_art("copy_bg");
+    let prop = node.get_property("rect").unwrap();
+    let code = cc.compile("w - COPY_BTN_X_OFF").unwrap();
+    prop.set_expr(atom, Role::App, 0, code).unwrap();
+    prop.set_f32(atom, Role::App, 1, 27.).unwrap();
+    prop.set_f32(atom, Role::App, 2, 400.).unwrap();
+    prop.set_f32(atom, Role::App, 3, CHATEDIT_HEIGHT).unwrap();
+    node.set_property_u32(atom, Role::App, "z_index", 1).unwrap();
+    let shape = shape::create_copy(COLOR_WHITE).scaled(COPY_BTN_SCALE);
     let node = node.setup(|me| VectorArt::new(me, shape, renderer.clone(), redraw.clone())).await;
     select_layer.link(node);
 
