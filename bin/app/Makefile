@@ -35,34 +35,23 @@ DEV_FEATURES = --features=schema-app,enable-filelog,enable-netdebug,enable-plugi
 default: build-release
 	./darkfi-app
 
-android: android-release
-
 # Platform release builds
 
-macos-release: build-release
-	-mv darkfi-app darkfi-app.macos
-macos-debug: build-debug
-	-mv darkfi-app darkfi-app_debug.macos
-linux-release: build-release
+macos: $(SRC) $(PROOFS_BIN) fonts assets/forest_1920x1080.ivf
+	$(CARGO) zigbuild --no-default-features --release --target universal2-apple-darwin $(RELEASE_FEATURES)
+	-mv target/universal2-apple-darwin/release/darkfi-app darkfi-app.macos
+linux: build-release
 	-mv darkfi-app darkfi-app.linux
-linux-debug: build-debug
-	-mv darkfi-app darkfi-app_debug.linux
-win64-msvc: $(SRC) $(PROOFS_BIN) fonts
+win64-msvc: $(SRC) $(PROOFS_BIN) fonts assets/forest_1920x1080.ivf
 	PATH="$(shell pwd)/release/win:$$PATH" $(CARGO) xwin build --no-default-features --release --target x86_64-pc-windows-msvc $(RELEASE_FEATURES)
 	-mv target/x86_64-pc-windows-msvc/release/darkfi-app.exe .
-android-release: $(SRC) $(PROOFS_BIN) fonts assets/forest_720x1280.mp4
+android: $(SRC) $(PROOFS_BIN) fonts assets/forest_720x1280.mp4
 	podman run -v $(shell pwd)/../../:/root/darkfi -w /root/darkfi/bin/app/ -t apk cargo quad-apk build --no-default-features --release $(RELEASE_FEATURES)
 	-mv $(RELEASE_APK) darkfi-app.apk
-android-debug: $(SRC) $(PROOFS_BIN) fonts assets/forest_720x1280.mp4
-	podman run -v $(shell pwd)/../../:/root/darkfi -w /root/darkfi/bin/app/ -t apk cargo quad-apk build --no-default-features $(DEBUG_FEATURES)
-	-mv $(DEBUG_APK) darkfi-app_debug.apk
 
 build-release: $(SRC) $(PROOFS_BIN) fonts assets/forest_1920x1080.ivf
 	$(CARGO) build --no-default-features --release $(RELEASE_FEATURES)
 	-mv target/release/darkfi-app .
-build-debug: $(SRC) $(PROOFS_BIN) fonts assets/forest_1920x1080.ivf
-	$(CARGO) build --no-default-features $(DEBUG_FEATURES)
-	-mv target/debug/darkfi-app .
 
 # Download font data
 

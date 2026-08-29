@@ -49,6 +49,23 @@ install [Microsoft Visual C++ Redistributable][msvc++].
 [cargo-xwin]: https://github.com/rust-cross/cargo-xwin
 [msvc++]: https://learn.microsoft.com/en-us/cpp/windows/latest-supported-vc-redist?view=msvc-170#visual-studio-2015-2017-2019-and-2022
 
+# MacOS
+
+Building for MacOS is done on a Mac. The `macos` target builds a
+universal (aarch64 + x86_64) binary using [cargo-zigbuild].
+Also install [rustup](rustup.rs), then:
+
+```
+$ rustup target add aarch64-apple-darwin x86_64-apple-darwin
+$ cargo install cargo-zigbuild
+$ make macos
+```
+
+The resulting `darkfi-app.macos` is placed in `bin/app/`. It is ad-hoc
+signed and runs as-is.
+
+[cargo-zigbuild]: https://github.com/rust-cross/cargo-zigbuild
+
 # Android
 
 Make sure you have podman installed. Then run:
