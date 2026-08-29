@@ -128,8 +128,19 @@ impl Text {
         let text_color = self.text_color.get();
         let window_scale = self.window_scale.get();
         let width = self.rect.get_width();
-        let text_align = self.text_align.get();
-        let overflow_wrap = self.overflow_wrap.get();
+        let text_align = match self.text_align.get().as_str() {
+            "end" => parley::Alignment::End,
+            "left" => parley::Alignment::Left,
+            "center" => parley::Alignment::Center,
+            "right" => parley::Alignment::Right,
+            "justify" => parley::Alignment::Justify,
+            _ => parley::Alignment::Start,
+        };
+        let overflow_wrap = match self.overflow_wrap.get().as_str() {
+            "anywhere" => parley::OverflowWrap::Anywhere,
+            "break-word" => parley::OverflowWrap::BreakWord,
+            _ => parley::OverflowWrap::Normal,
+        };
 
         let text = if self.use_i18n.get() {
             if let Some(trans) = self.i18n_fish.tr(&text) {
@@ -151,8 +162,8 @@ impl Text {
             Some(width),
             &[],
             &[],
-            &text_align,
-            &overflow_wrap,
+            text_align,
+            overflow_wrap,
         )
     }
 

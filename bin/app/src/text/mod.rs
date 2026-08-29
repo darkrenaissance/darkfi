@@ -16,6 +16,44 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+//! GPU text rendering pipeline.
+//!
+//! Text is drawn as textured quads on the GPU; no platform text API is
+//! involved. The pipeline has three layers:
+//!
+//! * Layout (`make_layout`): parley shapes a string into glyph runs
+//!   using the font stack (IBM Plex Mono, Noto Color Emoji, DarkIRC
+//!   Emoji) registered in `GLOBAL_FONT_CTX`. Coordinates are physical
+//!   pixels (window scale is baked in by parley); `TextLayout` remembers
+//!   the scale, and consumers divide by it exactly once to get the
+//!   virtual units the renderer expects. Rasterization still happens at
+//!   physical resolution so text stays crisp while the renderer
+//!   re-applies the scale via `SetScale`.
+//!
+//! * Rendering (`render`): two passes over a layout. First every glyph
+//!   of every run is rasterized with swash and packed into an `Atlas`:
+//!   one RGBA8 texture per call, color glyphs stored as RGBA and mask
+//!   glyphs as alpha. Then each run becomes a `DrawMesh` of quads whose
+//!   UVs reference that texture, so a whole run draws in one call. This
+//!   atlas is transient (one per layout): the right trade-off for
+//!   arbitrary dynamic text such as chat messages and labels, where
+//!   layouts are short-lived and each draws from its own texture.
+//!
+//! * Batching for fixed sets (`string_atlas`): the opposite trade-off.
+//!   `make_string_atlas` lays out many fixed strings up front and packs
+//!   all their glyphs into a single shared atlas: one texture and one
+//!   raster per glyph for the entire set, returning per-string quad
+//!   geometry to the caller. Used by the emoji picker, where rendering
+//!   each icon through the dynamic path allocated one texture plus a
+//!   vertex/index buffer pair per emoji (~574 icons, ~2s of generation)
+//!   for glyphs that only ever needed to reference a shared sheet.
+//!
+//! The packer itself lives in `atlas`: sprites are separated by a 2px
+//! gap on all sides to prevent UV bleed, and can optionally wrap into
+//! rows capped at `MAX_TEXTURE_DIMENSION` so large fixed sets stay
+//! within GPU texture size limits (GLES3/WebGL2 only guarantee 2048),
+//! failing loudly at build time instead of corrupting at draw time.
+
 use parley::fontique::{Collection, CollectionOptions, SourceCache, SourceCacheOptions};
 use std::{
     cell::RefCell,
@@ -135,8 +173,8 @@ pub fn make_layout(
         width,
         underlines,
         &[],
-        "start",
-        "normal",
+        parley::Alignment::Start,
+        parley::OverflowWrap::Normal,
     )
 }
 
@@ -149,26 +187,10 @@ pub fn make_layout2(
     width: Option<f32>,
     underlines: &[Range<usize>],
     foreground_colors: &[(Range<usize>, Color)],
-    text_align: &str,
-    overflow_wrap: &str,
+    text_align: parley::Alignment,
+    overflow_wrap: parley::OverflowWrap,
 ) -> TextLayout {
     THREAD_LAYOUT_CTX.with(|layout_ctx| {
-        let text_align = match text_align {
-            "start" => parley::Alignment::Start,
-            "end" => parley::Alignment::End,
-            "left" => parley::Alignment::Left,
-            "center" => parley::Alignment::Center,
-            "right" => parley::Alignment::Right,
-            "justify" => parley::Alignment::Justify,
-            _ => parley::Alignment::Start,
-        };
-        let overflow_wrap = match overflow_wrap {
-            "normal" => parley::OverflowWrap::Normal,
-            "anywhere" => parley::OverflowWrap::Anywhere,
-            "break-word" => parley::OverflowWrap::BreakWord,
-            _ => parley::OverflowWrap::Normal,
-        };
-
         let mut layout_ctx = layout_ctx.borrow_mut();
         let mut font_ctx = GLOBAL_FONT_CTX.clone();
 

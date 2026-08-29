@@ -209,8 +209,8 @@ impl PrivMessage {
                 Some(clip.w - timestamp_width),
                 &[],
                 &url_ranges,
-                "start",
-                "normal",
+                parley::Alignment::Start,
+                parley::OverflowWrap::Normal,
             )
         } else {
             let body_color = if self.is_action {
@@ -235,8 +235,8 @@ impl PrivMessage {
                 Some(clip.w - timestamp_width),
                 &[],
                 &foreground_colors,
-                "start",
-                "normal",
+                parley::Alignment::Start,
+                parley::OverflowWrap::Normal,
             )
         };
         self.txt_layout = Some(txt_layout);
