@@ -437,14 +437,7 @@ pub async fn make(
 
     let emoji_meshes = emoji_picker::EmojiMeshes::new(app.renderer.clone(), EMOJI_PICKER_ICON_SIZE);
 
-    let emoji_meshes2 = emoji_meshes.clone();
-    let _ = std::thread::spawn(move || {
-        for i in (0..500).step_by(20) {
-            for j in i..(i + 20) {
-                emoji_meshes2.lock().get(j);
-            }
-        }
-    });
+    emoji_meshes.clone().start_make();
 
     // Initialize default channels if the table is empty
     if app_db.channels().await.expect("cannot read channels").is_empty() {

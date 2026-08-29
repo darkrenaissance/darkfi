@@ -236,6 +236,11 @@ impl EmojiPicker {
         if rect_changed {
             self.draw_cache.clear();
         }
+        if !self.emoji_meshes.clone().start_make() {
+            // Skip the draw while the atlas is unbuilt so an empty grid
+            // never lands in the cache; the pass retries once built.
+            return None
+        }
         let instrs = self.draw_cache.get_or_insert_with(|| {
             let mut instrs = vec![DrawInstruction::ApplyView(rect)];
 
@@ -253,7 +258,7 @@ impl EmojiPicker {
                     break
                 }
 
-                let (mesh, ink) = self.emoji_meshes.lock().get(i);
+                let Some((mesh, ink)) = self.emoji_meshes.get(i) else { break };
                 // Center the emoji's ink inside its cell so the margin pads
                 // it evenly on all sides. The ink origin sits above the
                 // mesh origin (text baseline), hence the -ink.x/-ink.y.
@@ -302,7 +307,7 @@ impl UIObject for EmojiPicker {
         });
         on_modify.when_change_external(self.emoji_size.prop(), |self_, _| async move {
             let emoji_size = self_.emoji_size.get();
-            self_.emoji_meshes.lock().set_size(emoji_size);
+            self_.emoji_meshes.set_size(emoji_size);
             self_.draw_cache.clear();
             self_.redraw.trigger();
         });
@@ -317,7 +322,7 @@ impl UIObject for EmojiPicker {
     fn stop(&self) {
         self.tasks.lock().clear();
         self.draw_cache.clear();
-        self.emoji_meshes.lock().clear();
+        self.emoji_meshes.clear();
     }
 
     #[instrument(target = "ui::emoji_picker")]

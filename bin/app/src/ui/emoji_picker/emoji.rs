@@ -16,82 +16,146 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+use std::{
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        Arc,
+    },
+    time::Instant,
+};
+
+use atomic_float::AtomicF32;
 use parking_lot::Mutex as SyncMutex;
-use std::sync::Arc;
 
 use crate::{
-    gfx::{gfxtag, DrawInstruction, DrawMesh, EpochTracker, Rectangle, Renderer},
-    mesh::COLOR_WHITE,
+    gfx::{gfxtag, DrawMesh, EpochTracker, Rectangle, Renderer},
+    mesh::{MeshBuilder, COLOR_WHITE},
     text,
+    text::atlas::MAX_TEXTURE_DIMENSION,
+    util::spawn_thread,
 };
 
 use super::default::DEFAULT_EMOJI_LIST;
 
-pub type EmojiMeshesPtr = Arc<SyncMutex<EmojiMeshes>>;
+macro_rules! d { ($($arg:tt)*) => { debug!(target: "ui:emoji_picker", $($arg)*); } }
+
+/// The fully-built atlas cache: one prebuilt quad mesh per emoji,
+/// index-aligned with `DEFAULT_EMOJI_LIST`, all referencing a single
+/// shared atlas texture.
+pub struct EmojiAtlasData {
+    meshes: Vec<(DrawMesh, Rectangle)>,
+}
 
 pub struct EmojiMeshes {
     renderer: Renderer,
-    emoji_size: f32,
-    epoch_tracker: EpochTracker,
-    meshes: Vec<(DrawMesh, Rectangle)>,
+    emoji_size: AtomicF32,
+    epoch_tracker: SyncMutex<EpochTracker>,
+    inner: SyncMutex<Option<EmojiAtlasData>>,
+    building: AtomicBool,
 }
+
+pub type EmojiMeshesPtr = Arc<EmojiMeshes>;
 
 impl EmojiMeshes {
     pub fn new(renderer: Renderer, emoji_size: f32) -> EmojiMeshesPtr {
         let epoch_tracker = EpochTracker::new(&renderer);
-        Arc::new(SyncMutex::new(Self { renderer, emoji_size, epoch_tracker, meshes: vec![] }))
+        Arc::new(Self {
+            renderer,
+            emoji_size: AtomicF32::new(emoji_size),
+            epoch_tracker: SyncMutex::new(epoch_tracker),
+            inner: SyncMutex::new(None),
+            building: AtomicBool::new(false),
+        })
     }
 
-    pub fn set_size(&mut self, emoji_size: f32) {
-        self.emoji_size = emoji_size;
-        self.meshes.clear();
+    /// Build the atlas at the current emoji size and swap it in. The
+    /// whole build (layouts, rasters, single texture upload, quad
+    /// meshes) runs outside the mutex, so it never blocks teardown or
+    /// the draw pass. A build whose epoch went stale mid-flight is
+    /// discarded.
+    pub fn make(&self) {
+        let now = Instant::now();
+        let epoch_before = self.renderer.epoch.load(Ordering::Relaxed);
+        let emoji_size = self.emoji_size.load(Ordering::Relaxed);
+
+        let strings: Vec<&str> = DEFAULT_EMOJI_LIST.to_vec();
+        let string_atlas = text::make_string_atlas(
+            &strings,
+            emoji_size,
+            1.,
+            MAX_TEXTURE_DIMENSION,
+            &self.renderer,
+            gfxtag!("emoji_atlas"),
+        );
+
+        let mut meshes = Vec::with_capacity(string_atlas.entries.len());
+        for entry in &string_atlas.entries {
+            let mut mesh = MeshBuilder::new(gfxtag!("emoji_atlas"));
+            for glyph in &entry.glyphs {
+                mesh.draw_box(&glyph.rect, COLOR_WHITE, &glyph.uv_rect);
+            }
+            let draw_mesh = mesh
+                .alloc(&self.renderer)
+                .draw_with_textures(vec![string_atlas.rendered.texture.clone()]);
+            meshes.push((draw_mesh, entry.ink_bounds));
+        }
+
+        let data = EmojiAtlasData { meshes };
+
+        let epoch_after = self.renderer.epoch.load(Ordering::Relaxed);
+        if epoch_before != epoch_after {
+            d!("Discarding emoji atlas built for a stale epoch");
+            return
+        }
+
+        *self.inner.lock() = Some(data);
+        d!("Built emoji atlas ({} emoji) in {:?}", DEFAULT_EMOJI_LIST.len(), now.elapsed());
     }
 
-    pub fn clear(&mut self) {
-        self.meshes.clear();
+    /// Start building the atlas if it is not available yet. Returns
+    /// `true` only when the atlas is available right now; `false`
+    /// means a build was started (or is already in flight) and the
+    /// caller should retry later.
+    pub fn start_make(self: Arc<Self>) -> bool {
+        if self.inner.lock().is_some() {
+            return true
+        }
+        if self.building.swap(true, Ordering::SeqCst) {
+            return false
+        }
+
+        spawn_thread("emoji-atlas", move || {
+            self.make();
+            self.building.store(false, Ordering::SeqCst);
+        });
+
+        false
     }
 
-    pub fn get(&mut self, i: usize) -> (DrawMesh, Rectangle) {
+    /// Prebuilt quad mesh and ink bounds for emoji `i`, or `None` while
+    /// the atlas is unbuilt (or was dropped by a size change, epoch
+    /// bump, or teardown).
+    pub fn get(&self, i: usize) -> Option<(DrawMesh, Rectangle)> {
         assert!(i < DEFAULT_EMOJI_LIST.len());
 
-        // Meshes hold epoch-scoped buffers; after a UI restart they are
-        // dead, so drop them and rebuild lazily.
-        if self.epoch_tracker.changed() {
-            self.meshes.clear();
+        if self.epoch_tracker.lock().changed() {
+            *self.inner.lock() = None;
         }
 
-        self.meshes.reserve_exact(DEFAULT_EMOJI_LIST.len());
-
-        if i >= self.meshes.len() {
-            //d!("EmojiMeshes loading new glyphs");
-            for j in self.meshes.len()..=i {
-                let emoji = DEFAULT_EMOJI_LIST[j];
-                let mesh = self.gen_emoji_mesh(emoji);
-                self.meshes.push(mesh);
-            }
-        }
-
-        self.meshes[i].clone()
+        let guard = self.inner.lock();
+        let data = guard.as_ref()?;
+        data.meshes.get(i).cloned()
     }
 
-    /// Make the mesh for this emoji, plus its ink bounds relative to the
-    /// mesh origin (the text baseline), so callers can center the visible
-    /// glyph inside a cell.
-    fn gen_emoji_mesh(&self, emoji: &str) -> (DrawMesh, Rectangle) {
-        //d!("rendering emoji: '{emoji}'");
-        // The params here don't actually matter since we're talking about BMP fixed sizes
-        let layout = text::make_layout(emoji, COLOR_WHITE, self.emoji_size, 1., 1., None, &[]);
+    /// Drop the atlas; it is rebuilt lazily via `start_make`.
+    pub fn clear(&self) {
+        *self.inner.lock() = None;
+    }
 
-        let (instrs, bounds) =
-            text::render_layout_with_bounds(&layout, &self.renderer, gfxtag!("emoji_mesh"));
-
-        // Extract the mesh from the draw instructions
-        // For a single emoji, we should get exactly one Draw instruction with a mesh
-        let mesh = match instrs.first() {
-            Some(DrawInstruction::Draw(mesh)) => mesh.clone(),
-            _ => panic!("Expected Draw instruction for emoji"),
-        };
-
-        (mesh, bounds)
+    /// Change the emoji size and drop the atlas so the next build uses
+    /// the new size.
+    pub fn set_size(&self, emoji_size: f32) {
+        self.emoji_size.store(emoji_size, Ordering::Relaxed);
+        self.clear();
     }
 }

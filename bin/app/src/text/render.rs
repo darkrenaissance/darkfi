@@ -138,17 +138,6 @@ pub fn render_layout_with_opts(
     render_raw_layout_impl(layout, layout.scale(), opts, renderer, tag).0
 }
 
-/// Render a layout and also return the union of the glyph ink bounds in
-/// virtual units, relative to the layout origin. Used by callers that
-/// position the mesh by its ink, e.g. centering emoji icons in grid cells.
-pub fn render_layout_with_bounds(
-    layout: &TextLayout,
-    renderer: &Renderer,
-    tag: DebugTag,
-) -> (Vec<DrawInstruction>, Rectangle) {
-    render_raw_layout_impl(layout, layout.scale(), DebugRenderOptions::OFF, renderer, tag)
-}
-
 /// Layout coordinates are physical (scale is baked in by parley) while
 /// meshes are consumed in virtual units and scaled up again by the
 /// renderer's `SetScale`. So every emitted coordinate is divided by
@@ -201,7 +190,7 @@ fn render_raw_layout_impl(
     (instrs, bounds.get().unwrap_or(Rectangle::zero()))
 }
 
-fn push_glyphs(
+pub(super) fn push_glyphs(
     atlas: &mut Atlas,
     glyph_run: &parley::GlyphRun<'_, Color>,
     run_idx: RunIdx,

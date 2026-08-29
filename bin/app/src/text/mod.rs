@@ -31,10 +31,9 @@ pub use editor::Editor;
 mod render;
 #[cfg(not(target_os = "android"))]
 pub use render::render_raw_layout;
-pub use render::{
-    render_backgrounds, render_layout, render_layout_with_bounds, render_layout_with_opts,
-    DebugRenderOptions,
-};
+pub use render::{render_backgrounds, render_layout, render_layout_with_opts, DebugRenderOptions};
+mod string_atlas;
+pub use string_atlas::make_string_atlas;
 
 pub static GLOBAL_FONT_CTX: LazyLock<parley::FontContext> = LazyLock::new(|| {
     let mut font_ctx = parley::FontContext {
