@@ -745,8 +745,8 @@ impl DarkIrc {
                 let public = secret_key.public_key();
                 let saltbox = ChaChaBox::new(&public, &secret_key);
 
-                // Log the secret in base58 for debugging
-                let secret_b58 = bs58::encode(secret).into_string();
+                // The secret in base58 for debugging
+                //let secret_b58 = bs58::encode(secret).into_string();
                 irc_channel.saltbox = Some(Arc::new(saltbox));
             }
 

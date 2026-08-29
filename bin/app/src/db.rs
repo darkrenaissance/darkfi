@@ -18,6 +18,7 @@
 
 use std::{path::PathBuf, sync::Arc};
 
+use rand::{rngs::OsRng, Rng};
 use smol::lock::Mutex as AsyncMutex;
 use turso::{Connection, Value};
 
@@ -51,7 +52,7 @@ impl AppDb {
         conn.execute_batch(include_str!("../app.sql")).await?;
         // First run: generate the DM identity secret right away. On
         // subsequent runs the row exists and the insert is ignored.
-        let secret: [u8; 32] = rand::random();
+        let secret: [u8; 32] = OsRng.gen();
         conn.execute(
             "INSERT OR IGNORE INTO profiles (id, nick, dm_secret) VALUES (1, 'anon', ?1)",
             vec![Value::Blob(secret.to_vec())],

@@ -107,7 +107,6 @@ pub fn setup_logging() -> Option<WorkerGuard> {
             AppendCount::new(0),
             ContentLimit::BytesSurpassed(LOGFILE_MAXSIZE),
             Compression::None,
-            #[cfg(unix)]
             None,
         ));
 
