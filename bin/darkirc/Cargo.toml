@@ -27,8 +27,6 @@ darkfi-sdk = {path = "../../src/sdk", features = ["async"]}
 darkfi-serial = {path = "../../src/serial", features = ["async"]}
 libc = "0.2.186"
 
-tikv-jemallocator = "0.5.4"
-
 # Event Graph DB
 kvdb-overlay = {git = "https://git.dark.fi/darkrenaissance/kvdb-overlay", version = "0.1.0"}
 
@@ -55,8 +53,6 @@ semver = "1.0.28"
 
 # Daemon
 easy-parallel = "3.3.1"
-signal-hook-async-std = "0.4.0"
-signal-hook = "0.4.4"
 tracing-subscriber = { version = "0.3.23", default-features = false, features = ["fmt"] }
 tracing-appender = "0.2.5"
 smol = "2.0.2"
@@ -65,6 +61,13 @@ smol = "2.0.2"
 serde = {version = "1.0.228", features = ["derive"]}
 structopt = "0.3.26"
 structopt-toml = "0.5.1"
+
+[target.'cfg(not(target_env = "msvc"))'.dependencies]
+tikv-jemallocator = "0.5.4"
+
+[target.'cfg(not(target_os = "windows"))'.dependencies]
+signal-hook-async-std = "0.4.0"
+signal-hook = "0.4.4"
 
 [lints]
 workspace = true

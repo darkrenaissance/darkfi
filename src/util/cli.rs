@@ -218,6 +218,7 @@ macro_rules! async_daemonize {
         }
 
         /// Auxiliary structure used to keep track of signals
+        #[cfg(not(windows))]
         struct SignalHandler {
             /// Termination signal channel receiver
             term_rx: smol::channel::Receiver<()>,
@@ -227,6 +228,7 @@ macro_rules! async_daemonize {
             sighup_pub: darkfi::system::PublisherPtr<Args>,
         }
 
+        #[cfg(not(windows))]
         impl SignalHandler {
             fn new(
                 ex: std::sync::Arc<smol::Executor<'static>>,
@@ -257,7 +259,38 @@ macro_rules! async_daemonize {
             }
         }
 
+        /// Windows lacks POSIX signal handling, so the process is simply
+        /// terminated externally and this handler blocks forever.
+        #[cfg(windows)]
+        struct SignalHandler {
+            /// Termination signal channel receiver
+            term_rx: smol::channel::Receiver<()>,
+        }
+
+        #[cfg(windows)]
+        impl SignalHandler {
+            fn new(
+                ex: std::sync::Arc<smol::Executor<'static>>,
+            ) -> Result<(Self, smol::Task<Result<()>>)> {
+                let (term_tx, term_rx) = smol::channel::bounded::<()>(1);
+                // Keep the sender alive so the channel never disconnects.
+                std::mem::forget(term_tx);
+                let signals_task = ex.spawn(async { Ok::<(), darkfi::Error>(()) });
+
+                Ok((Self { term_rx }, signals_task))
+            }
+
+            /// Handler waits for termination signal
+            async fn wait_termination(&self, signals_task: smol::Task<Result<()>>) -> Result<()> {
+                let _ = signals_task;
+                let _ = self.term_rx.recv().await;
+
+                Ok(())
+            }
+        }
+
         /// Auxiliary task to handle SIGINT for forceful process abort
+        #[cfg(not(windows))]
         async fn handle_abort(mut signals: signal_hook_async_std::Signals) {
             let mut n_sigint = 0;
             while let Some(signal) = signals.next().await {
@@ -271,6 +304,7 @@ macro_rules! async_daemonize {
         }
 
         /// Auxiliary task to handle SIGHUP, SIGTERM, SIGINT and SIGQUIT signals
+        #[cfg(not(windows))]
         async fn handle_signals(
             mut signals: signal_hook_async_std::Signals,
             term_tx: smol::channel::Sender<()>,

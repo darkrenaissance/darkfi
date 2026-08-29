@@ -234,9 +234,11 @@ struct Args {
     rpc: RpcSettingsOpt,
 }
 
+#[cfg(not(target_env = "msvc"))]
 #[global_allocator]
 static GLOBAL: tikv_jemallocator::Jemalloc = tikv_jemallocator::Jemalloc;
 
+#[cfg(not(target_env = "msvc"))]
 #[allow(non_upper_case_globals)]
 #[export_name = "malloc_conf"]
 pub static malloc_conf: &[u8] = b"dirty_decay_ms:1000,muzzy_decay_ms:1000\0";

@@ -63,11 +63,13 @@ use drk::{
     },
     common::*,
     dao::{DaoParams, ProposalRecord},
-    interactive::interactive,
     money::BALANCE_BASE10_DECIMALS,
     swap::PartialSwapData,
     Drk,
 };
+
+#[cfg(not(target_os = "windows"))]
+use drk::interactive::interactive;
 
 const CONFIG_FILE: &str = "drk_config.toml";
 const CONFIG_FILE_CONTENTS: &str = include_str!("../drk_config.toml");
@@ -624,6 +626,7 @@ async fn realmain(args: Args, ex: ExecutorPtr) -> Result<()> {
     };
 
     match args.command {
+        #[cfg(not(target_os = "windows"))]
         Subcmd::Interactive => {
             // Create an unbounded smol channel, so we can have a
             // printing queue the background logger and tasks can
@@ -659,6 +662,12 @@ async fn realmain(args: Args, ex: ExecutorPtr) -> Result<()> {
 
             drk.read().await.stop_rpc_client().await?;
             Ok(())
+        }
+
+        #[cfg(target_os = "windows")]
+        Subcmd::Interactive => {
+            eprintln!("Interactive shell is not supported on this platform");
+            exit(2);
         }
 
         Subcmd::Kaching => {

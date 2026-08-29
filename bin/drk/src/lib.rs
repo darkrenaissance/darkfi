@@ -48,6 +48,7 @@ pub mod token;
 pub mod cli_util;
 
 /// Drk interactive shell
+#[cfg(not(target_os = "windows"))]
 pub mod interactive;
 
 /// Wallet functionality related to Money
