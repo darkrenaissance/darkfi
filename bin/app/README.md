@@ -8,11 +8,45 @@ make
 
 # Windows
 
-Install [rustup](rustup.rs) and follow the instructions.
+Built by cross-compiling on Linux using [cargo-xwin] (MSVC ABI, clang-cl/lld-link).
+Also install [rustup](rustup.rs).
+
+Distro packages needed (example uses Void Linux):
+
+```
+# xbps-install -S clang lld ninja nasm wget \
+    cross-x86_64-w64-mingw32 cross-x86_64-w64-mingw32-crt
+```
+
+The mingw packages provide `windres`, which is used to embed the app icon
+and the Windows version resource turso needs (`rc.exe` does not exist on
+Linux). On Arch the equivalents are `clang lld ninja nasm mingw-w64-gcc`,
+on Debian `clang lld ninja-build nasm gcc-mingw-w64-x86-64`, and on Fedora
+`clang lld ninja-build nasm mingw64-gcc`.
+
+Then set up the Rust side:
+
+```
+$ rustup target add x86_64-pc-windows-msvc
+$ rustup component add llvm-tools
+$ cargo install --locked cargo-xwin
+```
+
+And build:
+
+```
+$ make win64-msvc
+```
+
+The first run downloads the Windows SDK and MSVC CRT (a couple of GB) and
+caches them. Using cargo-xwin implies accepting Microsoft's SDK license.
+The resulting `darkfi-app.exe` is placed in `bin/app/`, and can be tested
+on Linux using `wine darkfi-app.exe`.
 
 If you get the error "VCRUNTIME140.dll was not found", then
 install [Microsoft Visual C++ Redistributable][msvc++].
 
+[cargo-xwin]: https://github.com/rust-cross/cargo-xwin
 [msvc++]: https://learn.microsoft.com/en-us/cpp/windows/latest-supported-vc-redist?view=msvc-170#visual-studio-2015-2017-2019-and-2022
 
 # Android

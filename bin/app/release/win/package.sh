@@ -2,12 +2,14 @@
 set -e
 
 VERSION=${1:-"dev"}
+PROFILE=${2:-"release"}
+TARGET=${3:-"x86_64-pc-windows-gnu"}
 DIST_DIR="darkfi-win64-${VERSION}"
 rm -rf "${DIST_DIR}"
 mkdir -p "${DIST_DIR}"
 
 # Copy binary
-cp target/x86_64-pc-windows-gnu/release/darkfi-app.exe "${DIST_DIR}/"
+cp "target/${TARGET}/${PROFILE}/darkfi-app.exe" "${DIST_DIR}/"
 
 # Copy assets
 cp -r assets "${DIST_DIR}/"

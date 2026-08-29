@@ -16,7 +16,12 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::{fs::File, io::Write};
+use std::{
+    env, fs,
+    io::Write,
+    path::{Path, PathBuf},
+    process::Command,
+};
 
 /// Adds a temporary workaround for [an issue] with the Rust compiler and Android when
 /// compiling sqlite3 bundled C code.
@@ -41,15 +46,20 @@ use std::{fs::File, io::Write};
 /// [zcash issue]: https://github.com/zcash/librustzcash/issues/800
 /// [their workaround]: https://github.com/Electric-Coin-Company/zcash-android-wallet-sdk/blob/88058c63461f2808efc953af70db726b9f36f9b9/backend-lib/build.rs
 fn main() {
-    let target_os = std::env::var("CARGO_CFG_TARGET_OS").expect("CARGO_CFG_TARGET_OS not set");
-    let target_arch =
-        std::env::var("CARGO_CFG_TARGET_ARCH").expect("CARGO_CFG_TARGET_ARCH not set");
+    let target_os = env::var("CARGO_CFG_TARGET_OS").expect("CARGO_CFG_TARGET_OS not set");
+    let target_arch = env::var("CARGO_CFG_TARGET_ARCH").expect("CARGO_CFG_TARGET_ARCH not set");
     //println!("cargo:warning={target_arch}");
 
+    let out_dir = PathBuf::from(env::var("OUT_DIR").expect("OUT_DIR not set"));
+
     // Add some useful debug info directly into the app itself
-    let mut f = File::create("src/build_info.rs").unwrap();
+    let mut f = fs::File::create("src/build_info.rs").unwrap();
     writeln!(f, "pub const TARGET_OS: &'static str = \"{target_os}\";").unwrap();
     writeln!(f, "pub const TARGET_ARCH: &'static str = \"{target_arch}\";").unwrap();
+
+    if target_os == "windows" {
+        embed_windows_icon(&out_dir);
+    }
 
     if target_os == "android" {
         // Since we run this inside a container, we can just hardcore the paths directly
@@ -65,4 +75,28 @@ fn main() {
             ),
         }
     }
+}
+
+/// Embeds `release/win/darkfi.ico` as the exe icon on Windows targets,
+/// using mingw's windres directly.
+fn embed_windows_icon(out_dir: &Path) {
+    let manifest_dir = env::var("CARGO_MANIFEST_DIR").expect("CARGO_MANIFEST_DIR not set");
+    let ico_path = PathBuf::from(manifest_dir).join("release/win/darkfi.ico");
+    println!("cargo:rerun-if-changed={}", ico_path.display());
+
+    let rc_path = out_dir.join("app.rc");
+    let icon_rc = format!("1 ICON \"{}\"", ico_path.display());
+    fs::write(&rc_path, icon_rc).expect("write icon rc script");
+
+    let res_path = out_dir.join("app.res");
+    let status = Command::new("x86_64-w64-mingw32-windres")
+        .arg(&rc_path)
+        .arg("-O")
+        .arg("coff")
+        .arg("-o")
+        .arg(&res_path)
+        .status()
+        .expect("run windres");
+    assert!(status.success(), "windres failed");
+    println!("cargo:rustc-link-arg-bins={}", res_path.display());
 }

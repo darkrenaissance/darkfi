@@ -1,0 +1,17 @@
+#!/bin/sh
+# rc.exe replacement for cross builds, forwards to mingw windres
+out=
+in=
+for arg in "$@"; do
+    case "$arg" in
+        /fo*)
+            out=${arg#/fo}
+            ;;
+        /nologo|/r|/v)
+            ;;
+        *)
+            in=$arg
+            ;;
+    esac
+done
+exec x86_64-w64-mingw32-windres "$in" -O coff -o "$out"
