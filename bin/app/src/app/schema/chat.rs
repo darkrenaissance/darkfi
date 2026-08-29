@@ -384,8 +384,14 @@ pub async fn make(
         info!(target: "app::chat", "clicked back");
         let atom = &mut redraw2.make_guard(gfxtag!("goback action"));
 
-        let editz_node = layer_node2.lookup_node("/content/editz").unwrap();
-        editz_node.call_method("unfocus", vec![]).await.unwrap();
+        // Only unfocus editor (hide keyboard) on Android to hide IME.
+        // On desktop we will keep editor focused so when we switch back
+        // the user can keep typing without having to click the edit.
+        #[cfg(target_os = "android")]
+        {
+            let editz_node = layer_node2.lookup_node("/content/editz").unwrap();
+            editz_node.call_method("unfocus", vec![]).await.unwrap();
+        }
 
         let menu_node = sg_root2.lookup_node("/window/content/chat/menu_layer").unwrap();
         menu_node.set_property_bool(atom, Role::App, "is_visible", true).unwrap();
