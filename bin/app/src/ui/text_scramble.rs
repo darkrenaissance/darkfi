@@ -20,7 +20,7 @@ use async_trait::async_trait;
 use darkfi::system::msleep;
 use parking_lot::Mutex as SyncMutex;
 use rand::{rngs::OsRng, Rng};
-use std::sync::Arc;
+use std::{ops::Range, sync::Arc};
 use tracing::instrument;
 
 use crate::{
@@ -81,20 +81,22 @@ impl ScrambleState {
         }
     }
 
-    /// Current text with unsolved characters replaced by random glyphs.
-    /// Whitespace is kept so the word layout stays stable.
-    fn display(&self) -> String {
-        self.target
-            .iter()
-            .zip(self.solved.iter())
-            .map(|(&c, &solved)| {
-                if solved || c.is_whitespace() {
-                    c
-                } else {
-                    SCRAMBLE_GLYPHS[OsRng.gen_range(0..SCRAMBLE_GLYPHS.len())]
-                }
-            })
-            .collect()
+    /// Current text with unsolved characters replaced by random glyphs,
+    /// plus the byte ranges of those glyphs. Whitespace is kept so the
+    /// word layout stays stable.
+    fn display(&self) -> (String, Vec<Range<usize>>) {
+        let mut text = String::new();
+        let mut ranges = vec![];
+        for (&c, &solved) in self.target.iter().zip(self.solved.iter()) {
+            let start = text.len();
+            if solved || c.is_whitespace() {
+                text.push(c);
+            } else {
+                text.push(SCRAMBLE_GLYPHS[OsRng.gen_range(0..SCRAMBLE_GLYPHS.len())]);
+                ranges.push(start..text.len());
+            }
+        }
+        (text, ranges)
     }
 }
 
@@ -114,6 +116,7 @@ pub struct TextScramble {
     text: PropertyStr,
     font_size: PropertyFloat32,
     text_color: PropertyColor,
+    scramble_color: PropertyColor,
     lineheight: PropertyFloat32,
     text_align: PropertyEnum,
     overflow_wrap: PropertyEnum,
@@ -147,6 +150,8 @@ impl TextScramble {
         let text = PropertyStr::wrap(node_ref, Role::Internal, "text", 0).unwrap();
         let font_size = PropertyFloat32::wrap(node_ref, Role::Internal, "font_size", 0).unwrap();
         let text_color = PropertyColor::wrap(node_ref, Role::Internal, "text_color").unwrap();
+        let scramble_color =
+            PropertyColor::wrap(node_ref, Role::Internal, "scramble_color").unwrap();
         let lineheight = PropertyFloat32::wrap(node_ref, Role::Internal, "lineheight", 0).unwrap();
         let text_align = PropertyEnum::wrap(node_ref, Role::Internal, "text_align", 0).unwrap();
         let overflow_wrap =
@@ -178,6 +183,7 @@ impl TextScramble {
             text,
             font_size,
             text_color,
+            scramble_color,
             lineheight,
             text_align,
             overflow_wrap,
@@ -211,14 +217,18 @@ impl TextScramble {
     }
 
     fn make_layout(&self) -> text::TextLayout {
-        let text = self.scramble.lock().display();
+        let (text, scramble_ranges) = self.scramble.lock().display();
         let font_size = self.font_size.get();
         let lineheight = self.lineheight.get();
         let text_color = self.text_color.get();
+        let scramble_color = self.scramble_color.get();
         let window_scale = self.window_scale.get();
         let width = self.rect.get_width();
         let text_align = self.text_align.get();
         let overflow_wrap = self.overflow_wrap.get();
+
+        let scramble_colors =
+            scramble_ranges.into_iter().map(|range| (range, scramble_color)).collect::<Vec<_>>();
 
         text::make_layout2(
             &text,
@@ -228,7 +238,7 @@ impl TextScramble {
             window_scale,
             Some(width),
             &[],
-            &[],
+            &scramble_colors,
             &text_align,
             &overflow_wrap,
         )
@@ -323,6 +333,10 @@ impl UIObject for TextScramble {
             self_.redraw.trigger();
         });
         on_modify.when_change_external(self.text_color.prop(), |self_, _| async move {
+            self_.draw_cache.clear();
+            self_.redraw.trigger();
+        });
+        on_modify.when_change_external(self.scramble_color.prop(), |self_, _| async move {
             self_.draw_cache.clear();
             self_.redraw.trigger();
         });

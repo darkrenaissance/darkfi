@@ -322,7 +322,13 @@ pub async fn make(
         prop.set_f32(atom, Role::App, 1, 1.).unwrap();
         prop.set_f32(atom, Role::App, 2, 1.).unwrap();
         prop.set_f32(atom, Role::App, 3, 1.).unwrap();
+        let prop = node.get_property("scramble_color").unwrap();
+        prop.set_f32(atom, Role::App, 0, 0.5).unwrap();
+        prop.set_f32(atom, Role::App, 1, 0.5).unwrap();
+        prop.set_f32(atom, Role::App, 2, 0.5).unwrap();
+        prop.set_f32(atom, Role::App, 3, 1.).unwrap();
         node.set_property_str(atom, Role::App, "text", "welcome back commander").unwrap();
+        node.set_property_f32(atom, Role::App, "solve_probability", 0.06).unwrap();
         let node = node
             .setup(|me| {
                 TextScramble::new(
@@ -339,7 +345,7 @@ pub async fn make(
         // Hide the splash layer after 3s
         let redraw = app.redraw_trigger.clone();
         let hide_task = app.ex.spawn(async move {
-            msleep(3000).await;
+            msleep(5000).await;
             let atom = &mut redraw.make_guard(gfxtag!("splash_layer hide"));
             splash_layer.set_property_bool(atom, Role::App, "is_visible", false).unwrap();
         });

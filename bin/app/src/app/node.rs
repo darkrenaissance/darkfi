@@ -315,6 +315,13 @@ pub fn create_text_scramble(name: &str) -> SceneNode {
     prop.set_range_f32(0., 1.);
     node.add_property(prop).unwrap();
 
+    let mut prop = Property::new("scramble_color", PropertyType::Float32, PropertySubType::Color);
+    prop.set_ui_text("Scramble Color", "Text color for characters that have not solved yet");
+    prop.set_array_len(4);
+    prop.set_defaults_f32(vec![0.36, 1., 0.51, 1.]).unwrap();
+    prop.set_range_f32(0., 1.);
+    node.add_property(prop).unwrap();
+
     let mut prop = Property::new("overflow_wrap", PropertyType::Enum, PropertySubType::Null);
     prop.set_enum_items(vec!["normal", "anywhere", "break-word"]).unwrap();
     prop.set_defaults_str(vec!["normal".to_string()]).unwrap();
