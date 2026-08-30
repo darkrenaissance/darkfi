@@ -108,9 +108,9 @@ pub async fn make(
             .scaled(BACKARROW_SCALE)
             .offset(Point::new(BACKARROW_X, BACKARROW_Y)),
     );
-    let node = node
-        .setup(|me| VectorArt::new(me, shape, app.renderer.clone(), app.redraw_trigger.clone()))
-        .await;
+    node.set_property_shape(atom, Role::App, "shape", shape).unwrap();
+    let node =
+        node.setup(|me| VectorArt::new(me, app.renderer.clone(), app.redraw_trigger.clone())).await;
     wallet_layer.link(node.clone());
     let back_bg_is_visible = PropertyBool::wrap(&node, Role::App, "is_visible", 0).unwrap();
 
@@ -307,9 +307,9 @@ pub async fn make(
         1.,
         COLOR_TEAL,
     );
-    let node = node
-        .setup(|me| VectorArt::new(me, shape, app.renderer.clone(), app.redraw_trigger.clone()))
-        .await;
+    node.set_property_shape(atom, Role::App, "shape", shape).unwrap();
+    let node =
+        node.setup(|me| VectorArt::new(me, app.renderer.clone(), app.redraw_trigger.clone())).await;
     main_layer.link(node);
 
     // Receive button click handler
@@ -425,9 +425,9 @@ pub async fn make(
         1.,
         COLOR_TEAL,
     );
-    let node = node
-        .setup(|me| VectorArt::new(me, shape, app.renderer.clone(), app.redraw_trigger.clone()))
-        .await;
+    node.set_property_shape(atom, Role::App, "shape", shape).unwrap();
+    let node =
+        node.setup(|me| VectorArt::new(me, app.renderer.clone(), app.redraw_trigger.clone())).await;
     main_layer.link(node);
 
     // Send button click handler
@@ -590,9 +590,9 @@ async fn create_chat_btn(
         1.,
         [0.2, 0.2745, 0.2784, 1.],
     );
-    let node = node
-        .setup(|me| VectorArt::new(me, shape, app.renderer.clone(), app.redraw_trigger.clone()))
-        .await;
+    node.set_property_shape(atom, Role::App, "shape", shape).unwrap();
+    let node =
+        node.setup(|me| VectorArt::new(me, app.renderer.clone(), app.redraw_trigger.clone())).await;
     parent.link(node);
 
     let node = create_vector_art("chat_btn_shape");
@@ -608,9 +608,9 @@ async fn create_chat_btn(
     let mut shape = shape::create_netlogo1([0., 0.94, 1., 1.]);
     shape.join(shape::create_netlogo2([0., 0.94, 1., 1.]));
     shape.join(shape::create_netlogo3([0., 0.94, 1., 1.]));
-    let node = node
-        .setup(|me| VectorArt::new(me, shape, app.renderer.clone(), app.redraw_trigger.clone()))
-        .await;
+    node.set_property_shape(atom, Role::App, "shape", shape).unwrap();
+    let node =
+        node.setup(|me| VectorArt::new(me, app.renderer.clone(), app.redraw_trigger.clone())).await;
     parent.link(node);
 
     let node = create_button("chat_btn");

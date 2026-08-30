@@ -21,9 +21,43 @@ use crate::{
     expr::{SExprMachine, SExprVal},
     gfx::{Dimension, Rectangle},
     scene::SceneNode as SceneNode3,
+    ui::VectorShape,
 };
+use std::sync::Arc;
 
 use super::{PropertyAtomicGuard, PropertyPtr, PropertyType, Role};
+
+#[derive(Clone)]
+pub struct PropertyShape {
+    prop: PropertyPtr,
+    role: Role,
+    idx: usize,
+}
+
+impl PropertyShape {
+    pub fn wrap(node: &SceneNode3, role: Role, prop_name: &str, idx: usize) -> Result<Self> {
+        let prop = node.get_property(prop_name).ok_or(Error::PropertyNotFound)?;
+
+        // Test if it works
+        let _ = prop.get_shape(idx)?;
+
+        Ok(Self { prop, role, idx })
+    }
+
+    pub fn get(&self) -> Arc<VectorShape> {
+        self.prop.get_shape(self.idx).unwrap()
+    }
+
+    #[allow(dead_code)]
+    pub fn set(&self, atom: &mut PropertyAtomicGuard, val: VectorShape) {
+        self.prop().set_shape(atom, self.role, self.idx, val).unwrap()
+    }
+
+    #[inline]
+    pub fn prop(&self) -> PropertyPtr {
+        self.prop.clone()
+    }
+}
 
 #[derive(Clone)]
 pub struct PropertyBool {

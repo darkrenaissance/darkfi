@@ -154,9 +154,9 @@ pub async fn create_edit_buttons(
         COLOR_CYAN,
     );
 
-    let node = node
-        .setup(|me| VectorArt::new(me, shape, app.renderer.clone(), app.redraw_trigger.clone()))
-        .await;
+    node.set_property_shape(atom, Role::App, "shape", shape).unwrap();
+    let node =
+        node.setup(|me| VectorArt::new(me, app.renderer.clone(), app.redraw_trigger.clone())).await;
     editlayer_node.link(node);
 
     // Create the cancel button

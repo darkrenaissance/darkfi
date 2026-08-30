@@ -258,9 +258,9 @@ pub async fn make(
         0.2,
     );
 
-    let node = node
-        .setup(|me| VectorArt::new(me, shape, app.renderer.clone(), app.redraw_trigger.clone()))
-        .await;
+    node.set_property_shape(atom, Role::App, "shape", shape).unwrap();
+    let node =
+        node.setup(|me| VectorArt::new(me, app.renderer.clone(), app.redraw_trigger.clone())).await;
     layer_node.link(node);
 
     // Create some text
@@ -334,9 +334,9 @@ pub async fn make(
     node.set_property_f32(atom, Role::App, "scale", VERBLOCK_SCALE).unwrap();
     let shape = shape::create_version_block([1., 0., 0.25, 1.]);
 
-    let node = node
-        .setup(|me| VectorArt::new(me, shape, app.renderer.clone(), app.redraw_trigger.clone()))
-        .await;
+    node.set_property_shape(atom, Role::App, "shape", shape).unwrap();
+    let node =
+        node.setup(|me| VectorArt::new(me, app.renderer.clone(), app.redraw_trigger.clone())).await;
     layer_node.link(node);
 
     // Write / Menu button
@@ -380,9 +380,9 @@ pub async fn make(
     prop.set_f32(atom, Role::App, 3, MENU_ICON_SCALE).unwrap();
     node.set_property_u32(atom, Role::App, "z_index", 3).unwrap();
     let shape = shape::create_menu_icon(COLOR_CYAN).scaled(MENU_ICON_SCALE);
-    let node = node
-        .setup(|me| VectorArt::new(me, shape, app.renderer.clone(), app.redraw_trigger.clone()))
-        .await;
+    node.set_property_shape(atom, Role::App, "shape", shape).unwrap();
+    let node =
+        node.setup(|me| VectorArt::new(me, app.renderer.clone(), app.redraw_trigger.clone())).await;
     mainlayer_node.link(node);
 
     // Create cancel/done edit buttons
@@ -557,9 +557,9 @@ pub async fn setup_wallet_button(app: &App, chat_layer: SceneNodePtr, i18n_fish:
     shape.join(shape::create_blockchain_netlogo2(COLOR_CYAN));
     shape.join(shape::create_blockchain_netlogo3(COLOR_CYAN));
     shape.join(shape::create_blockchain_netlogo4(COLOR_CYAN));
-    let node = node
-        .setup(|me| VectorArt::new(me, shape, app.renderer.clone(), app.redraw_trigger.clone()))
-        .await;
+    node.set_property_shape(atom, Role::App, "shape", shape).unwrap();
+    let node =
+        node.setup(|me| VectorArt::new(me, app.renderer.clone(), app.redraw_trigger.clone())).await;
     menu_layer.link(node);
 
     // Wallet button (above write_btn, square: w = h = MENU_BTN_W_R)

@@ -27,7 +27,7 @@ use crate::{
     gfx::gfxtag,
     prop::{PropertyType, Role},
     scene::{SceneNodeId, SceneNodePtr, ScenePath, Slot},
-    ui::RedrawTrigger,
+    ui::{RedrawTrigger, ShapeVertex, VectorShape},
     ExecutorPtr,
 };
 
@@ -238,13 +238,19 @@ impl ZeroMQAdapter {
                         decompile(&expr).encode(&mut reply).unwrap();
                     } else if val.is_unset() {
                         1u8.encode(&mut reply).unwrap();
-                        let default = &prop.defaults[i];
-                        default.encode(&mut reply).unwrap();
+                        // Shapes are not serialized on the get path;
+                        // the python client shows a "<...>" placeholder.
+                        if prop.typ != PropertyType::VectorShape {
+                            let default = &prop.defaults[i];
+                            default.encode(&mut reply).unwrap();
+                        }
                     } else if val.is_null() {
                         2u8.encode(&mut reply).unwrap();
                     } else {
                         0u8.encode(&mut reply).unwrap();
-                        val.encode(&mut reply).unwrap();
+                        if prop.typ != PropertyType::VectorShape {
+                            val.encode(&mut reply).unwrap();
+                        }
                     }
                 }
             }
@@ -296,6 +302,40 @@ impl ZeroMQAdapter {
                         debug!(target: "req", "  compiling expr \"{expr_str}\"");
                         let code = Compiler::new().compile(&expr_str)?;
                         prop.set_expr(atom, Role::User, prop_i, code)?;
+                    }
+                    PropertyType::VectorShape => {
+                        // Vertices carry coordinate exprs as source strings,
+                        // compiled with the same const-free compiler. The
+                        // payload is: vert count varint; per vert: x expr
+                        // string, y expr string, 4x f32 color; index count
+                        // varint; u16 indices.
+                        let cc = Compiler::new();
+                        let vert_count = VarInt::decode(&mut cur)?.0 as usize;
+                        let mut verts = vec![];
+                        for _ in 0..vert_count {
+                            let x_src = String::decode(&mut cur)?;
+                            let y_src = String::decode(&mut cur)?;
+                            let color = [
+                                f32::decode(&mut cur)?,
+                                f32::decode(&mut cur)?,
+                                f32::decode(&mut cur)?,
+                                f32::decode(&mut cur)?,
+                            ];
+                            let x = cc.compile(&x_src)?;
+                            let y = cc.compile(&y_src)?;
+                            verts.push(ShapeVertex::new(x, y, color));
+                        }
+                        let index_count = VarInt::decode(&mut cur)?.0 as usize;
+                        let mut indices = vec![];
+                        for _ in 0..index_count {
+                            let index = u16::decode(&mut cur)?;
+                            if index as usize >= verts.len() {
+                                return Err(Error::PropertyWrongIndex)
+                            }
+                            indices.push(index);
+                        }
+                        let shape = VectorShape { verts, indices };
+                        prop.set_shape(atom, Role::User, prop_i, shape)?;
                     }
                 }
             }

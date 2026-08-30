@@ -246,9 +246,9 @@ pub async fn make(
         0.2,
     );
 
-    let node = node
-        .setup(|me| VectorArt::new(me, shape, app.renderer.clone(), app.redraw_trigger.clone()))
-        .await;
+    node.set_property_shape(atom, Role::App, "shape", shape).unwrap();
+    let node =
+        node.setup(|me| VectorArt::new(me, app.renderer.clone(), app.redraw_trigger.clone())).await;
     content.link(node);
 
     // Create back arrow
@@ -261,9 +261,9 @@ pub async fn make(
     node.set_property_u32(atom, Role::App, "z_index", 3).unwrap();
 
     let shape = shape::create_back_arrow().scaled(BACKARROW_SCALE);
-    let node = node
-        .setup(|me| VectorArt::new(me, shape, app.renderer.clone(), app.redraw_trigger.clone()))
-        .await;
+    node.set_property_shape(atom, Role::App, "shape", shape).unwrap();
+    let node =
+        node.setup(|me| VectorArt::new(me, app.renderer.clone(), app.redraw_trigger.clone())).await;
     content.link(node);
 
     // Create back button
@@ -382,9 +382,9 @@ pub async fn make(
     shape.verts.append(&mut verts);
     shape.indices.append(&mut indices);
 
-    let node = node
-        .setup(|me| VectorArt::new(me, shape, app.renderer.clone(), app.redraw_trigger.clone()))
-        .await;
+    node.set_property_shape(atom, Role::App, "shape", shape).unwrap();
+    let node =
+        node.setup(|me| VectorArt::new(me, app.renderer.clone(), app.redraw_trigger.clone())).await;
     content_area.link(node);
 
     let node = create_vector_art("active_tab_overlay");
@@ -421,9 +421,9 @@ pub async fn make(
         COLOR_CYAN,
     );
 
-    let node = node
-        .setup(|me| VectorArt::new(me, shape, app.renderer.clone(), app.redraw_trigger.clone()))
-        .await;
+    node.set_property_shape(atom, Role::App, "shape", shape).unwrap();
+    let node =
+        node.setup(|me| VectorArt::new(me, app.renderer.clone(), app.redraw_trigger.clone())).await;
     content_area.link(node);
 
     let node = create_vector_art("active_tab_bg");
@@ -443,9 +443,9 @@ pub async fn make(
         [0., 0., 0., 0.5],
     );
 
-    let node = node
-        .setup(|me| VectorArt::new(me, shape, app.renderer.clone(), app.redraw_trigger.clone()))
-        .await;
+    node.set_property_shape(atom, Role::App, "shape", shape).unwrap();
+    let node =
+        node.setup(|me| VectorArt::new(me, app.renderer.clone(), app.redraw_trigger.clone())).await;
     content_area.link(node);
 
     let node = create_vector_art("inactive_tab_overlay");
@@ -489,9 +489,9 @@ pub async fn make(
         COLOR_INACTIVE,
     );
 
-    let node = node
-        .setup(|me| VectorArt::new(me, shape, app.renderer.clone(), app.redraw_trigger.clone()))
-        .await;
+    node.set_property_shape(atom, Role::App, "shape", shape).unwrap();
+    let node =
+        node.setup(|me| VectorArt::new(me, app.renderer.clone(), app.redraw_trigger.clone())).await;
     content_area.link(node);
 
     let node = create_vector_art("input_area_bg");
@@ -513,9 +513,9 @@ pub async fn make(
         [0., 0., 0., 0.5],
     );
 
-    let node = node
-        .setup(|me| VectorArt::new(me, shape, app.renderer.clone(), app.redraw_trigger.clone()))
-        .await;
+    node.set_property_shape(atom, Role::App, "shape", shape).unwrap();
+    let node =
+        node.setup(|me| VectorArt::new(me, app.renderer.clone(), app.redraw_trigger.clone())).await;
     content_area.link(node);
 
     let node = create_vector_art("fullscreen_label_bg");
@@ -581,9 +581,9 @@ pub async fn make(
         COLOR_CYAN,
     );
 
-    let node = node
-        .setup(|me| VectorArt::new(me, shape, app.renderer.clone(), app.redraw_trigger.clone()))
-        .await;
+    node.set_property_shape(atom, Role::App, "shape", shape).unwrap();
+    let node =
+        node.setup(|me| VectorArt::new(me, app.renderer.clone(), app.redraw_trigger.clone())).await;
     content_area.link(node);
 
     let node = create_button("contacts_tab_btn");
@@ -634,9 +634,9 @@ pub async fn make(
     prop.set_f32(atom, Role::App, 3, CONTACTS_ICON_SCALE).unwrap();
     node.set_property_u32(atom, Role::App, "z_index", 2).unwrap();
     let shape = shape::create_contacts_icon(COLOR_MINT).scaled(CONTACTS_ICON_SCALE);
-    let node = node
-        .setup(|me| VectorArt::new(me, shape, app.renderer.clone(), app.redraw_trigger.clone()))
-        .await;
+    node.set_property_shape(atom, Role::App, "shape", shape).unwrap();
+    let node =
+        node.setup(|me| VectorArt::new(me, app.renderer.clone(), app.redraw_trigger.clone())).await;
     content_area.link(node);
 
     let node = create_text("contacts_tab_text");
@@ -727,9 +727,9 @@ pub async fn make(
     prop.set_f32(atom, Role::App, 3, CHANNELS_ICON_SCALE).unwrap();
     node.set_property_u32(atom, Role::App, "z_index", 2).unwrap();
     let shape = shape::create_channels_icon(COLOR_INACTIVE).scaled(CHANNELS_ICON_SCALE);
-    let node = node
-        .setup(|me| VectorArt::new(me, shape, app.renderer.clone(), app.redraw_trigger.clone()))
-        .await;
+    node.set_property_shape(atom, Role::App, "shape", shape).unwrap();
+    let node =
+        node.setup(|me| VectorArt::new(me, app.renderer.clone(), app.redraw_trigger.clone())).await;
     content_area.link(node);
 
     let node = create_text("channels_tab_text");
@@ -896,9 +896,9 @@ pub async fn make(
         [0., 0., 0., 0.5],
     );
 
-    let node = node
-        .setup(|me| VectorArt::new(me, shape, app.renderer.clone(), app.redraw_trigger.clone()))
-        .await;
+    node.set_property_shape(atom, Role::App, "shape", shape).unwrap();
+    let node =
+        node.setup(|me| VectorArt::new(me, app.renderer.clone(), app.redraw_trigger.clone())).await;
     content_area.link(node);
 
     let node = create_vector_art("search_outline");
@@ -920,9 +920,9 @@ pub async fn make(
         [0.3, 0.3, 0.3, 1.],
     );
 
-    let node = node
-        .setup(|me| VectorArt::new(me, shape, app.renderer.clone(), app.redraw_trigger.clone()))
-        .await;
+    node.set_property_shape(atom, Role::App, "shape", shape).unwrap();
+    let node =
+        node.setup(|me| VectorArt::new(me, app.renderer.clone(), app.redraw_trigger.clone())).await;
     content_area.link(node);
 
     let node = create_singleline_edit("nick_edit");
@@ -1047,9 +1047,9 @@ pub async fn make(
         [0., 0., 0., 0.5],
     );
 
-    let node = node
-        .setup(|me| VectorArt::new(me, shape, app.renderer.clone(), app.redraw_trigger.clone()))
-        .await;
+    node.set_property_shape(atom, Role::App, "shape", shape).unwrap();
+    let node =
+        node.setup(|me| VectorArt::new(me, app.renderer.clone(), app.redraw_trigger.clone())).await;
     content_area.link(node);
 
     let node = create_vector_art("nick_outline");
@@ -1070,9 +1070,9 @@ pub async fn make(
         [0.3, 0.3, 0.3, 1.],
     );
 
-    let node = node
-        .setup(|me| VectorArt::new(me, shape, app.renderer.clone(), app.redraw_trigger.clone()))
-        .await;
+    node.set_property_shape(atom, Role::App, "shape", shape).unwrap();
+    let node =
+        node.setup(|me| VectorArt::new(me, app.renderer.clone(), app.redraw_trigger.clone())).await;
     content_area.link(node);
 
     let node = create_singleline_edit("secret_edit");
@@ -1198,9 +1198,9 @@ pub async fn make(
         [0., 0., 0., 0.5],
     );
 
-    let node = node
-        .setup(|me| VectorArt::new(me, shape, app.renderer.clone(), app.redraw_trigger.clone()))
-        .await;
+    node.set_property_shape(atom, Role::App, "shape", shape).unwrap();
+    let node =
+        node.setup(|me| VectorArt::new(me, app.renderer.clone(), app.redraw_trigger.clone())).await;
     content_area.link(node);
 
     let node = create_vector_art("secret_outline");
@@ -1222,9 +1222,9 @@ pub async fn make(
         CONTENT_OUTLINE_SIZE,
         [0.3, 0.3, 0.3, 1.],
     );
-    let node = node
-        .setup(|me| VectorArt::new(me, shape, app.renderer.clone(), app.redraw_trigger.clone()))
-        .await;
+    node.set_property_shape(atom, Role::App, "shape", shape).unwrap();
+    let node =
+        node.setup(|me| VectorArt::new(me, app.renderer.clone(), app.redraw_trigger.clone())).await;
     content_area.link(node);
 
     let node = create_vector_art("receive_copy_btn_bg");
@@ -1243,9 +1243,9 @@ pub async fn make(
     node.set_property_u32(atom, Role::App, "z_index", 8).unwrap();
 
     let shape = shape::create_copy(COLOR_CYAN).scaled(COPY_SCALE);
-    let node = node
-        .setup(|me| VectorArt::new(me, shape, app.renderer.clone(), app.redraw_trigger.clone()))
-        .await;
+    node.set_property_shape(atom, Role::App, "shape", shape).unwrap();
+    let node =
+        node.setup(|me| VectorArt::new(me, app.renderer.clone(), app.redraw_trigger.clone())).await;
     content_area.link(node);
 
     // Clickable overlay: paste clipboard contents into the KEY field.
@@ -1340,9 +1340,9 @@ pub async fn make(
         COLOR_CYAN,
     );
 
-    let node = node
-        .setup(|me| VectorArt::new(me, shape, app.renderer.clone(), app.redraw_trigger.clone()))
-        .await;
+    node.set_property_shape(atom, Role::App, "shape", shape).unwrap();
+    let node =
+        node.setup(|me| VectorArt::new(me, app.renderer.clone(), app.redraw_trigger.clone())).await;
     editlayer_node.link(node);
 
     let node = create_button("addcontact_btn");

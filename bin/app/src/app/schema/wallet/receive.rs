@@ -131,9 +131,9 @@ pub async fn make(
     prop.add_depend(&addr_h_prop, 0, "addr_height");
     node.set_property_u32(atom, Role::App, "z_index", 2).unwrap();
     let shape = shape::create_copy(COLOR_CYAN).scaled(COPY_SCALE);
-    let node = node
-        .setup(|me| VectorArt::new(me, shape, app.renderer.clone(), app.redraw_trigger.clone()))
-        .await;
+    node.set_property_shape(atom, Role::App, "shape", shape).unwrap();
+    let node =
+        node.setup(|me| VectorArt::new(me, app.renderer.clone(), app.redraw_trigger.clone())).await;
     receive_layer.link(node);
 
     let node = create_button("receive_copy_btn");

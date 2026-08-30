@@ -259,9 +259,9 @@ pub async fn create_bg_mesh(
         expr::load_var("h"),
         [[0., 0., 0., 0.5], [0., 0., 0., 0.5], [0., 0., 0., 0.5], [0., 0., 0., 0.8]],
     );
-    let node = node
-        .setup(|me| VectorArt::new(me, shape, app.renderer.clone(), app.redraw_trigger.clone()))
-        .await;
+    node.set_property_shape(atom, Role::App, "shape", shape).unwrap();
+    let node =
+        node.setup(|me| VectorArt::new(me, app.renderer.clone(), app.redraw_trigger.clone())).await;
     layer.link(node);
 }
 
@@ -313,9 +313,9 @@ pub async fn create_header_bg(
         8,
         0.2,
     );
-    let node = node
-        .setup(|me| VectorArt::new(me, shape, app.renderer.clone(), app.redraw_trigger.clone()))
-        .await;
+    node.set_property_shape(atom, Role::App, "shape", shape).unwrap();
+    let node =
+        node.setup(|me| VectorArt::new(me, app.renderer.clone(), app.redraw_trigger.clone())).await;
     layer.link(node);
 }
 
@@ -345,8 +345,9 @@ pub async fn create_separator_expr(
         expr::const_f32(1.),
         [0.2, 0.2745, 0.2784, 1.],
     );
+    sep_node.set_property_shape(atom, Role::App, "shape", shape).unwrap();
     let sep_node = sep_node
-        .setup(|me| VectorArt::new(me, shape, app.renderer.clone(), app.redraw_trigger.clone()))
+        .setup(|me| VectorArt::new(me, app.renderer.clone(), app.redraw_trigger.clone()))
         .await;
     layer.link(sep_node.clone());
     sep_node
@@ -377,8 +378,8 @@ pub async fn create_separator(
         expr::const_f32(1.),
         [0.2, 0.2745, 0.2784, 1.],
     );
-    let sep_node =
-        sep_node.setup(|me| VectorArt::new(me, shape, renderer.clone(), redraw.clone())).await;
+    sep_node.set_property_shape(atom, Role::App, "shape", shape).unwrap();
+    let sep_node = sep_node.setup(|me| VectorArt::new(me, renderer.clone(), redraw.clone())).await;
     layer.link(sep_node.clone());
 
     *y += 1.;
@@ -417,9 +418,9 @@ pub async fn create_bottom_button(
         1.,
         COLOR_TEAL,
     );
-    let node = node
-        .setup(|me| VectorArt::new(me, shape, app.renderer.clone(), app.redraw_trigger.clone()))
-        .await;
+    node.set_property_shape(atom, Role::App, "shape", shape).unwrap();
+    let node =
+        node.setup(|me| VectorArt::new(me, app.renderer.clone(), app.redraw_trigger.clone())).await;
     layer.link(node.clone());
 
     // Button label text (if provided)
@@ -508,8 +509,9 @@ pub async fn create_bottom_button_with_states(
         1.,
         COLOR_TEAL,
     );
+    bg_valid.set_property_shape(atom, Role::App, "shape", shape).unwrap();
     let bg_valid = bg_valid
-        .setup(|me| VectorArt::new(me, shape, app.renderer.clone(), app.redraw_trigger.clone()))
+        .setup(|me| VectorArt::new(me, app.renderer.clone(), app.redraw_trigger.clone()))
         .await;
     layer.link(bg_valid.clone());
 
@@ -533,8 +535,9 @@ pub async fn create_bottom_button_with_states(
         1.,
         [0.5, 0.5, 0.5, 1.],
     );
+    bg_invalid.set_property_shape(atom, Role::App, "shape", shape).unwrap();
     let bg_invalid = bg_invalid
-        .setup(|me| VectorArt::new(me, shape, app.renderer.clone(), app.redraw_trigger.clone()))
+        .setup(|me| VectorArt::new(me, app.renderer.clone(), app.redraw_trigger.clone()))
         .await;
     layer.link(bg_invalid.clone());
 
@@ -658,9 +661,9 @@ pub async fn create_tooltip(
         1.,
         text_color,
     );
-    let node = node
-        .setup(|me| VectorArt::new(me, shape, app.renderer.clone(), app.redraw_trigger.clone()))
-        .await;
+    node.set_property_shape(atom, Role::App, "shape", shape).unwrap();
+    let node =
+        node.setup(|me| VectorArt::new(me, app.renderer.clone(), app.redraw_trigger.clone())).await;
     tooltip_layer.link(node);
 
     // Create text

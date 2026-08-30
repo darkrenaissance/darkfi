@@ -36,6 +36,7 @@ use crate::{
     pubsub::{Publisher, PublisherPtr, Subscription},
     setting::SettingPtr,
     ui,
+    ui::VectorShape,
 };
 
 macro_rules! t { ($($arg:tt)*) => { trace!(target: "scene", $($arg)*); } }
@@ -329,6 +330,15 @@ impl SceneNode {
         val: SceneNodeId,
     ) -> Result<()> {
         self.get_property(name).ok_or(Error::PropertyNotFound)?.set_node_id(atom, role, 0, val)
+    }
+    pub fn set_property_shape(
+        &self,
+        atom: &mut PropertyAtomicGuard,
+        role: Role,
+        name: &str,
+        val: VectorShape,
+    ) -> Result<()> {
+        self.get_property(name).ok_or(Error::PropertyNotFound)?.set_shape(atom, role, 0, val)
     }
 
     pub fn set_property_f32_vec(

@@ -22,8 +22,9 @@ use crate::{
     gfx::{Point, Vertex},
     mesh::Color,
 };
+use darkfi_serial::{Encodable, VarInt};
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub struct ShapeVertex {
     x: SExprCode,
     y: SExprCode,
@@ -73,7 +74,7 @@ fn sexpr_mul(mut x: SExprCode, op: Op) -> Option<Op> {
     Some(Op::Mul((Box::new(eqn), Box::new(op))))
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub struct VectorShape {
     pub verts: Vec<ShapeVertex>,
     pub indices: Vec<u16>,
@@ -348,5 +349,58 @@ impl VectorShape {
             verts: self.verts.into_iter().map(|v| v.offset(off)).collect(),
             indices: self.indices,
         }
+    }
+}
+
+impl Encodable for ShapeVertex {
+    fn encode<S: std::io::Write>(&self, s: &mut S) -> std::result::Result<usize, std::io::Error> {
+        let mut len = 0;
+        len += self.x.encode(s)?;
+        len += self.y.encode(s)?;
+        for c in self.color {
+            len += c.encode(s)?;
+        }
+        Ok(len)
+    }
+}
+
+impl Encodable for VectorShape {
+    fn encode<S: std::io::Write>(&self, s: &mut S) -> std::result::Result<usize, std::io::Error> {
+        let mut len = 0;
+        len += VarInt(self.verts.len() as u64).encode(s)?;
+        for vert in &self.verts {
+            len += vert.encode(s)?;
+        }
+        len += VarInt(self.indices.len() as u64).encode(s)?;
+        for index in &self.indices {
+            len += index.encode(s)?;
+        }
+        Ok(len)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use darkfi_serial::serialize;
+
+    #[test]
+    fn encode_shape() {
+        let mut shape = VectorShape::new();
+        shape.add_filled_box(
+            vec![Op::ConstFloat32(0.)],
+            vec![Op::ConstFloat32(0.)],
+            vec![Op::ConstFloat32(10.)],
+            vec![Op::ConstFloat32(10.)],
+            [0., 0., 0., 1.],
+        );
+
+        let data = serialize(&shape);
+        // vert count, then first vert: x code len 1, ConstFloat32 op tag 7
+        assert_eq!(data[0], 4);
+        assert_eq!(data[1], 1);
+        assert_eq!(data[2], 7);
+        // 4 verts x (1+1+4) x 2 coords + 16 color bytes, then 6 u16 indices
+        assert_eq!(data.len(), 1 + 4 * (6 + 6 + 16) + 1 + 6 * 2);
     }
 }

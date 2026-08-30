@@ -86,6 +86,7 @@ class PropertyType:
     ENUM = 5
     SCENE_NODE_ID = 7
     SEXPR = 8
+    VECTOR_SHAPE = 9
 
     @staticmethod
     def to_str(prop_type):
@@ -106,6 +107,8 @@ class PropertyType:
                 return "scene_node_id"
             case PropertyType.SEXPR:
                 return "sexpr"
+            case PropertyType.VECTOR_SHAPE:
+                return "vector_shape"
 
 class PropertySubType:
     NULL = 0
@@ -528,6 +531,9 @@ class Api:
                 return serial.decode_str(cur)
             case PropertyType.SCENE_NODE_ID:
                 return serial.read_u32(cur)
+            case PropertyType.VECTOR_SHAPE:
+                # Shapes carry no payload on the get path
+                return "<...>"
             case _:
                 raise Exception("unknown property type returned")
 
@@ -713,6 +719,25 @@ class Api:
         serial.write_u32(req, i)
         serial.write_u8(req, PropertyType.SEXPR)
         serial.encode_str(req, expr_str)
+        self._make_request(Command.SET_PROPERTY_VALUE, req)
+
+    def set_property_shape(self, node_path, prop_name, i, verts, indices):
+        # verts: list of (x_expr, y_expr, [r, g, b, a]) tuples, where the
+        # coordinate exprs use the same source language as set_property_expr
+        req = bytearray()
+        serial.encode_str(req, node_path)
+        serial.encode_str(req, prop_name)
+        serial.write_u32(req, i)
+        serial.write_u8(req, PropertyType.VECTOR_SHAPE)
+        serial.encode_varint(req, len(verts))
+        for (x_expr, y_expr, color) in verts:
+            serial.encode_str(req, x_expr)
+            serial.encode_str(req, y_expr)
+            for c in color:
+                serial.write_f32(req, c)
+        serial.encode_varint(req, len(indices))
+        for index in indices:
+            serial.write_u16(req, index)
         self._make_request(Command.SET_PROPERTY_VALUE, req)
 
     def get_signals(self, node_path):

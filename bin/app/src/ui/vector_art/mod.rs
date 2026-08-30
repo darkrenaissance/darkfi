@@ -27,7 +27,8 @@ use crate::{
         gfxtag, DrawCall, DrawInstruction, DrawMesh, EpochCache, Rectangle, RenderApi, Renderer,
     },
     prop::{
-        PropertyAtomicGuard, PropertyBool, PropertyFloat32, PropertyRect, PropertyUint32, Role,
+        PropertyAtomicGuard, PropertyBool, PropertyFloat32, PropertyRect, PropertyShape,
+        PropertyUint32, Role,
     },
     scene::{Pimpl, SceneNodeWeak},
     ExecutorPtr,
@@ -36,7 +37,6 @@ use crate::{
 use super::{DrawUpdate, OnModify, RedrawTrigger, UIObject};
 
 pub mod shape;
-use shape::VectorShape;
 
 pub type VectorArtPtr = Arc<VectorArt>;
 
@@ -46,7 +46,7 @@ pub struct VectorArt {
     redraw: RedrawTrigger,
     tasks: SyncMutex<Vec<smol::Task<()>>>,
 
-    shape: VectorShape,
+    shape: PropertyShape,
     dc_key: u64,
 
     is_visible: PropertyBool,
@@ -57,20 +57,16 @@ pub struct VectorArt {
 
     /// Cached draw instructions. Empty means the output is stale and must
     /// be recomputed by the draw pass. Entries from a dead UI epoch are
-    /// evicted automatically. Shape is static, so only visibility, rect,
-    /// scale and z_index changes invalidate it.
+    /// evicted automatically. Visibility, rect, scale, z_index and shape
+    /// changes invalidate it.
     draw_cache: EpochCache<Vec<DrawInstruction>>,
 }
 
 impl VectorArt {
-    pub async fn new(
-        node: SceneNodeWeak,
-        shape: VectorShape,
-        renderer: Renderer,
-        redraw: RedrawTrigger,
-    ) -> Pimpl {
+    pub async fn new(node: SceneNodeWeak, renderer: Renderer, redraw: RedrawTrigger) -> Pimpl {
         let node_ref = &node.upgrade().unwrap();
         let is_visible = PropertyBool::wrap(node_ref, Role::Internal, "is_visible", 0).unwrap();
+        let shape = PropertyShape::wrap(node_ref, Role::Internal, "shape", 0).unwrap();
         let rect = PropertyRect::wrap(node_ref, Role::Internal, "rect").unwrap();
         let scale = PropertyFloat32::wrap(node_ref, Role::Internal, "scale", 0).unwrap();
         let z_index = PropertyUint32::wrap(node_ref, Role::Internal, "z_index", 0).unwrap();
@@ -107,9 +103,16 @@ impl VectorArt {
 
         let rect = self.rect.get();
         let scale = self.scale.get();
-        let mut verts = self.shape.eval(rect.w, rect.h).expect("bad shape");
-        let indices = self.shape.indices.clone();
-        let num_elements = self.shape.indices.len() as i32;
+        let shape = self.shape.get();
+        let mut verts = match shape.eval(rect.w, rect.h) {
+            Ok(verts) => verts,
+            Err(e) => {
+                warn!(target: "ui::vector_art", "Shape eval failure: {e}");
+                return vec![]
+            }
+        };
+        let indices = shape.indices.clone();
+        let num_elements = shape.indices.len() as i32;
 
         // Apply scaling
         for v in &mut verts {
@@ -173,6 +176,10 @@ impl UIObject for VectorArt {
         // (the pass's own evals) are skipped: reacting to them would queue
         // a pass for every pass, forever.
         on_modify.when_change_external(self.is_visible.prop(), |self_, _| async move {
+            self_.draw_cache.clear();
+            self_.redraw.trigger();
+        });
+        on_modify.when_change_external(self.shape.prop(), |self_, _| async move {
             self_.draw_cache.clear();
             self_.redraw.trigger();
         });

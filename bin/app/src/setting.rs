@@ -187,7 +187,9 @@ impl Setting {
             PropertyType::Str => decode_ty!(String, Str),
             PropertyType::Enum => decode_ty!(String, Enum),
             PropertyType::SceneNodeId => decode_ty!(u32, SceneNodeId),
-            PropertyType::Null | PropertyType::SExpr => return Err(Error::PropertyWrongType),
+            PropertyType::Null | PropertyType::SExpr | PropertyType::VectorShape => {
+                return Err(Error::PropertyWrongType)
+            }
         };
 
         Ok(val)
@@ -208,7 +210,9 @@ impl Setting {
             PropertyValue::Enum(v) => prop.set_enum(atom, Role::User, i, v),
             PropertyValue::SceneNodeId(v) => prop.set_node_id(atom, Role::User, i, v),
             PropertyValue::Null => prop.set_null(atom, Role::User, i),
-            PropertyValue::Unset | PropertyValue::SExpr(_) => Err(Error::PropertyWrongType),
+            PropertyValue::Unset | PropertyValue::SExpr(_) | PropertyValue::VectorShape(_) => {
+                Err(Error::PropertyWrongType)
+            }
         }
     }
 }

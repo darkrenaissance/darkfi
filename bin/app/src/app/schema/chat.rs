@@ -290,7 +290,8 @@ pub async fn make(
         expr::load_var("h"),
         [[0., 0., 0., 0.5], [0., 0., 0., 0.5], [0., 0., 0., 0.5], [0., 0., 0., 0.8]],
     );
-    let node = node.setup(|me| VectorArt::new(me, shape, renderer.clone(), redraw.clone())).await;
+    node.set_property_shape(atom, Role::App, "shape", shape).unwrap();
+    let node = node.setup(|me| VectorArt::new(me, renderer.clone(), redraw.clone())).await;
     layer_node.link(node);
 
     // Create the toolbar bg
@@ -348,7 +349,9 @@ pub async fn make(
         0.2,
     );
 
-    let node = node.setup(|me| VectorArt::new(me, shape, renderer.clone(), redraw.clone())).await;
+    node.set_property_shape(atom, Role::App, "shape", shape).unwrap();
+
+    let node = node.setup(|me| VectorArt::new(me, renderer.clone(), redraw.clone())).await;
     layer_node.link(node);
 
     // Create the send button
@@ -361,8 +364,9 @@ pub async fn make(
     node.set_property_u32(atom, Role::App, "z_index", 3).unwrap();
 
     let shape = shape::create_back_arrow().scaled(BACKARROW_SCALE);
+    node.set_property_shape(atom, Role::App, "shape", shape).unwrap();
     let back_btn_bg_node =
-        node.setup(|me| VectorArt::new(me, shape, renderer.clone(), redraw.clone())).await;
+        node.setup(|me| VectorArt::new(me, renderer.clone(), redraw.clone())).await;
     layer_node.link(back_btn_bg_node.clone());
 
     // Create the back button
@@ -528,7 +532,8 @@ pub async fn make(
     //    expr::load_var("h"),
     //    [0.41, 0.6, 0.65, 1.],
     //);
-    let node = node.setup(|me| VectorArt::new(me, shape, renderer.clone(), redraw.clone())).await;
+    node.set_property_shape(atom, Role::App, "shape", shape).unwrap();
+    let node = node.setup(|me| VectorArt::new(me, renderer.clone(), redraw.clone())).await;
     layer_node.link(node);
 
     // Main content view
@@ -755,7 +760,8 @@ pub async fn make(
     let mut shape =
         shape::create_down_bgtab(rgba!(0x003232ff), rgba!(0x294f60ff), 0.1).scaled(DOWNARROW_SCALE);
     shape.join(shape::create_down_arrow(rgba!(0x00f0ffff), 1.));
-    let node = node.setup(|me| VectorArt::new(me, shape, renderer.clone(), redraw.clone())).await;
+    node.set_property_shape(atom, Role::App, "shape", shape).unwrap();
+    let node = node.setup(|me| VectorArt::new(me, renderer.clone(), redraw.clone())).await;
     down_layer.link(node);
 
     // Create the p2p toggle button
@@ -819,7 +825,8 @@ pub async fn make(
         1.,
         COLOR_RED,
     ));
-    let node = node.setup(|me| VectorArt::new(me, shape, renderer.clone(), redraw.clone())).await;
+    node.set_property_shape(atom, Role::App, "shape", shape).unwrap();
+    let node = node.setup(|me| VectorArt::new(me, renderer.clone(), redraw.clone())).await;
     select_layer.link(node);
 
     let node = create_vector_art("copy_bg");
@@ -831,7 +838,8 @@ pub async fn make(
     prop.set_f32(atom, Role::App, 3, CHATEDIT_HEIGHT).unwrap();
     node.set_property_u32(atom, Role::App, "z_index", 1).unwrap();
     let shape = shape::create_copy(COLOR_WHITE).scaled(COPY_BTN_SCALE);
-    let node = node.setup(|me| VectorArt::new(me, shape, renderer.clone(), redraw.clone())).await;
+    node.set_property_shape(atom, Role::App, "shape", shape).unwrap();
+    let node = node.setup(|me| VectorArt::new(me, renderer.clone(), redraw.clone())).await;
     select_layer.link(node);
 
     // unselect_btn sits over the back button and calls the chatview's unselect.
@@ -965,7 +973,8 @@ pub async fn make(
     //    expr::load_var("h"),
     //    [0.41, 0.6, 0.65, 1.],
     //);
-    let node = node.setup(|me| VectorArt::new(me, shape, renderer.clone(), redraw.clone())).await;
+    node.set_property_shape(atom, Role::App, "shape", shape).unwrap();
+    let node = node.setup(|me| VectorArt::new(me, renderer.clone(), redraw.clone())).await;
     layer_node.link(node);
 
     // Create the send button
@@ -979,7 +988,8 @@ pub async fn make(
     prop.set_f32(atom, Role::App, 3, 500.).unwrap();
     node.set_property_u32(atom, Role::App, "z_index", 5).unwrap();
     let shape = shape::create_send_arrow().scaled(EMOJI_SCALE);
-    let node = node.setup(|me| VectorArt::new(me, shape, renderer.clone(), redraw.clone())).await;
+    node.set_property_shape(atom, Role::App, "shape", shape).unwrap();
+    let node = node.setup(|me| VectorArt::new(me, renderer.clone(), redraw.clone())).await;
     layer_node.link(node);
 
     // Create the emoji button
@@ -997,7 +1007,8 @@ pub async fn make(
         ColorScheme::PaperLight => [0., 0., 0., 1.],
     };
     let shape = shape::create_emoji_selector(color).scaled(EMOJI_SCALE);
-    let node = node.setup(|me| VectorArt::new(me, shape, renderer.clone(), redraw.clone())).await;
+    node.set_property_shape(atom, Role::App, "shape", shape).unwrap();
+    let node = node.setup(|me| VectorArt::new(me, renderer.clone(), redraw.clone())).await;
     layer_node.link(node);
 
     // Create the emoji button
@@ -1012,7 +1023,8 @@ pub async fn make(
     prop.set_f32(atom, Role::App, 3, 500.).unwrap();
     node.set_property_u32(atom, Role::App, "z_index", 5).unwrap();
     let shape = shape::create_close_icon().scaled(EMOJI_CLOSE_SCALE);
-    let node = node.setup(|me| VectorArt::new(me, shape, renderer.clone(), redraw.clone())).await;
+    node.set_property_shape(atom, Role::App, "shape", shape).unwrap();
+    let node = node.setup(|me| VectorArt::new(me, renderer.clone(), redraw.clone())).await;
     layer_node.link(node);
 
     // Text edit
@@ -1186,8 +1198,9 @@ pub async fn make(
             [0., 0., 0., 0.],
         ]
     );
+    node.set_property_shape(atom, Role::App, "shape", shape).unwrap();
     let node =
-        node.setup(|me| VectorArt::new(me, shape, renderer.clone(), redraw.clone())).await;
+        node.setup(|me| VectorArt::new(me, renderer.clone(), redraw.clone())).await;
     layer_node.link(node);
     */
 
@@ -1581,7 +1594,9 @@ pub async fn make(
         [0.29, 0.51, 0.45, 1.],
     );
 
-    let node = node.setup(|me| VectorArt::new(me, shape, renderer.clone(), redraw.clone())).await;
+    node.set_property_shape(atom, Role::App, "shape", shape).unwrap();
+
+    let node = node.setup(|me| VectorArt::new(me, renderer.clone(), redraw.clone())).await;
     nick_row_node.link(node);
 
     // Create some text
@@ -1674,7 +1689,9 @@ pub async fn make(
         [0.29, 0.51, 0.45, 1.],
     );
 
-    let node = node.setup(|me| VectorArt::new(me, shape, renderer.clone(), redraw.clone())).await;
+    node.set_property_shape(atom, Role::App, "shape", shape).unwrap();
+
+    let node = node.setup(|me| VectorArt::new(me, renderer.clone(), redraw.clone())).await;
     me_row_node.link(node);
 
     // Create some text

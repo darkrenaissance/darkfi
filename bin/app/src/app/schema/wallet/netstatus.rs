@@ -105,9 +105,9 @@ pub async fn make(
     shape.join(shape::create_blockchain_netlogo2([0.27, 0.4, 0.4, 1.]));
     shape.join(shape::create_blockchain_netlogo3([0.27, 0.4, 0.4, 1.]));
     shape.join(shape::create_blockchain_netlogo4([0.27, 0.4, 0.4, 1.]));
-    let net0_node = node
-        .setup(|me| VectorArt::new(me, shape, app.renderer.clone(), app.redraw_trigger.clone()))
-        .await;
+    node.set_property_shape(atom, Role::App, "shape", shape).unwrap();
+    let net0_node =
+        node.setup(|me| VectorArt::new(me, app.renderer.clone(), app.redraw_trigger.clone())).await;
     netlayer_node.link(net0_node);
 
     let node = create_vector_art("net1");
@@ -124,9 +124,9 @@ pub async fn make(
     shape.join(shape::create_blockchain_netlogo2([0.73, 0.62, 1., 1.]));
     shape.join(shape::create_blockchain_netlogo3([0.27, 0.4, 0.4, 1.]));
     shape.join(shape::create_blockchain_netlogo4([0.27, 0.4, 0.4, 1.]));
-    let net1_node = node
-        .setup(|me| VectorArt::new(me, shape, app.renderer.clone(), app.redraw_trigger.clone()))
-        .await;
+    node.set_property_shape(atom, Role::App, "shape", shape).unwrap();
+    let net1_node =
+        node.setup(|me| VectorArt::new(me, app.renderer.clone(), app.redraw_trigger.clone())).await;
     netlayer_node.link(net1_node);
 
     let node = create_vector_art("net2");
@@ -143,9 +143,9 @@ pub async fn make(
     shape.join(shape::create_blockchain_netlogo2([0.49, 0.57, 1., 1.]));
     shape.join(shape::create_blockchain_netlogo3([0.49, 0.57, 1., 1.]));
     shape.join(shape::create_blockchain_netlogo4([0.27, 0.4, 0.4, 1.]));
-    let net2_node = node
-        .setup(|me| VectorArt::new(me, shape, app.renderer.clone(), app.redraw_trigger.clone()))
-        .await;
+    node.set_property_shape(atom, Role::App, "shape", shape).unwrap();
+    let net2_node =
+        node.setup(|me| VectorArt::new(me, app.renderer.clone(), app.redraw_trigger.clone())).await;
     netlayer_node.link(net2_node);
 
     let node = create_vector_art("net3");
@@ -162,9 +162,9 @@ pub async fn make(
     shape.join(shape::create_blockchain_netlogo2([0., 0.94, 1., 1.]));
     shape.join(shape::create_blockchain_netlogo3([0., 0.94, 1., 1.]));
     shape.join(shape::create_blockchain_netlogo4([0., 0.94, 1., 1.]));
-    let net3_node = node
-        .setup(|me| VectorArt::new(me, shape, app.renderer.clone(), app.redraw_trigger.clone()))
-        .await;
+    node.set_property_shape(atom, Role::App, "shape", shape).unwrap();
+    let net3_node =
+        node.setup(|me| VectorArt::new(me, app.renderer.clone(), app.redraw_trigger.clone())).await;
     netlayer_node.link(net3_node);
 
     netlayer_node

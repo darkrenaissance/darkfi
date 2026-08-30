@@ -93,6 +93,9 @@ pub fn create_vector_art(name: &str) -> SceneNode {
     prop.set_defaults_bool(vec![true]).unwrap();
     node.add_property(prop).unwrap();
 
+    let prop = Property::new("shape", PropertyType::VectorShape, PropertySubType::Null);
+    node.add_property(prop).unwrap();
+
     let mut prop = Property::new("rect", PropertyType::Float32, PropertySubType::Pixel);
     prop.set_array_len(4);
     prop.allow_exprs();
