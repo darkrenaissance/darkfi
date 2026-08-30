@@ -385,7 +385,6 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish) {
                 window_scale.clone(),
                 app.renderer.clone(),
                 app.redraw_trigger.clone(),
-                app.sg_root.clone(),
                 app.ex.clone(),
             )
         })

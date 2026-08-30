@@ -1530,7 +1530,7 @@ pub async fn make(
         while let Ok(data) = recvr.recv().await {
             let contact: String = deserialize(&data).unwrap();
             i!("Selected contact: {contact}");
-            let path = format!("/window/content/{}_chat_layer", &contact);
+            let path = format!("/window/content/chat/{}_chat_layer", &contact);
             let atom = &mut redraw2.make_guard(gfxtag!("contact_selected"));
 
             if let Some(node) = sg_root.lookup_node(&path) {
@@ -1539,7 +1539,7 @@ pub async fn make(
                 continue;
             }
 
-            let content = sg_root.lookup_node("/window/content").unwrap();
+            let content = sg_root.lookup_node("/window/content/chat").unwrap();
             let node = chat::make(
                 &sg_root,
                 &renderer,
@@ -1558,7 +1558,7 @@ pub async fn make(
             }
             node.set_property_bool(atom, Role::App, "is_visible", true).unwrap();
 
-            let main_menu = sg_root.lookup_node("/window/content/menu_layer/main_menu").unwrap();
+            let main_menu = sg_root.lookup_node("/window/content/chat/menu_layer/main_menu").unwrap();
             let items_prop = main_menu.get_property("items").unwrap();
             if !items_prop.contains_str(&contact) {
                 items_prop.push_str(atom, Role::App, &contact).unwrap();

@@ -1617,7 +1617,6 @@ pub async fn make(
     let sg_root = app.sg_root.clone();
     let renderer = app.renderer.clone();
     let ex = app.ex.clone();
-    let content2 = content.clone();
     let channel_vis = channel_is_visible.clone();
     let window_scale2 = window_scale.clone();
     let kv_db2 = kv_db.clone();
@@ -1629,7 +1628,7 @@ pub async fn make(
         while let Ok(data) = recvr.recv().await {
             let channel: String = deserialize(&data).unwrap();
             i!("Selected channel: {channel}");
-            let path = format!("/window/content/{}_chat_layer", &channel);
+            let path = format!("/window/content/chat/{}_chat_layer", &channel);
 
             let atom = &mut redraw2.make_guard(gfxtag!("channel_selected"));
 
@@ -1640,7 +1639,7 @@ pub async fn make(
                 continue;
             }
 
-            let content = sg_root.lookup_node("/window/content").unwrap();
+            let content = sg_root.lookup_node("/window/content/chat").unwrap();
             // Create the chat layer and get the node
             let node = chat::make(
                 &sg_root,
@@ -1664,7 +1663,7 @@ pub async fn make(
             node.set_property_bool(atom, Role::App, "is_visible", true).unwrap();
 
             // Add to main_menu items (check if not already there)
-            let main_menu = sg_root.lookup_node("/window/content/menu_layer/main_menu").unwrap();
+            let main_menu = sg_root.lookup_node("/window/content/chat/menu_layer/main_menu").unwrap();
             let items_prop = main_menu.get_property("items").unwrap();
 
             if !items_prop.contains_str(&channel) {

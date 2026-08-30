@@ -490,6 +490,17 @@ pub async fn make(
                     debug!(target: "app::menu", "deleted item: {item}");
                     node.unlink();
                 }
+
+                // The selection overlay is a sibling of the chat layer, not
+                // a child: it needs z_index/priority above netstatus_layer,
+                // which it can only get in the shared parent. Remove it
+                // alongside so it does not leak.
+                let path = format!("/window/content/chat/{}_select_layer", item);
+                if let Some(node) = sg_root.lookup_node(&path) {
+                    node.clear_tasks();
+                    debug!(target: "app::menu", "deleted select overlay: {item}");
+                    node.unlink();
+                }
             }
 
             // Unlinking changes no property, so request a pass explicitly:

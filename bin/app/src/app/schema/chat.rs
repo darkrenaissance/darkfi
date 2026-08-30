@@ -681,7 +681,6 @@ pub async fn make(
                 window_scale.clone(),
                 renderer.clone(),
                 redraw.clone(),
-                sg_root.clone(),
                 ex.clone(),
             )
         })
