@@ -140,7 +140,7 @@ impl DrkPlugin {
             PropertyEnum::wrap(&setting_node, Role::Internal, "net.transport", 0).unwrap();
 
         let endpoint = Url::parse(DARKFID_ENDPOINT_TCP).unwrap();
-        i!("Using {transport} transport for darkfid connection");
+        i!("Using {endpoint} transport for darkfid connection");
 
         let drk = match Drk::new(
             Network::Testnet,
@@ -697,7 +697,7 @@ impl DrkPlugin {
     }
 
     async fn start(self: Arc<Self>, ex: ExecutorPtr, tasks: Vec<smol::Task<()>>) {
-        let self2 = self.clone();
+        let me2 = Arc::downgrade(&self);
         let drk = self.drk.clone();
         let (shell_sender, shell_receiver) = unbounded();
         let ex_ = ex.clone();
@@ -718,6 +718,7 @@ impl DrkPlugin {
                     }
                 };
                 let status: u8 = if progress > 0.5 { 2 } else { 1 };
+                let Some(self2) = me2.upgrade() else { break };
                 let Some(node) = self2.node.upgrade() else { continue };
                 let start_height = first_height.unwrap();
                 let blocks_scanned = height - start_height;
@@ -732,11 +733,12 @@ impl DrkPlugin {
             }
         });
 
-        let self2 = self.clone();
+        let me2 = Arc::downgrade(&self);
 
         // Task that handles the RPC subscription with retry logic
         let subscribe_task = ex.spawn(async move {
             loop {
+                let Some(self2) = me2.upgrade() else { break };
                 let endpoint = self2.endpoint();
                 i!("Attempting to connect to darkfid daemon at {}", endpoint);
                 let subscribe_rpc_task = StoppableTask::new();
@@ -811,9 +813,10 @@ impl DrkPlugin {
             }
         });
 
-        let self2 = self.clone();
+        let me2 = Arc::downgrade(&self);
         let subscribe_recv_task = ex.spawn(async move {
             loop {
+                let Some(self2) = me2.upgrade() else { break };
                 let recv = shell_receiver.recv().await;
 
                 if let Ok(lines) = recv {
