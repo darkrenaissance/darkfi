@@ -23,7 +23,7 @@ use zeromq::{Socket, SocketRecv, SocketSend};
 
 use crate::{
     error::{Error, Result},
-    expr::SExprCode,
+    expr::{decompile, Compiler},
     gfx::gfxtag,
     prop::{PropertyType, Role},
     scene::{SceneNodeId, SceneNodePtr, ScenePath, Slot},
@@ -228,15 +228,20 @@ impl ZeroMQAdapter {
                 prop.typ.encode(&mut reply).unwrap();
                 VarInt(prop.get_len() as u64).encode(&mut reply).unwrap();
                 for i in 0..prop.get_len() {
-                    let val = prop.get_value(i)?;
-                    if val.is_unset() {
+                    // Check the raw stored value, since get_value() resolves
+                    // exprs to their cached/default value and would never
+                    // report the EXPR status.
+                    let val = prop.get_raw_value(i)?;
+                    if val.is_expr() {
+                        3u8.encode(&mut reply).unwrap();
+                        let expr = prop.get_expr(i)?;
+                        decompile(&expr).encode(&mut reply).unwrap();
+                    } else if val.is_unset() {
                         1u8.encode(&mut reply).unwrap();
                         let default = &prop.defaults[i];
                         default.encode(&mut reply).unwrap();
                     } else if val.is_null() {
                         2u8.encode(&mut reply).unwrap();
-                    } else if val.is_expr() {
-                        3u8.encode(&mut reply).unwrap();
                     } else {
                         0u8.encode(&mut reply).unwrap();
                         val.encode(&mut reply).unwrap();
@@ -284,9 +289,13 @@ impl ZeroMQAdapter {
                         prop.set_node_id(atom, Role::User, prop_i, val)?;
                     }
                     PropertyType::SExpr => {
-                        let val = SExprCode::decode(&mut cur).unwrap();
-                        debug!(target: "req", "  received code {:?}", val);
-                        prop.set_expr(atom, Role::User, prop_i, val)?;
+                        // Exprs are sent as source strings and compiled here.
+                        // The netdebug compiler is const-free: only machine
+                        // globals (w, h, ...) are available as variables.
+                        let expr_str = String::decode(&mut cur).unwrap();
+                        debug!(target: "req", "  compiling expr \"{expr_str}\"");
+                        let code = Compiler::new().compile(&expr_str)?;
+                        prop.set_expr(atom, Role::User, prop_i, code)?;
                     }
                 }
             }

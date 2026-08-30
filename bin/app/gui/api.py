@@ -1,9 +1,8 @@
 from collections import namedtuple
-from pydrk import Api, HostApi, PropertyType, PropertySubType, Property, serial
+from pydrk import Api, PropertyType, PropertySubType, Property, serial
 import zmq
 
 api = Api()
-host = HostApi(api)
 print("Node status:", api.hello())
 
 def make_sub_socket():

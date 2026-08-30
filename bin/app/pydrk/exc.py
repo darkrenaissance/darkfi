@@ -12,8 +12,6 @@ class PropertyNotFound(Exception):
     pass
 class PropertyWrongType(Exception):
     pass
-class PropertyWrongSubType(Exception):
-    pass
 class PropertyWrongLen(Exception):
     pass
 class PropertyWrongIndex(Exception):
@@ -52,12 +50,37 @@ class NodeChildNameConflict(Exception):
     pass
 class NodeSiblingNameConflict(Exception):
     pass
-class FileNotFound(Exception):
-    pass
-class PyEvalErr(Exception):
-    pass
-class SExprEmpty(Exception):
-    pass
 class SExprGlobalNotFound(Exception):
     pass
-
+class PublisherDestroyed(Exception):
+    pass
+class ChannelClosed(Exception):
+    pass
+class NodesAreSame(Exception):
+    pass
+class UnexpectedToken(Exception):
+    pass
+class KvdbErr(Exception):
+    pass
+class ServiceFailed(Exception):
+    pass
+class GfxDuplicateTextureID(Exception):
+    pass
+class GfxUnknownTextureID(Exception):
+    pass
+class GfxDuplicateBufferID(Exception):
+    pass
+class GfxUnknownBufferID(Exception):
+    pass
+class GfxDuplicateAnimID(Exception):
+    pass
+class GfxUnknownAnimID(Exception):
+    pass
+class ContactNotFound(Exception):
+    pass
+class SerialErr(Exception):
+    pass
+class TursoErr(Exception):
+    pass
+class UnknownError(Exception):
+    pass

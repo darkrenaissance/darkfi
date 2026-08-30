@@ -1558,7 +1558,8 @@ pub async fn make(
             }
             node.set_property_bool(atom, Role::App, "is_visible", true).unwrap();
 
-            let main_menu = sg_root.lookup_node("/window/content/chat/menu_layer/main_menu").unwrap();
+            let main_menu =
+                sg_root.lookup_node("/window/content/chat/menu_layer/main_menu").unwrap();
             let items_prop = main_menu.get_property("items").unwrap();
             if !items_prop.contains_str(&contact) {
                 items_prop.push_str(atom, Role::App, &contact).unwrap();

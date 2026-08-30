@@ -27,6 +27,10 @@ use std::io::{Read, Write};
 
 mod compile;
 pub use compile::Compiler;
+#[cfg(feature = "enable-netdebug")]
+mod decompile;
+#[cfg(feature = "enable-netdebug")]
+pub use decompile::decompile;
 
 pub type MachineGlobals = Vec<(String, SExprVal)>;
 #[derive(Debug, Clone)]

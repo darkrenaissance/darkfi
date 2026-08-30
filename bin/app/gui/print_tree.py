@@ -1,4 +1,4 @@
-from pydrk import SceneNodeType, PropertyType
+from pydrk import SceneNodeType, PropertyType, CallArgType, Expr
 from .api import api
 
 def join(parent_path, child_name):
@@ -45,8 +45,6 @@ def print_node_info(parent_path, depth, indent):
                 child_type = "chat_view"
             case SceneNodeType.BUTTON:
                 child_type = "button"
-            case SceneNodeType.SETTING_ROOT:
-                child_type = "setting_root"
             case SceneNodeType.SETTING:
                 child_type = "setting"
 
@@ -63,20 +61,23 @@ def print_node_info(parent_path, depth, indent):
         print_node_info(child_path, depth, indent+1)
 
     for prop in api.get_properties(parent_path):
-        if prop.type != PropertyType.BUFFER:
-            prop_val = api.get_property_value(parent_path, prop.name)
+        prop_val = api.get_property_value(parent_path, prop.name)
 
-            if prop.type == PropertyType.STR:
-                prop_val = "[" + ", ".join(f"\"{pv}\"" for pv in prop_val) + "]"
-            elif prop.type == PropertyType.FLOAT32:
-                prop_val = "[" + ", ".join(f"{pv:.2f}" for pv in prop_val) + "]"
+        def fmt_str(pv):
+            return pv if isinstance(pv, Expr) else f"\"{pv}\""
 
-            if len(prop_val) == 1:
-                prop_val = prop_val[0]
+        def fmt_f32(pv):
+            return pv if isinstance(pv, Expr) else f"{pv:.2f}"
 
-            prop_val = f" = {prop_val}"
-        else:
-            prop_val = ""
+        if prop.type == PropertyType.STR:
+            prop_val = "[" + ", ".join(fmt_str(pv) for pv in prop_val) + "]"
+        elif prop.type == PropertyType.FLOAT32:
+            prop_val = "[" + ", ".join(fmt_f32(pv) for pv in prop_val) + "]"
+
+        if len(prop_val) == 1:
+            prop_val = prop_val[0]
+
+        prop_val = f" = {prop_val}"
 
         prop_type = PropertyType.to_str(prop.type)
 
@@ -86,14 +87,14 @@ def print_node_info(parent_path, depth, indent):
 
     for sig in api.get_signals(parent_path):
         print(f"{ws}~{sig}")
-        for slot_id, slot in api.get_slots(parent_path, sig):
-            print(f"{ws}- '{slot}' ({slot_id})")
+        for slot_name, slot_id in api.get_slots(parent_path, sig):
+            print(f"{ws}- '{slot_name}' ({slot_id})")
 
     for method_name in api.get_methods(parent_path):
         args, results = api.get_method(parent_path, method_name)
 
-        args = [f"{name}: " + PropertyType.to_str(typ) for (name, _, typ) in args]
-        results = [f"{name}: " + PropertyType.to_str(typ) for (name, _, typ) in results]
+        args = [f"{name}: " + CallArgType.to_str(typ) for (name, _, typ) in args]
+        results = [f"{name}: " + CallArgType.to_str(typ) for (name, _, typ) in results]
 
         method_str = f"{method_name}(" + ", ".join(args) + ") -> (" + ", ".join(results) + ")"
         print(f"{ws}{method_str}")

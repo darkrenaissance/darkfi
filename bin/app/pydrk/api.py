@@ -1,6 +1,12 @@
 import zmq
 from collections import namedtuple
-from . import serial, exc, expr
+from . import serial, exc
+
+class Expr(str):
+    """String rendering of an expr-bound property value, sent over netdebug.
+    Subclasses str so it formats naturally, but stays isinstance-distinct
+    from plain str property values."""
+    pass
 
 Property = namedtuple("Property", [
     "name",
@@ -64,9 +70,11 @@ class SceneNodeType:
     SHORTCUT = 17
     GESTURE = 18
     EMOJI_PICKER = 19
-    SETTING_ROOT = 20
     SETTING = 21
-    PLUGINS = 100
+    MENU = 22
+    TOKEN_TABLE = 23
+    TEXT_SCRAMBLE = 24
+    PLUGIN_ROOT = 100
     PLUGIN = 101
 
 class PropertyType:
@@ -76,7 +84,6 @@ class PropertyType:
     FLOAT32 = 3
     STR = 4
     ENUM = 5
-    BUFFER = 6
     SCENE_NODE_ID = 7
     SEXPR = 8
 
@@ -95,8 +102,6 @@ class PropertyType:
                 return "str"
             case PropertyType.ENUM:
                 return "enum"
-            case PropertyType.BUFFER:
-                return "buffer"
             case PropertyType.SCENE_NODE_ID:
                 return "scene_node_id"
             case PropertyType.SEXPR:
@@ -107,18 +112,50 @@ class PropertySubType:
     COLOR = 1
     PIXEL = 2
     RESOURCE_ID = 3
+    LOCALE = 4
+    FLAG = 5
 
     @staticmethod
     def to_str(prop_type):
         match prop_type:
             case PropertySubType.NULL:
                 return "null"
-            case PropertySubType.Color:
+            case PropertySubType.COLOR:
                 return "color"
             case PropertySubType.PIXEL:
                 return "pixel"
             case PropertySubType.RESOURCE_ID:
                 return "resource_id"
+            case PropertySubType.LOCALE:
+                return "locale"
+            case PropertySubType.FLAG:
+                return "flag"
+
+class CallArgType:
+    UINT32 = 0
+    UINT64 = 1
+    FLOAT32 = 2
+    BOOL = 3
+    STR = 4
+    HASH = 5
+
+    @staticmethod
+    def to_str(arg_type):
+        match arg_type:
+            case CallArgType.UINT32:
+                return "uint32"
+            case CallArgType.UINT64:
+                return "uint64"
+            case CallArgType.FLOAT32:
+                return "float32"
+            case CallArgType.BOOL:
+                return "bool"
+            case CallArgType.STR:
+                return "str"
+            case CallArgType.HASH:
+                return "hash"
+            case _:
+                return "unknown"
 
 class PropertyStatus:
     OK = 0
@@ -134,7 +171,6 @@ class ErrorCode:
     PROPERTY_ALREADY_EXISTS = 5
     PROPERTY_NOT_FOUND = 6
     PROPERTY_WRONG_TYPE = 7
-    PROPERTY_WRONG_SUB_TYPE = 8
     PROPERTY_WRONG_LEN = 9
     PROPERTY_WRONG_INDEX = 10
     PROPERTY_OUT_OF_RANGE = 11
@@ -154,12 +190,22 @@ class ErrorCode:
     NODE_PARENT_NAME_CONFLICT = 25
     NODE_CHILD_NAME_CONFLICT = 26
     NODE_SIBLING_NAME_CONFLICT = 27
-    FILE_NOT_FOUND = 28
-    RESOURCE_NOT_FOUND = 29
-    PY_EVAL_ERR = 30
-    SEXPR_EMPTY = 31
     SEXPR_GLOBAL_NOT_FOUND = 32
+    PUBLISHER_DESTROYED = 34
     CHANNEL_CLOSED = 36
+    NODES_ARE_SAME = 37
+    UNEXPECTED_TOKEN = 38
+    KVDB_ERR = 39
+    SERVICE_FAILED = 40
+    GFX_DUPLICATE_TEXTURE_ID = 41
+    GFX_UNKNOWN_TEXTURE_ID = 42
+    GFX_DUPLICATE_BUFFER_ID = 43
+    GFX_UNKNOWN_BUFFER_ID = 44
+    GFX_DUPLICATE_ANIM_ID = 45
+    GFX_UNKNOWN_ANIM_ID = 46
+    CONTACT_NOT_FOUND = 47
+    SERIAL_ERR = 48
+    TURSO_ERR = 49
 
     @staticmethod
     def to_str(errc):
@@ -216,18 +262,40 @@ class ErrorCode:
                 return "node_child_name_conflict"
             case ErrorCode.NODE_SIBLING_NAME_CONFLICT:
                 return "node_sibling_name_conflict"
-            case ErrorCode.FILE_NOT_FOUND:
-                return "file_not_found"
-            case ErrorCode.RESOURCE_NOT_FOUND:
-                return "resource_not_found"
-            case ErrorCode.PY_EVAL_ERR:
-                return "py_eval_err"
-            case ErrorCode.SEXPR_EMPTY:
-                return "sexpr_empty"
             case ErrorCode.SEXPR_GLOBAL_NOT_FOUND:
                 return "sexpr_global_not_found"
+            case ErrorCode.PUBLISHER_DESTROYED:
+                return "publisher_destroyed"
             case ErrorCode.CHANNEL_CLOSED:
                 return "channel_closed"
+            case ErrorCode.NODES_ARE_SAME:
+                return "nodes_are_same"
+            case ErrorCode.UNEXPECTED_TOKEN:
+                return "unexpected_token"
+            case ErrorCode.KVDB_ERR:
+                return "kvdb_err"
+            case ErrorCode.SERVICE_FAILED:
+                return "service_failed"
+            case ErrorCode.GFX_DUPLICATE_TEXTURE_ID:
+                return "gfx_duplicate_texture_id"
+            case ErrorCode.GFX_UNKNOWN_TEXTURE_ID:
+                return "gfx_unknown_texture_id"
+            case ErrorCode.GFX_DUPLICATE_BUFFER_ID:
+                return "gfx_duplicate_buffer_id"
+            case ErrorCode.GFX_UNKNOWN_BUFFER_ID:
+                return "gfx_unknown_buffer_id"
+            case ErrorCode.GFX_DUPLICATE_ANIM_ID:
+                return "gfx_duplicate_anim_id"
+            case ErrorCode.GFX_UNKNOWN_ANIM_ID:
+                return "gfx_unknown_anim_id"
+            case ErrorCode.CONTACT_NOT_FOUND:
+                return "contact_not_found"
+            case ErrorCode.SERIAL_ERR:
+                return "serial_err"
+            case ErrorCode.TURSO_ERR:
+                return "turso_err"
+            case _:
+                return "unknown"
 
 def vertex(x, y, r, g, b, a, u, v):
     buf = bytearray()
@@ -265,72 +333,94 @@ class Api:
         errc = int.from_bytes(errc, "little")
         cursor = serial.Cursor(reply)
         match errc:
-            case 1:
+            case 0:
+                pass
+            case ErrorCode.INVALID_SCENE_PATH:
                 raise exc.InvalidScenePath
-            case 2:
+            case ErrorCode.NODE_NOT_FOUND:
                 raise exc.NodeNotFound
-            case 3:
+            case ErrorCode.CHILD_NODE_NOT_FOUND:
                 raise exc.ChildNodeNotFound
-            case 4:
+            case ErrorCode.PARENT_NODE_NOT_FOUND:
                 raise exc.ParentNodeNotFound
-            case 5:
+            case ErrorCode.PROPERTY_ALREADY_EXISTS:
                 raise exc.PropertyAlreadyExists
-            case 6:
+            case ErrorCode.PROPERTY_NOT_FOUND:
                 raise exc.PropertyNotFound
-            case 7:
+            case ErrorCode.PROPERTY_WRONG_TYPE:
                 raise exc.PropertyWrongType
-            case 8:
-                raise exc.PropertyWrongSubType
-            case 9:
+            case ErrorCode.PROPERTY_WRONG_LEN:
                 raise exc.PropertyWrongLen
-            case 10:
+            case ErrorCode.PROPERTY_WRONG_INDEX:
                 raise exc.PropertyWrongIndex
-            case 11:
+            case ErrorCode.PROPERTY_OUT_OF_RANGE:
                 raise exc.PropertyOutOfRange
-            case 12:
+            case ErrorCode.PROPERTY_NULL_NOT_ALLOWED:
                 raise exc.PropertyNullNotAllowed
-            case 12:
+            case ErrorCode.PROPERTY_SEXPR_NOT_ALLOWED:
                 raise exc.PropertySExprNotAllowed
-            case 14:
+            case ErrorCode.PROPERTY_IS_BOUNDED:
                 raise exc.PropertyIsBounded
-            case 15:
+            case ErrorCode.PROPERTY_WRONG_ENUM_ITEM:
                 raise exc.PropertyWrongEnumItem
-            case 16:
+            case ErrorCode.SIGNAL_ALREADY_EXISTS:
                 raise exc.SignalAlreadyExists
-            case 17:
+            case ErrorCode.SIGNAL_NOT_FOUND:
                 raise exc.SignalNotFound
-            case 18:
+            case ErrorCode.SLOT_NOT_FOUND:
                 raise exc.SlotNotFound
-            case 19:
+            case ErrorCode.METHOD_ALREADY_EXISTS:
                 raise exc.MethodAlreadyExists
-            case 20:
+            case ErrorCode.METHOD_NOT_FOUND:
                 raise exc.MethodNotFound
-            case 21:
+            case ErrorCode.NODES_ARE_LINKED:
                 raise exc.NodesAreLinked
-            case 22:
+            case ErrorCode.NODES_NOT_LINKED:
                 raise exc.NodesNotLinked
-            case 23:
+            case ErrorCode.NODE_HAS_PARENTS:
                 raise exc.NodeHasParents
-            case 24:
+            case ErrorCode.NODE_HAS_CHILDREN:
                 raise exc.NodeHasChildren
-            case 25:
+            case ErrorCode.NODE_PARENT_NAME_CONFLICT:
                 raise exc.NodeParentNameConflict
-            case 26:
+            case ErrorCode.NODE_CHILD_NAME_CONFLICT:
                 raise exc.NodeChildNameConflict
-            case 27:
+            case ErrorCode.NODE_SIBLING_NAME_CONFLICT:
                 raise exc.NodeSiblingNameConflict
-            case 28:
-                raise exc.FileNotFound
-            case 29:
-                raise exc.ResourceNotFound
-            case 30:
-                raise exc.PyEvalErr
-            case 31:
-                raise exc.SExprEmpty
-            case 32:
+            case ErrorCode.SEXPR_GLOBAL_NOT_FOUND:
                 raise exc.SExprGlobalNotFound
-            case 36:
+            case ErrorCode.PUBLISHER_DESTROYED:
+                raise exc.PublisherDestroyed
+            case ErrorCode.CHANNEL_CLOSED:
                 raise exc.ChannelClosed
+            case ErrorCode.NODES_ARE_SAME:
+                raise exc.NodesAreSame
+            case ErrorCode.UNEXPECTED_TOKEN:
+                raise exc.UnexpectedToken
+            case ErrorCode.KVDB_ERR:
+                raise exc.KvdbErr
+            case ErrorCode.SERVICE_FAILED:
+                raise exc.ServiceFailed
+            case ErrorCode.GFX_DUPLICATE_TEXTURE_ID:
+                raise exc.GfxDuplicateTextureID
+            case ErrorCode.GFX_UNKNOWN_TEXTURE_ID:
+                raise exc.GfxUnknownTextureID
+            case ErrorCode.GFX_DUPLICATE_BUFFER_ID:
+                raise exc.GfxDuplicateBufferID
+            case ErrorCode.GFX_UNKNOWN_BUFFER_ID:
+                raise exc.GfxUnknownBufferID
+            case ErrorCode.GFX_DUPLICATE_ANIM_ID:
+                raise exc.GfxDuplicateAnimID
+            case ErrorCode.GFX_UNKNOWN_ANIM_ID:
+                raise exc.GfxUnknownAnimID
+            case ErrorCode.CONTACT_NOT_FOUND:
+                raise exc.ContactNotFound
+            case ErrorCode.SERIAL_ERR:
+                raise exc.SerialErr
+            case ErrorCode.TURSO_ERR:
+                raise exc.TursoErr
+            case _:
+                raise exc.UnknownError(f"unknown error code: {errc}")
         return cursor
 
     def hello(self):
@@ -436,8 +526,6 @@ class Api:
                 return serial.decode_str(cur)
             case PropertyType.ENUM:
                 return serial.decode_str(cur)
-            case PropertyType.BUFFER:
-                pass
             case PropertyType.SCENE_NODE_ID:
                 return serial.read_u32(cur)
             case _:
@@ -456,7 +544,7 @@ class Api:
                 case PropertyStatus.NULL:
                     return None
                 case PropertyStatus.EXPR:
-                    return None
+                    return Expr(serial.decode_str(cur))
                 case PropertyStatus.UNSET | PropertyStatus.OK:
                     return Api.read_prop_val(cur, prop_type)
 
@@ -618,24 +706,13 @@ class Api:
         serial.encode_str(req, val)
         self._make_request(Command.SET_PROPERTY_VALUE, req)
 
-    def set_property_buf(self, node_path, prop_name, i, buf):
-        req = bytearray()
-        serial.encode_str(req, node_path)
-        serial.encode_str(req, prop_name)
-        serial.write_u32(req, i)
-        serial.write_u8(req, PropertyType.BUFFER)
-        serial.encode_buf(req, buf)
-        self._make_request(Command.SET_PROPERTY_VALUE, req)
-
-    def set_property_expr(self, node_path, prop_name, i, code):
+    def set_property_expr(self, node_path, prop_name, i, expr_str):
         req = bytearray()
         serial.encode_str(req, node_path)
         serial.encode_str(req, prop_name)
         serial.write_u32(req, i)
         serial.write_u8(req, PropertyType.SEXPR)
-        serial.encode_varint(req, len(code))
-        for sexpr in code:
-            expr.encode_expr(req, sexpr)
+        serial.encode_str(req, expr_str)
         self._make_request(Command.SET_PROPERTY_VALUE, req)
 
     def get_signals(self, node_path):
@@ -673,7 +750,7 @@ class Api:
         serial.encode_str(req, slot_name)
         try:
             cur = self._make_request(Command.LOOKUP_SLOT_ID, req)
-        except exc.RequestSlotNotFound:
+        except exc.SlotNotFound:
             return None
         return serial.read_u32(cur)
 

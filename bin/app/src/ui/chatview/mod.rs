@@ -50,7 +50,7 @@ use crate::{
         PropertyAtomicGuard, PropertyColor, PropertyFloat32, PropertyRect, PropertyStr,
         PropertyUint32, Role,
     },
-    scene::{MethodCallSub, Pimpl, SceneNodePtr, SceneNodeWeak},
+    scene::{MethodCallSub, Pimpl, SceneNodeWeak},
     text,
     util::clipboard,
     ExecutorPtr,
@@ -222,7 +222,6 @@ pub struct ChatView {
     tasks: SyncMutex<Vec<smol::Task<()>>>,
     renderer: Renderer,
     redraw: RedrawTrigger,
-    sg_root: SceneNodePtr,
 
     tree: Tree,
     msgbuf: AsyncMutex<MessageBuffer>,
@@ -295,7 +294,6 @@ impl ChatView {
         window_scale: PropertyFloat32,
         renderer: Renderer,
         redraw: RedrawTrigger,
-        sg_root: SceneNodePtr,
         ex: ExecutorPtr,
     ) -> Pimpl {
         let node_ref = &node.upgrade().unwrap();
@@ -359,7 +357,6 @@ impl ChatView {
             tasks: SyncMutex::new(vec![]),
             renderer: renderer.clone(),
             redraw,
-            sg_root,
 
             tree,
             msgbuf: AsyncMutex::new(MessageBuffer::new(

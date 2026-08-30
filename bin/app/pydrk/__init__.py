@@ -1,6 +1,4 @@
 from .api import (Api, ErrorCode, SceneNodeType,
-                  PropertyType, PropertySubType, Property,
-                  vertex, face)
-from .host import HostApi
+                  PropertyType, PropertySubType, CallArgType, Property,
+                  Expr, vertex, face)
 from . import exc, serial
-

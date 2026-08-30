@@ -93,8 +93,11 @@ impl<T: Piped> Publisher<T> {
                 continue
             }
 
-            if let Err(e) = sub.try_send(message_result.clone()) {
-                panic!("[system::publisher] Error returned sending message in notify_with_include() call! {}", e);
+            if sub.try_send(message_result.clone()).is_err() {
+                // The receiver was dropped before Drop::unsubscribe() took
+                // effect, e.g. a task cancellation racing this notify.
+                // Prune the dead subscription.
+                self.subs.lock().unwrap().remove(&id);
             }
         }
     }
@@ -103,9 +106,11 @@ impl<T: Piped> Publisher<T> {
     pub fn notify(&self, msg: T) {
         let subs = self.subs.lock().unwrap().clone();
         for (id, sub) in subs {
-            if let Err(e) = sub.try_send(msg.clone()) {
-                // This should never happen since Drop calls unsubscribe()
-                panic!("Error in notify() call for sub={}! {}", id, e);
+            if sub.try_send(msg.clone()).is_err() {
+                // The receiver was dropped before Drop::unsubscribe() took
+                // effect, e.g. a task cancellation racing this notify.
+                // Prune the dead subscription.
+                self.subs.lock().unwrap().remove(&id);
             }
         }
     }
