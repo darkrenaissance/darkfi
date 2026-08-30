@@ -1,16 +1,10 @@
-from pydrk import SceneNodeType, PropertyType, CallArgType, Expr
-from .api import api
+from .api import Api, PropertyType, SceneNodeType, CallArgType, Expr
 
-def join(parent_path, child_name):
-    if parent_path == "/":
-        return f"/{child_name}"
-    return f"{parent_path}/{child_name}"
-
-def print_tree(node_path="/", depth=None):
+def print_tree(api, node_path="/", depth=None):
     print(node_path)
-    print_node_info(node_path, depth, indent=1)
+    print_node_info(api, node_path, depth, indent=1)
 
-def print_node_info(parent_path, depth, indent):
+def print_node_info(api, parent_path, depth, indent):
     if indent - 1 == depth:
         return
 
@@ -58,7 +52,7 @@ def print_node_info(parent_path, depth, indent):
         else:
             child_path = parent_path + "/" + child_name
 
-        print_node_info(child_path, depth, indent+1)
+        print_node_info(api, child_path, depth, indent+1)
 
     for prop in api.get_properties(parent_path):
         prop_val = api.get_property_value(parent_path, prop.name)
@@ -98,4 +92,3 @@ def print_node_info(parent_path, depth, indent):
 
         method_str = f"{method_name}(" + ", ".join(args) + ") -> (" + ", ".join(results) + ")"
         print(f"{ws}{method_str}")
-

@@ -237,12 +237,21 @@ impl ZeroMQAdapter {
                         let expr = prop.get_expr(i)?;
                         decompile(&expr).encode(&mut reply).unwrap();
                     } else if val.is_unset() {
-                        1u8.encode(&mut reply).unwrap();
-                        // Shapes are not serialized on the get path;
-                        // the python client shows a "<...>" placeholder.
-                        if prop.typ != PropertyType::VectorShape {
-                            let default = &prop.defaults[i];
-                            default.encode(&mut reply).unwrap();
+                        // A null default encodes zero payload bytes, so it
+                        // is reported as the NULL status instead of UNSET.
+                        // This mirrors the old get_value() semantics, where
+                        // an unset index with a null default resolved to
+                        // null.
+                        let default = &prop.defaults[i];
+                        if default.is_null() {
+                            2u8.encode(&mut reply).unwrap();
+                        } else {
+                            1u8.encode(&mut reply).unwrap();
+                            // Shapes are not serialized on the get path;
+                            // the python client shows a "<...>" placeholder.
+                            if prop.typ != PropertyType::VectorShape {
+                                default.encode(&mut reply).unwrap();
+                            }
                         }
                     } else if val.is_null() {
                         2u8.encode(&mut reply).unwrap();
