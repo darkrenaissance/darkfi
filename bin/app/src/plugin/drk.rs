@@ -35,13 +35,17 @@ use url::Url;
 
 use crate::{
     error::{Error, Result},
+    prop::{PropertyEnum, Role},
     scene::{MethodCallSub, Pimpl, SceneNodePtr, SceneNodeWeak},
     ExecutorPtr,
 };
 
 // TODO: should be configurable at runtime
 //const DARKFID_ENDPOINT: &str = "tcp://127.0.0.1:18345";
-const DARKFID_ENDPOINT: &str = "tcp+tls://node0.testnet.dark.fi:18345";
+/// Testnet endpoint from drk_config.toml
+const DARKFID_ENDPOINT_TCP: &str = "tcp://127.0.0.1:18345";
+/// TODO: replace with the real darkfid tor endpoint
+const DARKFID_ENDPOINT_TOR: &str = "tor://darkfid-tor-placeholder.onion:18345";
 const DARKFID_RETRY_TIME: u64 = 20;
 
 #[cfg(target_os = "android")]
@@ -122,6 +126,7 @@ pub struct DrkPlugin {
     sg_root: SceneNodePtr,
     tasks: OnceLock<Vec<smol::Task<()>>>,
     scan_progress_pub: PublisherPtr<(u32, u32)>,
+    net_transport: PropertyEnum,
 
     drk: Arc<RwLock<Drk>>,
     build_tx_channel: smol::channel::Sender<BuildTxRequest>,
@@ -130,16 +135,19 @@ pub struct DrkPlugin {
 
 impl DrkPlugin {
     pub async fn new(node: SceneNodeWeak, sg_root: SceneNodePtr, ex: ExecutorPtr) -> Result<Pimpl> {
-        let node_ref = node.upgrade().unwrap();
+        let setting_node = sg_root.lookup_node("/setting").unwrap();
+        let net_transport =
+            PropertyEnum::wrap(&setting_node, Role::Internal, "net.transport", 0).unwrap();
 
-        let endpoint = Url::parse(DARKFID_ENDPOINT).unwrap();
+        let endpoint = Url::parse(DARKFID_ENDPOINT_TCP).unwrap();
+        i!("Using {transport} transport for darkfid connection");
 
         let drk = match Drk::new(
             Network::Testnet,
             get_cache_path().to_string_lossy().to_string(),
             get_wallet_path().to_string_lossy().to_string(),
             "changeme".to_string(),
-            Some(endpoint),
+            Some(endpoint.clone()),
             &ex,
             false,
         )
@@ -205,6 +213,7 @@ impl DrkPlugin {
             drk: drk.into_ptr(),
             build_tx_channel: build_tx_tx,
             scan_progress_pub: Publisher::new(),
+            net_transport,
             last_balances: SyncMutex::new(None),
         });
 
@@ -274,6 +283,21 @@ impl DrkPlugin {
         self_.clone().start(ex.clone(), tasks).await;
 
         Ok(Pimpl::Drk(self_))
+    }
+
+    /// Endpoint for the darkfid daemon connection, derived from the
+    /// `net.transport` setting
+    fn endpoint(&self) -> Url {
+        // Disabled pending drk changes
+        /*
+        let endpoint = match self.net_transport.get().as_str() {
+            "tor" => DARKFID_ENDPOINT_TOR,
+            "tcp" => DARKFID_ENDPOINT_TCP,
+            unhandled => panic!("Unhandled net.transport value: {unhandled}"),
+        };
+        Url::parse(endpoint).unwrap()
+        */
+        Url::parse(DARKFID_ENDPOINT_TCP).unwrap()
     }
 
     pub async fn get_default_address(&self) -> Result<String> {
@@ -673,8 +697,6 @@ impl DrkPlugin {
     }
 
     async fn start(self: Arc<Self>, ex: ExecutorPtr, tasks: Vec<smol::Task<()>>) {
-        let endpoint = Url::parse(DARKFID_ENDPOINT).unwrap();
-
         let self2 = self.clone();
         let drk = self.drk.clone();
         let (shell_sender, shell_receiver) = unbounded();
@@ -715,11 +737,11 @@ impl DrkPlugin {
         // Task that handles the RPC subscription with retry logic
         let subscribe_task = ex.spawn(async move {
             loop {
+                let endpoint = self2.endpoint();
                 i!("Attempting to connect to darkfid daemon at {}", endpoint);
                 let subscribe_rpc_task = StoppableTask::new();
                 let shell_sender = shell_sender.clone();
                 let drk = drk.clone();
-                let endpoint = endpoint.clone();
                 let ex = ex_.clone();
                 let progress_pub = self2.scan_progress_pub.clone();
 
@@ -803,6 +825,34 @@ impl DrkPlugin {
                 }
             }
         });
+
+        // NOTE: Disabled pending the drk scan_blocks upgrade. The current
+        // drk impl doesn't support restarting the rpc_task, but once we
+        // upgrade it, it will be trivial to fix in our custom loop.
+        //let net_transport = self.net_transport.clone();
+        //let net_transport_sub = net_transport.prop().subscribe_modify();
+        //let drk2 = self.drk.clone();
+        //let rpc_task_lock = self.rpc_task.clone();
+        //let ex_ = ex.clone();
+        //let transport_task = ex.spawn(async move {
+        //    while let Ok(_) = net_transport_sub.receive().await {
+        //        let transport = net_transport.get();
+        //        let endpoint = endpoint_for_transport(&transport);
+        //        i!("Transport changed to {transport}, restarting darkfid connection at {endpoint}");
+        //
+        //        {
+        //            let mut drk = drk2.write().await;
+        //            let _ = drk.stop_rpc_client().await;
+        //            drk.rpc_client = Some(RwLock::new(
+        //                DarkfidRpcClient::new(endpoint.clone(), ex_.clone()).await,
+        //            ));
+        //        }
+        //
+        //        if let Some(rpc_task) = &*rpc_task_lock.read().await {
+        //            rpc_task.stop().await;
+        //        }
+        //    }
+        //});
 
         let mut all_tasks = vec![scan_progress_task, subscribe_task, subscribe_recv_task];
         all_tasks.extend(tasks);

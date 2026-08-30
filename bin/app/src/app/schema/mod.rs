@@ -34,7 +34,7 @@ use crate::{
     db::AppDbPtr,
     expr::{self, Compiler},
     gfx::gfxtag,
-    prop::{PropertyAtomicGuard, PropertyFloat32, PropertyStr, Role},
+    prop::{PropertyAtomicGuard, PropertyEnum, PropertyFloat32, PropertyStr, Role},
     scene::{SceneNodePtr, Slot},
     sfx, shape,
     ui::{emoji_picker, Button, Layer, Text, TextScramble, VectorArt, VectorShape, Video},
@@ -72,16 +72,16 @@ mod android_ui_consts {
     pub const SPLASH_FONTSIZE: f32 = 52.;
     pub const SPLASH_MARGIN: f32 = 40.;
 
-    pub const NETSTAT_OVERLAY_HEIGHT: f32 = 760.;
+    pub const NETSTAT_OVERLAY_HEIGHT: f32 = 960.;
     pub const NETSTAT_OVERLAY_SEP_X: f32 = 2.;
-    pub const NETSTAT_OVERLAY_SEP_Y: f32 = 240.;
+    pub const NETSTAT_OVERLAY_SEP_Y: f32 = 440.;
     pub const NETSTAT_OVERLAY_SEP_H: f32 = 2.;
     pub const NETSTAT_OVERLAY_OUTLINE_W: f32 = 4.;
     pub const NETSTAT_OVERLAY_TEXT_X: f32 = 100.;
     pub const NETSTAT_OVERLAY_TEXT_MAX: f32 = 4000.;
     pub const NETSTAT_OVERLAY_P2P_LABEL_Y: f32 = 100.;
-    pub const NETSTAT_OVERLAY_OUTBOUND_LABEL_Y: f32 = 340.;
-    pub const NETSTAT_OVERLAY_CONN_INFO_Y: f32 = 460.;
+    pub const NETSTAT_OVERLAY_OUTBOUND_LABEL_Y: f32 = 540.;
+    pub const NETSTAT_OVERLAY_CONN_INFO_Y: f32 = 660.;
     pub const NETSTAT_OVERLAY_TOGGLE_NEG_X: f32 = 240.;
     pub const NETSTAT_OVERLAY_TOGGLE_R_PAD: f32 = 40.;
     pub const NETSTAT_OVERLAY_TOGGLE_Y: f32 = 40.;
@@ -89,6 +89,9 @@ mod android_ui_consts {
     pub const NETSTAT_OVERLAY_TOGGLE_H: f32 = 160.;
     pub const NETSTAT_OVERLAY_TOGGLE_OUTLINE_W: f32 = 2.;
     pub const NETSTAT_OVERLAY_TOGGLE_LABEL_Y: f32 = 90.;
+    pub const NETSTAT_OVERLAY_TRANSPORT_Y: f32 = 240.;
+    pub const NETSTAT_OVERLAY_TRANSPORT_LABEL_Y: f32 = 300.;
+    pub const NETSTAT_OVERLAY_TRANSPORT_OPT_LABEL_Y: f32 = 290.;
 }
 
 #[cfg(target_os = "android")]
@@ -158,16 +161,16 @@ mod ui_consts {
     pub const SPLASH_FONTSIZE: f32 = 26.;
     pub const SPLASH_MARGIN: f32 = 20.;
 
-    pub const NETSTAT_OVERLAY_HEIGHT: f32 = 380.;
+    pub const NETSTAT_OVERLAY_HEIGHT: f32 = 480.;
     pub const NETSTAT_OVERLAY_SEP_X: f32 = 1.;
-    pub const NETSTAT_OVERLAY_SEP_Y: f32 = 120.;
+    pub const NETSTAT_OVERLAY_SEP_Y: f32 = 220.;
     pub const NETSTAT_OVERLAY_SEP_H: f32 = 1.;
     pub const NETSTAT_OVERLAY_OUTLINE_W: f32 = 2.;
     pub const NETSTAT_OVERLAY_TEXT_X: f32 = 50.;
     pub const NETSTAT_OVERLAY_TEXT_MAX: f32 = 2000.;
     pub const NETSTAT_OVERLAY_P2P_LABEL_Y: f32 = 50.;
-    pub const NETSTAT_OVERLAY_OUTBOUND_LABEL_Y: f32 = 170.;
-    pub const NETSTAT_OVERLAY_CONN_INFO_Y: f32 = 230.;
+    pub const NETSTAT_OVERLAY_OUTBOUND_LABEL_Y: f32 = 270.;
+    pub const NETSTAT_OVERLAY_CONN_INFO_Y: f32 = 330.;
     pub const NETSTAT_OVERLAY_TOGGLE_NEG_X: f32 = 120.;
     pub const NETSTAT_OVERLAY_TOGGLE_R_PAD: f32 = 20.;
     pub const NETSTAT_OVERLAY_TOGGLE_Y: f32 = 20.;
@@ -175,6 +178,9 @@ mod ui_consts {
     pub const NETSTAT_OVERLAY_TOGGLE_H: f32 = 80.;
     pub const NETSTAT_OVERLAY_TOGGLE_OUTLINE_W: f32 = 1.;
     pub const NETSTAT_OVERLAY_TOGGLE_LABEL_Y: f32 = 45.;
+    pub const NETSTAT_OVERLAY_TRANSPORT_Y: f32 = 120.;
+    pub const NETSTAT_OVERLAY_TRANSPORT_LABEL_Y: f32 = 150.;
+    pub const NETSTAT_OVERLAY_TRANSPORT_OPT_LABEL_Y: f32 = 145.;
 
     pub use super::desktop_paths::*;
 }
@@ -261,6 +267,7 @@ pub async fn make(
     cc.add_const_f32("NETSTAT_OVERLAY_BTN_H", NETSTAT_OVERLAY_BTN_H);
     cc.add_const_f32("NETSTAT_OVERLAY_TOGGLE_NEG_X", NETSTAT_OVERLAY_TOGGLE_NEG_X);
     cc.add_const_f32("NETSTAT_OVERLAY_TOGGLE_R_PAD", NETSTAT_OVERLAY_TOGGLE_R_PAD);
+    cc.add_const_f32("NETSTAT_OVERLAY_TOGGLE_W", NETSTAT_OVERLAY_TOGGLE_W);
 
     let atom = &mut PropertyAtomicGuard::none();
 
@@ -835,6 +842,151 @@ pub async fn make(
     let node =
         node.setup(|me| Button::new(me, app.renderer.clone(), app.redraw_trigger.clone())).await;
     overlay_node.link(node);
+
+    let node = create_text("transport_label");
+    let prop = node.get_property("rect").unwrap();
+    prop.set_f32(atom, Role::App, 0, NETSTAT_OVERLAY_TEXT_X).unwrap();
+    prop.set_f32(atom, Role::App, 1, NETSTAT_OVERLAY_TRANSPORT_LABEL_Y).unwrap();
+    prop.set_f32(atom, Role::App, 2, NETSTAT_OVERLAY_TEXT_MAX).unwrap();
+    prop.set_f32(atom, Role::App, 3, NETSTAT_OVERLAY_TEXT_MAX).unwrap();
+    node.set_property_f32(atom, Role::App, "font_size", NETSTAT_OVERLAY_BTN_FONTSIZE).unwrap();
+    node.set_property_str(atom, Role::App, "text", "Transport").unwrap();
+    node.set_property_enum(atom, Role::App, "text_align", "left").unwrap();
+    let prop = node.get_property("text_color").unwrap();
+    prop.set_f32(atom, Role::App, 0, 0.47).unwrap();
+    prop.set_f32(atom, Role::App, 1, 1.).unwrap();
+    prop.set_f32(atom, Role::App, 2, 0.75).unwrap();
+    prop.set_f32(atom, Role::App, 3, 1.).unwrap();
+    node.set_property_u32(atom, Role::App, "z_index", 2).unwrap();
+    let node = node
+        .setup(|me| {
+            Text::new(
+                me,
+                window_scale.clone(),
+                app.renderer.clone(),
+                i18n_fish.clone(),
+                app.redraw_trigger.clone(),
+            )
+        })
+        .await;
+    overlay_node.link(node);
+
+    // Transport selector: one segment per option, the filled toggle is moved
+    // onto the selected one
+    let transport_opts = ["tcp", "tor"];
+    let net_transport = PropertyEnum::wrap(&setting_node, Role::User, "net.transport", 0).unwrap();
+    let transport_selected = net_transport.get();
+    let mut transport_sel_nodes = vec![];
+    for (idx, opt) in transport_opts.iter().enumerate() {
+        let node = create_vector_art(&format!("transport_sel_{opt}"));
+        let prop = node.get_property("rect").unwrap();
+        let code = cc
+            .compile(&format!(
+                "w - NETSTAT_OVERLAY_TOGGLE_R_PAD - {} * NETSTAT_OVERLAY_TOGGLE_W",
+                transport_opts.len() - idx
+            ))
+            .unwrap();
+        prop.set_expr(atom, Role::App, 0, code).unwrap();
+        prop.set_f32(atom, Role::App, 1, NETSTAT_OVERLAY_TRANSPORT_Y).unwrap();
+        prop.set_f32(atom, Role::App, 2, NETSTAT_OVERLAY_TOGGLE_W).unwrap();
+        prop.set_f32(atom, Role::App, 3, NETSTAT_OVERLAY_TOGGLE_H).unwrap();
+        node.set_property_bool(atom, Role::App, "is_visible", *opt == transport_selected).unwrap();
+        node.set_property_u32(atom, Role::App, "z_index", 1).unwrap();
+        let mut shape = VectorShape::new();
+        shape.add_filled_box(
+            expr::const_f32(0.),
+            expr::const_f32(0.),
+            expr::load_var("w"),
+            expr::load_var("h"),
+            [0., 0.12, 0.08, 1.],
+        );
+        shape.add_outline(
+            expr::const_f32(0.),
+            expr::const_f32(0.),
+            expr::load_var("w"),
+            expr::load_var("h"),
+            NETSTAT_OVERLAY_TOGGLE_OUTLINE_W,
+            [0.08, 0.68, 0.72, 1.],
+        );
+        let node = node
+            .setup(|me| VectorArt::new(me, shape, app.renderer.clone(), app.redraw_trigger.clone()))
+            .await;
+        overlay_node.link(node.clone());
+        transport_sel_nodes.push(node);
+    }
+
+    for (idx, opt) in transport_opts.iter().enumerate() {
+        let node = create_text(&format!("transport_opt_{opt}"));
+        let prop = node.get_property("rect").unwrap();
+        let code = cc
+            .compile(&format!(
+                "w - NETSTAT_OVERLAY_TOGGLE_R_PAD - {} * NETSTAT_OVERLAY_TOGGLE_W",
+                transport_opts.len() - idx
+            ))
+            .unwrap();
+        prop.set_expr(atom, Role::App, 0, code).unwrap();
+        prop.set_f32(atom, Role::App, 1, NETSTAT_OVERLAY_TRANSPORT_OPT_LABEL_Y).unwrap();
+        prop.set_f32(atom, Role::App, 2, NETSTAT_OVERLAY_TOGGLE_W).unwrap();
+        prop.set_f32(atom, Role::App, 3, NETSTAT_OVERLAY_TEXT_MAX).unwrap();
+        node.set_property_f32(atom, Role::App, "font_size", NETSTAT_OVERLAY_BTN_FONTSIZE).unwrap();
+        node.set_property_str(atom, Role::App, "text", *opt).unwrap();
+        node.set_property_enum(atom, Role::App, "text_align", "center").unwrap();
+        let prop = node.get_property("text_color").unwrap();
+        prop.set_f32(atom, Role::App, 0, 0.08).unwrap();
+        prop.set_f32(atom, Role::App, 1, 0.68).unwrap();
+        prop.set_f32(atom, Role::App, 2, 0.72).unwrap();
+        prop.set_f32(atom, Role::App, 3, 1.).unwrap();
+        node.set_property_u32(atom, Role::App, "z_index", 2).unwrap();
+        let node = node
+            .setup(|me| {
+                Text::new(
+                    me,
+                    window_scale.clone(),
+                    app.renderer.clone(),
+                    i18n_fish.clone(),
+                    app.redraw_trigger.clone(),
+                )
+            })
+            .await;
+        overlay_node.link(node);
+    }
+
+    for (idx, opt) in transport_opts.iter().enumerate() {
+        let node = create_button(&format!("transport_btn_{opt}"));
+        node.set_property_bool(atom, Role::App, "is_active", true).unwrap();
+        let prop = node.get_property("rect").unwrap();
+        let code = cc
+            .compile(&format!(
+                "w - NETSTAT_OVERLAY_TOGGLE_R_PAD - {} * NETSTAT_OVERLAY_TOGGLE_W",
+                transport_opts.len() - idx
+            ))
+            .unwrap();
+        prop.set_expr(atom, Role::App, 0, code).unwrap();
+        prop.set_f32(atom, Role::App, 1, NETSTAT_OVERLAY_TRANSPORT_Y).unwrap();
+        prop.set_f32(atom, Role::App, 2, NETSTAT_OVERLAY_TOGGLE_W).unwrap();
+        prop.set_f32(atom, Role::App, 3, NETSTAT_OVERLAY_TOGGLE_H).unwrap();
+        let (slot, recvr) = Slot::new(&format!("transport_select_{opt}"));
+        node.register("click", slot).unwrap();
+        let redraw = app.redraw_trigger.clone();
+        let sel_nodes = transport_sel_nodes.clone();
+        let net_transport = net_transport.clone();
+        let opt = *opt;
+        let listen_click = ex.spawn(async move {
+            while let Ok(_) = recvr.recv().await {
+                i!("transport_select_{opt}");
+                let atom = &mut redraw.make_guard(gfxtag!("transport_select"));
+                for (j, sel_node) in sel_nodes.iter().enumerate() {
+                    sel_node.set_property_bool(atom, Role::App, "is_visible", j == idx).unwrap();
+                }
+                net_transport.set(atom, opt);
+            }
+        });
+        overlay_node.push_task(listen_click);
+        let node = node
+            .setup(|me| Button::new(me, app.renderer.clone(), app.redraw_trigger.clone()))
+            .await;
+        overlay_node.link(node);
+    }
 
     let node = create_text("outbound_label");
     let prop = node.get_property("rect").unwrap();

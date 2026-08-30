@@ -57,6 +57,11 @@ pub fn create_setting(name: &str) -> SceneNode {
     prop.set_defaults_bool(vec![true]).unwrap();
     node.add_property(prop).unwrap();
 
+    let mut prop = Property::new("net.transport", PropertyType::Enum, PropertySubType::Null);
+    prop.set_enum_items(vec!["tcp", "tor"]).unwrap();
+    prop.set_defaults_str(vec!["tcp".to_string()]).unwrap();
+    node.add_property(prop).unwrap();
+
     let mut prop = Property::new("win.scale", PropertyType::Float32, PropertySubType::Null);
     prop.set_defaults_f32(vec![1.]).unwrap();
     prop.set_range_f32(0., f32::MAX);

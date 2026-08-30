@@ -59,7 +59,10 @@ use crate::{
     },
     db::AppDbPtr,
     error::{Error, Result},
-    prop::{BatchGuardPtr, PropertyAtomicGuard, PropertyBool, PropertyPtr, PropertyStr, Role},
+    prop::{
+        BatchGuardPtr, PropertyAtomicGuard, PropertyBool, PropertyEnum, PropertyPtr, PropertyStr,
+        Role,
+    },
     scene::{MethodCallSub, Pimpl, SceneNodePtr, SceneNodeWeak, Slot},
     ui::{
         chatview::{MessageId, Timestamp},
@@ -99,9 +102,6 @@ mod paths {
     pub fn get_chatdb_path() -> PathBuf {
         get_external_storage_path().join("chatdb")
     }
-    pub fn get_use_tor_filename() -> PathBuf {
-        get_external_storage_path().join("use_tor.txt")
-    }
 
     pub fn p2p_datastore_path() -> PathBuf {
         get_appdata_path().join("darkirc2_p2p")
@@ -117,9 +117,6 @@ mod paths {
 
     pub fn get_chatdb_path() -> PathBuf {
         dirs::data_local_dir().unwrap().join("darkfi/app/chatdb")
-    }
-    pub fn get_use_tor_filename() -> PathBuf {
-        dirs::data_local_dir().unwrap().join("darkfi/app/use_tor.txt")
     }
 
     pub fn p2p_datastore_path() -> PathBuf {
@@ -172,6 +169,7 @@ pub struct DarkIrc {
     seen_msgs: SyncMutex<SeenMessages>,
     nick: PropertyStr,
     chat_is_enabled: PropertyBool,
+    net_transport: PropertyEnum,
     pub channels: RwLock<HashMap<String, IrcChannel>>,
     pub contacts: RwLock<HashMap<String, IrcContact>>,
     app_db: AppDbPtr,
@@ -192,6 +190,8 @@ impl DarkIrc {
         let setting_node = sg_root.lookup_node("/setting").unwrap();
         let chat_is_enabled =
             PropertyBool::wrap(&setting_node, Role::User, "chat.is_enabled", 0).unwrap();
+        let net_transport =
+            PropertyEnum::wrap(&setting_node, Role::Internal, "net.transport", 0).unwrap();
 
         i!("Starting DarkIRC backend");
 
@@ -213,40 +213,9 @@ impl DarkIrc {
         p2p_settings.magic_bytes = MagicBytes([251, 229, 199, 181]);
         p2p_settings.app_version = semver::Version::parse("0.5.0").unwrap();
         p2p_settings.app_name = "darkirc".to_string();
-        if get_use_tor_filename().exists() {
-            i!("Setup P2P network [tor]");
-            let mut tor_profile = NetworkProfile::tor_default();
-            tor_profile.outbound_connect_timeout = 60;
-            p2p_settings.profiles.insert("tor".to_string(), tor_profile);
-            p2p_settings.outbound_peer_discovery_cooloff_time = 60;
-
-            p2p_settings.seeds.push(
-                url::Url::parse(
-                    "tor://g7fxelebievvpr27w7gt24lflptpw3jeeuvafovgliq5utdst6xyruyd.onion:25552",
-                )
-                .unwrap(),
-            );
-            p2p_settings.seeds.push(
-                url::Url::parse(
-                    "tor://yvklzjnfmwxhyodhrkpomawjcdvcaushsj6torjz2gyd7e25f3gfunyd.onion:25552",
-                )
-                .unwrap(),
-            );
-            p2p_settings.active_profiles = vec!["tor".to_string()];
-        } else {
-            i!("Setup P2P network [clearnet]");
-            let mut profile = NetworkProfile::default();
-            profile.outbound_connect_timeout = 40;
-            profile.channel_handshake_timeout = 30;
-            p2p_settings.profiles.insert("tcp+tls".to_string(), profile);
-
-            p2p_settings.outbound_connections = 5;
-            p2p_settings.inbound_connections = 2;
-
-            p2p_settings.seeds.push(url::Url::parse("tcp+tls://lilith0.dark.fi:9600").unwrap());
-            p2p_settings.seeds.push(url::Url::parse("tcp+tls://lilith1.dark.fi:9600").unwrap());
-            p2p_settings.active_profiles = vec!["tcp+tls".to_string()];
-        }
+        p2p_settings.inbound_connections = 2;
+        let transport = net_transport.get();
+        Self::apply_transport_settings(&mut p2p_settings, &transport);
         p2p_settings.p2p_datastore = p2p_datastore_path().into_os_string().into_string().ok();
         p2p_settings.hostlist = hostlist_path().into_os_string().into_string().ok();
 
@@ -301,6 +270,7 @@ impl DarkIrc {
             seen_msgs: SyncMutex::new(SeenMessages::new()),
             nick,
             chat_is_enabled,
+            net_transport,
 
             channels: RwLock::new(HashMap::new()),
             contacts: RwLock::new(HashMap::new()),
@@ -854,6 +824,78 @@ impl DarkIrc {
         true
     }
 
+    /// Apply the transport-specific P2P configuration (profiles, seeds,
+    /// active profiles) using the defaults from darkirc_config.toml
+    fn apply_transport_settings(settings: &mut NetSettings, transport: &str) {
+        settings.seeds.clear();
+        settings.profiles.clear();
+        settings.active_profiles.clear();
+
+        match transport {
+            "tor" => {
+                i!("Setup P2P network [tor]");
+                let mut tor_profile = NetworkProfile::tor_default();
+                tor_profile.outbound_connect_timeout = 60;
+                settings.profiles.insert("tor".to_string(), tor_profile);
+                settings.outbound_peer_discovery_cooloff_time = 60;
+
+                settings.seeds.push(
+                    url::Url::parse(
+                        "tor://wgxxaifz5gv4iggcflyl67lgmsihffs6bbwobqah4np52t3y3olrnpid.onion:9601",
+                    )
+                    .unwrap(),
+                );
+                settings.seeds.push(
+                    url::Url::parse(
+                        "tor://inx5s3pdzddvgb5ii3oydutmbvw6fvor3oqu65wtxl3pyevtvrdn4had.onion:9601",
+                    )
+                    .unwrap(),
+                );
+                settings.active_profiles.push("tor".to_string());
+            }
+            "tcp" => {
+                i!("Setup P2P network [clearnet]");
+                let mut profile = NetworkProfile::default();
+                profile.outbound_connect_timeout = 40;
+                profile.channel_handshake_timeout = 30;
+                settings.profiles.insert("tcp+tls".to_string(), profile);
+
+                settings.seeds.push(url::Url::parse("tcp+tls://lilith0.dark.fi:9600").unwrap());
+                settings.seeds.push(url::Url::parse("tcp+tls://lilith1.dark.fi:9600").unwrap());
+                settings.active_profiles.push("tcp+tls".to_string());
+            }
+            unhandled => panic!("Unhandled net.transport value: {unhandled}"),
+        }
+    }
+
+    /// `net.transport` was switched, reconfigure the P2P network and restart it
+    async fn handle_transport_change(&self, transport: String) {
+        i!("Transport changed to {transport}, restarting P2P network");
+
+        let was_started = self.chat_is_enabled.get();
+        if was_started {
+            self.p2p.clone().stop().await;
+        }
+
+        let settings_lock = self.p2p.settings();
+        let mut settings = settings_lock.write().await;
+        Self::apply_transport_settings(&mut settings, &transport);
+        drop(settings);
+
+        if was_started {
+            while let Err(err) = self.p2p.clone().start().await {
+                e!("Failed to start P2P network: {err}!");
+                e!("Retrying in {P2P_RETRY_TIME} secs");
+                sleep(P2P_RETRY_TIME).await;
+            }
+
+            let peers_count = self.p2p.peers_count();
+            self.notify_connect(peers_count, self.event_graph.is_synced()).await;
+        }
+
+        i!("P2P transport restart completed");
+    }
+
     /// `chat.is_enabled` was switched on
     async fn handle_start(&self) {
         i!("Manual P2P start triggered");
@@ -938,6 +980,17 @@ impl DarkIrc {
             }
         });
 
+        let net_transport = self.net_transport.clone();
+        let net_transport_sub = net_transport.prop().subscribe_modify();
+        let me2 = me.clone();
+        let transport_task = ex.spawn(async move {
+            while let Ok(_) = net_transport_sub.receive().await {
+                let Some(self_) = me2.upgrade() else { break };
+
+                self_.handle_transport_change(net_transport.get()).await;
+            }
+        });
+
         let rescan_method_sub = node.subscribe_method_call("rescan").unwrap();
         let me2 = me.clone();
         let rescan_method_task =
@@ -1006,6 +1059,7 @@ impl DarkIrc {
         let mut tasks = vec![
             send_method_task,
             setting_task,
+            transport_task,
             rescan_method_task,
             ev_task,
             dag_task,
