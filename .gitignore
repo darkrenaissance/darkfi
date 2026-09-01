@@ -47,3 +47,5 @@ witness.json
 
 *.rusty-tags.emacs
 /tags
+
+/.opencode
