@@ -24,7 +24,8 @@ use std::sync::Arc;
 use tracing::instrument;
 
 use crate::{
-    gfx::{DrawCall, DrawInstruction, Point, Rectangle, Renderer},
+    gfx::{gfxtag, DrawCall, DrawInstruction, Point, Rectangle, Renderer},
+    mesh::MeshBuilder,
     prop::{
         PropertyAtomicGuard, PropertyBool, PropertyFloat32, PropertyRect, PropertyUint32, Role,
     },
@@ -44,6 +45,7 @@ pub type LayerPtr = Arc<Layer>;
 
 pub struct Layer {
     node: SceneNodeWeak,
+    renderer: Renderer,
     redraw: RedrawTrigger,
     tasks: SyncMutex<Vec<smol::Task<()>>>,
     dc_key: u64,
@@ -53,6 +55,7 @@ pub struct Layer {
     alpha: PropertyFloat32,
     z_index: PropertyUint32,
     priority: PropertyUint32,
+    debug: PropertyBool,
 }
 
 impl Layer {
@@ -63,11 +66,11 @@ impl Layer {
         let alpha = PropertyFloat32::wrap(node_ref, Role::Internal, "alpha", 0).unwrap();
         let z_index = PropertyUint32::wrap(node_ref, Role::Internal, "z_index", 0).unwrap();
         let priority = PropertyUint32::wrap(node_ref, Role::Internal, "priority", 0).unwrap();
-
-        let _ = renderer;
+        let debug = PropertyBool::wrap(node_ref, Role::Internal, "debug", 0).unwrap();
 
         let self_ = Arc::new(Self {
             node: _node,
+            renderer,
             redraw,
             tasks: SyncMutex::new(vec![]),
             dc_key: OsRng.gen(),
@@ -77,6 +80,7 @@ impl Layer {
             alpha,
             z_index,
             priority,
+            debug,
         });
 
         Pimpl::Layer(self_)
@@ -117,12 +121,17 @@ impl Layer {
             }
         }
 
-        let dc = DrawCall::new(
-            vec![DrawInstruction::ApplyView(rect), DrawInstruction::SetAlpha(alpha)],
-            child_calls,
-            self.z_index.get(),
-            "layer",
-        );
+        let mut instrs = vec![DrawInstruction::ApplyView(rect)];
+
+        if self.debug.get() {
+            let mut mesh = MeshBuilder::new(gfxtag!("layer_debug"));
+            mesh.draw_outline(&Rectangle::new(0., 0., rect.w, rect.h), [1., 0., 0., 1.], 1.);
+            instrs.push(DrawInstruction::Draw(mesh.alloc(&self.renderer).draw_untextured()));
+        }
+
+        instrs.push(DrawInstruction::SetAlpha(alpha));
+
+        let dc = DrawCall::new(instrs, child_calls, self.z_index.get(), "layer");
         draw_calls.push((self.dc_key, dc));
         Some(DrawUpdate { key: self.dc_key, draw_calls })
     }
@@ -159,6 +168,9 @@ impl UIObject for Layer {
             self_.redraw.trigger();
         });
         on_modify.when_change_external(self.z_index.prop(), |self_, _| async move {
+            self_.redraw.trigger();
+        });
+        on_modify.when_change_external(self.debug.prop(), |self_, _| async move {
             self_.redraw.trigger();
         });
 
