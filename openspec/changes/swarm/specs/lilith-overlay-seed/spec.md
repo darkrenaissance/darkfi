@@ -1,8 +1,8 @@
 ## Purpose
 
-Defines lilith as a persistent ordinary overlay peer providing bounded subnet
+Defines lilith as a persistent ordinary overlay peer providing bounded swarm
 rendezvous through one listener and durable store without joining, probing, or
-serving advertised subnets.
+serving advertised swarms.
 
 ## ADDED Requirements
 
@@ -19,7 +19,7 @@ inbound-only with zero ordinary outbound slots as an operator topology choice.
 Production lilith overlay configuration MUST disable local-test egress mode;
 every configured outbound target SHALL use the exact resolved-target validation
 and dial budgets from `swarm-overlay`.
-It SHALL NOT require a per-subnet listener, descriptor, magic, datastore, or
+It SHALL NOT require a per-swarm listener, descriptor, magic, datastore, or
 network instance to store ads and answer lookup. Learning an ID MUST NOT make
 lilith join or serve it.
 
@@ -39,13 +39,13 @@ lilith join or serve it.
 - **THEN** startup fails before overlay activity without panic or unbounded
   fallback
 
-### Requirement: Unknown subnets need no reconfiguration
+### Requirement: Unknown swarms need no reconfiguration
 
 Lilith SHALL validate, store, relay, and answer valid ads for previously unknown
 IDs within all message/store/work bounds and without descriptors. Learning new
-IDs MUST NOT create subnet listeners or app protocols.
+IDs MUST NOT create swarm listeners or app protocols.
 
-#### Scenario: Fresh subnet ad
+#### Scenario: Fresh swarm ad
 
 - **WHEN** a valid unknown-ID ad arrives
 - **THEN** it becomes available to bounded lookup without restart or operator
@@ -53,16 +53,16 @@ IDs MUST NOT create subnet listeners or app protocols.
 
 #### Scenario: Rendezvous-only learning
 
-- **WHEN** many subnet IDs are learned
-- **THEN** lilith still runs one overlay and no subnet instance
+- **WHEN** many swarm IDs are learned
+- **THEN** lilith still runs one overlay and no swarm instance
 
 ### Requirement: Durable state preserves bounded replay and expiry
 
-Lilith SHALL persist normalized per-subnet address records with their current
+Lilith SHALL persist normalized per-swarm address records with their current
 visibility/expiry, local expiry metadata, stateless ordered indexes, protected
 replay IDs, and monotonic-epoch checkpoint metadata. It SHALL enforce configured
-caps no greater than 1,024 addresses per subnet, 65,536 total addresses, 1,024
-general-pool protected IDs per subnet, and 262,144 protected IDs globally.
+caps no greater than 1,024 addresses per swarm, 65,536 total addresses, 1,024
+general-pool protected IDs per swarm, and 262,144 protected IDs globally.
 Accepted address lifetime SHALL be clamped to the configured local receive cap,
 defaulting to 7,200 seconds and never exceeding 86,400 seconds. Restart MUST
 restore only remaining ad-address lifetime and MUST NOT revive expired entries.
@@ -82,12 +82,12 @@ Checkpoint failure reaching the 600-second maximum SHALL make lilith reject
 fresh ads until checkpoint recovery or controlled overlay shutdown; existing
 bounded lookup MAY continue.
 
-Protected IDs MUST NOT be evicted early. Lilith authors no subnet ads and SHALL
-configure zero local-author reserve partitions. If a subnet quota or its global
+Protected IDs MUST NOT be evicted early. Lilith authors no swarm ads and SHALL
+configure zero local-author reserve partitions. If a swarm quota or its global
 general pool has no expired slot, the applicable fresh remote ad SHALL be
 rejected rather than weakening replay protection.
 Persistence MUST NOT contain ad sources, queriers, query history, source-peer/
-subnet associations, or private secrets. Replay ID-to-advertised-subnet binding
+swarm associations, or private secrets. Replay ID-to-advertised-swarm binding
 solely for quota accounting is allowed and MUST NOT contain a peer/source.
 Decoding malformed/truncated records SHALL be fallible and bounded. Malformed or
 unverifiable seen-ID, quota/reserve, or epoch state SHALL fail overlay startup.
@@ -120,11 +120,11 @@ relay.
 - **THEN** each receives its conservative checkpointed remainder on a new
   monotonic epoch rather than a fresh full horizon
 
-#### Scenario: One subnet reaches its replay quota
+#### Scenario: One swarm reaches its replay quota
 
-- **WHEN** one claimed subnet consumes all of its unexpired general-pool slots
+- **WHEN** one claimed swarm consumes all of its unexpired general-pool slots
 - **THEN** lilith rejects another fresh ad for it without consuming other
-  subnet capacity
+  swarm capacity
 
 #### Scenario: Store rollback loses accepted ID
 
@@ -144,11 +144,11 @@ relay.
 
 ### Requirement: Lilith performs no advertisement liveness dialing
 
-Lilith MUST NOT connect to an advertised subnet address due to accepting,
+Lilith MUST NOT connect to an advertised swarm address due to accepting,
 storing, relaying, expiring, or reporting an ad. It SHALL expire through local
 TTL, replay admission, and capacity policy only. It MUST NOT describe transport
-reachability as subnet compatibility; only a descriptor-holding joining app can
-perform the subnet handshake.
+reachability as swarm compatibility; only a descriptor-holding joining app can
+perform the swarm handshake.
 
 #### Scenario: Attacker-selected address
 
@@ -206,7 +206,7 @@ policy.
 
 Status RPC SHALL expose listener state, aggregate connection counts, configured
 capacities, current address/dedup counts, evictions, rejections, and expiries.
-It MUST NOT expose peer or advertised addresses, queried/private subnet IDs,
+It MUST NOT expose peer or advertised addresses, queried/private swarm IDs,
 ad sources, per-peer counters, query history, or source/query associations.
 Public enumeration, if enabled, remains the bounded overlay protocol.
 
@@ -214,7 +214,7 @@ Public enumeration, if enabled, remains the bounded overlay protocol.
 
 - **WHEN** status is requested
 - **THEN** aggregate health/capacity/count metrics are returned without peer or
-  subnet-query identifiers
+  swarm-query identifiers
 
 #### Scenario: Querier data is absent
 

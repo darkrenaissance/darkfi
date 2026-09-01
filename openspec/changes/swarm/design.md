@@ -1,4 +1,4 @@
-# Design: swarm overlay for subnet rendezvous
+# Design: swarm overlay for swarm rendezvous
 
 ## Context
 
@@ -22,12 +22,37 @@ implementation constraints are:
 - `VersionMessage.features` is retained remotely but sent locally as empty.
   Existing variable version fields can combine past `VERSION_MAX_BYTES`, so
   feature validation alone is insufficient.
-- An ad store knows only one-way `SubnetId` and addresses. It cannot perform a
-  subnet handshake and must not become an attacker-controlled dialer.
+- An ad store knows only one-way `SwarmId` and addresses. It cannot perform a
+  swarm handshake and must not become an attacker-controlled dialer.
 - Current Tor state is process-global and does not guarantee independent onion
-  identities per subnet; I2P does not provide a general inbound listener.
+  identities per swarm; I2P does not provide a general inbound listener.
 - Apps such as darkirc/fud construct substantial state from `P2pPtr` before
   protocol registration. A registration closure alone is insufficient.
+
+## Terminology
+
+One sense per word:
+
+| Term | Meaning |
+|---|---|
+| overlay | the single rendezvous `P2p` network (fixed identity `darkfi-swarm`) where ads and lookups happen |
+| swarm | one application network: one descriptor, one `SwarmId`, one independent `P2p` instance |
+| `SwarmPool` | the orchestrator owning at most one overlay plus the independent `P2p` instance of each active swarm |
+
+The naming follows BitTorrent, which uses the same shape:
+
+| BitTorrent | Swarm subsystem |
+|---|---|
+| swarm = all peers sharing one torrent | swarm = the peers of one application network |
+| tracker / DHT rendezvous | the overlay, which hands out swarm addresses |
+| client session (libtorrent `session`) | `SwarmPool` |
+
+Wire names use the per-network sense: `getaddr`/`addrs` fetch one swarm's
+addresses and `getswarm`/`swarms` enumerate public swarms. `SwarmError`,
+`ProtocolSwarm`, the `swarm` feature and `net::swarm` module, and
+`swarm-ad-store` name the overlay protocol and subsystem, never a single
+swarm.
+
 
 ## Goals / Non-Goals
 
@@ -38,13 +63,13 @@ implementation constraints are:
 - Keep all untrusted wire, persistence, queue, request, and work state bounded.
 - Make bootstrap/source attempts, join completion, serving creation, rollback,
   recreation, and teardown explicit and testable.
-- Store/relay hints passively and validate only inside a joining subnet.
+- Store/relay hints passively and validate only inside a joining swarm.
 - Add no third-party dependency.
 - State realistic protocol disclosure and persistence boundaries.
 
 **Non-Goals:**
 
-- Multiplexing subnet traffic over overlay channels.
+- Multiplexing swarm traffic over overlay channels.
 - Authenticating ad authors or proving address ownership.
 - PIR, cover traffic, Sybil resistance, or global-observer resistance.
 - Automatic independent Tor/I2P provisioning.
@@ -106,20 +131,20 @@ field/format ambiguity would split deployed IDs.
 Initial messages are:
 
 ```text
-SubnetAd {
-    subnet_id, visibility, ad_id: [u8; 32],
+SwarmAd {
+    swarm_id, visibility, ad_id: [u8; 32],
     lifetime_secs, addrs: Vec<Url> // 1..=32
 }
-GetSubnetAddrs { request_id: [u8; 16], subnet_id, cursor? }
-SubnetAddrs    { request_id: [u8; 16], subnet_id, addrs, next? }
-GetPublicSubnets { request_id: [u8; 16], cursor? }
-PublicSubnets    { request_id: [u8; 16], subnet_ids, next? }
+GetSwarmAddrs { request_id: [u8; 16], swarm_id, cursor? }
+SwarmAddrs    { request_id: [u8; 16], swarm_id, addrs, next? }
+GetPublicSwarms { request_id: [u8; 16], cursor? }
+PublicSwarms    { request_id: [u8; 16], swarm_ids, next? }
 SwarmError       { request_id: [u8; 16], bounded_code }
 ```
 
-Commands are fixed to `swarm.ad`, `swarm.geta`, `swarm.addrs`, `swarm.gets`,
-`swarm.subs`, and `swarm.err` respectively. Struct field order is exactly the
-order shown in `swarm-overlay`; existing DarkFi encoding is used. Visibility is
+Commands are fixed to `ad`, `getaddr`, `addrs`, `getswarm`, `swarms`, and
+`err` respectively. Struct field order is exactly the order shown in
+`swarm-overlay`; existing DarkFi encoding is used. Visibility is
 `u8` (`0` public, `1` non-public), lifetime is `u32`, error codes are fixed
 `u8` values 0 through 3, and cursor version is one. No new serializer is added.
 
@@ -146,7 +171,7 @@ version: u8 | last_key: [u8; 32] | terminal_key: [u8; 32]
 ```
 
 Address pages use BLAKE3 of canonical URL bytes as ordered key; public pages use
-`SubnetId`. The first page captures the greatest current live key as a terminal.
+`SwarmId`. The first page captures the greatest current live key as a terminal.
 Later pages return live keys strictly after `last_key` and no greater than that
 terminal, then advance `last_key`. Mutation may make a traversal include or omit
 records, but never invalidates a well-formed cursor, allocates a server snapshot,
@@ -168,10 +193,10 @@ visibility is unsigned, an attacker can re-advertise an observed ID as public.
 
 Persistent nodes use existing `kvdb-overlay` trees for address records, public
 index, seen IDs, and monotonic-epoch metadata. Address keys are
-`(SubnetId, hash(canonical_url))`. Atomic batches update records and indexes.
-Seen keys remain global by `ad_id`; their values bind the advertised `SubnetId`
+`(SwarmId, hash(canonical_url))`. Atomic batches update records and indexes.
+Seen keys remain global by `ad_id`; their values bind the advertised `SwarmId`
 and general/local-reserve class only for quota/replay accounting. Reusing one ad
-ID under another subnet is therefore still a duplicate. No persistence API
+ID under another swarm is therefore still a duplicate. No persistence API
 receives a source channel/address.
 
 Each key has one normalized record containing URL, current visibility, expiry,
@@ -186,11 +211,11 @@ Defaults and hard maxima are:
 
 | Local limit | Default | Maximum |
 |---|---:|---:|
-| addresses per subnet | 256 | 1,024 |
+| addresses per swarm | 256 | 1,024 |
 | total addresses | 16,384 | 65,536 |
-| general protected IDs per subnet | 256 | 1,024 |
+| general protected IDs per swarm | 256 | 1,024 |
 | protected ad IDs | 65,536 | 262,144 |
-| local-author reserve subnet partitions | 32 | 256 |
+| local-author reserve swarm partitions | 32 | 256 |
 | accepted/authored address lifetime | 7,200 s | 86,400 s |
 | replay checkpoint interval | 300 s | 600 s |
 | relay fanout | 16 | 64 |
@@ -205,25 +230,25 @@ applies its own cap.
 Address capacity evicts expired first, then earliest expiry, then lexical key.
 Seen IDs remain protected exactly through local address expiry plus 86,400
 seconds, for at most 172,800 seconds from acceptance. Expired IDs
-are removed first. Remote IDs occupy a general pool with a per-subnet quota; if
+are removed first. Remote IDs occupy a general pool with a per-swarm quota; if
 that quota or the global general pool contains only protected IDs, the fresh ad
-is rejected before address mutation or relay. This prevents one claimed subnet
-from consuming the whole general pool, but generated subnet IDs can still cause
+is rejected before address mutation or relay. This prevents one claimed swarm
+from consuming the whole general pool, but generated swarm IDs can still cause
 distributed saturation.
 
-Authoring configuration reserves a default 32, at most 256, subnet partitions of
+Authoring configuration reserves a default 32, at most 256, swarm partitions of
 256 slots each inside the global cap. Checked multiplication/subtraction derives
 reserve and nonzero general capacities. Remote ads cannot consume a partition;
-locally authored IDs use their subnet's partition until expiry. A serving
+locally authored IDs use their swarm's partition until expiry. A serving
 transition atomically allocates/reuses a partition before listener/author start;
 stopping retains it until every protected local ID expires. Sequential churn may
 therefore return a typed capacity failure rather than overwrite protection. The
-last-ID expiry releases a stopped subnet's partition atomically; resumed serving
+last-ID expiry releases a stopped swarm's partition atomically; resumed serving
 retains it.
 
-Startup assigns persisted local IDs to partitions by distinct subnet and checks
+Startup assigns persisted local IDs to partitions by distinct swarm and checks
 each partition's 256 slots separately. Persisted general IDs are checked only
-against the remaining general capacity and per-subnet quota; local IDs already
+against the remaining general capacity and per-swarm quota; local IDs already
 inside reserve are not double-counted. The 256-slot partition exceeds the
 maximum IDs produced by the fixed 20-minute minimum cadence during the
 172,800-second maximum protection window. Protected IDs are never evicted early;
@@ -270,7 +295,7 @@ reserve partitions are validated independently before conversion.
 
 Transient stores use the same validation in bounded memory only. No store
 contains an active dialer. Active refinement is rejected because it cannot
-verify subnet attribution and creates scanning amplification.
+verify swarm attribution and creates scanning amplification.
 
 ### D6. Validate features and full version size
 
@@ -281,7 +306,7 @@ versions. Version permits at most 10 external addresses and 10 features;
 node ID is capped at 64 bytes, app name at 32, URL at 1,024, feature name at 32,
 and semver prerelease/build at 32 each. Before sending, protocol encodes and
 checks complete `VersionMessage` and `VerackMessage` against their maxima.
-Each overlay/subnet `P2p` receives a fresh CSPRNG node ID scoped to that instance;
+Each overlay/swarm `P2p` receives a fresh CSPRNG node ID scoped to that instance;
 it is not persisted or reused across networks/restarts.
 
 Inbound `VersionMessage` and `VerackMessage` use manual bounded decoders that
@@ -318,16 +343,16 @@ work rates are 32 store writes and 32 relay enqueues per 10 seconds plus
 | pages per public enumeration | 4 | 16 |
 | candidate addresses per attempt | 64 | 256 |
 | previously compatible retries | 16 | 64 |
-| persisted compatible retry URLs/subnet | 64 | 256 |
-| local-author reserve subnet partitions | 32 | 256 |
-| active subnets | 32 | 256 |
+| persisted compatible retry URLs/swarm | 64 | 256 |
+| local-author reserve swarm partitions | 32 | 256 |
+| active swarms | 32 | 256 |
 | concurrent lifecycle attempts | 8 | 32 |
 | shutdown deadline | 120 s | 600 s |
 | pending request timeout | 10 s | 60 s |
 | configured ordinary peers | 8 | 256 |
 | overlay bind addresses | 1 | 16 |
-| serving bind addresses/subnet | 1 | 16 |
-| serving external addresses/subnet | 1 | 32 |
+| serving bind addresses/swarm | 1 | 16 |
+| serving external addresses/swarm | 1 | 32 |
 | overlay inbound channels | 64 | 256 |
 | overlay outbound channels | 8 | 64 |
 | overlay manual channels | 8 | 256 |
@@ -344,7 +369,7 @@ does not claim Sybil resistance.
 
 ### D8. Bootstrap by constructing one stage at a time
 
-Swarm owns at most one running overlay candidate. A cache record is a bounded
+SwarmPool owns at most one running overlay candidate. A cache record is a bounded
 pair of the original connect URL and exact resolved endpoint used by a
 successfully completed persistent-feature channel. It never comes from
 `VersionMessage.ext_send_addr`. For a transient:
@@ -360,15 +385,15 @@ successfully completed persistent-feature channel. It never comes from
 5. Resolve/validate configured ordinary peers once, construct a fresh overlay
    candidate, install those exact targets through the same pre-start API, and
    repeat one bounded stage.
-6. Publish the successful `P2pPtr` as Swarm's active overlay only after success.
+6. Publish the successful `P2pPtr` as SwarmPool's active overlay only after success.
 
 No settings reload is used. Persistent nodes construct directly from configured
 ordinary topology. After an ordinary channel exposes `swarm-ad-store`, only its
 actual connect/resolved pair may enter the cache via atomic replacement. The
 peer's advertised external addresses are ignored for caching.
 
-Swarm does not configure a standard overlay hostlist/datastore for a
-privacy-maximal transient. Separately configured subnet and transport state is
+SwarmPool does not configure a standard overlay hostlist/datastore for a
+privacy-maximal transient. Separately configured swarm and transport state is
 outside that overlay-cache guarantee and documented.
 
 Untrusted dial paths use a new narrow target model:
@@ -419,13 +444,13 @@ attempt tries one resolved destination once. This does not prove endpoint
 ownership, but prevents local-network SSRF/DNS-rebinding and bounds public
 victim reflection.
 
-### D9. Keep overlay control channels and subnet data channels separate
+### D9. Keep overlay control channels and swarm data channels separate
 
 “Ordinary overlay session” means an inbound/outbound/manual/direct non-seed
 session on the overlay `P2p`; it does not mean every client keeps it for process
 lifetime. The channel remains bound to overlay magic/app identity, channel
 store, hosts, and `ProtocolSwarm`. Streams are never handed to another `P2p`,
-re-handshaken under subnet identity, or extended with subnet-tag multiplexing.
+re-handshaken under swarm identity, or extended with swarm-tag multiplexing.
 
 Persistent nodes retain the overlay while storing/relaying. Serving nodes retain
 it while authoring ads. Transient settings expose two policies:
@@ -436,23 +461,23 @@ ImmediateAfterOperation      // explicit reduced-privacy mode
 ```
 
 The default never reacts to lookup/join completion by disconnecting; it retains
-the overlay until an explicit `stop_overlay()` or full Swarm shutdown ends the
+the overlay until an explicit `stop_overlay()` or full SwarmPool shutdown ends the
 application session. Immediate mode deterministically stops after every
 caller-visible lookup or join reaches a terminal outcome—success, empty result,
 error, timeout, or cancellation—but not after an internal lookup phase within a
 join. Its configuration warning states that the responder and a same-operator
-subnet server may correlate query, subnet connection, and teardown timing. In
-either mode the subnet handle owns an independent `P2p` and outlives overlay
+swarm server may correlate query, swarm connection, and teardown timing. In
+either mode the swarm handle owns an independent `P2p` and outlives overlay
 stop. Later discovery runs staged bootstrap again only when no active overlay
 remains.
 
-Swarm tracks overlay lifetime separately from subnet registry lifetime.
+SwarmPool tracks overlay lifetime separately from swarm registry lifetime.
 `stop_overlay()` rejects persistent/serving duties, but for an eligible
-transient it stops only overlay tasks/channels and leaves subnet entries
-untouched. Full Swarm shutdown still stops every subnet and any active overlay.
+transient it stops only overlay tasks/channels and leaves swarm entries
+untouched. Full SwarmPool shutdown still stops every swarm and any active overlay.
 Transport reuse was rejected because it requires multiplexing or handoff,
-correlates overlay queries with subnet membership, mixes host/protocol state,
-and works only when the overlay peer also serves the subnet.
+correlates overlay queries with swarm membership, mixes host/protocol state,
+and works only when the overlay peer also serves the swarm.
 
 ### D10. Registry-owned lifecycle and explicit source attempts
 
@@ -484,7 +509,7 @@ A join attempt:
    time; verified and fresh resolution each receive half that subdeadline, so
    verified DNS/transport preparation cannot consume fresh preparation time;
 7. retains selected candidates as ephemeral `ValidatedDialTarget` values and
-   installs a two-phase verified/fresh plan through the subnet's pre-start manual-
+   installs a two-phase verified/fresh plan through the swarm's pre-start manual-
    target API, not its URL-only hostlist/refinery;
 8. starts and waits for a channel whose session flag is inbound, outbound, or
    manual; at start it snapshots remaining dial time, cancels verified targets at
@@ -534,7 +559,7 @@ visibility/lifetime
 ```
 
 Create-and-serve validates persistent role and all fields, builds `P2p` with
-listeners before start, atomically allocates/reuses the subnet's local-author
+listeners before start, atomically allocates/reuses the swarm's local-author
 reserve partition, runs the initializer, and calls `P2p::start()`. Reserve
 exhaustion fails before initializer/listener/author activity. Success requires
 listener readiness, not an existing peer, enabling a first server. Peer
@@ -557,8 +582,8 @@ warning.
 One author task uses a fixed version-one 30-minute base interval with
 independent uniformly sampled ±10-minute `OsRng` jitter; it is not configurable.
 Each emission uses a fresh 32-byte `OsRng` ad ID, configured lifetime capped at
-24 hours and defaulting to two hours, and only that subnet's external addresses.
-Multi-subnet emission order is shuffled with independent jitter.
+24 hours and defaulting to two hours, and only that swarm's external addresses.
+Multi-swarm emission order is shuffled with independent jitter.
 
 Initialization, listener readiness, peer connection, recreation, new overlay
 channel, and stop only mutate local author state. They never invoke immediate
@@ -566,7 +591,7 @@ send. Stop removes future snapshots; relayed ads expire locally.
 
 ### D13. Lilith uses ordinary persistent behavior
 
-Lilith `[overlay]` maps to normal persistent Swarm settings and strict policy. It
+Lilith `[overlay]` maps to normal persistent SwarmPool settings and strict policy. It
 may be inbound-only or have ordinary outbound peers; it never places overlay
 bootstrap into `Settings.seeds`.
 
@@ -576,7 +601,7 @@ Corrupt records decode fallibly. Malformed/unverifiable seen-ID, quota/reserve,
 or epoch state fails startup; address/index state may be quarantined/rebuilt only
 when authoritative replay/accounting remains intact. Status RPC reads only
 aggregate listener/connection/capacity/address/dedup/eviction/expiry/rejection
-counters, including aggregate per-subnet-quota and epoch-checkpoint failures. It
+counters, including aggregate per-swarm-quota and epoch-checkpoint failures. It
 never reports local-author reserve occupancy/use/transition timing and never
 walks full IDs/addresses or query mappings.
 
@@ -586,16 +611,16 @@ shutdown.
 ### D14. Scoped metadata threat model
 
 Protected properties are no stable author identity, no overlay-source-peer to
-subnet/authorship persistence, and isolated subnet state.
+swarm/authorship persistence, and isolated swarm state.
 
 Disclosed properties are requested ID to responder, connection-level query
 linkage, IDs and advertised endpoints observed/mapped by gossip/store peers,
 timing/topology evidence, public catalog, endpoint reuse, local full-ID paths
-when subnet persistence is enabled, and remote peer retention. The
+when swarm persistence is enabled, and remote peer retention. The
 ID-to-endpoint mapping is intentional rendezvous output. Separate anonymity
-circuits may reduce linkage but are not provisioned or guaranteed by Swarm.
+circuits may reduce linkage but are not provisioned or guaranteed by SwarmPool.
 
-Absolute cross-subnet unlinkability is rejected because direct query and shared
+Absolute cross-swarm unlinkability is rejected because direct query and shared
 connections make it false.
 
 ## Risks / Trade-offs
@@ -607,7 +632,7 @@ connections make it false.
   traversal, CSPRNG-shuffle bounded tiers, partition verified/fresh time and
   attempts, validate compatibility, retain app authorization/static fallback,
   make no authenticity claim.
-- **[Dedup saturation]** Protected IDs can fill capacity → Per-subnet general
+- **[Dedup saturation]** Protected IDs can fill capacity → Per-swarm general
   quotas prevent one-ID monopolization, local-author partitions preserve
   allocated local cadence, and strict global bounds reject distributed-ID floods
   without early eviction; general remote-ad availability and serving transitions
@@ -619,7 +644,7 @@ connections make it false.
   addresses → Resolve once, reject local/reserved ranges, connect the exact
   validated direct socket or configured trusted proxy socket, never locally
   resolve hidden names, reject proxy DNS bypass, enforce per-destination/rate/
-  concurrency/total budgets, and retain subnet handshake checks.
+  concurrency/total budgets, and retain swarm handshake checks.
 - **[Transport abort]** Existing transport constructors/dialers may assume
   validated configuration → Reject unaudited schemes before construction and
   require fallible no-unwind handling across every attacker-selected candidate
@@ -637,11 +662,11 @@ connections make it false.
   bounded forward progress while accepting non-snapshot omissions/additions.
 - **[Local reserve metadata]** Reserve records reveal local ephemeral authorship
   to the local database → Store no peer/stable identity and exclude reserve use,
-  occupancy, subnet labels, and timing from RPC/status/telemetry.
+  occupancy, swarm labels, and timing from RPC/status/telemetry.
 - **[Role Sybil]** Attackers claim persistent feature → Treat only as hint,
   cache multiple peers, grant no privilege.
 - **[Bootstrap concentration]** Configured peers can observe/censor → Multiple
-  peers/cache, staged deadlines, static subnet fallback.
+  peers/cache, staged deadlines, static swarm fallback.
 - **[Reconstruction cost]** Failed stages rerun P2p/app initialization → Explicit
   bounded attempts and complete cleanup; no unsupported reload semantics.
 - **[Serving downtime]** Promotion requires stop/recreate → Require serving mode
@@ -654,7 +679,7 @@ connections make it false.
 These are deliberately not `swarm` completion criteria:
 
 - **Endpoint-reuse enforcement:** A later transport-identity change may reject
-  cross-subnet external-endpoint reuse by default and require an explicit
+  cross-swarm external-endpoint reuse by default and require an explicit
   reduced-privacy override. This change only detects, warns, and documents reuse
   because independent Tor/I2P identity provisioning is unresolved.
 - **Query-peer privacy budget:** A later discovery-policy change may specify
@@ -669,7 +694,7 @@ These are deliberately not `swarm` completion criteria:
    bootstrap, and lifecycle attempts/recreation using local transports.
 3. Add lilith's optional overlay section alongside unchanged legacy sections.
 4. Run local multi-node tests for replay saturation, poisoning, no probing,
-   per-subnet quota/local reserve, monotonic-epoch restart, two-hour TTL clamp,
+   per-swarm quota/local reserve, monotonic-epoch restart, two-hour TTL clamp,
    mutation-tolerant terminal cursors, CSPRNG candidate ordering, DNS rebinding/
    local-range/reflection rejection, decoder truncation/hostile lengths, direct/
    proxy exact routing, hidden-service no-local-DNS, full candidate-pipeline no-
@@ -682,4 +707,4 @@ These are deliberately not `swarm` completion criteria:
 
 Rollback disables pilot/overlay config and returns to static seeds and legacy
 lilith. State is namespaced and removable after shutdown; existing wire and
-subnet persistence formats are unchanged.
+swarm persistence formats are unchanged.

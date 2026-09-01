@@ -1,4 +1,4 @@
-# Tasks: swarm overlay for subnet rendezvous
+# Tasks: swarm overlay for swarm rendezvous
 
 ## 1. Review checkpoint and module foundation
 
@@ -20,7 +20,7 @@
   domain, lengths, big-endian integers, 32-byte app-name bound, and secret shape; add app-name,
   flag/secret, UTF-8 byte, and excluded-version-field tests, then run
   `make test`.
-- [ ] 2.2 Implement BLAKE3 `SubnetId` and the normative darkirc byte/hash golden
+- [ ] 2.2 Implement BLAKE3 `SwarmId` and the normative darkirc byte/hash golden
   vector plus bound-field divergence and patch-equivalence tests; run
   `make test`.
 - [ ] 2.3 Add `OsRng` private-secret generation and secret-safe debug/error
@@ -44,7 +44,7 @@
   semver strings—before reservation/allocation while preserving valid wire
   bytes. Add golden compatibility, huge declared count/string, overlong
   element, roundtrip, and combined-oversize tests. Generate each P2p node ID with
-  `OsRng`; test overlay/subnet/restart independence and no persistence/reuse,
+  `OsRng`; test overlay/swarm/restart independence and no persistence/reuse,
   then run `make test`.
 - [ ] 3.3 Record focused human review that shared-net changes alter neither
   framing, magic, version compatibility, nor manual/seed/inbound reload
@@ -74,7 +74,7 @@
 
 ## 4. Bounded correlated wire protocol
 
-- [ ] 4.1 Implement nonempty `SubnetAd` with exact ID, visibility, ad ID,
+- [ ] 4.1 Implement nonempty `SwarmAd` with exact ID, visibility, ad ID,
   lifetime, 1..=32 address, 1,024-byte URL, shareable-scheme, and 65,536-byte
   message limits plus fixed command/field order and visibility values; add
   serialization/golden-command and every-boundary test, then run `make test`.
@@ -121,17 +121,17 @@
   default/max/clamp, relay-preservation, duplicate/fresh-ID, and expiry tests,
   then run `make test`.
 - [ ] 5.3 Implement protected seen-ID retention through local address expiry
-  plus 86,400 seconds, a 256-default/1,024-maximum general quota per subnet, and
-  32-default/256-maximum remote-inaccessible local-author subnet partitions of
+  plus 86,400 seconds, a 256-default/1,024-maximum general quota per swarm, and
+  32-default/256-maximum remote-inaccessible local-author swarm partitions of
   256 slots each within the global cap. Use checked capacity arithmetic and
   validate persisted general/local partitions separately without double count;
-  retain stopped-subnet partitions until their IDs expire. Reject fresh ads or
+  retain stopped-swarm partitions until their IDs expire. Reject fresh ads or
   serving transitions before mutation/network activity when the applicable pool
-  is full. Add one-subnet, distributed-subnet, global, sequential serving churn,
-  local-reserve, stopped-subnet last-ID release/resume race, cadence-window,
+  is full. Add one-swarm, distributed-swarm, global, sequential serving churn,
+  local-reserve, stopped-swarm last-ID release/resume race, cadence-window,
   local-reserve wire/RPC/status/metric/telemetry exclusion, positive restart
   fixture where reserve IDs fit only when excluded from general accounting,
-  protected-ID, cross-subnet ad-ID reuse, expired-admission, and replay tests,
+  protected-ID, cross-swarm ad-ID reuse, expired-admission, and replay tests,
   then run `make test`.
 - [ ] 5.4 Implement dual-clock ad-address expiry plus restart-safe dedup:
   restore bounded remaining address lifetime and persist seen-ID deadlines on a
@@ -175,11 +175,11 @@
   correlated pending requests; direct lookup ignores visibility and enabled
   enumeration grants no role privilege. Add continuous-mutation bounded progress,
   terminal-key, non-snapshot omission/addition, disabled-public, transient
-  requester, no-cross-subnet, and unsolicited-response tests, then run
+  requester, no-cross-swarm, and unsolicited-response tests, then run
   `make test`.
 - [ ] 6.4 Implement the exact per-channel message/work rates and
   response-byte budget plus configured queue, global semaphore, page, candidate,
-  previously-compatible retry/index, local-author partition, active-subnet,
+  previously-compatible retry/index, local-author partition, active-swarm,
   concurrent-attempt, and shutdown defaults/maxima plus request timeout,
   configured peer, bind/external address, and
   inbound/outbound/manual/total channel, dial concurrency/rate,
@@ -211,31 +211,31 @@
 - [ ] 7.5 Test that failed cached app/protocol/store startup leaves no task or
   state before the configured stage and that overall bootstrap remains bounded;
   run `make test`.
-- [ ] 7.6 Implement transient overlay stop independently from subnet registry
+- [ ] 7.6 Implement transient overlay stop independently from swarm registry
   lifetime. Default to session-bound retention with no lookup/join-triggered
   stop; allow immediate teardown only via explicit reduced-privacy policy with
   timing warning and deterministic stop after every caller-visible success,
   empty, error, timeout, or cancellation outcome but not join's internal lookup;
   reject stop while persistent store/gossip or serving-ad duties remain. Add
   default-no-trigger, all terminal outcomes, internal-phase retention,
-  same-operator correlation, later reconnect, and subnet-survival tests with
+  same-operator correlation, later reconnect, and swarm-survival tests with
   `make test`.
 
-## 8. Registry-owned subnet lifecycle and source attempts
+## 8. Registry-owned swarm lifecycle and source attempts
 
 - [ ] 8.1 Implement per-ID `Initializing`, `Joining`, `Joined`, `Serving`, and
   `Stopping` ownership with serialized same-ID transitions and concurrent
   different-ID operation; add legal/duplicate transition tests, then run
   `make test`.
 - [ ] 8.2 Implement full-ID paths and isolated settings, hosts, refinement,
-  datastores, app state, and shutdown ownership; add cross-subnet isolation and
+  datastores, app state, and shutdown ownership; add cross-swarm isolation and
   delete tests, then run `make test`.
 - [ ] 8.3 Implement the fallible initializer returning typed app state plus
   shutdown; retain a type-erased `Arc` and hook in the registry so caller-handle
   drop cannot end app state. Test pre-start ordering, drop ownership, and
   initializer failure with `make test`.
 - [ ] 8.4 Keep overlay candidates as ephemeral typed original-URL/resolved-socket
-  targets through the subnet pre-start manual connector; do not insert URL-only
+  targets through the swarm pre-start manual connector; do not insert URL-only
   host/refinery state before compatibility. Drop failures, persist only after
   compatible ordinary channel, and re-resolve/revalidate every later outbound/
   retry/refine attempt. Bound the persisted-compatible index at 64 default/256
@@ -250,8 +250,8 @@
   magic/app/version, temporary-direct, seed/refine-without-peer, unreachable,
   disconnect-race, and test-only injected-RNG tests; run `make test`.
 - [ ] 8.5 Enforce channel ownership separation: no overlay stream transfer,
-  subnet re-handshake, or subnet-tag multiplexing, even when the answering
-  overlay peer also serves the subnet; add structural and same-operator tests,
+  swarm re-handshake, or swarm-tag multiplexing, even when the answering
+  overlay peer also serves the swarm; add structural and same-operator tests,
   then run `make test`.
 - [ ] 8.6 Implement overlay-only, static-only, and combined attempts with
   explicit source activation and per-attempt/overall deadlines; add policy and
@@ -267,7 +267,7 @@
   add repeated leave, join/leave race, retained rejoin, and isolated deletion
   tests, then run `make test`.
 - [ ] 8.10 Implement swarm shutdown ordering: stop authoring, cancel attempts,
-  stop every subnet despite errors, then overlay; add finite concurrent teardown
+  stop every swarm despite errors, then overlay; add finite concurrent teardown
   and failing-hook tests, then run `make test`.
 
 ## 9. Initial serving, controlled recreation, and authoring
@@ -287,11 +287,11 @@
   success, retained-state, bind failure, and no-partial-author tests, then run
   `make test`.
 - [ ] 9.4 Validate advertised endpoints separately, emit explicit warning on
-  local cross-subnet reuse, and avoid automatic Tor/I2P provisioning claims;
+  local cross-swarm reuse, and avoid automatic Tor/I2P provisioning claims;
   add bind/external distinction and reuse tests, then run `make test`.
 - [ ] 9.5 Implement one author task with a fixed non-configurable 30-minute
   base interval, independent uniform ±10-minute
-  `OsRng` jitter, fresh `OsRng` ad IDs, shuffled subnet order, and bounded
+  `OsRng` jitter, fresh `OsRng` ad IDs, shuffled swarm order, and bounded
   two-hour-default/24-hour-maximum lifetime and addresses; add default/clamp,
   config-rejection, reserve-capacity, and injected clock/RNG tests, then run
   `make test`.
@@ -308,12 +308,12 @@
   omitted tests, then run `make test`.
 - [ ] 10.2 Start lilith with the durable passive store and no ad-refinery/dial
   path; add direct ordinary cold-start, persisted expiry, dedup saturation,
-  per-subnet quota, zero local-author partitions, checked monotonic-epoch
+  per-swarm quota, zero local-author partitions, checked monotonic-epoch
   remainder restart, equality/overflow/reduced-cap/epoch startup failure, two-
   hour stale-address clamp, rollback-before-ID-commit replay, forward-clock, and
   dial-spy tests, then run `make test`.
 - [ ] 10.3 Implement aggregate-only status RPC for listener, aggregate
-  connections, capacities, address/dedup, per-subnet-quota/checkpoint failures,
+  connections, capacities, address/dedup, per-swarm-quota/checkpoint failures,
   eviction, expiry, and rejection; prove peer/advertised addresses, IDs, sources,
   per-peer data, and query mappings are absent with `make test`.
 - [ ] 10.4 Keep overlay and legacy instances isolated in settings, policy,
@@ -323,9 +323,9 @@
 
 - [ ] 11.1 Add local cold-start tests for cached ordinary success, fresh
   configured fallback, descriptor lookup, app initialization, and ordinary
-  subnet join without per-subnet overlay configuration; run `make test`.
+  swarm join without per-swarm overlay configuration; run `make test`.
 - [ ] 11.2 Add first-server creation followed by cadence ad, client lookup, and
-  ordinary join, proving a new subnet requires no preexisting peer; run
+  ordinary join, proving a new swarm requires no preexisting peer; run
   `make test`.
 - [ ] 11.3 Add poisoned/stale tests proving stores/lilith never dial targets,
   two-hour defaults reduce stale retention, CSPRNG ordering defeats lexical
@@ -333,7 +333,7 @@
   blamed, and static fallback remains usable; run `make test`.
 - [ ] 11.4 Add concurrent abuse tests for oversized fields/URLs, query/pending
   floods, fresh-ID floods, protected-set saturation, replay loops, relay fanout,
-  one-subnet/distributed saturation, local-author reserve, terminal-cursor
+  one-swarm/distributed saturation, local-author reserve, terminal-cursor
   mutation/duplicate/empty-page churn, durable-write/checkpoint pressure,
   candidate reservoir/order/time-budget grinding, dial concurrency/rate, per-
   destination repetition, DNS resolution totals, and victim reflection; verify
@@ -343,8 +343,8 @@
   serving recreation, concurrent leave, retained rejoin, isolated delete, and
   failing shutdown hooks; run `make test`.
 - [ ] 11.6 Add artifact/privacy tests proving no protocol-added stable node/
-  signing identity across overlay/subnets (excluding disclosed endpoint reuse),
-  non-public omission, caches/stores free of queries/sources, scoped subnet and
+  signing identity across overlay/swarms (excluding disclosed endpoint reuse),
+  non-public omission, caches/stores free of queries/sources, scoped swarm and
   transport persistence, explicit ID-to-endpoint visibility but no source-peer/
   authorship mapping; run `make test`.
 
@@ -355,7 +355,7 @@
   behavior; add overlay success, fresh static fallback, repeated initializer,
   and complete failure tests, then run `make test`.
 - [ ] 12.2 Add bounded aggregate pilot metrics for lookup latency, stale/poisoned
-  failures, per-subnet/global remote dedup pressure, checkpoint failures, page
+  failures, per-swarm/global remote dedup pressure, checkpoint failures, page
   completion/mutation omissions, and bootstrap/source fallback. Expose no local-
   author reserve occupancy/use/failure timing. Prove schemas contain no peer,
   query mapping, private ID, local-author fact, or secret with `make test`.
@@ -363,7 +363,7 @@
   seeds, staged reconstruction, initializer reruns, serving recreation downtime,
   bind versus external endpoints, ID/query disclosure, unsigned poisoning,
   gossip/store visibility of ID-to-endpoint mappings, egress/DNS/proxy policy,
-  reflection budgets, per-subnet/global dedup saturation and local reserve,
+  reflection budgets, per-swarm/global dedup saturation and local reserve,
   monotonic checkpoint extension and rollback-before-commit replay limitation,
   two-hour TTL defaults, mutation-tolerant non-snapshot pagination, randomized
   reservoir/time-partitioned candidate tiers, static fallback, endpoint

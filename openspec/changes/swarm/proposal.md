@@ -1,28 +1,28 @@
 ## Why
 
 DarkFi applications currently need independently configured bootstrap peers and
-seed lists for every subnet. This makes dynamic subnet discovery, first-server
+seed lists for every swarm. This makes dynamic swarm discovery, first-server
 startup, and shared operational deployment unnecessarily difficult.
 
-Introduce one bounded rendezvous overlay that discovers subnet endpoints while
-keeping each subnet in its own ordinary `P2p` instance. Static seeds remain an
+Introduce one bounded rendezvous overlay that discovers swarm endpoints while
+keeping each swarm in its own ordinary `P2p` instance. Static seeds remain an
 explicit fallback and unchanged default during the pilot.
 
 The overlay is a metadata and availability dependency, not an anonymity,
 authentication, authorization, or access-control mechanism. It does not remove
-per-subnet handshakes, application authorization, endpoint poisoning, Sybil
+per-swarm handshakes, application authorization, endpoint poisoning, Sybil
 risk, or availability failure, and it cannot hide a lookup from its responder.
 
 ## What Changes
 
 - Add an isolated higher-level `src/net/swarm/` subsystem, exposed as
-  `darkfi::net::swarm` behind a dedicated `swarm` feature. `Swarm` owns one
-  overlay `P2p` instance at a time and manages independent subnet `P2p`
+  `darkfi::net::swarm` behind a dedicated `swarm` feature. `SwarmPool` owns one
+  overlay `P2p` instance at a time and manages independent swarm `P2p`
   instances. Existing BLAKE3, `kvdb-overlay`, serialization, and networking
   facilities are activated explicitly; no third-party dependency is added
   silently.
 
-- Define a versioned, collision-resistant `SubnetId`. Its normative encoding is
+- Define a versioned, collision-resistant `SwarmId`. Its normative encoding is
   domain-separated, length-delimited, byte-exact, and covered by a golden vector.
   It binds application name, magic bytes, and the major/minor compatibility
   boundary enforced by the current handshake. Patch/prerelease/build metadata do
@@ -55,13 +55,13 @@ risk, or availability failure, and it cannot hide a lookup from its responder.
 
 - Treat advertisements as untrusted routing hints. Address/replay storage is
   TTL-, cap-, and work-bounded. Replaying a retained global ad ID neither
-  refreshes it nor relays it again, including reuse under another subnet.
+  refreshes it nor relays it again, including reuse under another swarm.
   Protected IDs are never evicted early.
 
-- Partition replay capacity into a general pool with per-subnet quotas and a
-  fixed local-author reserve. Reserve subnet partitions default to 32, max 256,
+- Partition replay capacity into a general pool with per-swarm quotas and a
+  fixed local-author reserve. Reserve swarm partitions default to 32, max 256,
   and hold exactly 256 IDs each inside the global cap. Remote ads cannot consume
-  them. Serving allocates a partition before network activity; stopped subnets
+  them. Serving allocates a partition before network activity; stopped swarms
   retain nonempty partitions until expiry. General and reserve state are checked
   separately at startup without double-counting. Reserve occupancy, use,
   failure, and timing remain absent from wire, RPC, status, metrics, and
@@ -84,9 +84,9 @@ risk, or availability failure, and it cannot hide a lookup from its responder.
   pilot metrics, and static fallback mitigate stale hints without probing.
 
 - Perform no advertisement liveness dialing from overlay stores or Lilith.
-  `SubnetId` is one-way, so a store cannot perform the subnet handshake, and a
+  `SwarmId` is one-way, so a store cannot perform the swarm handshake, and a
   transport-only probe would create attacker-controlled scanning/reflection.
-  Only a descriptor-holding joining subnet validates returned addresses through
+  Only a descriptor-holding joining swarm validates returned addresses through
   ordinary magic, application-name, and major/minor compatibility. Compatibility
   and possession of a private ID still grant no application authorization.
 
@@ -123,28 +123,28 @@ risk, or availability failure, and it cannot hide a lookup from its responder.
   except their bounded successful-endpoint cache. The self-declared feature
   grants no validation, metering, query, or storage privilege.
 
-- Keep overlay and subnet channels structurally separate. Overlay channels remain
+- Keep overlay and swarm channels structurally separate. Overlay channels remain
   owned by the fixed overlay identity and are never transferred, re-handshaken,
-  multiplexed, or reused for subnet data. Subnet `P2p` lifetime remains
+  multiplexed, or reused for swarm data. Swarm `P2p` lifetime remains
   independent.
 
 - Persistent store/gossip and serving-advertisement duties retain the overlay.
-  The transient default retains it until explicit stop or Swarm shutdown and
+  The transient default retains it until explicit stop or SwarmPool shutdown and
   never disconnects because lookup/join completed. Explicit reduced-privacy mode
   tears down after every caller-visible terminal result—but not an internal join
   lookup—and documents timing correlation. Later discovery reconstructs an
   overlay only when none remains.
 
 - Make metadata disclosure explicit. Ads contain no stable node/signing ID,
-  author, relay provenance, or intentional cross-subnet field. Nevertheless,
+  author, relay provenance, or intentional cross-swarm field. Nevertheless,
   responders see requested IDs; requests on one channel are linkable; gossip
   peers observe ID-to-endpoint mappings; timing/topology can suggest origin; and
-  endpoint reuse links subnets. The prohibited durable mapping is source peer to
-  subnet/authorship, not the rendezvous mapping itself. No PIR or global-observer
+  endpoint reuse links swarms. The prohibited durable mapping is source peer to
+  swarm/authorship, not the rendezvous mapping itself. No PIR or global-observer
   guarantee is made.
 
 - Generate `VersionMessage.node_id` independently with a CSPRNG for every
-  overlay/subnet `P2p` instance and process lifetime; do not persist or reuse it
+  overlay/swarm `P2p` instance and process lifetime; do not persist or reuse it
   across networks. Explicit endpoint reuse remains linkable and warning-only.
 
 - Plumb a validated local feature vector into `VersionMessage` without changing
@@ -160,7 +160,7 @@ risk, or availability failure, and it cannot hide a lookup from its responder.
   or reachable unimplemented branch. Unsupported/unaudited schemes fail before
   dialer construction.
 
-- Implement registry-owned subnet attempts. Initialization constructs app state,
+- Implement registry-owned swarm attempts. Initialization constructs app state,
   protocols, and a shutdown hook before network activity. Join succeeds only on
   a compatible ordinary inbound/outbound/manual channel—not seed, direct, or
   refinement—and failure/timeout/cancellation fully rolls back.
@@ -193,7 +193,7 @@ risk, or availability failure, and it cannot hide a lookup from its responder.
 
 Deferred follow-up changes, intentionally not implemented here:
 
-- fail-closed cross-subnet endpoint-reuse policy;
+- fail-closed cross-swarm endpoint-reuse policy;
 - query-peer selection/privacy budgets.
 
 Non-goals: connection multiplexing; authenticated ads; PIR, cover traffic,
@@ -209,7 +209,7 @@ compatibility, or seed-session changes.
 - `swarm-overlay`: versioned IDs; bounded correlated messages/pagination;
   passive replay storage; roles; ordinary-peer bootstrap; exact-target dialing;
   resource limits; and privacy disclosure.
-- `subnet-lifecycle`: descriptor resolution; registry-owned app state; ordinary
+- `swarm-lifecycle`: descriptor resolution; registry-owned app state; ordinary
   join completion; bounded source fallback; isolated state; serving/recreation;
   and teardown.
 - `lilith-overlay-seed`: optional persistent ordinary overlay peer with bounded
@@ -234,10 +234,10 @@ None. No existing specifications under `openspec/specs/` are modified.
   supply-chain review.
 - **Lilith:** one optional overlay section and aggregate status; legacy sections
   remain available.
-- **Pilot:** opt-in Swarm construction and descriptor pinning with static fallback
+- **Pilot:** opt-in SwarmPool construction and descriptor pinning with static fallback
   unchanged by default.
 - **Operational cost:** one additional bounded overlay connection set/store plus
-  independent per-subnet listeners.
+  independent per-swarm listeners.
 - **Security review:** this is a privacy-sensitive shared-network change.
   Transport/privacy, persistence, descriptor hashing, and candidate fairness
   require focused human review. `@anon-security-review`, CI, and final human

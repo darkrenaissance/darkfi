@@ -1,18 +1,18 @@
 ## Purpose
 
-Defines a bounded rendezvous overlay that resolves known subnet descriptors to
+Defines a bounded rendezvous overlay that resolves known swarm descriptors to
 untrusted peer addresses while making bootstrap, replay, resource, persistence,
 and metadata-disclosure boundaries explicit.
 
 ## ADDED Requirements
 
-### Requirement: Versioned subnet identifier derivation
+### Requirement: Versioned swarm identifier derivation
 
-A version-1 descriptor SHALL bind the subnet application name, magic bytes,
+A version-1 descriptor SHALL bind the swarm application name, magic bytes,
 and major/minor version pair used by the existing compatibility handshake. Its
 canonical bytes SHALL be, in order:
 
-1. ASCII `darkfi-swarm-subnet-v1` followed by one zero byte;
+1. ASCII `darkfi-swarm-id-v1` followed by one zero byte;
 2. application-name UTF-8 byte length as unsigned 16-bit big-endian, followed
    by those exact bytes without Unicode normalization;
 3. the four magic bytes;
@@ -21,7 +21,7 @@ canonical bytes SHALL be, in order:
 6. for a private descriptor only, exactly 32 secret bytes.
 
 Application names MUST contain 1 through 32 UTF-8 bytes. Other private-secret
-lengths and flag values MUST be rejected. `SubnetId` SHALL be the 32-byte
+lengths and flag values MUST be rejected. `SwarmId` SHALL be the 32-byte
 BLAKE3 hash of the canonical bytes. Implementations SHALL rely on collision
 resistance rather than claim collision is impossible. Patch, prerelease, and
 build metadata SHALL NOT affect the ID.
@@ -29,11 +29,11 @@ build metadata SHALL NOT affect the ID.
 For public `darkirc`, magic `fb e5 c7 b5`, and compatibility pair `0.5`, the
 canonical bytes SHALL be:
 
-`6461726b66692d737761726d2d7375626e65742d76310000076461726b697263fbe5c7b50000000000000000000000000000000500`
+`6461726b66692d737761726d2d69642d76310000076461726b697263fbe5c7b50000000000000000000000000000000500`
 
-and `SubnetId` SHALL be:
+and `SwarmId` SHALL be:
 
-`b4c9d83b53cc7473d26bf173a9abd5e3025957141e20779960d587eec88618ed`.
+`cad1d01807849a400541725bd75af14e53d259392082c14fa96ce6313551feb4`.
 
 #### Scenario: Golden public identifier
 
@@ -103,7 +103,7 @@ MUST contain no more than 256 endpoint records, 262,144 encoded file bytes, or
 connect URL and resolved endpoint actually used by a successfully completed
 ordinary channel advertising `("swarm-ad-store", 1)`. Advertised external
 addresses MUST NOT be cached from that feature handshake. The cache MUST NOT
-contain features, subnet IDs, ads, queries, or source/query associations.
+contain features, swarm IDs, ads, queries, or source/query associations.
 
 #### Scenario: Cached stage succeeds
 
@@ -121,7 +121,7 @@ contain features, subnet IDs, ads, queries, or source/query associations.
 - **WHEN** a fresh configured-peer stage establishes an ordinary channel
 - **THEN** lookup can run on that channel without a seed session
 
-#### Scenario: Cache contains no subnet activity
+#### Scenario: Cache contains no swarm activity
 
 - **WHEN** lookup sessions persist the swarm cache
 - **THEN** it contains successful connect/resolved endpoint pairs only
@@ -134,7 +134,7 @@ contain features, subnet IDs, ads, queries, or source/query associations.
 
 ### Requirement: Untrusted dials use validated exact targets
 
-Before dialing a fresh advertised or configured untrusted target, the swarm
+Before dialing a fresh advertised or configured untrusted target, the joiner
 SHALL resolve clearnet names once and validate the selected socket address. A
 cached target SHALL instead revalidate and reuse its stored successfully
 connected socket without DNS resolution. Unless explicit local-test mode is
@@ -167,7 +167,7 @@ proxy route SHALL revalidate that its exact socket still matches current trusted
 local proxy configuration; mismatch fails without DNS or fallback.
 
 An advertised candidate SHALL remain a typed pair of original URL and validated
-resolved socket through the subnet connection attempt. Before compatibility
+resolved socket through the swarm connection attempt. Before compatibility
 succeeds it MUST NOT be downgraded into a URL-only hostlist, persisted, or sent
 through a connector/refinery path that resolves it again. Failed candidates
 SHALL be dropped. After compatibility succeeds, ordinary host persistence MAY
@@ -217,9 +217,9 @@ resolve, validate, budget, and dial one exact socket again.
   proxy matching its transport
 - **THEN** it fails before dialer construction without direct-network fallback
 
-#### Scenario: Candidate crosses into subnet connector
+#### Scenario: Candidate crosses into swarm connector
 
-- **WHEN** a validated advertised candidate is handed to the subnet connection
+- **WHEN** a validated advertised candidate is handed to the swarm connection
   attempt
 - **THEN** its original URL and exact socket remain typed until compatibility
   succeeds, with no second DNS lookup or URL-only greylist insertion
@@ -271,46 +271,46 @@ the join budget.
   transport path
 - **THEN** the candidate is rejected before transport construction or dialing
 
-### Requirement: Overlay control channels are never subnet data channels
+### Requirement: Overlay control channels are never swarm data channels
 
 An overlay channel SHALL remain owned by the overlay `P2p` identified by fixed
 swarm magic bytes, app name, version policy, host state, and protocol registry.
-It MUST NOT carry subnet application messages, be transferred to a subnet
-`P2p`, be re-handshaken in place under a subnet identity, or multiplex traffic
-tagged by subnet ID. Joining SHALL create a separate subnet channel under that
-subnet's own identity and state.
+It MUST NOT carry swarm application messages, be transferred to a swarm
+`P2p`, be re-handshaken in place under a swarm identity, or multiplex traffic
+tagged by swarm ID. Joining SHALL create a separate swarm channel under that
+swarm's own identity and state.
 
 A persistent participant SHALL keep its overlay active while it performs
-durable store or gossip duties. A participant serving any subnet SHALL keep the
+durable store or gossip duties. A participant serving any swarm SHALL keep the
 overlay active while advertisement authoring is enabled. The default transient
 policy SHALL retain the overlay for the application session and MUST NOT stop it
 as an automatic reaction to lookup or join completion. The application session
-ends only through explicit overlay stop or full Swarm shutdown. An explicit
+ends only through explicit overlay stop or full SwarmPool shutdown. An explicit
 reduced-privacy policy SHALL stop after every caller-visible lookup/join terminal
 outcome—success, empty result, error, timeout, or cancellation—but MUST NOT stop
 after an internal lookup phase within join. Configuration and documentation
-MUST warn that responder/subnet observers can correlate the query, subnet
+MUST warn that responder/swarm observers can correlate the query, swarm
 connection, and teardown timing. Stopping the overlay MUST NOT stop or transfer
-the independent subnet `P2p`; a later lookup establishes a new overlay session
+the independent swarm `P2p`; a later lookup establishes a new overlay session
 only when no active overlay remains.
 
-#### Scenario: Overlay peer also serves requested subnet
+#### Scenario: Overlay peer also serves requested swarm
 
 - **WHEN** the lookup responder also operates a serving endpoint for the
-  requested subnet
-- **THEN** the client opens a separate subnet connection rather than reusing the
+  requested swarm
+- **THEN** the client opens a separate swarm connection rather than reusing the
   overlay channel
 
 #### Scenario: Default transient join does not trigger disconnect
 
-- **WHEN** a default-policy transient completes lookup or subnet join
+- **WHEN** a default-policy transient completes lookup or swarm join
 - **THEN** join completion itself does not stop the overlay
 
 #### Scenario: Explicit reduced-privacy teardown
 
 - **WHEN** a caller selects immediate teardown and lookup or join reaches any
   terminal outcome
-- **THEN** the overlay stops without stopping the subnet and configuration/docs
+- **THEN** the overlay stops without stopping the swarm and configuration/docs
   flag the timing-correlation risk
 
 #### Scenario: Join's internal lookup completes
@@ -338,11 +338,11 @@ Protocol hard limits SHALL be:
 
 | Message | Maximum encoded bytes |
 |---|---:|
-| `SubnetAd` | 65,536 |
-| `GetSubnetAddrs` | 128 |
-| `SubnetAddrs` | 65,536 |
-| `GetPublicSubnets` | 128 |
-| `PublicSubnets` | 16,384 |
+| `SwarmAd` | 65,536 |
+| `GetSwarmAddrs` | 128 |
+| `SwarmAddrs` | 65,536 |
+| `GetPublicSwarms` | 128 |
+| `PublicSwarms` | 16,384 |
 | `SwarmError` | 128 |
 
 Every encoded URL MUST be no more than 1,024 bytes. A page cursor SHALL be a
@@ -354,12 +354,12 @@ Message command strings and canonical field order SHALL be:
 
 | Command | Fields in encoded order |
 |---|---|
-| `swarm.ad` | `SubnetId[32]`, visibility `u8`, ad ID `[32]`, lifetime `u32`, URL vector |
-| `swarm.geta` | request ID `[16]`, `SubnetId[32]`, optional cursor |
-| `swarm.addrs` | request ID `[16]`, `SubnetId[32]`, URL vector, optional cursor |
-| `swarm.gets` | request ID `[16]`, optional cursor |
-| `swarm.subs` | request ID `[16]`, `SubnetId` vector, optional cursor |
-| `swarm.err` | request ID `[16]`, error code `u8` |
+| `ad` | `SwarmId[32]`, visibility `u8`, ad ID `[32]`, lifetime `u32`, URL vector |
+| `getaddr` | request ID `[16]`, `SwarmId[32]`, optional cursor |
+| `addrs` | request ID `[16]`, `SwarmId[32]`, URL vector, optional cursor |
+| `getswarm` | request ID `[16]`, optional cursor |
+| `swarms` | request ID `[16]`, `SwarmId` vector, optional cursor |
+| `err` | request ID `[16]`, error code `u8` |
 
 Fields SHALL use existing DarkFi canonical wire encoding. Visibility values
 SHALL be `0 = public` and `1 = non-public`; other values are invalid. Error
@@ -402,18 +402,18 @@ MUST precede allocation and element decoding.
 
 ### Requirement: Advertisement format is bounded and nonempty
 
-An ad SHALL contain exactly one subnet ID, public/non-public visibility, a
+An ad SHALL contain exactly one swarm ID, public/non-public visibility, a
 fresh 32-byte per-ad ID, lifetime seconds, and 1 through 32 serving addresses.
 The ad ID MUST use a cryptographically secure random source and MUST NOT be
-reused for another emission or subnet. It is deduplication data, not identity.
+reused for another emission or swarm. It is deduplication data, not identity.
 
 Lifetime MUST be 1 through 86,400 seconds. Ads MUST NOT contain `last_seen`, a
 stable node ID, signing key, author, relay provenance, hop count, or identifier
-shared with another subnet. Every address MUST be valid, publicly shareable,
+shared with another swarm. Every address MUST be valid, publicly shareable,
 and within the URL bound. A receiver SHALL reject the entire ad if any field or
 address is invalid.
 
-#### Scenario: Valid ad is subnet-scoped
+#### Scenario: Valid ad is swarm-scoped
 
 - **WHEN** a valid ad for S is accepted
 - **THEN** it contains only S, S's addresses, and a unique ephemeral ad ID
@@ -430,15 +430,15 @@ address is invalid.
 
 ### Requirement: Expiry, replay suppression, and storage remain bounded
 
-A persistent participant SHALL use finite nonzero per-subnet, global-address,
-per-subnet protected-ID, and global protected-ID caps. Configured values MUST NOT
-exceed 1,024 addresses per subnet, 65,536 total addresses, 1,024 protected IDs
-per subnet in the general pool, or 262,144 protected IDs globally. Runtime
+A persistent participant SHALL use finite nonzero per-swarm, global-address,
+per-swarm protected-ID, and global protected-ID caps. Configured values MUST NOT
+exceed 1,024 addresses per swarm, 65,536 total addresses, 1,024 protected IDs
+per swarm in the general pool, or 262,144 protected IDs globally. Runtime
 expiry SHALL use a monotonic deadline from local receipt and sender clocks SHALL
 have no effect.
 
-Those caps SHALL default respectively to 256 addresses per subnet, 16,384 total
-addresses, 256 general protected IDs per subnet, and 65,536 protected IDs
+Those caps SHALL default respectively to 256 addresses per swarm, 16,384 total
+addresses, 256 general protected IDs per swarm, and 65,536 protected IDs
 globally.
 
 The receiver SHALL clamp each accepted address lifetime to the lesser of the
@@ -450,23 +450,23 @@ Receiving a retained ad ID MUST NOT extend expiry or repeat relay work. The
 dedup deadline SHALL be exactly 86,400 seconds after the associated locally
 clamped address expiry, making total protection no greater than 172,800 seconds
 from acceptance. A protected ID MUST NOT be evicted before that deadline. A fresh remote
-ad SHALL be rejected without address mutation or relay when its subnet's
+ad SHALL be rejected without address mutation or relay when its swarm's
 general-pool quota or the global general pool has no expired slot. Expired IDs
 may be evicted deterministically.
 
-Local-author reserve-subnet partitions SHALL default to 32 and MUST NOT exceed
+Local-author reserve-swarm partitions SHALL default to 32 and MUST NOT exceed
 256. Each partition contains exactly 256 protected-ID slots and counts within the
 global cap; checked configuration arithmetic SHALL require a nonzero remaining
 general pool. Remote ads MUST NOT consume reserve partitions. A serving
-transition SHALL atomically allocate/reuse one partition for its subnet before
+transition SHALL atomically allocate/reuse one partition for its swarm before
 listener or author activation and fail with a typed capacity error when none is
 available. Stopping service SHALL retain that partition until all its protected
-local IDs expire, then release it atomically when that subnet is not serving, so
-sequential subnet churn cannot overwrite protection.
+local IDs expire, then release it atomically when that swarm is not serving, so
+sequential swarm churn cannot overwrite protection.
 
 Startup SHALL validate the partitions independently: general protected IDs MUST
-fit the global general capacity and each general per-subnet quota; local IDs MUST
-fit 256 slots for each distinct reserved subnet and the configured partition
+fit the global general capacity and each general per-swarm quota; local IDs MUST
+fit 256 slots for each distinct reserved swarm and the configured partition
 count. Persisted local IDs already occupy their reserve and MUST NOT be counted
 again as general state. Locally authored IDs MAY NOT evict protected IDs. The
 reserve prevents remote admission from blocking allocated local cadence, but
@@ -475,9 +475,9 @@ does not provide preferential validation or remote role privilege.
 Fresh IDs may refresh addresses subject to caps. Address eviction SHALL choose
 expired entries first, then earliest expiry, then lexical key. Stores MUST NOT
 dial advertised addresses or record ad sources, queriers, query history, or
-source-peer/subnet associations. Replay IDs SHALL remain globally keyed; each
-record SHALL bind its advertised subnet only for quota/protection accounting, so
-reuse of one ad ID under another subnet is still a duplicate. A local-author
+source-peer/swarm associations. Replay IDs SHALL remain globally keyed; each
+record SHALL bind its advertised swarm only for quota/protection accounting, so
+reuse of one ad ID under another swarm is still a duplicate. A local-author
 reserve record necessarily marks an ID as generated by this process; that local
 fact and reserve occupancy/use/failure/timing MUST NOT enter wire messages,
 RPC, status, metrics, telemetry, or peer-linked state, even as aggregate counters.
@@ -489,7 +489,7 @@ enqueued. Commit failure SHALL cause no mutation or relay. Rollback of the
 database to a snapshot before that commit can remove the seen ID and permit a
 later replay; this capability makes no non-rollbackable replay guarantee.
 
-Store state SHALL be normalized per `(SubnetId, canonical address)`. Accepting
+Store state SHALL be normalized per `(SwarmId, canonical address)`. Accepting
 a fresh ad updates visibility and expiry for every address present in that ad;
 addresses absent from it retain their current record until independently
 updated, expired, or evicted. An ID is publicly enumerable iff at least one
@@ -532,10 +532,10 @@ be rebuilt only when authoritative replay/accounting state remains intact.
 - **WHEN** a retained ad ID is replayed
 - **THEN** original expiry remains and no second relay occurs
 
-#### Scenario: Ad ID is reused for another subnet
+#### Scenario: Ad ID is reused for another swarm
 
-- **WHEN** a retained global ad ID appears with a different subnet ID
-- **THEN** it remains a duplicate and does not consume that subnet's quota or
+- **WHEN** a retained global ad ID appears with a different swarm ID
+- **THEN** it remains a duplicate and does not consume that swarm's quota or
   mutate/relay addresses
 
 #### Scenario: Protected dedup set is full
@@ -543,23 +543,23 @@ be rebuilt only when authoritative replay/accounting state remains intact.
 - **WHEN** a fresh ad arrives while every dedup slot is protected
 - **THEN** the fresh ad is rejected instead of evicting a protected ID
 
-#### Scenario: One subnet fills its protected-ID quota
+#### Scenario: One swarm fills its protected-ID quota
 
-- **WHEN** fresh remote ads for one subnet consume every unexpired slot in that
-  subnet's general quota
-- **THEN** another fresh ad for that subnet is rejected without consuming slots
-  reserved for other subnets or local authoring
+- **WHEN** fresh remote ads for one swarm consume every unexpired slot in that
+  swarm's general quota
+- **THEN** another fresh ad for that swarm is rejected without consuming slots
+  reserved for other swarms or local authoring
 
 #### Scenario: Remote flood reaches the local-author reserve
 
 - **WHEN** the remote general pool is full while local authoring remains active
-- **THEN** a locally authored ad may use its subnet reserve and no remote ad may
+- **THEN** a locally authored ad may use its swarm reserve and no remote ad may
   consume that slot
 
 #### Scenario: Sequential serving exhausts reserve partitions
 
-- **WHEN** stopped subnets with protected local IDs occupy every configured
-  reserve partition and another subnet requests serving
+- **WHEN** stopped swarms with protected local IDs occupy every configured
+  reserve partition and another swarm requests serving
 - **THEN** transition fails before listener/author activation without evicting
   or shortening any occupied partition
 
@@ -615,7 +615,7 @@ Queued relay work MUST be bounded and duplicates MUST NOT be requeued. Own ads
 SHALL be authored only on a fixed 1,800-second base cadence with independently
 sampled uniform jitter from -600 through +600 seconds. This cadence is not
 configurable in version one. Authored lifetime SHALL default to 7,200 seconds
-and MUST NOT exceed 86,400 seconds. Subnet start, listener start, and new overlay
+and MUST NOT exceed 86,400 seconds. Swarm start, listener start, and new overlay
 channels MUST NOT trigger authoring.
 
 A transient MAY relay newly accepted ads from bounded memory but SHALL NOT
@@ -626,7 +626,7 @@ timing, topology, first-seen, or global observation.
 #### Scenario: Relay preserves contents
 
 - **WHEN** an accepted ad is relayed
-- **THEN** subnet ID, visibility, ad ID, lifetime, and addresses are unchanged
+- **THEN** swarm ID, visibility, ad ID, lifetime, and addresses are unchanged
 
 #### Scenario: Gossip loop
 
@@ -640,7 +640,7 @@ timing, topology, first-seen, or global observation.
 
 ### Requirement: Lookup and optional public enumeration are paginated
 
-Direct lookup SHALL name one subnet and return addresses only for it. Each page
+Direct lookup SHALL name one swarm and return addresses only for it. Each page
 SHALL echo the request ID, contain at most 64 addresses and 65,536 encoded
 bytes, and include at most one fixed cursor. On the first page, the responder
 SHALL capture the current greatest live ordered key as the terminal key. A next
@@ -722,7 +722,7 @@ existing field order and valid wire encoding byte-for-byte.
 
 A transient SHALL accept no inbound overlay connections, author no ads, and
 persist no swarm-overlay ad/query/history state. It MAY keep bounded in-memory
-ads and the bounded successful-endpoint-only cache. Subnet lifecycle persistence and
+ads and the bounded successful-endpoint-only cache. Swarm lifecycle persistence and
 transport-managed state are separate scopes and MUST be documented separately.
 Both roles apply identical decoding, validation, authorization, and work
 bounds.
@@ -760,7 +760,7 @@ bounds.
 - **WHEN** a transient disconnects
 - **THEN** swarm-overlay state retained by the module is at most its bounded
   successful connect-URL/resolved-endpoint cache, while separately configured
-  subnet/transport state follows its own documented policy
+  swarm/transport state follows its own documented policy
 
 ### Requirement: Resource accounting covers amplification paths
 
@@ -784,16 +784,16 @@ limits SHALL use these defaults and MUST NOT exceed these maxima:
 | pages consumed per public enumeration | 4 | 16 |
 | candidate addresses per join attempt | 64 | 256 |
 | previously compatible retry attempts | 16 | 64 |
-| persisted compatible retry URLs per subnet | 64 | 256 |
-| local-author reserve subnet partitions | 32 | 256 |
-| active subnets | 32 | 256 |
+| persisted compatible retry URLs per swarm | 64 | 256 |
+| local-author reserve swarm partitions | 32 | 256 |
+| active swarms | 32 | 256 |
 | concurrent lifecycle attempts | 8 | 32 |
 | shutdown deadline seconds | 120 | 600 |
 | pending-request timeout seconds | 10 | 60 |
 | configured ordinary overlay peers | 8 | 256 |
 | overlay bind/listener addresses | 1 | 16 |
-| serving bind addresses per subnet | 1 | 16 |
-| serving external addresses per subnet | 1 | 32 |
+| serving bind addresses per swarm | 1 | 16 |
+| serving external addresses per swarm | 1 | 32 |
 | overlay inbound channels | 64 | 256 |
 | overlay outbound channels | 8 | 64 |
 | overlay manual channels | 8 | 256 |
@@ -822,11 +822,11 @@ peer addresses, and SHALL be removed on disconnect.
 - **THEN** accepting, storing, relaying, expiring, or reporting it opens no
   connection to that address
 
-### Requirement: Subnet joining alone validates advertised addresses
+### Requirement: Swarm joining alone validates advertised addresses
 
 Lookup results SHALL remain ephemeral typed original-URL/resolved-socket targets
-for the requested subnet until compatibility succeeds; they MUST NOT enter a
-URL-only host/refinery set first. A joining subnet MUST apply ordinary magic,
+for the requested swarm until compatibility succeeds; they MUST NOT enter a
+URL-only host/refinery set first. A joining swarm MUST apply ordinary magic,
 application-name, and major/minor checks before treating a peer as compatible.
 Failure MUST drop the candidate, remain fallible, and MUST NOT penalize the
 overlay relay. Passing compatibility does not authenticate an operator or
@@ -835,7 +835,7 @@ MUST independently resolve and validate a new exact target.
 
 Before resolution or dialing, the joiner SHALL place previously compatibility-
 verified persisted ordinary peers in one tier and fresh overlay URLs in another.
-The Swarm retry index itself SHALL contain at most the configured persisted-
+The swarm retry index itself SHALL contain at most the configured persisted-
 compatible cap; when full, a newly compatible URL remains usable for its current
 session but MUST NOT evict an existing retry URL merely to enter that index.
 
@@ -854,7 +854,7 @@ donated to fresh preparation but not conversely. Every persisted peer MUST
 still undergo fresh resolution and egress validation.
 
 Already validated targets SHALL be installed as a two-phase pre-start manual
-plan. At subnet start, the remaining candidate-dial duration SHALL be split at a
+plan. At swarm start, the remaining candidate-dial duration SHALL be split at a
 monotonic midpoint. The verified phase MUST stop/cancel by that midpoint and
 consume no more than its configured retry limit or half the total candidate-
 attempt budget. Fresh targets activate for the second half and retain at least
@@ -862,14 +862,14 @@ half the attempt capacity; if the verified phase is empty, fresh dialing MAY
 begin immediately. Every connector uses the exact validated target. No fresh
 candidate is persisted before compatibility.
 
-#### Scenario: Wrong subnet is rejected
+#### Scenario: Wrong swarm is rejected
 
 - **WHEN** an advertised peer fails a bound compatibility field
-- **THEN** it does not enter the verified ordinary subnet peer set
+- **THEN** it does not enter the verified ordinary swarm peer set
 
 #### Scenario: Relay is not blamed
 
-- **WHEN** a relayed address fails subnet connection
+- **WHEN** a relayed address fails swarm connection
 - **THEN** the immediate overlay relay is not treated as author
 
 #### Scenario: Attacker grinds lexical address order
@@ -894,21 +894,21 @@ candidate is persisted before compatibility.
 
 ### Requirement: Metadata disclosure and identity scoping are explicit
 
-Wire messages MUST NOT intentionally bind different subnets to one stable node
+Wire messages MUST NOT intentionally bind different swarms to one stable node
 or signing identity. Durable state MUST NOT contain querier identity or query
 history. An answering peer nevertheless observes the requested ID; requests on
 one channel are linkable; timing, topology, public enumeration, and endpoint
 reuse are metadata surfaces. The capability MUST NOT claim PIR, guaranteed
 origin anonymity, absence of remote traces, or global-observer resistance.
 
-Gossip and store peers necessarily observe and MAY retain every subnet-ID to
+Gossip and store peers necessarily observe and MAY retain every swarm-ID to
 advertised-endpoint mapping they receive. The forbidden provenance association
-is a mapping from overlay source peer to subnet/ad authorship; the rendezvous
+is a mapping from overlay source peer to swarm/ad authorship; the rendezvous
 ID-to-endpoint mapping is intentional protocol output and is not confidential.
 
-Every overlay and subnet `P2p` instance SHALL use an independently CSPRNG-
+Every overlay and swarm `P2p` instance SHALL use an independently CSPRNG-
 generated `VersionMessage.node_id`; it MUST NOT be persisted or reused across
-instances, subnets, overlay/subnet roles, or process restart.
+instances, swarms, overlay/swarm roles, or process restart.
 
 Serving documentation SHALL identify endpoint reuse as directly linkable and
 SHALL NOT claim automatic independent Tor/I2P provisioning.
@@ -918,12 +918,12 @@ SHALL NOT claim automatic independent Tor/I2P provisioning.
 - **WHEN** a lookup for S is issued
 - **THEN** documentation states the answering peer observes S
 
-#### Scenario: Overlay and subnet version identities
+#### Scenario: Overlay and swarm version identities
 
-- **WHEN** one process starts an overlay and one or more subnet `P2p` instances
+- **WHEN** one process starts an overlay and one or more swarm `P2p` instances
 - **THEN** their version node IDs are independently generated and unequal
 
 #### Scenario: Shared endpoint is linkable
 
-- **WHEN** one endpoint is advertised for two subnets
+- **WHEN** one endpoint is advertised for two swarms
 - **THEN** guidance identifies the direct link and makes no contrary claim
