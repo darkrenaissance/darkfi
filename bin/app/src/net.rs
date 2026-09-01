@@ -22,14 +22,47 @@ use std::{io::Cursor, sync::Arc};
 use zeromq::{Socket, SocketRecv, SocketSend};
 
 use crate::{
+    app::node::{create_layer, create_vector_art},
     error::{Error, Result},
     expr::{decompile, Compiler},
-    gfx::gfxtag,
+    gfx::{gfxtag, Renderer},
     prop::{PropertyType, Role},
-    scene::{SceneNodeId, SceneNodePtr, ScenePath, Slot},
-    ui::{RedrawTrigger, ShapeVertex, VectorShape},
+    scene::{Pimpl, SceneNodeId, SceneNodePtr, SceneNodeType, ScenePath, Slot},
+    ui::{
+        get_ui_object3, get_ui_object_ptr, Layer, RedrawTrigger, ShapeVertex, VectorArt,
+        VectorShape,
+    },
     ExecutorPtr,
 };
+
+/// Stop the UI tasks and clear the buffers of a subtree about to be
+/// removed at runtime, mirroring Window::stop(). Only pimpl types with a
+/// UIObject mapping are touched; others (Window, Setting, plugins, Null)
+/// keep their tasks until process exit.
+fn stop_ui_subtree(node: &SceneNodePtr) {
+    if matches!(
+        node.pimpl(),
+        Pimpl::Layer(_) |
+            Pimpl::ScrollLayer(_) |
+            Pimpl::VectorArt(_) |
+            Pimpl::Text(_) |
+            Pimpl::TextScramble(_) |
+            Pimpl::Edit(_) |
+            Pimpl::ChatView(_) |
+            Pimpl::Image(_) |
+            Pimpl::Video(_) |
+            Pimpl::Button(_) |
+            Pimpl::EmojiPicker(_) |
+            Pimpl::Shortcut(_) |
+            Pimpl::Menu(_) |
+            Pimpl::TokenTable(_)
+    ) {
+        get_ui_object3(node).stop();
+    }
+    for child in node.get_children() {
+        stop_ui_subtree(&child);
+    }
+}
 
 const USE_IPV6: bool = true;
 
@@ -79,6 +112,7 @@ pub struct ZeroMQAdapter {
     slot_recvr: Option<mpsc::Receiver<(Vec<u8>, Vec<u8>)>>,
     */
     sg_root: SceneNodePtr,
+    renderer: Renderer,
     redraw: RedrawTrigger,
     ex: ExecutorPtr,
 
@@ -87,7 +121,12 @@ pub struct ZeroMQAdapter {
 }
 
 impl ZeroMQAdapter {
-    pub async fn new(sg_root: SceneNodePtr, redraw: RedrawTrigger, ex: ExecutorPtr) -> Arc<Self> {
+    pub async fn new(
+        sg_root: SceneNodePtr,
+        renderer: Renderer,
+        redraw: RedrawTrigger,
+        ex: ExecutorPtr,
+    ) -> Arc<Self> {
         let mut zmq_rep = zeromq::RepSocket::new();
         if USE_IPV6 {
             zmq_rep.bind("tcp://[::]:9484").await.unwrap();
@@ -104,6 +143,7 @@ impl ZeroMQAdapter {
 
         Arc::new(Self {
             sg_root,
+            renderer,
             redraw,
             ex,
             zmq_rep: Mutex::new(zmq_rep),
@@ -349,21 +389,71 @@ impl ZeroMQAdapter {
                 }
             }
             Command::AddNode => {
-                /*
-                let node_name = String::decode(&mut cur).unwrap();
-                let node_type = SceneNodeType::decode(&mut cur).unwrap();
-                debug!(target: "req", "{:?}({}, {:?})", cmd, node_name, node_type);
+                let parent_path: ScenePath = String::decode(&mut cur)?.parse()?;
+                let node_name = String::decode(&mut cur)?;
+                let node_type = SceneNodeType::decode(&mut cur)?;
+                debug!(target: "req", "{cmd:?}({parent_path}, {node_name}, {node_type:?})");
 
-                let node_id = scene_graph.add_node(&node_name, node_type).id;
-                node_id.encode(&mut reply).unwrap();
-                */
+                let parent = self.sg_root.lookup_node(parent_path).ok_or(Error::NodeNotFound)?;
+
+                if parent.get_children().iter().any(|c| c.name == node_name) {
+                    return Err(Error::NodeSiblingNameConflict)
+                }
+
+                let renderer = self.renderer.clone();
+                let redraw = self.redraw.clone();
+                let node = match node_type {
+                    SceneNodeType::Layer => {
+                        create_layer(&node_name)
+                            .setup(|me| Layer::new(me, renderer.clone(), redraw.clone()))
+                            .await
+                    }
+                    SceneNodeType::VectorArt => {
+                        create_vector_art(&node_name)
+                            .setup(|me| VectorArt::new(me, renderer.clone(), redraw.clone()))
+                            .await
+                    }
+                    _ => return Err(Error::UnsupportedNodeType),
+                };
+
+                // Hold the guard over the link so the triggered pass sees
+                // the attached node.
+                let _atom = self.redraw.make_guard(gfxtag!("ZeroMQAdapter::AddNode"));
+                parent.link(node.clone());
+                node.id.encode(&mut reply).unwrap();
+
+                // Arm the pimpl's OnModify handlers (redraw on property
+                // change) exactly like window-owned nodes. The task keeps a
+                // strong ref so an immediate RemoveNode cannot drop the node
+                // out from under start().
+                let node2 = node.clone();
+                let ex2 = self.ex.clone();
+                self.ex
+                    .spawn(async move {
+                        let obj = get_ui_object_ptr(&node2);
+                        obj.start(ex2).await
+                    })
+                    .detach();
             }
             Command::RemoveNode => {
-                /*
-                let node_id = SceneNodeId::decode(&mut cur).unwrap();
-                debug!(target: "req", "{:?}({})", cmd, node_id);
-                scene_graph.remove_node(node_id)?;
-                */
+                let node_path: ScenePath = String::decode(&mut cur)?.parse()?;
+                debug!(target: "req", "{cmd:?}({node_path})");
+
+                let node = self.sg_root.lookup_node(node_path).ok_or(Error::NodeNotFound)?;
+
+                // The scene root has no parent, removal is meaningless.
+                if Arc::ptr_eq(&node, &self.sg_root) {
+                    return Err(Error::NodeNotRemovable)
+                }
+
+                // Tear down the subtree's UI tasks and buffers before
+                // unlinking, mirroring Window::stop(). Pimpl types without
+                // a UIObject mapping (Window, Setting, plugins, ...) keep
+                // their tasks until process exit.
+                stop_ui_subtree(&node);
+
+                node.unlink();
+                self.redraw.trigger();
             }
             Command::RenameNode => {
                 /*

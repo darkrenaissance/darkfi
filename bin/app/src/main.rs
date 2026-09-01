@@ -197,10 +197,11 @@ impl God {
         {
             let sg_root = sg_root.clone();
             let ex = bg_ex.clone();
+            let renderer = app.renderer.clone();
             let redraw = app.redraw_trigger.clone();
             let zmq_task = bg_ex.spawn(async {
                 i!("Enabled net debugging backend in this build");
-                let zmq_rpc = ZeroMQAdapter::new(sg_root, redraw, ex).await;
+                let zmq_rpc = ZeroMQAdapter::new(sg_root, renderer, redraw, ex).await;
                 zmq_rpc.run().await;
             });
             bg_runtime.push_task(zmq_task);

@@ -88,7 +88,7 @@ def print_node_info(api, parent_path, depth, indent):
         args, results = api.get_method(parent_path, method_name)
 
         args = [f"{name}: " + CallArgType.to_str(typ) for (name, _, typ) in args]
-        results = [f"{name}: " + CallArgType.to_str(typ) for (name, _, typ) in results]
+        results = [f"{name}: " + CallArgType.to_str(typ) for (name, _, typ) in (results or [])]
 
         method_str = f"{method_name}(" + ", ".join(args) + ") -> (" + ", ".join(results) + ")"
         print(f"{ws}{method_str}")

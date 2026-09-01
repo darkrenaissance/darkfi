@@ -4,7 +4,7 @@ Work happens in `bin/app/`. For live tests run `make dev` in a second
 terminal and keep it running; every `python -m pydrk ...` line below is
 run from `bin/app`.
 
-- [ ] 1.1 Create `pydrk/cli.py` (argparse `main()`, global `--addr`/`--port`
+- [x] Create `pydrk/cli.py` (argparse `main()`, global `--addr`/`--port`
   defaulting to `127.0.0.1:9484`, subcommand dispatch, top-level
   try/except printing `error: <name>` and exiting 1) and
   `pydrk/__main__.py` (`from pydrk import cli; cli.main()`). Implement
@@ -12,23 +12,23 @@ run from `bin/app`.
   `hello` against the running app; `python -m pydrk ping --port 9999`
   prints an error naming `127.0.0.1:9999` and exits non-zero. Commit as
   `app: add pydrk CLI skeleton with ping`.
-- [ ] 1.2 Implement `ls [path]`: child rows as `name <id> type` (type via
+- [x] Implement `ls [path]`: child rows as `name <id> type` (type via
   `SceneNodeType` names) followed by property rows `name: type = value`
   (value from `get_property_value`, exprs shown as their source,
   `<shape>` placeholder for shapes). Verify: `python -m pydrk ls /`
   lists `setting` and `window` plus the root's properties;
   `python -m pydrk ls /nope` prints `node_not_found`. Commit as
   `app: pydrk CLI ls command`.
-- [ ] 1.3 Implement `tree [path] [--depth N]` by wiring
+- [x] Implement `tree [path] [--depth N]` by wiring
   `pydrk.print_tree.print_tree` into the CLI. Verify: `python -m pydrk
   tree / --depth 2` prints two levels with properties, signals and
   methods. Commit as `app: pydrk CLI tree command`.
-- [ ] 1.4 Implement `props <path>`: one block per property showing name,
+- [x] Implement `props <path>`: one block per property showing name,
   type, subtype, array_len (mark unbounded when 0), null/expr allowance,
   min/max range when present, enum items when present, ui_name and desc.
   Verify: `python -m pydrk props /window/content` shows `alpha` with its
   `[0.0, 1.0]` range. Commit as `app: pydrk CLI props command`.
-- [ ] 1.5 Implement `get [path] PROP [idx]` with the shared positional
+- [x] Implement `get [path] PROP [idx]` with the shared positional
   grammar from design D8 (right-to-left parse via `parse_get_args`, path
   optional defaulting to `/` in one-shot mode, trailing integer = index):
   one line per index annotated `value`/`expr`/`null`/`unset`, only the
@@ -37,7 +37,7 @@ run from `bin/app`.
   /window/content alpha` prints `0: value 1.0`; `python -m pydrk get
   /window/content rect 2` prints only index 2. Commit as
   `app: pydrk CLI get command`.
-- [ ] 1.6 Implement `show [path] PROP`: the full single-property view
+- [x] Implement `show [path] PROP`: the full single-property view
   from design D8 — metadata block (name, type, subtype, array_len,
   null/expr allowance, min/max range, enum items, ui_name, desc,
   depends) followed by the per-index values with statuses. Verify: `python
@@ -45,7 +45,7 @@ run from `bin/app`.
   `[0.0, 1.0]` range and then `0: value 1.0`; `python -m pydrk show
   /window/content no_such_prop` prints `property_not_found`. Commit as
   `app: pydrk CLI show command`.
-- [ ] 1.7 Fix `Api.get_method()` in `pydrk/api.py`: decode the results as
+- [x] Fix `Api.get_method()` in `pydrk/api.py`: decode the results as
   `Option<Vec<CallArg>>` (read the u8 tag, then the array only when
   some) per design D6. Implement `methods <path>` (name + arg/result
   signature per method) and `signals <path>` (signal names). Verify:
@@ -53,7 +53,7 @@ run from `bin/app`.
   with its `str` result signature, and `python -m pydrk tree /plugin/drk`
   no longer truncates method results. Commit as
   `app: fix pydrk get_method result decoding, add methods/signals commands`.
-- [ ] 1.8 Add `--selftest` handling in `cli.py`: a `run_selftests()`
+- [x] Add `--selftest` handling in `cli.py`: a `run_selftests()`
   function with assert-based checks of the pure helpers introduced so
   far (path/type/value formatting, `parse_get_args`), so `python -m
   pydrk.cli --selftest` prints `cli self-test OK` without a running app.
@@ -61,7 +61,7 @@ run from `bin/app`.
 
 ## 2. Typed property setting (Python only)
 
-- [ ] 2.1 Implement the typed value table from design D8: a pure
+- [x] Implement the typed value table from design D8: a pure
   `encode_set_value(api, path, prop_meta, token, index)` helper that
   looks up the property via `get_properties` and dispatches to the right
   `Api.set_property_*` call (bool/uint32/float32/str/enum/scene_node_id,
@@ -74,7 +74,7 @@ run from `bin/app`.
   restores it; `python -m pydrk get /window/content/chat is_visible`
   round-trips both values. Add `parse_set_args` cases to `--selftest`.
   Commit as `app: pydrk CLI typed set command`.
-- [ ] 2.2 Add `--expr` to `set` (sends via `set_property_expr`). Verify
+- [x] Add `--expr` to `set` (sends via `set_property_expr`). Verify
   live: `python -m pydrk set /window/content rect 2 "w/2" --expr`
   exits 0 and `python -m pydrk get /window/content rect 2` shows
   `2: expr "w/2"`. Commit as `app: pydrk CLI set --expr`.
@@ -89,22 +89,22 @@ run from `bin/app`.
 
 ## 3. netdebug backend: node creation and removal (Rust)
 
-- [ ] 3.1 Add `Error::UnsupportedNodeType = 50` and
+- [x] Add `Error::UnsupportedNodeType = 50` and
   `Error::NodeNotRemovable = 51` (used to reject removing the scene
   root) to `bin/app/src/error.rs` following the existing variant style.
   Verify: `make compile-dev` succeeds. Commit as
   `app: add netdebug error codes for node create/remove`.
-- [ ] 3.2 Mirror the two codes in pydrk: `ErrorCode` constants, `exc.py`
+- [x] Mirror the two codes in pydrk: `ErrorCode` constants, `exc.py`
   exception classes, `_make_request` match arms raising them. Verify:
   `python -m pydrk.cli --selftest` and `python -m pydrk ping` still
   work. Commit as `app: pydrk error codes for node create/remove`.
-- [ ] 3.3 Thread the renderer into the adapter per design D5: add the
+- [x] Thread the renderer into the adapter per design D5: add the
   `renderer: Renderer` field to `ZeroMQAdapter`, change
   `ZeroMQAdapter::new` to take it, update the call site in `main.rs`
   (it already has `app.renderer` in scope). Verify: `make compile-dev`
   succeeds and `python -m pydrk ping` still works. Commit as
   `app/netdebug: pass renderer into ZeroMQAdapter`.
-- [ ] 3.4 Implement the `AddNode` arm per design D2: decode
+- [x] Implement the `AddNode` arm per design D2: decode
   `(parent_path, name, node_type)`; look up the parent; reject duplicate
   sibling names with `NodeSiblingNameConflict`; match `Layer` and
   `VectorArt` through `create_layer`/`create_vector_art` +
@@ -112,7 +112,7 @@ run from `bin/app`.
   types with `UnsupportedNodeType`; reply the id. Verify: `make
   compile-dev` succeeds. Commit as
   `app/netdebug: path-based AddNode for layer and vector_art`.
-- [ ] 3.5 Implement the `RemoveNode` arm per design D3: decode
+- [x] Implement the `RemoveNode` arm per design D3: decode
   `(node_path)`; reject `/` with `NodeNotRemovable`; look up the node;
   `unlink()`; `redraw.trigger()`. No restrictions on which nodes are
   removable — full scene-graph access is intentional for this debugging
@@ -121,7 +121,7 @@ run from `bin/app`.
 
 ## 4. Node lifecycle commands (Python)
 
-- [ ] 4.1 Add `Api.add_node(parent_path, name, node_type)` to `api.py`
+- [x] Add `Api.add_node(parent_path, name, node_type)` to `api.py`
   and the `mknode <parent_path> <name> <type>` subcommand accepting only
   `layer`/`vector_art` (anything else fails locally with
   `unsupported node type`), printing `id=... path=...`. Verify live
@@ -132,7 +132,7 @@ run from `bin/app`.
   factory properties including `shape`; `python -m pydrk mknode
   /window/content dbg layer` again prints `node_sibling_name_conflict`.
   Commit as `app: pydrk CLI mknode command`.
-- [ ] 4.2 Add `Api.remove_node(node_path)` and the `rmnode <path>`
+- [x] Add `Api.remove_node(node_path)` and the `rmnode <path>`
   subcommand (full graph access, documented in `--help` as runtime-only).
   Verify live: create `dbg` as above then `python -m pydrk rmnode
   /window/content/dbg` — `ls /window/content` no longer lists it and the
@@ -141,7 +141,7 @@ run from `bin/app`.
   `python -m pydrk rmnode /` prints `node_not_removable` and `python -m
   pydrk ls /` still lists everything. Commit as
   `app: pydrk CLI rmnode command`.
-- [ ] 4.3 Delete the dead client methods from `api.py` listed in design
+- [x] Delete the dead client methods from `api.py` listed in design
   D6 plus the legacy `vertex()`/`face()` helpers. Verify: `grep -rn
   "link_node\|scan_dangling\|add_property" bin/app/pydrk bin/app/script`
   is empty, `python -m pydrk.cli --selftest` passes, and the commands
@@ -150,7 +150,7 @@ run from `bin/app`.
 
 ## 5. Shape data (Python)
 
-- [ ] 5.1 Implement `set-shape <path> [--prop NAME] [--index N]` with the
+- [x] Implement `set-shape <path> [--prop NAME] [--index N]` with the
   `--box` flag from design D11 (argparse `nargs=8`, `action="append"`),
   building on `pydrk.vector_shape.VectorShape`, with the
   `< 65536` vertex guard. Verify live: `mknode /window/content dbg
@@ -172,7 +172,7 @@ run from `bin/app`.
 
 ## 6. Method calls (Python)
 
-- [ ] 6.1 Implement `call <path> <method> [ARGS...]`: fetch the
+- [x] Implement `call <path> <method> [ARGS...]`: fetch the
   signature with `Api.get_method`, encode each positional arg per its
   declared type (`uint32`/`uint64`/`float32`/`bool`/`str`; `hash` as
   64-char hex → 32 bytes), reject wrong arg counts or unparseable
@@ -186,12 +186,12 @@ run from `bin/app`.
 
 ## 7. Interactive shell
 
-- [ ] 7.1 Implement `resolve_path(cwd_tokens, arg)` exactly per design
+- [x] Implement `resolve_path(cwd_tokens, arg)` exactly per design
   D9 plus its `--selftest` cases (absolute paths, `..`, `.`, empty,
   relative tokens, leading/trailing slashes). Verify: `python -m
   pydrk.cli --selftest` passes with no app running. Commit as
   `app: pydrk CLI path resolution helper`.
-- [ ] 7.2 Implement the shell per design D9: entered when `python -m
+- [x] Implement the shell per design D9: entered when `python -m
   pydrk` runs with no subcommand; prompt `pydrk:/window/content> `;
   `shlex.split` line tokenization; dispatch each line to the same
   per-command handlers as one-shot mode, with the optional-path grammar
@@ -205,7 +205,7 @@ run from `bin/app`.
   prints `false`, `set is_visible true`, `cd ..`, `pwd`, `get
   no_such_prop` prints `property_not_found` and the shell survives,
   `exit`. Commit as `app: pydrk interactive shell mode`.
-- [ ] 7.3 Implement the readline completer per design D10: command-name
+- [x] Implement the readline completer per design D10: command-name
   completion for the first token, live child-path completion (dir part +
   prefix, `api.get_children`, per-prompt cache cleared after each
   executed command), completion of the first positional argument of
@@ -219,7 +219,7 @@ run from `bin/app`.
 
 ## 8. Final verification
 
-- [ ] 8.1 Run the full junior walkthrough end-to-end against a fresh
+- [x] Run the full junior walkthrough end-to-end against a fresh
   `make dev` instance: `ping`; `ls /`; `tree / --depth 2`; enter the
   shell; `cd /window/content`; `mknode dbg layer` style flow for layer +
   vector_art (via subcommand or shell); set `rect` and `is_visible`;
@@ -227,7 +227,7 @@ run from `bin/app`.
   layer and confirm the window redraws clean with no leftover geometry.
   Fix anything broken found during the walkthrough and amend the
   selftest. Commit as `app: pydrk CLI end-to-end walkthrough fixes`.
-- [ ] 8.2 Final gates: `make compile-dev` succeeds with no warnings
+- [x] Final gates: `make compile-dev` succeeds with no warnings
   introduced; `python -m pydrk.cli --selftest` and `python -m
   pydrk.vector_shape` pass; `python -m pydrk ping` works; `git status`
   shows a clean tree after the last commit. Confirm the spec scenarios

@@ -82,5 +82,9 @@ class SerialErr(Exception):
     pass
 class TursoErr(Exception):
     pass
+class UnsupportedNodeType(Exception):
+    pass
+class NodeNotRemovable(Exception):
+    pass
 class UnknownError(Exception):
     pass

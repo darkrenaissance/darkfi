@@ -13,7 +13,21 @@ import math
 def _coord(x):
     if isinstance(x, str):
         return x
-    return repr(float(x))
+    x = float(x)
+    neg = math.copysign(1.0, x) < 0
+    if neg:
+        x = -x
+    s = repr(x)
+    if "e" in s or "E" in s:
+        # The app-side expr tokenizer does not accept scientific
+        # notation (glow trig produces values like 6.1e-17), so render
+        # tiny/huge floats as plain decimals.
+        s = f"{x:.30f}".rstrip("0")
+        if s.endswith("."):
+            s += "0"
+    # The tokenizer also has no unary minus, so negative constants
+    # (outline borders, glow trig) are rendered as subtraction.
+    return f"(0 - {s})" if neg else s
 
 def _mul(a, b):
     return f"({_coord(a)} * {_coord(b)})"
@@ -141,6 +155,12 @@ class VectorShape:
 
 # python -m pydrk.vector_shape
 if __name__ == "__main__":
+    assert _coord(6.123233995736766e-17) == f"{6.123233995736766e-17:.30f}".rstrip("0")
+    assert _coord(-1.2246467991473532e-16) == f"(0 - {f'{1.2246467991473532e-16:.30f}'.rstrip('0')})"
+    assert _coord(0.0) == "0.0"
+    assert _coord(10) == "10.0"
+    assert _coord(-4.0) == "(0 - 4.0)"
+
     shape = VectorShape()
     shape.add_filled_box("w/2", 0, "w", 10, [1., 0., 0., 1.])
     assert len(shape.verts) == 4 and len(shape.indices) == 6
@@ -157,13 +177,13 @@ if __name__ == "__main__":
     shape.add_outline("x1", "y1", "x2", "y2", 2.0, [0., 0., 0., 1.])
     assert len(shape.verts) == 16 and len(shape.indices) == 24
     assert shape.verts[1][0] == "(x1 + 2.0)"
-    assert shape.verts[8][0] == "(x2 + -2.0)"
-    assert shape.verts[12][1] == "(y2 + -2.0)"
+    assert shape.verts[8][0] == "(x2 + (0 - 2.0))"
+    assert shape.verts[12][1] == "(y2 + (0 - 2.0))"
 
     shape = VectorShape()
     shape.add_line(0., 0., 10., 0., 4., [1., 1., 1., 1.])
     assert len(shape.verts) == 4 and len(shape.indices) == 6
-    assert shape.verts[0][1] == "2.0" and shape.verts[2][1] == "-2.0"
+    assert shape.verts[0][1] == "2.0" and shape.verts[2][1] == "(0 - 2.0)"
 
     shape = VectorShape()
     shape.add_radial_glow("w/2", "h/2", "w", "h", 12, 0., math.pi * 2., [1., 0., 0., 1.])

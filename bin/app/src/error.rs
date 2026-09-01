@@ -146,6 +146,12 @@ pub enum Error {
 
     #[error("SQL database error")]
     TursoErr = 49,
+
+    #[error("Unsupported node type")]
+    UnsupportedNodeType = 50,
+
+    #[error("Node not removable")]
+    NodeNotRemovable = 51,
 }
 
 impl From<kvdb_overlay::Error> for Error {

@@ -312,14 +312,27 @@ impl<T: Send + Sync + 'static> OnModify<T> {
                 } else {
                     t!(
                         "Property {:?} modified -> triggering {:?} [depend_idx={idx}, role={role:?}]",
-                        prop_weak.upgrade().unwrap(),
+                        prop_weak.upgrade(),
                         prop
                     );
                 }
 
                 let Some(self_) = me.upgrade() else {
-                    // Should not happen
-                    panic!("{:?} self destroyed before modify_task was stopped!", prop);
+                    // Normally unreachable: an owner is dropped only after
+                    // stop() cleared its modify tasks, so an alive task
+                    // implies an alive owner. Runtime node removal
+                    // (netdebug rmnode) breaks that: stop() merely drops
+                    // the Task handles, and a future that is mid-poll on
+                    // a worker thread keeps running until its next yield,
+                    // which can carry it past this upgrade after the last
+                    // Arc is gone (this future holds only weak refs).
+                    // With no owner there is nothing left to notify, so
+                    // exit quietly instead of panicking.
+                    warn!(
+                        target: "scene::on_modify",
+                        "Property {:?} owner destroyed before modify_task was stopped", prop
+                    );
+                    return
                 };
 
                 //debug!(target: "app", "property modified");
