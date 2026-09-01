@@ -1617,12 +1617,17 @@ impl UIObject for BaseEdit {
         async fn redraw(self_: Arc<BaseEdit>, _batch: BatchGuardPtr) {
             self_.redraw.trigger();
         }
+        async fn rect_changed(self_: Arc<BaseEdit>, _batch: BatchGuardPtr) {
+            // A width change can crop scrolled content; re-clamp.
+            self_.reset_scroll();
+            self_.redraw.trigger();
+        }
         async fn set_text(self_: Arc<BaseEdit>, _batch: BatchGuardPtr) {
             self_.editor.lock().on_text_prop_changed();
             self_.redraw.trigger();
         }
 
-        on_modify.when_change_external(self.rect.prop(), redraw);
+        on_modify.when_change_external(self.rect.prop(), rect_changed);
         on_modify.when_change_external(self.baseline.prop(), redraw);
         on_modify.when_change_external(self.lineheight.prop(), redraw);
         on_modify.when_change_external(self.select_ascent.prop(), redraw);

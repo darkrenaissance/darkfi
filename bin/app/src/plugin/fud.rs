@@ -47,7 +47,7 @@ use crate::{
     error::{Error, Result},
     prop::{PropertyAtomicGuard, PropertyBool, Role},
     scene::{MethodCall, MethodCallSub, Pimpl, SceneNodePtr, SceneNodeWeak},
-    ui::chatview::FileMessageStatus,
+    ui::chatview::msg::filemsg::FileMsgStatus as FileMessageStatus,
     ExecutorPtr,
 };
 

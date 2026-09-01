@@ -351,7 +351,6 @@ pub fn get_ui_object_ptr(node: &SceneNode3) -> Arc<dyn UIObject + Send> {
         Pimpl::Text(obj) => obj.clone(),
         Pimpl::TextScramble(obj) => obj.clone(),
         Pimpl::Edit(obj) => obj.clone(),
-        Pimpl::ChatView(obj) => obj.clone(),
         Pimpl::Image(obj) => obj.clone(),
         Pimpl::Video(obj) => obj.clone(),
         Pimpl::Button(obj) => obj.clone(),
@@ -359,6 +358,10 @@ pub fn get_ui_object_ptr(node: &SceneNode3) -> Arc<dyn UIObject + Send> {
         Pimpl::Shortcut(obj) => obj.clone(),
         Pimpl::Menu(obj) => obj.clone(),
         Pimpl::TokenTable(obj) => obj.clone(),
+        Pimpl::ChatView(obj) => obj.clone(),
+        Pimpl::PrivMsgNode(obj) => obj.clone(),
+        Pimpl::DateMsgNode(obj) => obj.clone(),
+        Pimpl::FileMsgNode(obj) => obj.clone(),
         _ => panic!("unhandled type for get_ui_object: {node:?}"),
     }
 }
@@ -370,7 +373,6 @@ pub fn get_ui_object3<'a>(node: &'a SceneNode3) -> &'a dyn UIObject {
         Pimpl::Text(obj) => obj.as_ref(),
         Pimpl::TextScramble(obj) => obj.as_ref(),
         Pimpl::Edit(obj) => obj.as_ref(),
-        Pimpl::ChatView(obj) => obj.as_ref(),
         Pimpl::Image(obj) => obj.as_ref(),
         Pimpl::Video(obj) => obj.as_ref(),
         Pimpl::Button(obj) => obj.as_ref(),
@@ -378,6 +380,10 @@ pub fn get_ui_object3<'a>(node: &'a SceneNode3) -> &'a dyn UIObject {
         Pimpl::Shortcut(obj) => obj.as_ref(),
         Pimpl::Menu(obj) => obj.as_ref(),
         Pimpl::TokenTable(obj) => obj.as_ref(),
+        Pimpl::ChatView(obj) => obj.as_ref(),
+        Pimpl::PrivMsgNode(obj) => obj.as_ref(),
+        Pimpl::DateMsgNode(obj) => obj.as_ref(),
+        Pimpl::FileMsgNode(obj) => obj.as_ref(),
         _ => panic!("unhandled type for get_ui_object: {node:?}"),
     }
 }

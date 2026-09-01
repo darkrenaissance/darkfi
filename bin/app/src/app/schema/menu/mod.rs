@@ -16,7 +16,7 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use darkfi_serial::deserialize;
+use darkfi_serial::{deserialize, Encodable};
 use kvdb_overlay::Database as KvDb;
 use std::io::Write;
 use ui_consts::*;
@@ -439,18 +439,24 @@ pub async fn make(
     let redraw = app.redraw_trigger.clone();
     let role1_group = node.get_property("role1_group").unwrap();
     let role2_group = node.get_property("role2_group").unwrap();
+    let role1_group2 = role1_group.clone();
+    let role2_group2 = role2_group.clone();
     let listen_click = app.ex.spawn(async move {
         while let Ok(data) = recvr.recv().await {
             let channel: String = deserialize(&data).unwrap();
-            let path = format!("/window/content/chat/{}_chat_layer", channel);
-            if let Some(node) = sg_root.lookup_node(path) {
+            // One chat screen: retarget the chatview via set_channel.
+            if let Some(node) = sg_root.lookup_node("/window/content/chat/main_chat_layer") {
                 let atom = &mut redraw.make_guard(gfxtag!("channel_clicked"));
                 info!(target: "app::menu", "clicked: {channel}!");
                 sfx::play_click();
-                role1_group.remove_str_item(atom, Role::App, &channel);
-                role2_group.remove_str_item(atom, Role::App, &channel);
+                role1_group2.remove_str_item(atom, Role::App, &channel);
+                role2_group2.remove_str_item(atom, Role::App, &channel);
                 node.set_property_bool(atom, Role::App, "is_visible", true).unwrap();
                 menu_is_visible.set(atom, false);
+                let chatty = node.lookup_node("/content/chatty").unwrap();
+                let mut chan_data = vec![];
+                channel.encode(&mut chan_data).unwrap();
+                let _ = chatty.call_method("set_channel", chan_data).await;
             }
         }
     });
@@ -472,9 +478,10 @@ pub async fn make(
     // Subscribe to edit_done signal to persist the joined list and unlink removed layers
     let (edit_done_slot, edit_done_recvr) = Slot::new("edit_done");
     menu_node.register("edit_done", edit_done_slot).unwrap();
-    let sg_root = app.sg_root.clone();
     let menu_node2 = menu_node.clone();
     let redraw = app.redraw_trigger.clone();
+    let role1_group = role1_group.clone();
+    let role2_group = role2_group.clone();
     let edit_done_listen = app.ex.spawn(async move {
         while let Ok(data) = edit_done_recvr.recv().await {
             let deleted_items: Vec<String> = deserialize(&data).unwrap();
@@ -483,24 +490,13 @@ pub async fn make(
                 menu_node2.get_property("items").unwrap().get_str_vec().unwrap();
             write_joined_channels(&current);
 
+            // One chat screen: removed channels have no per-channel
+            // scene to unlink; clear their unread markers and leave
+            // their trees on disk (re-joining restores history).
+            let atom = &mut redraw.make_guard(gfxtag!("edit_done cleanup"));
             for item in &deleted_items {
-                let path = format!("/window/content/chat/{}_chat_layer", item);
-                if let Some(node) = sg_root.lookup_node(&path) {
-                    node.clear_tasks();
-                    debug!(target: "app::menu", "deleted item: {item}");
-                    node.unlink();
-                }
-
-                // The selection overlay is a sibling of the chat layer, not
-                // a child: it needs z_index/priority above netstatus_layer,
-                // which it can only get in the shared parent. Remove it
-                // alongside so it does not leak.
-                let path = format!("/window/content/chat/{}_select_layer", item);
-                if let Some(node) = sg_root.lookup_node(&path) {
-                    node.clear_tasks();
-                    debug!(target: "app::menu", "deleted select overlay: {item}");
-                    node.unlink();
-                }
+                role1_group.remove_str_item(atom, Role::App, item);
+                role2_group.remove_str_item(atom, Role::App, item);
             }
 
             // Unlinking changes no property, so request a pass explicitly:

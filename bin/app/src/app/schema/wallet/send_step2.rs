@@ -339,12 +339,8 @@ pub async fn make(
     let listen_click = app.ex.spawn(async move {
         while let Ok(_) = recvr.recv().await {
             if let Some(clipboard_text) = clipboard::get() {
-                let text_prop = recipient_input2.get_property("text").unwrap();
                 let atom = &mut redraw_clone.make_guard(gfxtag!("step2 recipient paste"));
-                text_prop.set_str(atom, Role::App, 0, &clipboard_text).unwrap();
-                if let crate::scene::Pimpl::Edit(edit) = recipient_input2.pimpl() {
-                    edit.on_text_prop_changed();
-                }
+                recipient_input2.set_property_str(atom, Role::App, "text", clipboard_text).unwrap();
             }
         }
     });
@@ -443,10 +439,9 @@ pub async fn make(
 
                 // Update amount token symbol
                 if let Some(token_symbol_node) = sg_root.lookup_node("/window/content/wallet/send_step3_layer/send_amount_wrapper/send_amount_token_symbol") {
-                    token_symbol_node.set_property_str(atom, Role::Internal, "text", token_symbol).unwrap();
-                    if let Pimpl::Edit(edit) = token_symbol_node.pimpl() {
-                        edit.on_text_prop_changed();
-                    }
+                    // Role::App: schema-driven write, so the edit's text
+                    // watcher syncs its internal buffer.
+                    token_symbol_node.set_property_str(atom, Role::App, "text", token_symbol).unwrap();
                 }
             }
             if let Some(recipient_str) = &data.recipient_str {

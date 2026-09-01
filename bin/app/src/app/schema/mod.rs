@@ -45,6 +45,7 @@ mod chat;
 pub mod menu;
 use menu::channel::Channel;
 pub mod test;
+pub mod test_chatview;
 pub mod test_edit;
 pub mod test_scroll_layer;
 mod wallet;
@@ -1060,32 +1061,19 @@ pub async fn make(
     menu::make(app, chat_layer.clone(), i18n_fish, app_db.clone(), &kv_db, emoji_meshes.clone())
         .await;
 
-    // Create chat layers only for joined channels/contacts, in joined order.
-    for name in read_joined_channels() {
-        let bare = if name.starts_with('#') || name.starts_with('@') { &name[1..] } else { &name };
-        let in_db = match name.chars().next() {
-            Some('#') => app_db.channel_get(bare).await.ok().flatten().is_some(),
-            Some('@') => app_db.contact_get(bare).await.ok().flatten().is_some(),
-            _ => false,
-        };
-        if !in_db {
-            warn!(target: "app::schema", "Joined entry '{name}' not found in kv_db; skipping");
-            continue
-        }
-
-        chat::make(
-            &app.sg_root,
-            &app.renderer,
-            &app.ex,
-            chat_layer.clone(),
-            &name,
-            &kv_db,
-            i18n_fish,
-            emoji_meshes.clone(),
-            app.redraw_trigger.clone(),
-        )
-        .await;
-    }
+    // The single chat screen; channel switching goes through
+    // `set_channel` instead of per-channel layers.
+    chat::make(
+        &app.sg_root,
+        &app.renderer,
+        &app.ex,
+        chat_layer.clone(),
+        &kv_db,
+        i18n_fish,
+        emoji_meshes.clone(),
+        app.redraw_trigger.clone(),
+    )
+    .await;
 
     wallet::make(app, content.clone(), i18n_fish).await;
 

@@ -20,14 +20,14 @@
 
 use crate::{
     app::{
-        node::{create_chatview, create_layer, create_text, create_vector_art, create_video},
+        node::{create_layer, create_text, create_vector_art, create_video},
         App,
     },
     expr::{self, Compiler},
     mesh::COLOR_PURPLE,
     prop::{PropertyAtomicGuard, PropertyFloat32, Role},
     scene::SceneNodePtr,
-    ui::{ChatView, Layer, Text, VectorArt, VectorShape, Video},
+    ui::{Layer, Text, VectorArt, VectorShape, Video},
     util::i18n::I18nBabelFish,
 };
 

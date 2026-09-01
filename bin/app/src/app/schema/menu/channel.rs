@@ -1267,12 +1267,9 @@ pub async fn make(
             debug!(target: "app::menu", "secret paste button clicked");
             match miniquad::window::clipboard_get() {
                 Some(clipboard_text) => {
-                    let text_prop = secedit_node2.get_property("text").unwrap();
                     let atom = &mut redraw2.make_guard(gfxtag!("secret paste"));
-                    text_prop.set_str(atom, Role::App, 0, &clipboard_text).unwrap();
-                    if let crate::scene::Pimpl::Edit(edit) = secedit_node2.pimpl() {
-                        edit.on_text_prop_changed();
-                    }
+                    secedit_node2.set_property_str(atom, Role::App, "text", clipboard_text)
+                        .unwrap();
                 }
                 None => warn!(target: "app::menu", "clipboard_get() returned None (empty or unsupported on this platform)"),
             }
@@ -1429,12 +1426,8 @@ pub async fn make(
             debug!(target: "app::menu", "gen secret button clicked");
             let secret_bytes: [u8; 32] = OsRng.gen();
             let secret = bs58::encode(secret_bytes).into_string();
-            let text_prop = secedit_node3.get_property("text").unwrap();
             let atom = &mut redraw_clone.make_guard(gfxtag!("gen secret"));
-            text_prop.set_str(atom, Role::App, 0, &secret).unwrap();
-            if let crate::scene::Pimpl::Edit(edit) = secedit_node3.pimpl() {
-                edit.on_text_prop_changed();
-            }
+            secedit_node3.set_property_str(atom, Role::App, "text", secret).unwrap();
         }
     });
     app.tasks.lock().unwrap().push(listen_click);
@@ -1615,70 +1608,37 @@ pub async fn make(
     menu_node.register("select", slot).unwrap();
 
     let sg_root = app.sg_root.clone();
-    let renderer = app.renderer.clone();
-    let ex = app.ex.clone();
     let channel_vis = channel_is_visible.clone();
-    let window_scale2 = window_scale.clone();
-    let kv_db2 = kv_db.clone();
-    let i18n_fish2 = i18n_fish.clone();
-    let emoji_meshes2 = emoji_meshes.clone();
     let redraw2 = app.redraw_trigger.clone();
 
     let listen_select = app.ex.spawn(async move {
         while let Ok(data) = recvr.recv().await {
             let channel: String = deserialize(&data).unwrap();
             i!("Selected channel: {channel}");
-            let path = format!("/window/content/chat/{}_chat_layer", &channel);
 
             let atom = &mut redraw2.make_guard(gfxtag!("channel_selected"));
-
-            // Check if chat layer already exists
-            if let Some(node) = sg_root.lookup_node(&path) {
-                node.set_property_bool(atom, Role::App, "is_visible", true).unwrap();
-                channel_vis.set(atom, false);
-                continue;
-            }
-
-            let content = sg_root.lookup_node("/window/content/chat").unwrap();
-            // Create the chat layer and get the node
-            let node = chat::make(
-                &sg_root,
-                &renderer,
-                &ex,
-                content,
-                &channel,
-                &kv_db2,
-                &i18n_fish2,
-                emoji_meshes2.clone(),
-                redraw2.clone(),
-            )
-            .await;
-            match node.pimpl() {
-                Pimpl::Layer(layer) => layer.clone().start(ex.clone()).await,
-                _ => panic!("wrong pimpl"),
-            }
-            d!("Added channel layer: {}", node.get_full_path().unwrap());
-
-            // Show the chat layer
-            node.set_property_bool(atom, Role::App, "is_visible", true).unwrap();
-
-            // Add to main_menu items (check if not already there)
             let main_menu =
                 sg_root.lookup_node("/window/content/chat/menu_layer/main_menu").unwrap();
             let items_prop = main_menu.get_property("items").unwrap();
 
-            if !items_prop.contains_str(&channel) {
-                items_prop.push_str(atom, Role::App, &channel).unwrap();
+            // One chat screen: a channel already in the menu just
+            // retargets the chatview; an unknown one is newly joined.
+            if items_prop.contains_str(&channel) {
+                let node = sg_root.lookup_node("/window/content/chat/main_chat_layer").unwrap();
+                node.set_property_bool(atom, Role::App, "is_visible", true).unwrap();
+                channel_vis.set(atom, false);
+                let chatty = node.lookup_node("/content/chatty").unwrap();
+                let mut chan_data = vec![];
+                channel.encode(&mut chan_data).unwrap();
+                let _ = chatty.call_method("set_channel", chan_data).await;
+                continue
             }
 
+            items_prop.push_str(atom, Role::App, &channel).unwrap();
             append_joined_channel(&channel);
 
             // Hide channel screen
             channel_vis.set(atom, false);
-
-            // Trigger a draw pass so the newly added node's parent_rect
-            // gets set. The pass walks the whole tree so the new layer is
-            // drawn with correct geometry.
             redraw2.trigger();
 
             // Trigger rescan for this channel

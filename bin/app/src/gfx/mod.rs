@@ -376,6 +376,10 @@ impl<'a> RenderContext<'a> {
 
         let overlays = std::mem::take(&mut self.overlays);
         for overlay in overlays {
+            // screen_size() is physical; dividing by the overlay's
+            // scale virtualizes it into the same unit space the defer
+            // origin and Move offsets use (mirrors Window::draw's
+            // screen_size/scale for the root view).
             self.view = Rectangle::new(0., 0., screen_w, screen_h);
             self.scale = overlay.scale;
             self.view.w /= self.scale;
@@ -568,7 +572,12 @@ impl<'a> RenderContext<'a> {
                     }
                 }
                 GfxDrawInstruction::Overlay(instrs) => {
-                    let pos = self.view.pos() / self.scale + self.cursor;
+                    // `self.view` is in virtual units and draw_overlays
+                    // consumes this in virtual units (Move adds virtual
+                    // offsets onto it), so the view origin passes
+                    // through unscaled; dividing by the window scale
+                    // here misplaces overlays on scaled displays.
+                    let pos = self.view.pos() + self.cursor;
                     self.overlays.push(OverlayDefer {
                         scale: self.scale,
                         pos,

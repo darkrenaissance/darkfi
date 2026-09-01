@@ -325,30 +325,29 @@ async fn load_plugins(
             let nick = String::decode(&mut cur).unwrap();
             let msg = String::decode(&mut cur).unwrap();
 
-            let node_path = format!("/window/content/chat/{channel}_chat_layer/content/chatty");
+            let node_path = "/window/content/chat/main_chat_layer/content/chatty";
             t!("Attempting to relay message to {node_path}");
-            let Some(chatview) = sg_root2.lookup_node(&node_path) else {
-                d!("Ignoring message since {node_path} doesn't exist");
-                continue
-            };
+            let chatview = sg_root2.lookup_node(node_path).unwrap();
 
-            // I prefer to just re-encode because the code is clearer.
+            // The chatview routes: active channel inserts live, anything
+            // else persists to its own tree.
             let mut data = vec![];
+            channel.encode(&mut data).unwrap();
             timestamp.encode(&mut data).unwrap();
             id.encode(&mut data).unwrap();
             nick.encode(&mut data).unwrap();
             msg.encode(&mut data).unwrap();
-            if let Err(err) = chatview.call_method("insert_line", data).await {
-                error!(
-                    target: "app",
-                    "Call method {node_path}::insert_line({timestamp}, {id}, {nick}, '{msg}'): {err:?}"
-                );
+            if let Err(err) = chatview.call_method("receive", data).await {
+                error!(target: "app", "Call method {node_path}::receive({channel}, {timestamp}, {id}): {err:?}");
             }
 
-            // Apply coloring when you get a message
-            let chat_path = format!("/window/content/chat/{channel}_chat_layer");
-            let chat_layer = sg_root2.lookup_node(chat_path).unwrap();
-            if chat_layer.get_property_bool("is_visible").unwrap() {
+            // Apply coloring when the message is not being viewed:
+            // either another channel is open, or the user is not in the
+            // chat screen at all.
+            let chat_layer = sg_root2.lookup_node("/window/content/chat/main_chat_layer").unwrap();
+            let viewing = chat_layer.get_property_bool("is_visible").unwrap() &&
+                chatview.get_property_str("channel").unwrap_or_default() == channel;
+            if viewing {
                 continue
             }
 
@@ -436,16 +435,17 @@ async fn load_plugins(
         let sg_root2 = sg_root.clone();
         let listen_file_status = ex.spawn(async move {
             while let Ok(data) = recv.recv().await {
-                let window = sg_root2.lookup_node("/window/content").unwrap();
                 let mut cur = Cursor::new(&data);
                 let url = Url::decode(&mut cur).unwrap();
-                let status = chatview::FileMessageStatus::decode(&mut cur).unwrap();
-                for child in window.get_children() {
-                    if let Some(chatty) = child.lookup_node("/content/chatty") {
+                let status = chatview::msg::filemsg::FileMsgStatus::decode(&mut cur).unwrap();
+                if let Some(chatty) =
+                    sg_root2.lookup_node("/window/content/chat/main_chat_layer/content/chatty")
+                {
+                    if let Some(filemsg) = chatty.lookup_node("/filemsg") {
                         let mut data = vec![];
                         url.encode(&mut data).unwrap();
                         status.encode(&mut data).unwrap();
-                        let _ = chatty.call_method("set_file_status", data).await;
+                        let _ = filemsg.call_method("set_file_status", data).await;
                     }
                 }
             }

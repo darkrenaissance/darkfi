@@ -94,6 +94,7 @@ schema-app = []
 schema-test = []
 schema-test-edit = []
 schema-test-scroll-layer = []
+schema-test-chatview = []
 
 [patch.crates-io]
 halo2_proofs = { git="https://github.com/parazyd/halo2", branch="v050" }

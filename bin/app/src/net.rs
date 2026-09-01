@@ -48,7 +48,6 @@ fn stop_ui_subtree(node: &SceneNodePtr) {
             Pimpl::Text(_) |
             Pimpl::TextScramble(_) |
             Pimpl::Edit(_) |
-            Pimpl::ChatView(_) |
             Pimpl::Image(_) |
             Pimpl::Video(_) |
             Pimpl::Button(_) |

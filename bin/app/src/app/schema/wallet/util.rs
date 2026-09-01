@@ -91,14 +91,6 @@ pub async fn update_amount_screen(
     let amount_rect = amount_input_node.get_property("rect").unwrap();
     amount_rect.set_expr(atom, Role::App, 2, width_code).unwrap();
 
-    // Reset scroll to prevent content from being cropped
-    if let Pimpl::Edit(edit) = amount_input_node.pimpl() {
-        edit.reset_scroll();
-    }
-    if let Pimpl::Edit(edit) = token_node.pimpl() {
-        edit.reset_scroll();
-    }
-
     // Update token symbol position
     let token_rect = token_node.get_property("rect").unwrap();
     token_rect

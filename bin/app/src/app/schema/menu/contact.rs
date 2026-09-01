@@ -1270,12 +1270,10 @@ pub async fn make(
             debug!(target: "app::menu", "secret paste button clicked");
             match clipboard::get() {
                 Some(clipboard_text) => {
-                    let text_prop = secedit_node2.get_property("text").unwrap();
                     let atom = &mut redraw_clone.make_guard(gfxtag!("secret paste"));
-                    text_prop.set_str(atom, Role::App, 0, &clipboard_text).unwrap();
-                    if let crate::scene::Pimpl::Edit(edit) = secedit_node2.pimpl() {
-                        edit.on_text_prop_changed();
-                    }
+                    secedit_node2
+                        .set_property_str(atom, Role::App, "text", clipboard_text)
+                        .unwrap();
                 }
                 None => warn!(target: "app::menu", "clipboard_get() returned None (empty or unsupported on this platform)"),
             }
@@ -1533,30 +1531,16 @@ pub async fn make(
             let path = format!("/window/content/chat/{}_chat_layer", &contact);
             let atom = &mut redraw2.make_guard(gfxtag!("contact_selected"));
 
-            if let Some(node) = sg_root.lookup_node(&path) {
+            // One chat screen: retarget the chatview.
+            if let Some(node) = sg_root.lookup_node("/window/content/chat/main_chat_layer") {
                 node.set_property_bool(atom, Role::App, "is_visible", true).unwrap();
                 contact_vis.set(atom, false);
+                let chatty = node.lookup_node("/content/chatty").unwrap();
+                let mut chan_data = vec![];
+                contact.encode(&mut chan_data).unwrap();
+                let _ = chatty.call_method("set_channel", chan_data).await;
                 continue;
             }
-
-            let content = sg_root.lookup_node("/window/content/chat").unwrap();
-            let node = chat::make(
-                &sg_root,
-                &renderer,
-                &ex,
-                content,
-                &contact,
-                &kv_db2,
-                &i18n_fish2,
-                emoji_meshes2.clone(),
-                redraw2.clone(),
-            )
-            .await;
-            match node.pimpl() {
-                Pimpl::Layer(layer) => layer.clone().start(ex.clone()).await,
-                _ => panic!("wrong pimpl"),
-            }
-            node.set_property_bool(atom, Role::App, "is_visible", true).unwrap();
 
             let main_menu =
                 sg_root.lookup_node("/window/content/chat/menu_layer/main_menu").unwrap();

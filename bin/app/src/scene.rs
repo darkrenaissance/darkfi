@@ -111,7 +111,6 @@ pub enum SceneNodeType {
     Texture = 10,
     Fonts = 11,
     Font = 12,
-    ChatView = 13,
     Edit = 14,
     Image = 15,
     Button = 16,
@@ -121,6 +120,10 @@ pub enum SceneNodeType {
     Menu = 22,
     TokenTable = 23,
     TextScramble = 24,
+    ChatView = 25,
+    PrivMsgNode = 26,
+    DateMsgNode = 27,
+    FileMsgNode = 28,
     PluginRoot = 100,
     Plugin = 101,
 }
@@ -603,7 +606,6 @@ pub enum Pimpl {
     VectorArt(ui::VectorArtPtr),
     Text(ui::TextPtr),
     Edit(ui::BaseEditPtr),
-    ChatView(ui::ChatViewPtr),
     Image(ui::ImagePtr),
     Video(ui::VideoPtr),
     Button(ui::ButtonPtr),
@@ -613,6 +615,10 @@ pub enum Pimpl {
     TokenTable(ui::TokenTablePtr),
     Setting(SettingPtr),
     TextScramble(ui::TextScramblePtr),
+    ChatView(ui::ChatViewPtr),
+    PrivMsgNode(ui::chatview::msg::PrivMsgNodePtr),
+    DateMsgNode(ui::chatview::msg::DateMsgNodePtr),
+    FileMsgNode(ui::chatview::msg::FileMsgNodePtr),
     #[cfg(feature = "enable-plugin-darkirc")]
     DarkIrc(plugin::DarkIrcPtr),
     #[cfg(feature = "enable-plugin-fud")]

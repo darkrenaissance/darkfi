@@ -55,7 +55,7 @@ build-release: $(SRC) $(PROOFS_BIN) fonts assets/forest_1920x1080.ivf
 
 # Download font data
 
-fonts: data/font/ibm-plex-mono-regular.otf data/font/NotoColorEmoji.ttf
+fonts: data/font/ibm-plex-mono-regular.otf data/font/NotoColorEmoji.ttf data/font/darkfi-custom-emoji.ttf
 
 data/font/ibm-plex-mono-regular.otf:
 	mkdir -p data/font/

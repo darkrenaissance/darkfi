@@ -27,10 +27,11 @@ use crate::{
     expr::{self, Compiler},
     mesh::COLOR_PURPLE,
     prop::{PropertyAtomicGuard, PropertyFloat32, Role},
-    scene::SceneNodePtr,
+    scene::{Pimpl, SceneNodePtr},
     ui::{ChatView, Layer, Text, VectorArt, VectorShape, Video},
     util::i18n::I18nBabelFish,
 };
+use darkfi_serial::Encodable;
 use kvdb_overlay::Database as KvDb;
 
 const LIGHTMODE: bool = false;
@@ -323,7 +324,6 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish) {
     node.set_property_f32(atom, Role::App, "line_height", 30.).unwrap();
     node.set_property_f32(atom, Role::App, "baseline", 20.).unwrap();
     node.set_property_u32(atom, Role::App, "z_index", 1).unwrap();
-    //node.set_property_bool(atom, Role::App, "debug", true).unwrap();
 
     let prop = node.get_property("timestamp_color").unwrap();
     prop.set_f32(atom, Role::App, 0, 0.5).unwrap();
@@ -343,7 +343,36 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish) {
         prop.set_f32(atom, Role::App, 3, 1.).unwrap();
     }
 
-    let prop = node.get_property("nick_colors").unwrap();
+    let prop = node.get_property("hi_bg_color").unwrap();
+    prop.set_f32(atom, Role::App, 0, 0.5).unwrap();
+    prop.set_f32(atom, Role::App, 1, 0.5).unwrap();
+    prop.set_f32(atom, Role::App, 2, 0.5).unwrap();
+    prop.set_f32(atom, Role::App, 3, 1.).unwrap();
+
+    let kv_db = KvDb::open_default(&get_chatdb_path()).expect("cannot open kvdb");
+    let chat_tree = kv_db.open_tree_default(&ChatView::tree_name("chat")).unwrap();
+    if chat_tree.is_empty().unwrap() {
+        populate_tree(&chat_tree);
+    }
+    debug!(target: "app", "db has {} lines", chat_tree.len().unwrap());
+    let node = node
+        .setup(|me| {
+            ChatView::new(
+                me,
+                kv_db,
+                window_scale.clone(),
+                i18n_fish.clone(),
+                app.renderer.clone(),
+                app.redraw_trigger.clone(),
+                app.ex.clone(),
+            )
+        })
+        .await;
+    layer_node.link(node.clone());
+
+    // Type-specific styling lives on the privmsg sub-node.
+    let privmsg_node = node.lookup_node("/privmsg").unwrap();
+    let prop = privmsg_node.get_property("nick_colors").unwrap();
     #[rustfmt::skip]
     let nick_colors = [
         0.00, 0.94, 1.00, 1.,
@@ -361,38 +390,15 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish) {
         prop.push_f32(atom, Role::App, c).unwrap();
     }
 
-    let prop = node.get_property("hi_bg_color").unwrap();
-    if LIGHTMODE {
-        prop.set_f32(atom, Role::App, 0, 0.5).unwrap();
-        prop.set_f32(atom, Role::App, 1, 0.5).unwrap();
-        prop.set_f32(atom, Role::App, 2, 0.5).unwrap();
-        prop.set_f32(atom, Role::App, 3, 1.).unwrap();
-    } else {
-        prop.set_f32(atom, Role::App, 0, 0.5).unwrap();
-        prop.set_f32(atom, Role::App, 1, 0.5).unwrap();
-        prop.set_f32(atom, Role::App, 2, 0.5).unwrap();
-        prop.set_f32(atom, Role::App, 3, 1.).unwrap();
-    }
-
-    let kv_db = KvDb::open_default(&get_chatdb_path()).expect("cannot open kvdb");
-    let chat_tree = kv_db.open_tree(b"chat").unwrap();
-    if chat_tree.is_empty() {
-        populate_tree(&chat_tree);
-    }
-    debug!(target: "app", "db has {} lines", chat_tree.len());
-    let node = node
-        .setup(|me| {
-            ChatView::new(
-                me,
-                chat_tree,
-                window_scale.clone(),
-                app.renderer.clone(),
-                app.redraw_trigger.clone(),
-                app.ex.clone(),
-            )
-        })
-        .await;
-    layer_node.link(node);
+    let bind_task = app.ex.spawn(async move {
+        // Over the method bus once start() has subscribed; the delay
+        // covers the setup -> start gap so the call isn't dropped.
+        darkfi::system::sleep(1).await;
+        let mut data = vec![];
+        "chat".encode(&mut data).unwrap();
+        let _ = node.call_method("set_channel", data).await;
+    });
+    app.tasks.lock().unwrap().push(bind_task);
 
     // Text edit
     let node = create_singleline_edit("editz");

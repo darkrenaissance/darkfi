@@ -42,12 +42,16 @@ use crate::{
     scene::{Pimpl, SceneNodePtr, Slot},
     shape,
     ui::{
-        chatview, emoji_picker, BaseEdit, BaseEditType, Button, ChatView, EmojiPicker, Layer,
-        RedrawTrigger, Shortcut, Text, VectorArt, VectorShape,
+        chatview::MessageId, emoji_picker, BaseEdit, BaseEditType, Button, ChatView, EmojiPicker,
+        Layer, RedrawTrigger, Shortcut, Text, VectorArt, VectorShape,
     },
     util::{i18n::I18nBabelFish, unixtime},
     ExecutorPtr,
 };
+
+use std::io::Cursor;
+
+use url::Url;
 
 use super::{ColorScheme, COLOR_SCHEME};
 
@@ -87,6 +91,7 @@ mod android_ui_consts {
     pub const MESSAGE_SPACING: f32 = 15.;
     pub const LINE_HEIGHT: f32 = 58.;
     pub const CHATVIEW_BASELINE: f32 = 36.;
+    pub const CHATVIEW_DATE_FONTSIZE: f32 = 32.;
 
     pub const CMD_HELP_HEIGHT: f32 = 110.;
     pub const CMD_HELP_GAP: f32 = 10.;
@@ -170,6 +175,7 @@ mod ui_consts {
     pub const MESSAGE_SPACING: f32 = 5.;
     pub const LINE_HEIGHT: f32 = 30.;
     pub const CHATVIEW_BASELINE: f32 = 20.;
+    pub const CHATVIEW_DATE_FONTSIZE: f32 = 16.;
 
     pub const CMD_HELP_HEIGHT: f32 = 55.;
     pub const CMD_HELP_GAP: f32 = 5.;
@@ -232,7 +238,6 @@ pub async fn make(
     renderer: &Renderer,
     ex: &ExecutorPtr,
     content: SceneNodePtr,
-    channel: &str,
     kv_db: &KvDb,
     i18n_fish: &I18nBabelFish,
     emoji_meshes: emoji_picker::EmojiMeshesPtr,
@@ -263,7 +268,7 @@ pub async fn make(
     cc.add_const_f32("NETSTATUS_ICON_SIZE", super::NETSTATUS_ICON_SIZE);
 
     // Main view
-    let layer_node = create_layer(&(channel.to_string() + "_chat_layer"));
+    let layer_node = create_layer("main_chat_layer");
     let prop = layer_node.get_property("rect").unwrap();
     prop.set_f32(atom, Role::App, 0, 0.).unwrap();
     prop.set_f32(atom, Role::App, 1, 0.).unwrap();
@@ -447,9 +452,7 @@ pub async fn make(
     prop.set_expr(atom, Role::App, 2, expr::load_var("w")).unwrap();
     prop.set_f32(atom, Role::App, 3, CHATEDIT_HEIGHT).unwrap();
     node.set_property_f32(atom, Role::App, "font_size", FONTSIZE).unwrap();
-    node.set_property_str(atom, Role::App, "text", channel).unwrap();
-    //node.set_property_bool(atom, Role::App, "debug", true).unwrap();
-    //node.set_property_str(atom, Role::App, "text", "anon1").unwrap();
+    node.set_property_str(atom, Role::App, "text", "").unwrap();
     let prop = node.get_property("text_color").unwrap();
     if COLOR_SCHEME == ColorScheme::DarkMode {
         prop.set_f32(atom, Role::App, 0, 1.).unwrap();
@@ -464,12 +467,12 @@ pub async fn make(
     }
     node.set_property_u32(atom, Role::App, "z_index", 3).unwrap();
 
-    let node = node
+    let label_node = node
         .setup(|me| {
             Text::new(me, window_scale.clone(), renderer.clone(), i18n_fish.clone(), redraw.clone())
         })
         .await;
-    layer_node.link(node);
+    layer_node.link(label_node.clone());
 
     // Create the emoji picker
     let mut node = create_emoji_picker("emoji_picker");
@@ -567,16 +570,9 @@ pub async fn make(
     node.set_property_f32(atom, Role::App, "timestamp_width", TIMESTAMP_WIDTH).unwrap();
     node.set_property_f32(atom, Role::App, "line_height", LINE_HEIGHT).unwrap();
     node.set_property_f32(atom, Role::App, "message_spacing", MESSAGE_SPACING).unwrap();
+    node.set_property_f32(atom, Role::App, "wheel_page_frac", 0.2).unwrap();
     node.set_property_f32(atom, Role::App, "baseline", CHATVIEW_BASELINE).unwrap();
     node.set_property_u32(atom, Role::App, "z_index", 2).unwrap();
-    //node.set_property_bool(atom, Role::App, "debug", true).unwrap();
-
-    #[cfg(target_os = "android")]
-    node.set_property_f32(atom, Role::App, "scroll_start_accel", 40.).unwrap();
-    #[cfg(target_os = "linux")]
-    node.set_property_f32(atom, Role::App, "scroll_start_accel", 15.).unwrap();
-
-    node.set_property_f32(atom, Role::App, "scroll_resist", 0.9).unwrap();
 
     let prop = node.get_property("timestamp_color").unwrap();
     prop.set_f32(atom, Role::App, 0, 0.407).unwrap();
@@ -596,52 +592,95 @@ pub async fn make(
         prop.set_f32(atom, Role::App, 3, 1.).unwrap();
     }
 
-    let prop = node.get_property("action_text_color").unwrap();
+    let prop = node.get_property("hi_bg_color").unwrap();
     if COLOR_SCHEME == ColorScheme::PaperLight {
-        prop.set_f32(atom, Role::App, 0, 0.).unwrap();
-        prop.set_f32(atom, Role::App, 1, 0.).unwrap();
-        prop.set_f32(atom, Role::App, 2, 0.).unwrap();
+        prop.set_f32(atom, Role::App, 0, 0.5).unwrap();
+        prop.set_f32(atom, Role::App, 1, 0.5).unwrap();
+        prop.set_f32(atom, Role::App, 2, 0.5).unwrap();
         prop.set_f32(atom, Role::App, 3, 1.).unwrap();
     } else if COLOR_SCHEME == ColorScheme::DarkMode {
-        prop.set_f32(atom, Role::App, 0, 1.).unwrap();
-        prop.set_f32(atom, Role::App, 1, 1.).unwrap();
-        prop.set_f32(atom, Role::App, 2, 1.).unwrap();
+        prop.set_f32(atom, Role::App, 0, 0.).unwrap();
+        prop.set_f32(atom, Role::App, 1, 0.2).unwrap();
+        prop.set_f32(atom, Role::App, 2, 0.2).unwrap();
         prop.set_f32(atom, Role::App, 3, 1.).unwrap();
     }
 
-    let prop = node.get_property("url_text_color").unwrap();
+    let chatview_node = node
+        .setup(|me| {
+            ChatView::new(
+                me,
+                kv_db.clone(),
+                window_scale.clone(),
+                i18n_fish.clone(),
+                renderer.clone(),
+                redraw.clone(),
+                ex.clone(),
+            )
+        })
+        .await;
+    layer_node.link(chatview_node.clone());
+
+    let tree_name = "#dev__chat_tree_v2";
+    let tree = kv_db.open_tree_default(&tree_name).unwrap();
+    if tree.is_empty().expect("cannot read dev chat tree") {
+        populate_tree(&tree);
+    }
+
+    // The label follows the bound channel.
+    {
+        let channel_prop = PropertyStr::wrap(&chatview_node, Role::App, "channel", 0).unwrap();
+        let channel_sub = channel_prop.prop().subscribe_modify();
+        let label_text = PropertyStr::wrap(&label_node, Role::App, "text", 0).unwrap();
+        let redraw2 = redraw.clone();
+        let label_task = ex.spawn(async move {
+            while let Ok(_) = channel_sub.receive().await {
+                let atom = &mut redraw2.make_guard(gfxtag!("channel label"));
+                label_text.set(atom, channel_prop.get());
+            }
+        });
+        chatview_node.push_task(label_task);
+    }
+
+    // Type-specific styling lives on the privmsg type sub-node.
+    let privmsg_node = chatview_node.lookup_node("/privmsg").expect("privmsg type node");
+    privmsg_node.set_property_f32(atom, Role::App, "cap_max_height", 1000.).unwrap();
+    let prop = privmsg_node.get_property("action_text_color").unwrap();
+    prop.set_f32(atom, Role::App, 0, 0.5).unwrap();
+    prop.set_f32(atom, Role::App, 1, 0.25).unwrap();
+    prop.set_f32(atom, Role::App, 2, 0.75).unwrap();
+    prop.set_f32(atom, Role::App, 3, 1.).unwrap();
+    let prop = privmsg_node.get_property("url_text_color").unwrap();
     prop.set_f32(atom, Role::App, 0, 0.).unwrap();
     prop.set_f32(atom, Role::App, 1, 0.94).unwrap();
     prop.set_f32(atom, Role::App, 2, 1.).unwrap();
     prop.set_f32(atom, Role::App, 3, 1.).unwrap();
-    let prop = node.get_property("url_bg_color").unwrap();
+    let prop = privmsg_node.get_property("url_bg_color").unwrap();
     prop.set_f32(atom, Role::App, 0, 0.).unwrap();
     prop.set_f32(atom, Role::App, 1, 0.13).unwrap();
     prop.set_f32(atom, Role::App, 2, 0.08).unwrap();
     prop.set_f32(atom, Role::App, 3, 1.).unwrap();
-    node.set_property_f32(atom, Role::App, "url_bg_border_size", 1.).unwrap();
-    let prop = node.get_property("url_bg_border_color").unwrap();
+    privmsg_node.set_property_f32(atom, Role::App, "url_bg_border_size", 1.).unwrap();
+    let prop = privmsg_node.get_property("url_bg_border_color").unwrap();
     prop.set_f32(atom, Role::App, 0, 0.11).unwrap();
     prop.set_f32(atom, Role::App, 1, 0.6).unwrap();
     prop.set_f32(atom, Role::App, 2, 0.63).unwrap();
     prop.set_f32(atom, Role::App, 3, 1.).unwrap();
 
     // "Copied link" overlay styling (mirrors the edit action menu)
-    let prop = node.get_property("url_copy_fg_color").unwrap();
+    let prop = privmsg_node.get_property("url_copy_fg_color").unwrap();
     prop.set_f32(atom, Role::App, 0, 0.).unwrap();
     prop.set_f32(atom, Role::App, 1, 0.94).unwrap();
     prop.set_f32(atom, Role::App, 2, 1.).unwrap();
     prop.set_f32(atom, Role::App, 3, 1.).unwrap();
-    let prop = node.get_property("url_copy_bg_color").unwrap();
+    let prop = privmsg_node.get_property("url_copy_bg_color").unwrap();
     prop.set_f32(atom, Role::App, 0, 0.1).unwrap();
     prop.set_f32(atom, Role::App, 1, 0.1).unwrap();
     prop.set_f32(atom, Role::App, 2, 0.1).unwrap();
     prop.set_f32(atom, Role::App, 3, 0.9).unwrap();
-    node.set_property_f32(atom, Role::App, "url_copy_font_size", FONTSIZE).unwrap();
-    node.set_property_f32(atom, Role::App, "url_copy_padding", ACTION_PADDING).unwrap();
-    node.set_property_f32(atom, Role::App, "url_copy_offset", ACTION_PADDING).unwrap();
-
-    let prop = node.get_property("nick_colors").unwrap();
+    privmsg_node.set_property_f32(atom, Role::App, "url_copy_font_size", FONTSIZE).unwrap();
+    privmsg_node.set_property_f32(atom, Role::App, "url_copy_padding", ACTION_PADDING).unwrap();
+    privmsg_node.set_property_f32(atom, Role::App, "url_copy_offset", ACTION_PADDING).unwrap();
+    let prop = privmsg_node.get_property("nick_colors").unwrap();
     #[rustfmt::skip]
     let nick_colors = [
         0.00, 0.94, 1.00, 1.,
@@ -659,41 +698,21 @@ pub async fn make(
         prop.push_f32(atom, Role::App, c).unwrap();
     }
 
-    let prop = node.get_property("hi_bg_color").unwrap();
-    if COLOR_SCHEME == ColorScheme::PaperLight {
-        prop.set_f32(atom, Role::App, 0, 0.5).unwrap();
-        prop.set_f32(atom, Role::App, 1, 0.5).unwrap();
-        prop.set_f32(atom, Role::App, 2, 0.5).unwrap();
-        prop.set_f32(atom, Role::App, 3, 1.).unwrap();
-    } else if COLOR_SCHEME == ColorScheme::DarkMode {
-        prop.set_f32(atom, Role::App, 0, 0.).unwrap();
-        prop.set_f32(atom, Role::App, 1, 0.2).unwrap();
-        prop.set_f32(atom, Role::App, 2, 0.2).unwrap();
-        prop.set_f32(atom, Role::App, 3, 1.).unwrap();
-    }
+    // Date separator styling.
+    let datemsg_node = chatview_node.lookup_node("/datemsg").expect("datemsg type node");
+    datemsg_node.set_property_f32(atom, Role::App, "font_size", CHATVIEW_DATE_FONTSIZE).unwrap();
+    let prop = datemsg_node.get_property("color").unwrap();
+    prop.set_f32(atom, Role::App, 0, 0.5).unwrap();
+    prop.set_f32(atom, Role::App, 1, 0.5).unwrap();
+    prop.set_f32(atom, Role::App, 2, 0.5).unwrap();
+    prop.set_f32(atom, Role::App, 3, 1.).unwrap();
 
-    let tree_name = channel.to_string() + "__chat_tree";
-    let chat_tree = kv_db.open_tree_default(&tree_name).unwrap();
-    //if chat_tree.is_empty() {
-    //    populate_tree(&chat_tree);
-    //}
-    debug!(target: "app", "Loaded {channel} history: {} lines", chat_tree.len().unwrap());
-    let chatview_node = node
-        .setup(|me| {
-            ChatView::new(
-                me,
-                chat_tree,
-                window_scale.clone(),
-                renderer.clone(),
-                redraw.clone(),
-                ex.clone(),
-            )
-        })
-        .await;
-    layer_node.link(chatview_node.clone());
+    // File signals live on the filemsg type node. The download request
+    // payload carries (id, url); the fud plugin takes the url.
+    let filemsg_node = chatview_node.lookup_node("/filemsg").expect("filemsg type node");
 
     let (slot, recvr) = Slot::new("fileurl_detect");
-    chatview_node.register("fileurl_detected", slot).unwrap();
+    filemsg_node.register("fileurl_detected", slot).unwrap();
     let sg_root2 = sg_root.clone();
     let listen_fileurl = ex.spawn(async move {
         while let Ok(data) = recvr.recv().await {
@@ -704,13 +723,18 @@ pub async fn make(
     });
     layer_node.push_task(listen_fileurl);
 
-    let (slot, recvr) = Slot::new("file_download_request");
-    chatview_node.register("file_download_request", slot).unwrap();
+    let (slot, recvr) = Slot::new("file_download");
+    filemsg_node.register("download_request", slot).unwrap();
     let sg_root2 = sg_root.clone();
     let listen_file_download = ex.spawn(async move {
         while let Ok(data) = recvr.recv().await {
+            let mut cur = Cursor::new(&data);
+            let Ok(_id) = MessageId::decode(&mut cur) else { continue };
+            let Ok(url) = Url::decode(&mut cur) else { continue };
             if let Some(fud_node) = sg_root2.lookup_node("/plugin/fud") {
-                let _ = fud_node.call_method("get", data).await;
+                let mut fud_data = vec![];
+                url.encode(&mut fud_data).unwrap();
+                let _ = fud_node.call_method("get", fud_data).await;
             }
         }
     });
@@ -734,19 +758,16 @@ pub async fn make(
 
     let down_layer_is_visible =
         PropertyBool::wrap(&down_layer, Role::App, "is_visible", 0).unwrap();
-    let chatview_scroll = PropertyFloat32::wrap(&chatview_node, Role::App, "scroll", 0).unwrap();
-    let chatview_scroll_sub = chatview_scroll.prop().subscribe_modify();
+    let chatview_at_bottom =
+        PropertyBool::wrap(&chatview_node, Role::App, "is_at_bottom", 0).unwrap();
+    let at_bottom_sub = chatview_at_bottom.prop().subscribe_modify();
     let redraw2 = redraw.clone();
-    let chatview_scroll2 = chatview_scroll.clone();
+    let chatview_at_bottom2 = chatview_at_bottom.clone();
     let monitor_scroll_task = ex.spawn(async move {
-        while let Ok(_) = chatview_scroll_sub.receive().await {
-            let scroll = chatview_scroll2.get();
+        while let Ok(_) = at_bottom_sub.receive().await {
+            let at_bottom = chatview_at_bottom2.get();
             let atom = &mut redraw2.make_guard(gfxtag!("down arrow visibility change"));
-            if scroll > 0. {
-                down_layer_is_visible.set(atom, true);
-            } else {
-                down_layer_is_visible.set(atom, false);
-            }
+            down_layer_is_visible.set(atom, !at_bottom);
         }
     });
     down_layer.push_task(monitor_scroll_task);
@@ -777,11 +798,10 @@ pub async fn make(
     prop.set_f32(atom, Role::App, 3, DOWNARROW_H).unwrap();
     let (slot, recvr) = Slot::new("scroll_bottom");
     node.register("click", slot).unwrap();
-    let redraw2 = redraw.clone();
+    let chatview_node2 = chatview_node.clone();
     let listen_click = ex.spawn(async move {
         while let Ok(_) = recvr.recv().await {
-            let atom = &mut redraw2.make_guard(gfxtag!("down arrow clicked"));
-            chatview_scroll.set(atom, 0.);
+            let _ = chatview_node2.call_method("scroll_to_bottom", vec![]).await;
         }
     });
     down_layer.push_task(listen_click);
@@ -793,7 +813,7 @@ pub async fn make(
     // the netstatus layer, so its single background box draws over the netstatus
     // icons and its buttons win click hit-testing. It carries `unselect_btn`
     // (over `back_btn`) and `copy_btn` (over the reconnect button).
-    let select_layer = create_layer(&(channel.to_string() + "_select_layer"));
+    let select_layer = create_layer("select_layer");
     let prop = select_layer.get_property("rect").unwrap();
     prop.set_f32(atom, Role::App, 0, 0.).unwrap();
     prop.set_f32(atom, Role::App, 1, 0.).unwrap();
@@ -1122,6 +1142,7 @@ pub async fn make(
     //node.set_property_bool(atom, Role::App, "debug", true).unwrap();
 
     let editz_text = PropertyStr::wrap(&node, Role::App, "text", 0).unwrap();
+
     let editz_select_text = node.get_property("select_text").unwrap();
 
     //let editbox_focus = PropertyBool::wrap(node, Role::App, "is_focused", 0).unwrap();
@@ -1157,6 +1178,25 @@ pub async fn make(
         .await;
     let chatedit_node = node.clone();
     layer_node.link(node);
+
+    // Nick clicks on messages insert the nick at the editor cursor,
+    // like the emoji picker.
+    {
+        let (slot, recvr) = Slot::new("nick_clicked");
+        privmsg_node.register("nick_clicked", slot).unwrap();
+        let chatedit_node3 = chatedit_node.clone();
+        let listen_nick = ex.spawn(async move {
+            while let Ok(data) = recvr.recv().await {
+                let mut cur = Cursor::new(&data);
+                let Ok(_id) = MessageId::decode(&mut cur) else { continue };
+                let Ok(nick) = String::decode(&mut cur) else { continue };
+                let mut edit_data = vec![];
+                nick.encode(&mut edit_data).unwrap();
+                chatedit_node3.call_method("insert_text", edit_data).await.unwrap();
+            }
+        });
+        layer_node.push_task(listen_nick);
+    }
 
     let (slot, recvr) = Slot::new("emoji_selected");
     emoji_picker_node.register("emoji_select", slot).unwrap();
@@ -1219,18 +1259,18 @@ pub async fn make(
     prop.set_f32(atom, Role::App, 3, SENDBTN_BOX[3]).unwrap();
 
     let editz_text2 = editz_text.clone();
-    let channel2 = channel.to_string();
     let sg_root2 = sg_root.clone();
     let redraw2 = redraw.clone();
     let sendmsg = move || {
         let editz_text = editz_text2.clone();
-        let channel = channel2.clone();
         let sg_root = sg_root2.clone();
         let chatview_node = chatview_node.clone();
         let redraw = redraw2.clone();
         async move {
             let mut text = editz_text.get();
-            info!(target: "app::chat", "Send '{text}' to channel: {channel}");
+            let channel = chatview_node.get_property_str("channel").unwrap_or_default();
+            let privmsg_node = chatview_node.lookup_node("/privmsg").expect("privmsg type node");
+            trace!(target: "app::chat", "send to channel: {channel}");
             {
                 let atom = &mut redraw.make_guard(gfxtag!("sendmsg clear edit"));
                 editz_text.set(atom, "");
@@ -1257,7 +1297,7 @@ pub async fn make(
                 id.encode(&mut data).unwrap();
                 "NOTICE".encode(&mut data).unwrap();
                 msg.encode(&mut data).unwrap();
-                chatview_node.call_method("insert_line", data).await.unwrap();
+                privmsg_node.call_method("insert_line", data).await.unwrap();
 
                 return
             }
@@ -1799,9 +1839,11 @@ pub async fn make(
 // Just for testing
 #[allow(dead_code)]
 pub(super) fn populate_tree(tree: &Tree) {
+    use crate::ui::chatview::{codec, MessageId, MsgType};
     use chrono::{NaiveDate, NaiveDateTime};
+
     let chat_txt = include_str!("../../../data/chat.txt");
-    for line in chat_txt.lines() {
+    for (idx, line) in chat_txt.lines().enumerate() {
         let parts: Vec<&str> = line.splitn(3, ' ').collect();
         assert_eq!(parts.len(), 3);
         let time_parts: Vec<&str> = parts[0].splitn(2, ':').collect();
@@ -1815,16 +1857,14 @@ pub(super) fn populate_tree(tree: &Tree) {
         let nick = parts[1].to_string();
         let text = parts[2].to_string();
 
-        // serial order is important here
-        let timest = timest.to_be_bytes();
-        assert_eq!(timest.len(), 8);
-        let mut key = [0u8; 8 + 32];
-        key[..8].clone_from_slice(&timest);
+        // Unique id per line: the minute timestamp alone can repeat.
+        let mut id_bytes = [0u8; 32];
+        id_bytes[..8].copy_from_slice(&(idx as u64).to_be_bytes());
+        let id = MessageId(id_bytes);
 
-        let msg = chatview::ChatMsg { nick, text };
-        let mut val = vec![];
-        msg.encode(&mut val).unwrap();
-
+        let payload = codec::encode_privmsg_payload(&nick, &text, true);
+        let val = codec::encode_value(MsgType::PrivMsg, &payload);
+        let key = codec::encode_key(timest, &id);
         tree.insert(&key, &val).unwrap();
     }
     // O(n)
