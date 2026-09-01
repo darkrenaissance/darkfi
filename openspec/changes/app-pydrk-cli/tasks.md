@@ -78,7 +78,7 @@ run from `bin/app`.
   live: `python -m pydrk set /window/content rect 2 "w/2" --expr`
   exits 0 and `python -m pydrk get /window/content rect 2` shows
   `2: expr "w/2"`. Commit as `app: pydrk CLI set --expr`.
-- [ ] 2.3 Verify the failure paths end-to-end: `python -m pydrk set
+- [x] 2.3 Verify the failure paths end-to-end: `python -m pydrk set
   /window/content alpha 5.0` prints `property_out_of_range`;
   `python -m pydrk set /window no_such_prop 1` prints
   `property_not_found`; `set --expr "q/3"` on a rect index prints
@@ -160,7 +160,7 @@ run from `bin/app`.
   /window/content/dbg/art1 --box 0 0 w 10 1 0 0 1` — a red bar renders
   along the top of the window. Commit as
   `app: pydrk CLI set-shape with box primitive`.
-- [ ] 5.2 Add the remaining primitives from design D11: `--gbox`,
+- [x] 5.2 Add the remaining primitives from design D11: `--gbox`,
   `--vgradient`, `--outline`, `--line`, `--glow` (colors inline as
   trailing R G B A float args; coordinates may be expr strings). Verify
   live by composing one shape using at least `--vgradient`, `--outline`

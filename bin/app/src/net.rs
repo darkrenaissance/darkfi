@@ -24,7 +24,7 @@ use zeromq::{Socket, SocketRecv, SocketSend};
 use crate::{
     app::node::{create_layer, create_vector_art},
     error::{Error, Result},
-    expr::{decompile, Compiler},
+    expr::{decompile, MachineGlobals, Compiler, SExprCode, SExprMachine, SExprVal},
     gfx::{gfxtag, Renderer},
     prop::{PropertyType, Role},
     scene::{Pimpl, SceneNodeId, SceneNodePtr, SceneNodeType, ScenePath, Slot},
@@ -62,6 +62,21 @@ fn stop_ui_subtree(node: &SceneNodePtr) {
     for child in node.get_children() {
         stop_ui_subtree(&child);
     }
+}
+
+/// Run a freshly compiled expr on a throwaway machine so unknown
+/// variables (typos) reject the set request instead of failing silently
+/// on every eval afterwards. The dummy values are irrelevant; only name
+/// resolution matters and the globals are discarded. `global_names` are
+/// the variable names the property's real eval can provide.
+fn check_expr(code: &SExprCode, global_names: &[String]) -> Result<()> {
+    let mut globals: MachineGlobals = vec![];
+    for name in global_names {
+        globals.push((name.clone(), SExprVal::Float32(1.)));
+    }
+    let mut machine = SExprMachine { globals, stmts: code };
+    machine.call()?;
+    Ok(())
 }
 
 const USE_IPV6: bool = true;
@@ -350,6 +365,19 @@ impl ZeroMQAdapter {
                         let expr_str = String::decode(&mut cur).unwrap();
                         debug!(target: "req", "  compiling expr \"{expr_str}\"");
                         let code = Compiler::new().compile(&expr_str)?;
+                        // The property's eval site provides its depends
+                        // names plus one of the machine global sets in
+                        // use (w, h for most rects, parent_*/rect_* for
+                        // edit behaves), so accept the union and treat
+                        // anything else as a typo.
+                        let mut names: Vec<String> =
+                            prop.get_depends().into_iter().map(|d| d.local_name).collect();
+                        names.extend(
+                            ["w", "h", "parent_w", "parent_h", "rect_w", "rect_h"].iter().map(
+                                |s| s.to_string(),
+                            ),
+                        );
+                        check_expr(&code, &names)?;
                         prop.set_expr(atom, Role::User, prop_i, code)?;
                     }
                     PropertyType::VectorShape => {
@@ -359,6 +387,9 @@ impl ZeroMQAdapter {
                         // string, y expr string, 4x f32 color; index count
                         // varint; u16 indices.
                         let cc = Compiler::new();
+                        // Shape verts eval with only the w/h globals.
+                        let shape_globals: Vec<String> =
+                            ["w", "h"].iter().map(|s| s.to_string()).collect();
                         let vert_count = VarInt::decode(&mut cur)?.0 as usize;
                         let mut verts = vec![];
                         for _ in 0..vert_count {
@@ -372,6 +403,8 @@ impl ZeroMQAdapter {
                             ];
                             let x = cc.compile(&x_src)?;
                             let y = cc.compile(&y_src)?;
+                            check_expr(&x, &shape_globals)?;
+                            check_expr(&y, &shape_globals)?;
                             verts.push(ShapeVertex::new(x, y, color));
                         }
                         let index_count = VarInt::decode(&mut cur)?.0 as usize;

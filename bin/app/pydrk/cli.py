@@ -38,6 +38,7 @@ def error_name(err):
         return str(err)
     name = type(err).__name__
     name = name.replace("ID", "Id")
+    name = name.replace("SExpr", "Sexpr")
     return re.sub(r"(?<!^)(?=[A-Z])", "_", name).lower()
 
 
@@ -922,6 +923,12 @@ def run_selftests():
     assert NODE_TYPE_NAMES[SceneNodeType.LAYER] == "layer"
     assert NODE_TYPE_NAMES[SceneNodeType.VECTOR_ART] == "vector_art"
     assert NODE_TYPE_NAMES[SceneNodeType.PLUGIN_ROOT] == "plugin_root"
+
+    assert error_name(exc.SExprGlobalNotFound()) == "sexpr_global_not_found"
+    assert error_name(exc.PropertySExprNotAllowed()) == "property_sexpr_not_allowed"
+    assert error_name(exc.PropertyOutOfRange()) == "property_out_of_range"
+    assert error_name(exc.PropertyNotFound()) == "property_not_found"
+    assert error_name(exc.NodeSiblingNameConflict()) == "node_sibling_name_conflict"
 
     assert resolve_path([], "/") == "/"
     assert resolve_path([], "") == "/"
