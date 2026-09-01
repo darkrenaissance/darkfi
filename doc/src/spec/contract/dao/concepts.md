@@ -4,12 +4,12 @@ The governance process is divided in a few steps that are outlined
 below:
 
 * **Propose:** a proposal is submitted to the blockchain.
-* **Vote:** governance token holdens can vote on the proposal.
+* **Vote:** governance token holders can vote on the proposal.
 * **Exec:** if the proposal passes within the time limit then the
   proposal is executed.
 
 > Note: There is a special case where a proposal can be executed before
-> voting period passes, if its strongly supported, based on the
+> the voting period passes, if it's strongly supported, based on the
 > configured early execution quorum.
 
 ## Propose

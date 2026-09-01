@@ -3,7 +3,8 @@
 ## Abstract
 
 The _Money_ contract implements network fees, token transfers,
-atomic swaps, and token minting.
+atomic swaps, token minting and freezing, value burning (destroying),
+the genesis allocation, and consensus rewards minting.
 
 The functions provided by this smart contract are:
 ```rust

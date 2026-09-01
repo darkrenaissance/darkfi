@@ -99,11 +99,13 @@ impl CoinAttributes {
 }
 
 #[derive(Debug, Clone, SerialEncodable, SerialDecodable)]
+// ANCHOR: token-attributes
 pub struct TokenAttributes {
     pub auth_parent: FuncId,
     pub user_data: pallas::Base,
     pub blind: BaseBlind,
 }
+// ANCHOR_END: token-attributes
 
 impl TokenAttributes {
     pub fn to_token_id(&self) -> TokenId {

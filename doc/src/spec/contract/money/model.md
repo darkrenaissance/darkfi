@@ -38,6 +38,36 @@ $$ \begin{aligned}
 $$ \t{Coin} : \t{Attrs}_\t{Coin} → 𝔽ₚ $$
 $$ \t{Coin}(p) = \t{Bulla}(\mathcal{X}(p.\t{PK}), \mathcal{Y}(p.\t{PK}), ℕ₆₄2𝔽ₚ(p.v), p.τ, p.\t{SH}, p.\t{UD}, p.b) $$
 
+Spending a coin $C = \t{Coin}(p)$ reveals its nullifier, derived from the
+secret key $x$ corresponding to $p.\t{PK}$:
+$$ \t{Nullifier} : 𝔽ₚ × 𝔽ₚ → 𝔽ₚ $$
+$$ \t{Nullifier}(x, C) = \t{PoseidonHash}(x, C) $$
+
+## Token
+
+Tokens are identified by a token ID $τ$, which is itself a commitment to
+the token's attributes. The parent authority $\t{SH}$ is the function ID
+allowed to mint the token (see `Money::AuthTokenMintV1`), the user data
+$\t{UD}$ can bind additional parameters, and the blind $b$ guarantees
+uniqueness of the token ID.
+
+Define the token attributes
+$$ \begin{aligned}
+  \t{Attrs}_\t{Token}.\t{SH} &∈ 𝔽ₚ \\
+  \t{Attrs}_\t{Token}.\t{UD} &∈ 𝔽ₚ \\
+  \t{Attrs}_\t{Token}.b &∈ 𝔽ₚ \\
+\end{aligned} $$
+
+```rust
+{{#include ../../../../../src/contract/money/src/model/mod.rs:token-attributes}}
+```
+
+$$ \t{TokenId} : \t{Attrs}_\t{Token} → 𝔽ₚ $$
+$$ \t{TokenId}(p) = \t{Bulla}(p.\t{SH}, p.\t{UD}, p.b) $$
+
+The native network token is the constant `DARK_TOKEN_ID` which does not
+correspond to any real commitment (see `src/contract/money/src/model/token_id.rs`).
+
 ## Inputs and Outputs
 
 ### Clear Input
@@ -45,7 +75,7 @@ $$ \t{Coin}(p) = \t{Bulla}(\mathcal{X}(p.\t{PK}), \mathcal{Y}(p.\t{PK}), ℕ₆�
 Define the clear input attributes
 $$ \begin{aligned}
   \t{MoneyClearInput}.v &∈ ℕ₆₄ \\
-  \t{MoneyClearInput}.T &∈ ℙₚ \\
+  \t{MoneyClearInput}.T &∈ 𝔽ₚ \\
   \t{MoneyClearInput}.v_\t{blind} &∈ 𝔽_q \\
   \t{MoneyClearInput}.t_\t{blind} &∈ 𝔽ₚ \\
   \t{MoneyClearInput}.Z &∈ ℙₚ \\
@@ -63,10 +93,14 @@ $$ \begin{aligned}
   \t{MoneyInput}.T &∈ 𝔽ₚ \\
   \t{MoneyInput}.N &∈ 𝔽ₚ \\
   \t{MoneyInput}.R &∈ 𝔽ₚ \\
-  \t{MoneyInput}.h &∈ 𝔽ₚ \\
   \t{MoneyInput}.U &∈ 𝔽ₚ \\
   \t{MoneyInput}.Z &∈ ℙₚ \\
+  \t{MoneyInput}.\t{tx\_local} &∈ ℤ₂ \\
 \end{aligned} $$
+
+The spend hook $h$ verified by the `Burn_V1` proof is not part of the
+input itself: it is computed by the contract from the parent call's
+function reference during execution (see [Transfer](scheme.md#transfer)).
 
 ```rust
 {{#include ../../../../../src/contract/money/src/model/mod.rs:money-input}}
@@ -82,9 +116,9 @@ $$ \begin{aligned}
   \t{MoneyOutput}.T &∈ 𝔽ₚ \\
   \t{MoneyOutput}.C &∈ 𝔽ₚ \\
   \t{MoneyOutput}.\t{note} &∈ \t{AeadEncNote} \\
+  \t{MoneyOutput}.\t{tx\_local} &∈ ℤ₂ \\
 \end{aligned} $$
 
 ```rust
 {{#include ../../../../../src/contract/money/src/model/mod.rs:money-output}}
 ```
-

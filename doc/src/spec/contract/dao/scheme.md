@@ -14,11 +14,11 @@ Let $\t{Params}_\t{DAO}, \t{Bulla}_\t{DAO}, \t{Params}_\t{Proposal}, \t{Bulla}_\
 
 Let $\t{AeadEncNote}$ be defined as in [In-band Secret Distribution](../../crypto-schemes.md#in-band-secret-distribution).
 
-Let $\t{ElGamal.Encrypt}, \t{ElGamalEncNote}ₖ$ be defined as in the section [Verifiable In-Band Secret Distribution](../../crypto-schemes.md#verifiable-in-band-secret-distribution).
+Let $\t{ElGamalEncNote}ₖ, \t{ElGamal}.\t{Encrypt}$ be defined as in the section [Verifiable In-Band Secret Distribution](../../crypto-schemes.md#verifiable-in-band-secret-distribution).
 
 ## Mint
 
-This function creates a DAO bulla $𝒟 $. It's comparatively simple- we commit to
+This function creates a DAO bulla $𝒟$. It's comparatively simple- we commit to
 the DAO params and then add the bulla to the set.
 
 * Wallet builder: `src/contract/dao/src/client/mint.rs`
@@ -39,14 +39,15 @@ $$ \begin{aligned}
 
 ### Contract Statement
 
-**DAO bulla uniqueness** &emsp; whether $ℬ $ already exists. If yes then fail.
+**DAO bulla uniqueness** &emsp; whether $𝒟$ already exists. If yes then fail.
 
 Let there be a prover auxiliary witness inputs:
 $$ \begin{aligned}
   L &∈ ℕ₆₄ \\
   Q &∈ ℕ₆₄ \\
   EEQ &∈ ℕ₆₄ \\
-  A^\% &∈ ℕ₆₄ × ℕ₆₄ \\
+  A_q &∈ ℕ₆₄ \\
+  A_b &∈ ℕ₆₄ \\
   τ &∈ 𝔽ₚ \\
   Nx &∈ 𝔽ₚ \\
   px &∈ 𝔽ₚ \\
@@ -56,7 +57,6 @@ $$ \begin{aligned}
   EEx &∈ 𝔽ₚ \\
   b_\t{DAO} &∈ 𝔽ₚ
 \end{aligned} $$
-
 Attach a proof $π$ such that the following relations hold:
 
 **Proof of notes public key ownership** &emsp; $\t{NPK} = \t{DerivePubKey}(Nx)$.
@@ -71,10 +71,13 @@ Attach a proof $π$ such that the following relations hold:
 
 **Proof of early executor public key ownership** &emsp; $\t{EEPK} = \t{DerivePubKey}(EEx)$.
 
-**Proof that early execution quorum is greater than normal quorum** &emsp; $Q <= EEQ1$.
+**Early execution quorum is not less than quorum** &emsp; $Q ≤ EEQ$.
 
-**DAO bulla integrity** &emsp; $ℬ  = \t{Bulla}_\t{DAO}((L, Q, EEQ, A^\%, τ,
+**DAO bulla integrity** &emsp; $𝒟 = \t{Bulla}_\t{DAO}((L, Q, EEQ, A_q, A_b, τ,
 \t{NPK}, \t{pPK}, \t{PPK}, \t{VPK}, \t{EPK}, \t{EEPK}), b_\t{DAO})$
+
+The state update additionally appends $𝒟$ to the DAO bulla Merkle tree,
+which is used later for existence proofs in the Propose phase.
 
 ### Signatures
 
@@ -88,14 +91,16 @@ $R_\t{DAO}$ which contains the DAO bulla created in the Mint phase.
 
 Several inputs are attached containing proof of ownership for the governance
 token. This is to satisfy the proposer limit value set in the DAO.
-We construct the nullifier $\cN$ which can leak anonymity when those same
-coins are spent. To workaround this, wallet implementers can attach an
-additional `Money::transfer()` call to the transaction.
+We construct the proposal-specific nullifier $\cN$ which can leak anonymity
+when those same coins are spent. To workaround this, wallet implementers
+can attach an additional `Money::transfer()` call to the transaction.
 
-The nullifier $\cN$ proves the coin isn't already spent in the set determined
-by $R_\t{coin}$. Each value commit $V$ exported by the input is summed and
-used in the main proof to determine the total value attached in the inputs
-crosses the proposer limit threshold.
+For every input, an SMT non-membership proof shows the corresponding coin
+was unspent in the Money state snapshot determined by the coin merkle root
+$R_\t{coin}$ and the nullifier set SMT root $R_\t{null}$. Each value commit
+$V$ exported by the inputs is summed and used in the main proof to determine
+that the total value attached in the inputs crosses the proposer limit
+threshold.
 
 This is merely a proof of ownership of holding a certain amount of value.
 Coins are not locked and continue to be spendable.
@@ -116,6 +121,8 @@ A proposal contains a list of auth calls as specified in [Auth Calls](model.md#a
 Define the DAO propose function params
 $$ \begin{aligned}
   R_\t{DAO} &∈ 𝔽ₚ \\
+  R_\t{coin} &∈ 𝔽ₚ \\
+  R_\t{null} &∈ 𝔽ₚ \\
   T &∈ 𝔽ₚ \\
   𝒫 &∈ \t{im}(\t{Bulla}_\t{Proposal}) \\
   \t{note} &∈ \t{AeadEncNote} \\
@@ -126,9 +133,11 @@ Define the DAO propose-input function params
 $$ \begin{aligned}
   \t{ProposeInput}.\cN &∈ 𝔽ₚ \\
   \t{ProposeInput}.V &∈ ℙₚ \\
-  \t{ProposeInput}.R_\t{coin} &∈ 𝔽ₚ \\
   \t{ProposeInput}.\t{PK}_σ &∈ ℙₚ
 \end{aligned} $$
+
+The coin merkle root $R_\t{coin}$ and nullifier SMT root $R_\t{null}$ are
+attached once per call and bound to every input proof.
 
 ```rust
 {{#include ../../../../../src/contract/dao/src/model.rs:dao-propose-params}}
@@ -147,7 +156,15 @@ Let $\t{Attrs}_\t{Coin}$ be defined as in [Coin](../money/model.md#coin).
 **Valid DAO bulla merkle root** &emsp; check that $R_\t{DAO}$ is a previously
 seen merkle root in the DAO contract merkle roots DB.
 
-**Proposal bulla uniqueness** &emsp; whether $𝒫 $ already exists. If yes then fail.
+**Valid snapshot** &emsp; check that $R_\t{coin}$ is a previously seen
+merkle root in the money contract merkle roots DB, that $R_\t{null}$ is a
+previously seen SMT root in the money contract nullifier roots DB, and
+that the two snapshots correspond to the same state (the nullifier SMT
+root snapshot must contain the coin tree root snapshot). The snapshot
+must be recent enough: not older than `PROPOSAL_SNAPSHOT_CUTOFF_LIMIT`
+blocks (100).
+
+**Proposal bulla uniqueness** &emsp; whether $𝒫$ already exists. If yes then fail.
 
 Let there be prover auxiliary witness inputs:
 $$ \begin{aligned}
@@ -158,21 +175,23 @@ $$ \begin{aligned}
   b_p &∈ 𝔽ₚ \\
   d &∈ \t{Params}_\t{DAO} \\
   b_d &∈ 𝔽ₚ \\
+  px &∈ 𝔽ₚ \\
   (ψ, Π) &∈ \t{MerklePos} × \t{MerklePath} \\
 \end{aligned} $$
-Attach a proof $π_𝒫 $ such that the following relations hold:
+Attach a proof $π_𝒫$ such that the following relations hold:
 
-**Governance token commit** &emsp; export the DAO token ID as an encrypted pedersen
-commit $T = \t{PedersenCommit}(d.τ, b_τ)$ where $T = ∑_{i ∈ 𝐢} Tᵢ$.
+**Governance token commit** &emsp; export the DAO token ID as an encrypted
+commit $T = \t{PoseidonHash}(d.τ, b_τ)$, matching the token commit of
+every input.
 
 **Proof of proposer public key ownership** &emsp; $\t{pPK} = \t{DerivePubKey}(px)$.
 
-**DAO bulla integrity** &emsp; $𝒟  = \t{Bulla}_\t{DAO}(d, b_d)$
+**DAO bulla integrity** &emsp; $𝒟 = \t{Bulla}_\t{DAO}(d, b_d)$
 
-**DAO existence** &emsp; $R_\t{DAO} = \t{MerkleRoot}(ψ, Π, 𝒟 )$
+**DAO existence** &emsp; $R_\t{DAO} = \t{MerkleRoot}(ψ, Π, 𝒟)$
 
 **Proposal bulla integrity** &emsp; $𝒫 = \t{Bulla}_\t{Proposal}(p, b_p)$
-where $p.t₀ = t₀$.
+where $p.t₀ = t₀$ is enforced as a public input.
 
 **Proposer limit threshold met** &emsp; check the proposer has supplied enough
 inputs that the required funds for the proposer limit set in the DAO is met.
@@ -182,13 +201,9 @@ Let the total funds $v = ∑_{i ∈ 𝐢} i.v$, then check $d.L ≤ v$.
 $V = ∑_{i ∈ 𝐢} i.V$. We use this to check that $v = ∑_{i ∈ 𝐢} i.v$ as
 claimed in the *proposer limit threshold met* check.
 
+**Input uniqueness** &emsp; the nullifiers $\cN$ must be unique within the call.
+
 For each input $i ∈ 𝐢$, perform the following checks:
-
-&emsp; **Unused nullifier** &emsp; check that $\cN$ does not exist in the
-money contract nullifiers DB.
-
-&emsp; **Valid input coins merkle root** &emsp; check that $i.R_\t{coin}$ is a
-previously seen merkle root in the money contract merkle roots DB.
 
 &emsp; Let there be a prover auxiliary witness inputs:
 $$ \begin{aligned}
@@ -197,19 +212,29 @@ $$ \begin{aligned}
   bᵥ &∈ 𝔽ᵥ \\
   b_τ &∈ 𝔽ₚ \\
   (ψᵢ, Πᵢ) &∈ \t{MerklePos} × \t{MerklePath} \\
+  (ψ^N, Π^N) &∈ \t{MerklePos} × \t{MerklePath} \\
   x_σ &∈ 𝔽ₚ \\
 \end{aligned} $$
 &emsp; Attach a proof $π_i$ such that the following relations hold:
 
-&emsp; **Nullifier integrity** &emsp; $\cN = \t{PoseidonHash}(x_c, C)$
+&emsp; **Nullifier integrity** &emsp; let $C = \t{Coin}(c)$ and
+$N = \t{PoseidonHash}(x_c, C)$, then $\cN = \t{PoseidonHash}(N, 𝒫)$
+
+&emsp; **Unspent at snapshot** &emsp;
+$R_\t{null} = \t{MerkleRoot}(ψ^N, Π^N, 0)$, i.e. an SMT non-membership
+proof of $N$ in the nullifier set snapshot.
 
 &emsp; **Coin value commit** &emsp; $i.V = \t{PedersenCommit}(c.v, bᵥ)$.
 
 &emsp; **Token commit** &emsp; $T = \t{PoseidonHash}(c.τ, b_τ)$.
 
-&emsp; **Valid coin** &emsp; Check $c.P = \t{DerivePubKey}(x_c)$. Let $C = \t{Coin}(c)$. Check $i.R_\t{coin} = \t{MerkleRoot}(ψᵢ, Πᵢ, C)$.
+&emsp; **Valid coin** &emsp; Check $c.P = \t{DerivePubKey}(x_c)$. Check $R_\t{coin} = \t{MerkleRoot}(ψᵢ, Πᵢ, C)$.
 
 &emsp; **Proof of signature public key ownership** &emsp; $i.\t{PK}_σ = \t{DerivePubKey}(x_σ)$.
+
+**Snapshot creation** &emsp; once the proposal is accepted, the latest
+Money coin merkle root and nullifier SMT root are snapshotted alongside
+the proposal. Only coins in this snapshot are votable with (see [Vote](#vote)).
 
 ### Signatures
 
@@ -224,13 +249,13 @@ of a certain value of governance tokens. This is how we achieve token weighted
 voting. The result of the vote is communicated to DAO members that can view votes
 through the encrypted note $\t{note}$.
 
-Each nullifier $𝒩 $ is stored uniquely per proposal. Additionally as before,
+Each nullifier $𝒩$ is stored uniquely per proposal. Additionally as before,
 there is a leakage here connecting the coins when spent. However prodigious
 usage of `Money::transfer()` to wash the coins after calling `DAO::vote()`
 should mitigate against this attack. In the future this can be fixed using
-set nonmembership primitives.
+set non-membership primitives.
 
-Another leakage is that the proposal bulla $𝒫 $ is public. To ensure every vote
+Another leakage is that the proposal bulla $𝒫$ is public. To ensure every vote
 is discoverable by verifiers (who cannot decrypt values) and protect against
 'nothing up my sleeve', we link them all together. This is so the final tally
 used for executing proposals is accurate.
@@ -248,10 +273,10 @@ and the yes votes by $V_\t{yes}$.
 
 Define the DAO vote function params
 $$ \begin{aligned}
-  τ &∈ 𝔽ₚ \\
+  T &∈ 𝔽ₚ \\
   𝒫 &∈ \t{im}(\t{Bulla}_\t{Proposal}) \\
   V_\t{yes} &∈ ℙₚ \\
-  \t{enc\_vote} &∈ \t{ElGamalEncNote}₄ \\
+  \t{note} &∈ \t{ElGamalEncNote}₄ \\
   𝐢 &∈ \t{VoteInput}^*
 \end{aligned} $$
 
@@ -259,7 +284,6 @@ Define the DAO vote-input function params
 $$ \begin{aligned}
   \t{VoteInput}.𝒩 &∈ 𝔽ₚ \\
   \t{VoteInput}.V &∈ ℙₚ \\
-  \t{VoteInput}.R_\t{coin} &∈ 𝔽ₚ \\
   \t{VoteInput}.\t{PK}_σ &∈ ℙₚ
 \end{aligned} $$
 
@@ -284,7 +308,10 @@ sum of DAO votes.
 
 Let $t₀ = \t{BlockWindow} ∈ 𝔽ₚ$ be the current blockwindow as defined in [Blockwindow](model.md#blockwindow).
 
-**Proposal bulla exists** &emsp; check $𝒫 $ exists in the DAO contract proposal
+Let $R_\t{coin}, R_\t{null}$ be the Money state snapshot attached to the
+proposal when it was created.
+
+**Proposal bulla exists** &emsp; check $𝒫$ exists in the DAO contract proposal
 bullas DB.
 
 Let there be prover auxiliary witness inputs:
@@ -303,58 +330,70 @@ $$ \begin{aligned}
 \end{aligned} $$
 Attach a proof $π_\mathcal{V}$ such that the following relations hold:
 
-**Governance token commit** &emsp; export the DAO token ID as an encrypted pedersen
-commit $T = \t{PedersenCommit}(d.τ, b_τ)$ where $T = ∑_{i ∈ 𝐢} Tᵢ$.
+**Governance token commit** &emsp; export the DAO token ID as an encrypted
+commit $T = \t{PoseidonHash}(d.τ, b_τ)$, matching the token commit of
+every input.
 
 **DAO bulla integrity** &emsp; $𝒟 = \t{Bulla}_\t{DAO}(d, b_d)$
 
 **Proposal bulla integrity** &emsp; $𝒫 = \t{Bulla}_\t{Proposal}(p, b_p)$
 
-**Yes vote commit** &emsp; $V_\t{yes} = \t{PedersenCommit}(ov, \t{Lift}_q(b_y))$
+**Yes vote commit** &emsp; $V_\t{yes} = (o \cdot v)G_V + b_y H_B$
 
-**Total vote value commit** &emsp; $V_\t{all} = \t{PedersenCommit}(v, \t{Lift}_q(bᵥ))$ where
-$V_\t{all} = ∑_{i ∈ 𝐢} i.V$ should also hold.
+**Total vote value commit** &emsp; $V_\t{all} = vG_V + bᵥH_B$ where
+$V_\t{all} = ∑_{i ∈ 𝐢} i.V$ should also hold. Here $G_V$ is the
+`VALUE_COMMIT_VALUE` generator, and the blinds $b_y, bᵥ$ are base field
+elements used with the `VALUE_COMMIT_RANDOM_BASE` generator $H_B$, so
+they can be verifiably encrypted.
 
 **Vote option boolean** &emsp; enforce $o ∈ \{ 0, 1 \}$.
 
 **Proposal not expired** &emsp; let $t_\t{end} = ℕ₆₄2𝔽ₚ(p.t₀) + ℕ₆₄2𝔽ₚ(p.D)$,
-and then check $t_\t{now} < t_\t{end}$.
+and then check $t_\t{now} < t_\t{end}$, where $t_\t{now}$ is enforced to be
+the current blockwindow via a public input.
 
 **Verifiable encryption of vote commit secrets** &emsp;
 let $𝐧 = (o, b_y, v, bᵥ)$, and verify
-$\t{enc\_vote} = \t{ElGamal}.\t{Encrypt}(𝐧, \t{esk}, d.\t{VPK})$.
+$\t{note} = \t{ElGamal}.\t{Encrypt}(𝐧, \t{esk}, d.\t{VPK})$.
 
 For each input $i ∈ 𝐢$, perform the following checks:
 
-&emsp; **Valid input merkle root** &emsp; check that $i.R_\t{coin}$ is the
-previously seen merkle root in the proposal snapshot merkle root.
+&emsp; **Unused nullifier (proposal)** &emsp; check that $𝒩$ does not exist in the
+DAO contract nullifiers DB for this specific proposal (nullifiers are keyed
+by $(𝒫, 𝒩)$), and is unique within the call.
 
-&emsp; **Unused nullifier (money)** &emsp; check that $\cN$ does not exist in the
-money contract nullifiers DB.
-
-&emsp; **Unused nullifier (proposal)** &emsp; check that $\cN$ does not exist in the
-DAO contract nullifiers DB for this specific proposal.
-
-Let there be prover auxiliary witness inputs:
+&emsp; Let there be a prover auxiliary witness inputs:
 $$ \begin{aligned}
   x_c &∈ 𝔽ₚ \\
   c &∈ \t{Attrs}_\t{Coin} \\
   bᵥ &∈ 𝔽ᵥ \\
   b_τ &∈ 𝔽ₚ \\
   (ψᵢ, Πᵢ) &∈ \t{MerklePos} × \t{MerklePath} \\
+  (ψ^N, Π^N) &∈ \t{MerklePos} × \t{MerklePath} \\
   x_σ &∈ 𝔽ₚ \\
 \end{aligned} $$
 Attach a proof $πᵢ$ such that the following relations hold:
 
-&emsp; **Nullifier integrity** &emsp; $\cN = \t{PoseidonHash}(x_c, C)$
+&emsp; **Nullifier integrity** &emsp; let $C = \t{Coin}(c)$ and
+$N = \t{PoseidonHash}(x_c, C)$, then
+$𝒩 = \t{PoseidonHash}(N, x_c, 𝒫)$
+
+&emsp; **Unspent at snapshot** &emsp;
+$R_\t{null} = \t{MerkleRoot}(ψ^N, Π^N, 0)$, i.e. an SMT non-membership
+proof of $N$ in the nullifier set snapshot, so only participants from
+before the proposal was posted can vote.
 
 &emsp; **Coin value commit** &emsp; $i.V = \t{PedersenCommit}(c.v, bᵥ)$.
 
 &emsp; **Token commit** &emsp; $T = \t{PoseidonHash}(c.τ, b_τ)$.
 
-&emsp; **Valid coin** &emsp; Check $c.P = \t{DerivePubKey}(x_c)$. Let $C = \t{Coin}(c)$. Check $i.R_\t{coin} = \t{MerkleRoot}(ψᵢ, Πᵢ, C)$.
+&emsp; **Valid coin** &emsp; Check $c.P = \t{DerivePubKey}(x_c)$. Check $R_\t{coin} = \t{MerkleRoot}(ψᵢ, Πᵢ, C)$, i.e. the coin existed in the proposal's snapshot of the coin tree.
 
 &emsp; **Proof of signature public key ownership** &emsp; $i.\t{PK}_σ = \t{DerivePubKey}(x_σ)$.
+
+**Vote aggregation** &emsp; the state update adds $V_\t{yes}$ and
+$∑ i.V$ to the proposal's aggregated vote commits
+($\t{DaoBlindAggregateVote}$), and records the used vote nullifiers.
 
 ### Signatures
 
@@ -374,6 +413,10 @@ calls set inside the proposal. One of these will usually be an auth module
 function. Currently the DAO provides a single preset for executing
 `Money::transfer()` calls so DAOs can manage anonymous treasuries.
 
+The `early_exec` flag selects which proof statement is verified:
+`Exec` for normal execution after expiry, or `EarlyExec` for strongly
+supported proposals (see [EarlyExec](#earlyexec)).
+
 * Wallet builder: `src/contract/dao/src/client/exec.rs`
 * WASM VM code: `src/contract/dao/src/entrypoint/exec.rs`
 * ZK proofs:
@@ -387,9 +430,11 @@ Let $\t{AuthCall}, \t{Commit}_{\t{Auth}^*}$ be defined as in the section [Auth C
 Define the DAO exec function params
 $$ \begin{aligned}
   𝒫 &∈ \t{im}(\t{Bulla}_\t{Proposal}) \\
-  𝒜  &∈ \t{AuthCall}^* \\
+  𝒜 &∈ \t{AuthCall}^* \\
   V_\t{yes} &∈ ℙₚ \\
   V_\t{all} &∈ ℙₚ \\
+  \t{early} &∈ ℤ₂ \\
+  \t{PK}_σ &∈ ℙₚ
 \end{aligned} $$
 
 ```rust
@@ -407,8 +452,9 @@ transaction matches what is specified in the proposal. Then in the second phase,
 we verify the correct voting rules.
 
 **Auth call spec match** &emsp; denote the child calls of Exec by $C$.
-If $\#C ≠ \#𝒜 $ then exit.
-Otherwise, for each $c ∈ C$ and $a ∈ 𝒜 $, check the function ID of $c$ is $a$.
+If $\#C ≠ \#𝒜$ then exit.
+Otherwise, for each $c ∈ C$ and $a ∈ 𝒜$, check the contract ID and
+function code of $c$ match $a$.
 
 **Aggregate votes lookup** &emsp; using the proposal bulla, fetch the
 aggregated votes from the DB and verify $V_\t{yes}$ and $V_\t{all}$ are set correctly.
@@ -423,6 +469,8 @@ $$ \begin{aligned}
   v_a &∈ 𝔽ₚ \\
   b_y &∈ 𝔽ᵥ \\
   b_a &∈ 𝔽ᵥ \\
+  t_\t{now} &∈ 𝔽ₚ \\
+  x_σ &∈ 𝔽ₚ
 \end{aligned} $$
 Attach a proof $π$ such that the following relations hold:
 
@@ -431,10 +479,12 @@ Attach a proof $π$ such that the following relations hold:
 **DAO bulla integrity** &emsp; $𝒟 = \t{Bulla}_\t{DAO}(d, b_d)$
 
 **Proposal bulla integrity** &emsp; $𝒫 = \t{Bulla}_\t{Proposal}(p, b_p)$
-where $p.𝒜  = 𝒜 $.
+where $\t{Commit}_{\t{Auth}^*}(p.C) = \t{Commit}_{\t{Auth}^*}(𝒜)$ is
+enforced as a public input.
 
 **Proposal has expired** &emsp; let $t_\t{end} = ℕ₆₄2𝔽ₚ(p.t₀) + ℕ₆₄2𝔽ₚ(p.D)$,
-and then check $t_\t{end} <= t_\t{now}$.
+and then check $t_\t{end} ≤ t_\t{now}$, where $t_\t{now}$ is enforced to
+be the current blockwindow via a public input.
 
 **Yes vote commit** &emsp; $V_\t{yes} = \t{PedersenCommit}(v_y, b_y)$
 
@@ -443,8 +493,11 @@ and then check $t_\t{end} <= t_\t{now}$.
 **All votes pass quorum** &emsp; $Q ≤ v_a$
 
 **Approval ratio satisfied** &emsp; we wish to check that
-$\frac{A^\%_q}{A^\%_b} ≤ \frac{v_y}{v_a}$. Instead we perform the
-equivalent check that $v_a A^\%_q ≤ v_y A^\%_b$.
+$\frac{A_q}{A_b} ≤ \frac{v_y}{v_a}$. Instead we perform the
+equivalent check that $v_a A_q ≤ v_y A_b$.
+
+**Proposal removal** &emsp; the state update removes the proposal from
+the DB so it cannot be executed twice.
 
 ### EarlyExec
 
@@ -461,6 +514,8 @@ $$ \begin{aligned}
   v_a &∈ 𝔽ₚ \\
   b_y &∈ 𝔽ᵥ \\
   b_a &∈ 𝔽ᵥ \\
+  t_\t{now} &∈ 𝔽ₚ \\
+  x_σ &∈ 𝔽ₚ
 \end{aligned} $$
 Attach a proof $π$ such that the following relations hold:
 
@@ -471,10 +526,12 @@ Attach a proof $π$ such that the following relations hold:
 **DAO bulla integrity** &emsp; $𝒟 = \t{Bulla}_\t{DAO}(d, b_d)$
 
 **Proposal bulla integrity** &emsp; $𝒫 = \t{Bulla}_\t{Proposal}(p, b_p)$
-where $p.𝒜  = 𝒜 $.
+where $\t{Commit}_{\t{Auth}^*}(p.C) = \t{Commit}_{\t{Auth}^*}(𝒜)$ is
+enforced as a public input.
 
 **Proposal has not expired** &emsp; let $t_\t{end} = ℕ₆₄2𝔽ₚ(p.t₀) + ℕ₆₄2𝔽ₚ(p.D)$,
-and then check $t_\t{now} < t_\t{end}$.
+and then check $t_\t{now} < t_\t{end}$, where $t_\t{now}$ is enforced to
+be the current blockwindow via a public input.
 
 **Yes vote commit** &emsp; $V_\t{yes} = \t{PedersenCommit}(v_y, b_y)$
 
@@ -483,12 +540,14 @@ and then check $t_\t{now} < t_\t{end}$.
 **All votes pass early execution quorum** &emsp; $EEQ ≤ v_a$
 
 **Approval ratio satisfied** &emsp; we wish to check that
-$\frac{A^\%_q}{A^\%_b} ≤ \frac{v_y}{v_a}$. Instead we perform the
-equivalent check that $v_a A^\%_q ≤ v_y A^\%_b$.
+$\frac{A_q}{A_b} ≤ \frac{v_y}{v_a}$. Instead we perform the
+equivalent check that $v_a A_q ≤ v_y A_b$.
 
 ### Signatures
 
-No signatures are attached.
+A single signature is attached, using $\t{PK}_σ$ as the signature public
+key. The signature binds the `DAO::exec()` call to the transaction so it
+cannot be combined with other calls.
 
 ## AuthMoneyTransfer
 
@@ -497,8 +556,8 @@ It checks the next sibling call is `Money::transfer()` and accordingly
 verifies the first $n - 1$ output coins match the data set in this
 call's [auth data](model.md#auth-calls).
 
-Additionally we provide a note with the coin params that are verifiably
-encrypted to mitigate the attack where Exec is called, but the supplied
+Additionally we provide verifiably encrypted notes for the coins, to
+mitigate the attack where Exec is called, but the supplied
 `Money::transfer()` call contains an invalid note which cannot be
 decrypted by the receiver. In this case, the money would still leave the
 DAO treasury but be unspendable.
@@ -525,18 +584,20 @@ This provides verifiable note encryption for all output coins in the sibling `Mo
 
 ### Contract Statement
 
-Denote the DAO contract ID by $\t{CID}_\t{DAO} ∈ 𝔽ₚ$.
+Denote the DAO function ID of `Dao::Exec` by $\t{FID}_\t{Exec} ∈ 𝔽ₚ$.
 
-**Sibling call is `Money::transfer()`** &emsp; load the sibling call and check
-the contract ID and function code match `Money::transfer()`.
+**Sibling call is `Money::transfer()`** &emsp; load the immediate next
+sibling call and check the contract ID and function code match
+`Money::transfer()`.
 
 **Money originates from the same DAO** &emsp; check all the input's `user_data`
 for the sibling `Money::transfer()` encode the same DAO. We do this by using the
 same blind for all `user_data`. Denote this value by $\t{UD}_\t{enc}$.
 
 **Output coins match proposal** &emsp; check there are $n + 1$ output coins,
-with the first $n$ coins exactly matching those set in the auth data in
-the parent `DAO::exec()` call. Denote these proposal auth calls by $𝒜 $.
+with the first $n$ coins exactly matching those set in this call's auth
+data in the parent `DAO::exec()` call. The auth data is decoded as a
+list of $n$ coins.
 
 Let there be a prover auxiliary witness inputs:
 $$ \begin{aligned}
@@ -557,37 +618,41 @@ following relations hold:
 **DAO bulla integrity** &emsp; $𝒟 = \t{Bulla}_\t{DAO}(d, b_d)$
 
 **Proposal bulla integrity** &emsp; $𝒫 = \t{Bulla}_\t{Proposal}(p, b_p)$
-where $𝒫 $ matches the value in `DAO::exec()`, and $p.𝒜  = 𝒜 $.
+where $𝒫$ matches the value in `DAO::exec()`, and
+$\t{Commit}_{\t{Auth}^*}(p.C)$ is enforced as a public input.
 
 **Input user data commits to DAO bulla** &emsp; $\t{UD}_\t{enc} =
-\t{PoseidonHash}(𝒟 , b_\t{UD})$
+\t{PoseidonHash}(𝒟, b_\t{UD})$
 
 **DAO change coin integrity** &emsp; denote the last coin in the
 `Money::transfer()` outputs by $C_\t{DAO}$. Then check
-$$ C_\t{DAO} = \t{Coin}(d.\t{PK}, v_\t{DAO}, τ_\t{DAO},
-                        \t{CID}_\t{DAO}, 𝒟 , b_\t{DAO}) $$
+$$ C_\t{DAO} = \t{Coin}(d.\t{NPK}, v_\t{DAO}, τ_\t{DAO},
+                        \t{FID}_\t{Exec}, 𝒟, b_\t{DAO}) $$
+i.e. the change is sent back to the DAO's notes public key, locked to
+`Dao::Exec` via the spend hook, with the DAO bulla as user data. The
+spend hook $\t{FID}_\t{Exec}$ is additionally enforced as a public input.
 
 **Verifiable DAO change coin note encryption** &emsp;
 let $𝐧 = (v_\t{DAO}, τ_\t{DAO}, b_\t{DAO})$, and verify
-$𝒟_\t{enc} = \t{ElGamal}.\t{Encrypt}(𝐧, \t{esk}, d.\t{PK})$.
+$𝒟_\t{enc} = \t{ElGamal}.\t{Encrypt}(𝐧, \t{esk}, d.\t{NPK})$.
 
 Then we do the same for each output coin of `Money::transfer()`.
-For $k ∈ [n]$, let $a = (𝒞_\t{enc})ₖ$ and $C$ be the $k$th output coin from
+For $k ∈ [n+1]$, let $a = (𝒞_\t{enc})ₖ$ and $C$ be the $k$th output coin from
 `Money::transfer()`.
-Let there be prover auxiliary witness inputs:
+Let there be a prover auxiliary witness inputs:
 $$ \begin{aligned}
   c &∈ \t{Attrs}_\t{Coin} \\
-  e &∈ 𝔽ₚ
 \end{aligned} $$
-Attach a proof $πₖ$ such that the following relations hold:
+Attach a proof $πₖ$ (reusing the same $\t{esk}$) such that the following
+relations hold:
 
 &emsp; **Coin integrity** &emsp; $C = \t{Coin}(c)$
 
 &emsp; **Verifiable output coin note encryption** &emsp;
-let $𝐧 = (c.v, c.τ, c.\t{SH}, c.\t{UD}, c.n)$, and verify
-$a = \t{ElGamal}.\t{Encrypt}(𝐧, \t{esk}, d.\t{PK})$.
+let $𝐧 = (c.v, c.τ, c.\t{SH}, c.\t{UD}, c.b)$, and verify
+$a = \t{ElGamal}.\t{Encrypt}(𝐧, \t{esk}, c.\t{PK})$, i.e. the coin
+secrets are encrypted to the coin's own recipient public key.
 
 ### Signatures
 
 No signatures are attached.
-
