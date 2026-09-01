@@ -1,84 +1,245 @@
 ## Purpose
 
-Defines lilith redeployed as a single persistent overlay seed: one overlay
-listener and datastore, a durable advertisement store with refinery-based
-expiry, dynamic learning of new subnets without operator action, and
-continued support for legacy per-network sections during migration.
+Defines lilith as a persistent ordinary overlay peer providing bounded subnet
+rendezvous through one listener and durable store without joining, probing, or
+serving advertised subnets.
 
 ## ADDED Requirements
 
-### Requirement: Single overlay seed configuration
+### Requirement: Single ordinary overlay configuration
 
-Lilith SHALL support an overlay configuration section that starts one
-overlay network instance with its own accept addresses, datastore, and
-hostlist paths. When the overlay section is present, lilith participates in
-the overlay as a persistent node: high inbound slot allowance, no outbound
-slot requirement, gossip relay, and the swarm-ad-store handshake feature.
-Per-network configuration sections SHALL NOT be required for the overlay to
-operate, and operating the overlay SHALL NOT require one listener, datastore
-section, or magic-bytes constant per served subnet.
+Lilith SHALL support one overlay section containing accept and external
+addresses, ordinary bootstrap peers, connection policy, datastore/hostlist/ad
+store paths, public-enumeration policy, and finite resource limits within
+`swarm-overlay` maxima. It SHALL start one ordinary
+overlay `P2p` advertising `("swarm-ad-store", 1)`.
 
-#### Scenario: Fresh subnet served without reconfiguration
-
-- **WHEN** participants begin advertising a subnet unknown to a running
-  lilith overlay seed
-- **THEN** lilith's advertisement store learns and serves the subnet with
-  no operator action and no restart
+Bootstrap addresses MUST be ordinary peers, not seed sessions. Lilith MAY run
+inbound-only with zero ordinary outbound slots as an operator topology choice.
+Production lilith overlay configuration MUST disable local-test egress mode;
+every configured outbound target SHALL use the exact resolved-target validation
+and dial budgets from `swarm-overlay`.
+It SHALL NOT require a per-subnet listener, descriptor, magic, datastore, or
+network instance to store ads and answer lookup. Learning an ID MUST NOT make
+lilith join or serve it.
 
 #### Scenario: Overlay-only deployment
 
-- **WHEN** lilith is configured with only the overlay section
-- **THEN** it starts, accepts overlay connections, and serves subnet
-  discovery
+- **WHEN** a valid overlay section exists without legacy sections
+- **THEN** lilith starts one persistent ordinary overlay peer
 
-### Requirement: Durable advertisement store
+#### Scenario: Inbound-only topology
 
-Lilith's overlay advertisement store SHALL persist to disk and survive
-restarts. Entries SHALL be served after restart until their TTL expires
-absent re-confirmation. Store persistence MUST NOT record any information
-about transient queriers (no logging of query sources into the store).
+- **WHEN** an overlay listener has zero outbound slots
+- **THEN** inbound ordinary peers can maintain sessions, submit ads, and query
 
-#### Scenario: Restart preserves cold-start service
+#### Scenario: Invalid configuration
 
-- **WHEN** lilith restarts while a subnet's serving peers are offline
-- **THEN** the persisted advertisements are still available to cold-start
-  nodes that query afterward, within TTL bounds
+- **WHEN** any path, address, privacy policy, or resource limit is invalid
+- **THEN** startup fails before overlay activity without panic or unbounded
+  fallback
 
-### Requirement: Advertisement refinery
+### Requirement: Unknown subnets need no reconfiguration
 
-Lilith SHALL run a periodic refinery over its advertisement store,
-verifying reachability of advertised addresses; entries failing checks
-SHALL be downgraded or dropped. The refinery SHALL be rate-limited so it
-does not dial a burst of addresses simultaneously.
+Lilith SHALL validate, store, relay, and answer valid ads for previously unknown
+IDs within all message/store/work bounds and without descriptors. Learning new
+IDs MUST NOT create subnet listeners or app protocols.
 
-#### Scenario: Dead advertisement expires early
+#### Scenario: Fresh subnet ad
 
-- **WHEN** an advertised address fails refinery liveness checks before its
-  TTL would expire
-- **THEN** lilith stops serving that address before TTL expiry
+- **WHEN** a valid unknown-ID ad arrives
+- **THEN** it becomes available to bounded lookup without restart or operator
+  action
 
-### Requirement: Legacy per-network sections honored during migration
+#### Scenario: Rendezvous-only learning
 
-While the migration period is in effect, lilith SHALL keep accepting and
-spawning per-network sections as independent network instances alongside
-the overlay, preserving current seed behavior for apps that have not
-adopted the swarm. Deprecation of per-network sections, when it comes,
-SHALL be staged (warning first, refusal at a later release boundary).
+- **WHEN** many subnet IDs are learned
+- **THEN** lilith still runs one overlay and no subnet instance
 
-#### Scenario: Mixed config runs both
+### Requirement: Durable state preserves bounded replay and expiry
 
-- **WHEN** lilith is configured with both the overlay section and legacy
-  per-network sections
-- **THEN** the overlay seed and the legacy per-network instances all run
+Lilith SHALL persist normalized per-subnet address records with their current
+visibility/expiry, local expiry metadata, stateless ordered indexes, protected
+replay IDs, and monotonic-epoch checkpoint metadata. It SHALL enforce configured
+caps no greater than 1,024 addresses per subnet, 65,536 total addresses, 1,024
+general-pool protected IDs per subnet, and 262,144 protected IDs globally.
+Accepted address lifetime SHALL be clamped to the configured local receive cap,
+defaulting to 7,200 seconds and never exceeding 86,400 seconds. Restart MUST
+restore only remaining ad-address lifetime and MUST NOT revive expired entries.
 
-### Requirement: RPC reporting of overlay state
+At least every 600 seconds and on clean shutdown, lilith SHALL atomically persist
+the current monotonic epoch checkpoint, defaulting to 300 seconds. Restart SHALL
+compare unsigned 64-bit deadline/checkpoint ticks before checked subtraction:
+expired/equal records are removed; valid deltas over 173,400 seconds, arithmetic
+failure, or failed checked `Instant` addition are typed startup errors; remaining
+duration is capped at 172,800 seconds. Surviving records and the new epoch SHALL
+be replaced atomically. It MUST NOT reset every record present in the loaded
+database to a fresh horizon or shorten it. Crash/downtime MAY extend that
+remainder. Rollback before an ID's commit can remove replay state and permit
+replay; lilith makes no non-rollbackable guarantee.
 
-Lilith's JSON-RPC SHALL expose overlay seed status: listener health,
-participating subnets, and advertisement store statistics. The reported
-data MUST NOT include addresses or identifiers of transient queriers.
+Checkpoint failure reaching the 600-second maximum SHALL make lilith reject
+fresh ads until checkpoint recovery or controlled overlay shutdown; existing
+bounded lookup MAY continue.
 
-#### Scenario: Operator inspects seed
+Protected IDs MUST NOT be evicted early. Lilith authors no subnet ads and SHALL
+configure zero local-author reserve partitions. If a subnet quota or its global
+general pool has no expired slot, the applicable fresh remote ad SHALL be
+rejected rather than weakening replay protection.
+Persistence MUST NOT contain ad sources, queriers, query history, source-peer/
+subnet associations, or private secrets. Replay ID-to-advertised-subnet binding
+solely for quota accounting is allowed and MUST NOT contain a peer/source.
+Decoding malformed/truncated records SHALL be fallible and bounded. Malformed or
+unverifiable seen-ID, quota/reserve, or epoch state SHALL fail overlay startup.
+Address records MAY be quarantined and the public index rebuilt only when replay
+and accounting state remains intact. Capacity failure SHALL not evict/reset
+protected state.
 
-- **WHEN** an operator calls the lilith status RPC
-- **THEN** listener health, known subnet identifiers, and advertisement
-  counts are returned, with no record of which peers queried which subnets
+Seen-ID/quota state, address/index mutation, and acceptance SHALL commit
+atomically before relay enqueue. Commit failure performs neither mutation nor
+relay.
+
+#### Scenario: Restart preserves remaining lifetime
+
+- **WHEN** lilith restarts before expiry without wall-clock rollback
+- **THEN** only remaining lifetime is restored
+
+#### Scenario: Restart does not revive expiry
+
+- **WHEN** restart occurs after expiry
+- **THEN** the ad is not returned
+
+#### Scenario: Protected set is full
+
+- **WHEN** all dedup slots are protected and a fresh ad arrives
+- **THEN** lilith rejects it without evicting protected replay state
+
+#### Scenario: Restart restores seen-ID remainder
+
+- **WHEN** lilith loads valid persisted seen IDs after any clock movement
+- **THEN** each receives its conservative checkpointed remainder on a new
+  monotonic epoch rather than a fresh full horizon
+
+#### Scenario: One subnet reaches its replay quota
+
+- **WHEN** one claimed subnet consumes all of its unexpired general-pool slots
+- **THEN** lilith rejects another fresh ad for it without consuming other
+  subnet capacity
+
+#### Scenario: Store rollback loses accepted ID
+
+- **WHEN** lilith loads a database snapshot from before an ad's atomic commit
+- **THEN** replay may be accepted again and no rollback-resistant claim is made
+
+#### Scenario: Reduced dedup cap blocks startup
+
+- **WHEN** configured capacity cannot hold valid persisted seen IDs
+- **THEN** overlay startup fails without evicting them
+
+#### Scenario: Corrupt record
+
+- **WHEN** durable bytes are malformed or truncated
+- **THEN** authoritative replay/accounting corruption fails startup, while only
+  non-authoritative address/index state may be quarantined/rebuilt fallibly
+
+### Requirement: Lilith performs no advertisement liveness dialing
+
+Lilith MUST NOT connect to an advertised subnet address due to accepting,
+storing, relaying, expiring, or reporting an ad. It SHALL expire through local
+TTL, replay admission, and capacity policy only. It MUST NOT describe transport
+reachability as subnet compatibility; only a descriptor-holding joining app can
+perform the subnet handshake.
+
+#### Scenario: Attacker-selected address
+
+- **WHEN** an accepted ad contains an attacker-selected shareable address
+- **THEN** no lilith ad-store task connects to it
+
+#### Scenario: Passive expiry
+
+- **WHEN** an ad expires
+- **THEN** it stops being returned without a probe
+
+### Requirement: Cold-start lookup uses an ordinary correlated session
+
+A client SHALL be able to configure lilith as an ordinary peer, establish a
+long-lived session, and issue request-ID-correlated bounded lookups. Lilith MAY
+return locally unexpired addresses whose servers are offline; responses are
+untrusted hints, not reachability proof.
+
+#### Scenario: Fresh client queries directly
+
+- **WHEN** a no-cache client connects to lilith as an ordinary peer
+- **THEN** it can query without a seed-session exchange
+
+#### Scenario: Stored address is stale
+
+- **WHEN** a returned unexpired address is offline
+- **THEN** the joining app handles failure within its deadline and lilith makes
+  no availability guarantee
+
+### Requirement: Strict bounded resource policy
+
+Lilith's overlay SHALL enforce all protocol message, URL, page, pending request,
+store, dedup, work, relay-fanout, and configured-safe maxima with strict ban
+policy. Small requests MUST NOT induce unbounded response, cursor, write,
+relay, allocation, or connection work. Legacy policy MUST NOT weaken overlay
+policy.
+
+#### Scenario: Query flood
+
+- **WHEN** one channel exceeds message or work budgets
+- **THEN** strict penalties apply while state remains bounded
+
+#### Scenario: Ad flood
+
+- **WHEN** fresh ads reach address or protected-ID caps
+- **THEN** deterministic rejection/eviction rules preserve every bound and
+  replay guarantee
+
+#### Scenario: Legacy relaxed policy
+
+- **WHEN** a legacy instance is relaxed
+- **THEN** overlay strict policy remains independent
+
+### Requirement: Aggregate-only overlay status
+
+Status RPC SHALL expose listener state, aggregate connection counts, configured
+capacities, current address/dedup counts, evictions, rejections, and expiries.
+It MUST NOT expose peer or advertised addresses, queried/private subnet IDs,
+ad sources, per-peer counters, query history, or source/query associations.
+Public enumeration, if enabled, remains the bounded overlay protocol.
+
+#### Scenario: Operator reads health
+
+- **WHEN** status is requested
+- **THEN** aggregate health/capacity/count metrics are returned without peer or
+  subnet-query identifiers
+
+#### Scenario: Querier data is absent
+
+- **WHEN** peers query different IDs
+- **THEN** status and durable metrics cannot identify which peer queried which
+  ID
+
+### Requirement: Legacy sections remain isolated during migration
+
+Lilith SHALL continue accepting valid legacy sections as independent `P2p`
+instances. Overlay and legacy settings, listeners, paths, protocol registries,
+policies, failures, and shutdown handles MUST remain isolated. Legacy refusal
+requires a later release-boundary plan.
+
+#### Scenario: Mixed configuration
+
+- **WHEN** overlay and legacy sections coexist
+- **THEN** each runs with independent state and policy
+
+#### Scenario: Overlay failure
+
+- **WHEN** overlay startup or runtime fails
+- **THEN** failure is reported without silently changing legacy configuration
+
+#### Scenario: Legacy-only deployment
+
+- **WHEN** currently valid legacy sections exist without overlay
+- **THEN** they remain accepted during migration
