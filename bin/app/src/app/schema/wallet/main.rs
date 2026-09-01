@@ -615,6 +615,9 @@ async fn create_chat_btn(
 
     let node = create_button("chat_btn");
     node.set_property_bool(atom, Role::App, "is_active", true).unwrap();
+    // The button floats above the tokens table (priority 0), whose
+    // rect spans the rest of the layer — it must be hit-tested first.
+    node.set_property_u32(atom, Role::App, "priority", 1).unwrap();
     let prop = node.get_property("rect").unwrap();
     let code = cc.compile(format!("w - {CHAT_BTN_SIZE} - {CHAT_BTN_MARGIN}")).unwrap();
     prop.set_expr(atom, Role::App, 0, code).unwrap();

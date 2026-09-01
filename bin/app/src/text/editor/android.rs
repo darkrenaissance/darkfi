@@ -200,10 +200,19 @@ impl Editor {
     }
 
     pub fn insert(&mut self, txt: &str, atom: &mut PropertyAtomicGuard) {
-        // TODO: need to verify this is correct
-        // Insert text by updating the state
-        self.state.text.push_str(txt);
-        let cursor_idx = self.state.text.len();
+        // Insert at the cursor, replacing any active selection, like
+        // the parley editor's insert_or_replace_selection. Indices are
+        // byte offsets. The selection can also arrive from the IME, so
+        // snap malformed boundaries instead of panicking.
+        let (anchor, focus) = self.state.select;
+        let (start, end) = if anchor <= focus { (anchor, focus) } else { (focus, anchor) };
+
+        let len = self.state.text.len();
+        let start = snap_char_boundary(&self.state.text, start.min(len));
+        let end = snap_char_boundary(&self.state.text, end.min(len));
+
+        self.state.text.replace_range(start..end, txt);
+        let cursor_idx = start + txt.len();
         self.state.select = (cursor_idx, cursor_idx);
         self.state.compose = None;
         self.input.set_state(self.state.clone());
@@ -274,4 +283,13 @@ impl Editor {
     pub fn set_input_type(&mut self, input_type: u32) {
         self.input.set_input_type(input_type);
     }
+}
+
+/// Advance `i` to the nearest following UTF-8 char boundary. Used to
+/// keep IME-supplied indices safe for `String` slicing.
+fn snap_char_boundary(s: &str, mut i: usize) -> usize {
+    while i < s.len() && !s.is_char_boundary(i) {
+        i += 1;
+    }
+    i
 }

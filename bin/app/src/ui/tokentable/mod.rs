@@ -19,7 +19,7 @@
 use async_trait::async_trait;
 use darkfi_money_contract::model::{TokenId, DARK_TOKEN_ID};
 use darkfi_serial::{Decodable, Encodable, SerialEncodable};
-use miniquad::{MouseButton, TouchPhase};
+use miniquad::MouseButton;
 use parking_lot::Mutex as SyncMutex;
 use rand::{rngs::OsRng, Rng};
 use std::sync::{Arc, Weak};
@@ -36,7 +36,7 @@ use crate::{
     ExecutorPtr,
 };
 
-use super::{DrawUpdate, OnModify, RedrawTrigger, UIObject};
+use super::{DrawUpdate, GestureAction, GestureSet, OnModify, RedrawTrigger, UIObject};
 
 macro_rules! d { ($($arg:tt)*) => { debug!(target: "ui::tokentable", $($arg)*); } }
 macro_rules! t { ($($arg:tt)*) => { trace!(target: "ui::tokentable", $($arg)*); } }
@@ -209,6 +209,18 @@ impl TokenTable {
         } else {
             None
         }
+    }
+
+    /// Emit the `row_click` signal for a tapped row.
+    async fn trigger_row_click(&self, row: TokenRow) {
+        let mut data = vec![];
+        if let Err(e) = row.encode(&mut data) {
+            error!(target: "ui::tokentable", "Failed to encode row: {e}");
+            return
+        }
+
+        let node_ref = self.node.upgrade().unwrap();
+        let _ = node_ref.trigger("row_click", data).await;
     }
 
     fn get_meshes(&self, rect: &Rectangle) -> Vec<DrawInstruction> {
@@ -405,36 +417,31 @@ impl UIObject for TokenTable {
             return false
         }
 
-        let mut data = vec![];
-        if let Err(e) = row.encode(&mut data) {
-            error!(target: "ui::tokentable", "Failed to encode row: {e}");
-            return false
-        }
-
-        let node_ref = self.node.upgrade().unwrap();
-        let _ = node_ref.trigger("row_click", data).await;
+        self.trigger_row_click(row).await;
 
         true
     }
 
-    async fn handle_touch(&self, phase: TouchPhase, id: u64, touch_pos: Point) -> bool {
-        // Ignore multi-touch
-        if id != 0 {
-            return false
-        }
+    fn gesture_set(&self) -> GestureSet {
+        GestureSet::TAP
+    }
 
-        let rect = self.rect.get();
-        if !rect.contains(touch_pos) {
-            return false
-        }
+    fn gesture_hit_test(&self, pos: Point) -> bool {
+        // Only the rows are tappable. The table's rect spans the rest
+        // of the screen below it (it sizes to the layer), so a rect-only
+        // hit-test would own touches meant for widgets underneath —
+        // the old dispatch fell through to them when no row matched.
+        self.rect.get().contains(pos) && self.get_row_at_y(pos.y).is_some()
+    }
 
-        // Simulate mouse events
-        match phase {
-            TouchPhase::Started => self.handle_mouse_btn_down(MouseButton::Left, touch_pos).await,
-            TouchPhase::Moved => false,
-            TouchPhase::Ended => self.handle_mouse_btn_up(MouseButton::Left, touch_pos).await,
-            TouchPhase::Cancelled => false,
-        }
+    async fn handle_gesture(&self, gesture: GestureAction) -> bool {
+        let GestureAction::Tap { pos } = gesture else { return false };
+
+        let Some(row) = self.get_row_at_y(pos.y) else { return false };
+
+        self.trigger_row_click(row).await;
+
+        true
     }
 }
 
@@ -447,5 +454,66 @@ impl Drop for TokenTable {
 impl std::fmt::Debug for TokenTable {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         write!(f, "{:?}", self.node.upgrade().unwrap())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    use crate::{
+        app::node::create_tokentable,
+        gfx::Renderer,
+        prop::{PropertyAtomicGuard, Role},
+        scene::SceneNode,
+        ui::RedrawTrigger,
+    };
+
+    /// The table's gesture hit-test region is its rows, not its whole
+    /// rect: the rect spans the remainder of the layer (widgets like
+    /// the wallet chat button live underneath it), and chain
+    /// resolution has no per-event sibling fallthrough.
+    #[test]
+    fn gesture_hit_test_only_passes_on_rows() {
+        smol::block_on(async {
+            let (redraw_tx, _redraw_rx) = RedrawTrigger::new();
+            let (method_tx, _method_rx) = async_channel::unbounded();
+            let renderer = Renderer::new(method_tx);
+
+            let node = create_tokentable("tokens_table");
+            {
+                let atom = &mut PropertyAtomicGuard::none();
+                let rect = node.get_property("rect").unwrap();
+                rect.set_f32(atom, Role::App, 0, 0.).unwrap();
+                rect.set_f32(atom, Role::App, 1, 100.).unwrap();
+                rect.set_f32(atom, Role::App, 2, 600.).unwrap();
+                rect.set_f32(atom, Role::App, 3, 1000.).unwrap();
+                node.set_property_f32(atom, Role::App, "font_size", 18.).unwrap();
+                node.set_property_f32(atom, Role::App, "padding_x", 8.).unwrap();
+                node.set_property_f32(atom, Role::App, "padding_y", 8.).unwrap();
+            }
+
+            let node = node.setup(|me| TokenTable::new(me, renderer, redraw_tx)).await;
+            let obj = node.pimpl();
+            let Pimpl::TokenTable(table) = obj else { panic!() };
+
+            // No rows yet: nothing passes, even inside the rect
+            assert!(!table.gesture_hit_test(Point::new(50., 110.)));
+
+            table.set_tokens(vec![TokenRow {
+                id: *DARK_TOKEN_ID,
+                symbol: "DRK".to_string(),
+                balance: "0".to_string(),
+            }]);
+
+            // Row height = padding_y * 2 + font_size + 1 = 35
+            // Inside row 0
+            assert!(table.gesture_hit_test(Point::new(50., 110.)));
+            // Inside the rect but below every row (where the chat
+            // button lives)
+            assert!(!table.gesture_hit_test(Point::new(50., 900.)));
+            // Outside the rect entirely
+            assert!(!table.gesture_hit_test(Point::new(50., 50.)));
+        });
     }
 }

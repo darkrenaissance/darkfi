@@ -21,11 +21,11 @@ use async_trait::async_trait;
 use atomic_float::AtomicF32;
 use darkfi::system::CondVar;
 use darkfi_serial::{serialize, Decodable};
-use miniquad::{MouseButton, TouchPhase};
+use miniquad::MouseButton;
 use parking_lot::Mutex as SyncMutex;
 use rand::{rngs::OsRng, Rng};
 use std::{
-    collections::{HashMap, HashSet, VecDeque},
+    collections::HashSet,
     io::Read,
     sync::{
         atomic::{AtomicBool, Ordering},
@@ -44,7 +44,7 @@ use crate::{
     text, ExecutorPtr,
 };
 
-use super::{DrawUpdate, OnModify, RedrawTrigger, UIObject};
+use super::{DrawUpdate, GestureAction, GestureSet, OnModify, RedrawTrigger, UIObject};
 
 mod shape;
 
@@ -62,16 +62,6 @@ macro_rules! d { ($($arg:tt)*) => { debug!(target: "ui::menu", $($arg)*); } }
 macro_rules! t { ($($arg:tt)*) => { trace!(target: "ui::menu", $($arg)*); } }
 
 #[derive(Clone)]
-struct TouchInfo {
-    start_scroll: f32,
-    start_pos: Point,
-    start_instant: std::time::Instant,
-    samples: VecDeque<(std::time::Instant, f32)>,
-    last_instant: std::time::Instant,
-    last_pos: Point,
-}
-
-#[derive(Clone)]
 struct MouseClickInfo {
     start_pos: Point,
     start_instant: std::time::Instant,
@@ -81,34 +71,6 @@ struct MouseClickInfo {
 struct DragInfo {
     item_idx: usize,
     insert_idx: usize,
-}
-
-impl TouchInfo {
-    fn new(start_scroll: f32, pos: Point) -> Self {
-        Self {
-            start_scroll,
-            start_pos: pos,
-            start_instant: std::time::Instant::now(),
-            samples: VecDeque::from([(std::time::Instant::now(), pos.y)]),
-            last_instant: std::time::Instant::now(),
-            last_pos: pos,
-        }
-    }
-
-    fn push_sample(&mut self, y: f32) {
-        self.samples.push_back((std::time::Instant::now(), y));
-
-        while let Some((instant, _)) = self.samples.front() {
-            if instant.elapsed().as_micros() <= 40_000 {
-                break
-            }
-            self.samples.pop_front();
-        }
-    }
-
-    fn first_sample(&self) -> Option<(f32, f32)> {
-        self.samples.front().map(|(t, s)| (t.elapsed().as_micros() as f32 / 1000., *s))
-    }
 }
 
 pub type MenuPtr = Arc<Menu>;
@@ -147,10 +109,12 @@ pub struct Menu {
     window_scale: PropertyFloat32,
 
     mouse_pos: SyncMutex<Point>,
-    touch_info: SyncMutex<Option<TouchInfo>>,
     mouse_click_info: SyncMutex<Option<MouseClickInfo>>,
     drag_info: SyncMutex<Option<DragInfo>>,
     long_press_task: SyncMutex<Option<smol::Task<()>>>,
+    /// Active 1:1 scroll drag: (finger y at drag start, scroll at drag
+    /// start), parent space.
+    drag_state: SyncMutex<Option<(f32, f32)>>,
     scroll_start_accel: PropertyFloat32,
     scroll_resist: PropertyFloat32,
     overscroll: PropertyFloat32,
@@ -239,10 +203,10 @@ impl Menu {
             fade_zone,
             window_scale,
             mouse_pos: SyncMutex::new(Point::new(0., 0.)),
-            touch_info: SyncMutex::new(None),
             mouse_click_info: SyncMutex::new(None),
             drag_info: SyncMutex::new(None),
             long_press_task: SyncMutex::new(None),
+            drag_state: SyncMutex::new(None),
             scroll_start_accel,
             scroll_resist,
             overscroll,
@@ -614,18 +578,6 @@ impl Menu {
 
             self.speed.store(0., Ordering::Relaxed);
             break
-        }
-    }
-
-    fn end_touch_phase(&self, touch_y: f32) {
-        let touch_info = std::mem::take(&mut *self.touch_info.lock());
-        let info = touch_info.unwrap();
-
-        if let Some((dt, _)) = info.first_sample() {
-            if dt > EPSILON {
-                let velocity = (touch_y - info.start_pos.y) / dt;
-                self.start_scroll(-velocity);
-            }
         }
     }
 
@@ -1018,30 +970,29 @@ impl UIObject for Menu {
         false
     }
 
-    fn handle_touch_sync(&self, phase: TouchPhase, id: u64, touch_pos: Point) -> bool {
-        if id != 0 {
-            return false
-        }
+    fn gesture_set(&self) -> GestureSet {
+        GestureSet::MENU
+    }
 
-        match phase {
-            TouchPhase::Started => {
-                let rect = self.rect.get();
-                if !rect.contains(touch_pos) {
-                    *self.touch_info.lock() = None;
-                    return false
-                }
+    fn gesture_hit_test(&self, pos: Point) -> bool {
+        self.rect.get().contains(pos)
+    }
 
-                let is_edit_mode = self.is_edit_mode.load(Ordering::Relaxed);
-
-                if is_edit_mode {
+    async fn handle_gesture(&self, gesture: GestureAction) -> bool {
+        match gesture {
+            GestureAction::Down { pos } => {
+                // Arm the item-reorder grab: touching a reorder handle
+                // is a zero-threshold action, not a recognized gesture.
+                if self.is_edit_mode.load(Ordering::Relaxed) {
+                    let rect = self.rect.get();
                     let font_size = self.font_size.get();
                     let hammy_half_size = font_size * 2.0;
                     let hammy_center = rect.w - MENU_ICON_OFFSET - font_size * 0.56;
                     let hammy_min = hammy_center - hammy_half_size;
                     let hammy_max = hammy_center + hammy_half_size;
 
-                    if touch_pos.x >= hammy_min && touch_pos.x <= hammy_max {
-                        if let Some(item_idx) = self.get_selected_item_index(touch_pos.y) {
+                    if pos.x >= hammy_min && pos.x <= hammy_max {
+                        if let Some(item_idx) = self.get_selected_item_index(pos.y) {
                             *self.drag_info.lock() =
                                 Some(DragInfo { item_idx, insert_idx: item_idx });
                             info!(target: "app::menu", "Dragging item: {}", item_idx);
@@ -1049,111 +1000,59 @@ impl UIObject for Menu {
                     }
                 }
 
-                *self.touch_info.lock() =
-                    Some(TouchInfo::new(self.scroll.load(Ordering::Relaxed), touch_pos));
-
-                // Spawn a task to detect long press while the touch is
-                // still held, mirroring the mouse path.
-                let me = self.me.clone();
-                let start_pos = touch_pos;
-                let ex = self.ex.clone();
-                let long_press_task = ex.spawn(async move {
-                    darkfi::system::msleep(long_press_timeout() as u64).await;
-
-                    let Some(arc_self) = me.upgrade() else { return };
-
-                    let touch_info = arc_self.touch_info.lock().clone();
-                    let Some(info) = touch_info else { return };
-
-                    let movement_dist = ((info.last_pos.x - start_pos.x).powi(2) +
-                        (info.last_pos.y - start_pos.y).powi(2))
-                    .sqrt();
-
-                    if movement_dist < LONG_PRESS_EPSILON &&
-                        !arc_self.is_edit_mode.load(Ordering::Relaxed)
-                    {
-                        arc_self.save_items_layout();
-                        arc_self.is_edit_mode.store(true, Ordering::Release);
-                        let node = arc_self.node.upgrade().unwrap();
-                        node.trigger("edit_active", vec![]).await.unwrap();
-                        arc_self.invalidate_draw();
-                        arc_self.redraw.trigger();
-                    }
-                });
-
-                *self.long_press_task.lock() = Some(long_press_task);
-
                 true
             }
-
-            TouchPhase::Moved => {
-                let mut should_redraw = false;
-
+            GestureAction::DragStart { start } => {
+                *self.drag_state.lock() = Some((start.y, self.scroll.load(Ordering::Relaxed)));
+                true
+            }
+            GestureAction::DragMove { curr, .. } => {
+                // An armed reorder takes precedence over scrolling
                 if self.drag_info.lock().is_some() {
-                    if let Some(insert_idx) = self.get_selected_item_index(touch_pos.y) {
-                        let mut drag = self.drag_info.lock();
-                        if let Some(d) = drag.as_mut() {
-                            if d.insert_idx != insert_idx {
-                                d.insert_idx = insert_idx;
-                                info!(target: "app::menu", "insert_idx changed to: {}", insert_idx);
-                                should_redraw = true;
+                    if let Some(insert_idx) = self.get_selected_item_index(curr.y) {
+                        let should_redraw = {
+                            let mut drag = self.drag_info.lock();
+                            match drag.as_mut() {
+                                Some(d) if d.insert_idx != insert_idx => {
+                                    d.insert_idx = insert_idx;
+                                    info!(target: "app::menu", "insert_idx changed to: {}", insert_idx);
+                                    true
+                                }
+                                _ => false,
                             }
+                        };
+
+                        if should_redraw {
+                            self.invalidate_draw();
+                            self.redraw.trigger();
                         }
                     }
-                }
 
-                if should_redraw {
-                    self.invalidate_draw();
-                    self.redraw.trigger();
+                    return true
                 }
 
                 let scroll = {
-                    let mut touch_info = self.touch_info.lock();
-                    let Some(info) = &mut *touch_info else { return false };
-
-                    info.last_pos = touch_pos;
-                    info.push_sample(touch_pos.y);
-
-                    let last_elapsed = info.last_instant.elapsed().as_millis();
-                    if last_elapsed <= 20 {
-                        return true
-                    }
-                    info.last_instant = std::time::Instant::now();
-
-                    let dist = touch_pos.y - info.start_pos.y;
-                    if dist.abs() < BIG_EPSILON {
-                        return true
-                    }
-
-                    info.start_scroll - dist
+                    let drag_state = self.drag_state.lock();
+                    let Some((start_y, start_scroll)) = *drag_state else { return false };
+                    start_scroll + start_y - curr.y
                 };
 
                 self.scrollview(scroll);
                 self.redraw.trigger();
                 true
             }
+            GestureAction::DragEnd { vel, .. } => {
+                *self.drag_state.lock() = None;
 
-            // Use async handler instead
-            TouchPhase::Ended | TouchPhase::Cancelled => false,
-        }
-    }
-
-    async fn handle_touch(&self, phase: TouchPhase, id: u64, touch_pos: Point) -> bool {
-        if id != 0 {
-            return false
-        }
-
-        match phase {
-            // Should be handled by handle_touch_sync
-            TouchPhase::Started | TouchPhase::Moved => false,
-
-            TouchPhase::Ended | TouchPhase::Cancelled => {
-                // Cancel the long press detection task
-                let task = self.long_press_task.lock().take();
-                if let Some(task) = task {
-                    task.cancel().await;
-                }
-
+                // Flick inertia from the release velocity, reproducing
+                // the old dist-over-sample-window formula (px/ms).
+                let accel = self.scroll_start_accel.get() * -vel.y / 1000.;
+                self.speed.store(accel, Ordering::Relaxed);
+                self.motion_cv.notify();
+                true
+            }
+            GestureAction::Up { .. } => {
+                // Commit an armed reorder at touch end
                 let drag = self.drag_info.lock().take();
                 if let Some(drag_info) = drag {
                     if drag_info.item_idx != drag_info.insert_idx {
@@ -1167,22 +1066,29 @@ impl UIObject for Menu {
                     return true
                 }
 
-                let (is_tap, is_long_press_tap, elapsed) = {
-                    let touch_info = self.touch_info.lock();
-                    let Some(info) = &*touch_info else { return true };
+                false
+            }
+            GestureAction::LongPress { .. } => {
+                // Enter edit mode while the finger is still down; the
+                // recognizer fires once per touch by construction.
+                if !self.is_edit_mode.load(Ordering::Relaxed) {
+                    self.save_items_layout();
+                    self.is_edit_mode.store(true, Ordering::Release);
+                    let node = self.node.upgrade().unwrap();
+                    node.trigger("edit_active", vec![]).await.unwrap();
+                    self.invalidate_draw();
+                    self.redraw.trigger();
+                }
+                true
+            }
+            GestureAction::Tap { pos } => {
+                // A stationary grab on the reorder handle is a no-op,
+                // not a selection (the old armed path suppressed it)
+                if self.drag_info.lock().is_some() {
+                    return true
+                }
 
-                    let is_tap = (touch_pos.y - info.start_pos.y).abs() < BIG_EPSILON;
-                    let movement_dist = ((touch_pos.x - info.start_pos.x).powi(2) +
-                        (touch_pos.y - info.start_pos.y).powi(2))
-                    .sqrt();
-                    let is_long_press_tap = movement_dist < LONG_PRESS_EPSILON;
-                    let elapsed = info.start_instant.elapsed().as_millis();
-                    (is_tap, is_long_press_tap, elapsed)
-                };
-
-                self.handle_interaction(touch_pos, is_tap, is_long_press_tap, elapsed).await;
-
-                self.end_touch_phase(touch_pos.y);
+                self.handle_interaction(pos, true, false, 0).await;
                 true
             }
         }

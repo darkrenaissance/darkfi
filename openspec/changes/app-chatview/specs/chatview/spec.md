@@ -118,19 +118,30 @@ distinguishes "at the live bottom" from "scrolled into history".
 
 ### Requirement: Direct-drag scrolling
 
-Touch or mouse-drag scrolling SHALL move content 1:1 with the pointer in
-pixels, without animation or smoothing on top. Starting a drag SHALL
-cancel any in-flight glide or scroll animation.
+Touch-drag scrolling, delivered by the app gesture subsystem as a drag
+lifecycle (`DragStart`/`DragMove`/`DragEnd`), SHALL move content 1:1
+with the pointer in pixels, without animation or smoothing on top. The
+slop dead-zone before the drag starts and the move delivery cadence
+SHALL come from the gesture session, not the view. Starting a drag —
+or touching down over the view — SHALL cancel any in-flight glide or
+scroll animation.
 
 #### Scenario: Finger tracking is pixel-exact
 
 - **WHEN** the finger moves up by N pixels during a drag
-- **THEN** the content scrolls exactly N pixels in the same frame cadence
-  as the input
+- **THEN** the content scrolls exactly N pixels, delivered at the
+  gesture session's move cadence, with no acceleration or smoothing
+  added by the view
+
+#### Scenario: Slop dead-zone precedes scroll
+
+- **WHEN** a touch travels less than the session's touch slop
+- **THEN** no scroll occurs and the touch remains eligible for
+  tap/long-press recognition
 
 #### Scenario: Grabbing stops motion
 
-- **WHEN** a drag starts while an animated scroll or glide is in progress
+- **WHEN** a touch begins while an animated scroll or glide is in progress
 - **THEN** the animation/glide stops immediately and the drag takes over
 
 ### Requirement: Animated page scrolling for wheel and keys
@@ -153,14 +164,23 @@ retarget/coalesce the animation rather than accumulate velocity.
 ### Requirement: Flick inertia
 
 Releasing a drag with sufficient velocity SHALL produce an inertial glide
-that decays over time and stops within the clamped range. A stationary
-hold during a glide-capable touch SHALL stop the glide.
+that decays over time and stops within the clamped range. Release
+velocity SHALL be taken from the gesture session's `DragEnd` velocity
+(the view does not sample its own). Touching down over the view during a
+glide SHALL stop it, including before the touch travels past the touch
+slop.
 
 #### Scenario: Flick decays and stops
 
 - **WHEN** the finger is released with upward velocity
 - **THEN** the content glides in the same direction, decaying, and comes
   to rest at or within the valid scroll range
+
+#### Scenario: Touchdown stops a glide
+
+- **WHEN** the user touches the view while an inertial glide is in motion
+- **THEN** the glide stops immediately, even if the touch never travels
+  past the touch slop
 
 ### Requirement: Scroll compensation for height changes
 
@@ -382,8 +402,10 @@ right-click or long-press copying with the "copied link" toast overlay.
 
 ### Requirement: Selection across message types
 
-Any displayed message, regardless of type, SHALL be selectable (click
-toggle, drag sweep, tap toggling in selection mode). `copy_select`
+Any displayed message, regardless of type, SHALL be selectable (mouse
+click toggle, `Tap` toggle, drag sweep, long-press entering selection
+mode with subsequent drag extending the selection, tap toggling in
+selection mode). `copy_select`
 SHALL copy the selected messages' text in display order joined by
 newlines, where each selected message contributes copy text defined by
 its type; a type MAY contribute nothing. `unselect` SHALL clear all
@@ -404,6 +426,13 @@ and not having any selection.
 - **WHEN** a date separator line is clicked
 - **THEN** it becomes selected and shows the selection highlight,
   unlike the current chatview where separators are unselectable
+
+#### Scenario: Long-press selects and drag extends
+
+- **WHEN** a long-press lands on a message line and the finger then
+  drags without lifting
+- **THEN** the pressed line becomes selected, selection mode is entered,
+  and the drag extends the selection instead of scrolling
 
 #### Scenario: Selection transitions signal
 
@@ -497,3 +526,32 @@ leak to other UI elements while interacting with the chatview.
 
 - **WHEN** PageUp is pressed
 - **THEN** the view animates half a page up and the key event is consumed
+
+### Requirement: Gesture subsystem integration
+
+The chatview SHALL receive touch input exclusively through the app
+gesture subsystem: it SHALL declare its accepted gestures via
+`gesture_set` (tap, long-press, vertical drag), pass an exact
+`gesture_hit_test` matching its rect, and consume the `GestureAction`
+stream via `handle_gesture`. It SHALL NOT implement its own recognition
+thresholds, long-press timers, or velocity sampling; touch slop, tap
+bounds, long-press firing, move throttling, and release velocity SHALL
+come from the session. Interactive layers floating over the chatview
+(e.g. the scroll-to-bottom arrow) SHALL carry a higher node priority
+than the chatview so the session's priority-ordered target resolution
+delivers their gestures to them.
+
+#### Scenario: Overlaying arrow receives its taps
+
+- **WHEN** the scroll-to-bottom arrow is visible over the chatview and
+  tapped
+- **THEN** the arrow receives the tap (triggering scroll-to-bottom) and
+  the chatview does not treat it as selection or content activation
+
+#### Scenario: No local recognition
+
+- **WHEN** a touch stream is delivered to the chatview
+- **THEN** slop gating, tap/long-press discrimination, long-press
+  timing, and release-velocity sampling are those of the gesture
+  session; the chatview applies only scroll physics and content
+  dispatch

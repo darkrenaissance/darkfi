@@ -52,7 +52,7 @@ pub use ev::{
     GraphicsEventCharSub, GraphicsEventKeyDownSub, GraphicsEventKeyUpSub,
     GraphicsEventMouseButtonDownSub, GraphicsEventMouseButtonUpSub, GraphicsEventMouseMoveSub,
     GraphicsEventMouseWheelSub, GraphicsEventPublisher, GraphicsEventPublisherPtr,
-    GraphicsEventResizeSub, GraphicsEventTouchSub,
+    GraphicsEventResizeSub,
 };
 mod favico;
 mod prune;
@@ -1301,19 +1301,16 @@ impl EventHandler for Stage {
             self.window_node = god.app.sg_root.lookup_node("/window");
         }
 
-        // Direct call to Window's handle_touch_sync
         if let Some(window_node) = &self.window_node {
             match window_node.pimpl() {
                 Pimpl::Window(win) => {
-                    if win.handle_touch_sync(phase, id, pos) {
-                        return
-                    }
+                    // All touch interaction flows through the gesture
+                    // session, fed here at the Stage entry.
+                    win.feed_gesture(phase, id, pos);
                 }
                 _ => panic!(),
             }
         }
-
-        self.event_pub.notify_touch(phase, id, pos);
     }
 
     fn quit_requested_event(&mut self) {

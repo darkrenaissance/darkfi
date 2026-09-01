@@ -35,9 +35,12 @@ serving as the functional spec (feature parity, no regressions).
   flag.
 - Scrolling: pixel scroll from bottom (scroll=0 is always the bottom),
   1:1 finger drag, animated half-page mouse-wheel jumps, flick inertia as
-  distinct states of a scroll controller; compensation rule for height
-  changes below the viewport; per-channel scroll restore (anchor msg id +
-  offset) on re-entry.
+  distinct states of a scroll controller fed by the new `ui/gesture`
+  subsystem (drag lifecycle events, release velocity on `DragEnd`); the
+  controller owns physics only — recognition, slop, long-press timers,
+  and velocity sampling are session-provided; compensation rule for
+  height changes below the viewport; per-channel scroll restore (anchor
+  msg id + offset) on re-entry.
 - Performance: visible-range lookup, total height, and position queries
   are O(log n) in buffer size; only visible messages (soft window + LRU
   budget) hold render resources; loading is a single async background
@@ -79,5 +82,11 @@ the `chatview` capability.)
 - Per-channel kv trees: value format gains a type ID tag; keys unchanged.
   Existing history remains readable (v1 privmsg payload is the current
   `nick, text` encoding plus a confirmed flag).
+- `bin/app/src/ui/gesture/` (applied by the `app-gesture` change) is
+  consumed as-is, not modified: chatview2 implements `gesture_set`/
+  `gesture_hit_test`/`handle_gesture` instead of the removed
+  `handle_touch`; overlaying interactive layers (scroll-to-bottom arrow,
+  cmd hints) need explicit node priority above the chatview for the
+  gesture session's priority-ordered targeting.
 - Build/test via `bin/app` Makefile targets (`make compile-dev`,
   `compile-apk`); no changes outside `bin/app`, no new dependencies.

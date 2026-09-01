@@ -11,15 +11,27 @@ cached parley layouts and mesh caches; `adjust_scroll`→
 clones instructions for every message from newest to the viewport top
 every frame; mesh caches are only cleared on rect/scale/epoch change
 (never on scroll); `chat::make()` builds a full screen per channel and
-switching toggles `is_visible`. Wheel/flick share one `speed: AtomicF32`
-decayed by a 10ms loop.
+switching toggles `is_visible`. Wheel/flick still share one `speed:
+AtomicF32` decayed by a 10ms loop, but touch input now arrives through
+the gesture subsystem (the applied `app-gesture` change):
+`handle_touch`/`handle_touch_sync` are gone from `UIObject`, and the
+migrated ChatView consumes the `GestureAction` stream — chatview2
+builds on that seam from day one.
 
 Scene/property system facts the design relies on: `Property*::wrap`
 returns a live handle to a property object on a node (cross-node wrapping
 already exists — `window_scale` from `/window`); nodes track parents;
 nodes carry signals (`register`/`trigger`), method-call subscriptions,
 `OnModify`, and task lists; `Pimpl` UIObjects implement `draw` and
-`handle_*` input.
+`handle_*` input. Gesture subsystem facts (applied `app-gesture` change,
+`src/ui/gesture/`): `UIObject` carries `gesture_set()`/
+`gesture_hit_test()`/`handle_gesture(GestureAction)`; the window
+`GestureSession` owns recognition — 10px touch slop, 300ms tap bound,
+timer-fired single long-press, 20ms-throttled `DragMove`, release
+velocity sampled over a 40ms window and carried on `DragEnd { vel }`
+(px/sec) — with sticky hit-test-chain ownership resolved in node
+priority order; wheel and keyboard remain `handle_mouse_wheel`/
+`handle_key_down`.
 
 ## Goals / Non-Goals
 
@@ -105,9 +117,12 @@ impl ChatView2 {
 // exposes insert_line/insert_unconf_line/confirm plus url/nick
 // interaction signals; filemsg exposes set_file_status plus its file
 // signals.
-// UIObject: draw() assembles only the visible window; handle_mouse_*,
-// handle_touch, handle_key_down dispatch to materialized instances
-// through the type registry.
+// UIObject: draw() assembles only the visible window. Touch input via
+// gesture_set()/gesture_hit_test()/handle_gesture(GestureAction) — see
+// the gesture input integration section; Tap/LongPress hit-dispatch to
+// materialized instances through the type registry;
+// handle_mouse_wheel (wheel) and handle_key_down (PageUp/PageDown)
+// feed the scroll controller's page_tick.
 ```
 
 `buffer.rs` — ordering + geometry, no rendering:
@@ -180,7 +195,10 @@ pub struct ScrollController {
 pub struct Anchor { pub msg: Option<MessageId>, pub dy: f32 }
 
 impl ScrollController {
-    /// Drag: 1:1, cancels Glide/Anim
+    /// Drag: 1:1, cancels Glide/Anim. Inputs are the session's
+    /// DragStart/DragMove events (already slop-gated and throttled);
+    /// drag_end consumes the session's DragEnd velocity — no local
+    /// sampling, timers, or thresholds live here.
     pub fn drag_start(&mut self, y: f32)
     pub fn drag_move(&mut self, y: f32) -> f32
     pub fn drag_end(&mut self, velocity: f32)
@@ -688,7 +706,8 @@ pub fn page_tick(&mut self, dir: f32, page: f32) {
         ScrollState::Anim { from: self.scroll, to, started: Instant::now() };
 }
 
-// Flick: hand the sampled velocity to a decaying glide
+// Flick: the session pre-samples release velocity (DragEnd.vel, px/sec
+// over its 40ms window); flick is this controller's threshold on it
 pub fn drag_end(&mut self, velocity: f32) {
     self.state = ScrollState::Glide { velocity };
 }
@@ -784,6 +803,53 @@ pub fn anchor(&self) -> Anchor { /* per the definition above */ }
 The method is `anchor()` (a snapshot), not `save_anchor()` — nothing
 is persisted by the call itself; persistence is the chatview storing
 the snapshot in its per-channel state map on exit.
+
+### Gesture input integration
+
+Touch input arrives through the gesture subsystem landed by
+`app-gesture` (`src/ui/gesture/`, applied): the window `GestureSession`
+owns recognition and delivers a `GestureAction` stream;
+`handle_touch` no longer exists on `UIObject`. ChatView2 declares a
+chatview-shaped `GestureSet` (tap + long-press + vertical drag after
+slop) and maps actions to its own machinery — it runs no recognizers,
+timers, or velocity sampling of its own:
+
+| GestureAction | ChatView2 handling |
+|---|---|
+| `Down` | reset long-press mode; pause inertia while the finger is down |
+| `DragStart { start }` | `scroll.drag_start(start.y)` — grab kills Glide/Anim |
+| `DragMove { curr, .. }` | 1:1 drag on the chat axis: `scroll = scroll0 + dy` (scroll grows back into history — the inverted-axis trap the old widget hit) — or, in long-press select mode, extend the selection instead of scrolling |
+| `DragEnd { vel, .. }` | flick threshold on `vel.y` → `drag_end(velocity)` → Glide |
+| `Tap { pos }` | hit-dispatch through the type registry (URL open, nick/file activation), else line-toggle selection |
+| `LongPress { pos }` | URL under the finger → toast copy; else select line + enter selection mode (single-fire, timer-driven — session-owned) |
+| `Up` | clear touch-active state; inertia eligible again |
+
+Session-provided (never re-implemented): 10px touch slop (the dead-zone
+before drag start), 300ms tap bound, long-press timeout (system,
+timer-fired, once per touch), 20ms move delivery throttle (velocity
+sampling still observes every move), release velocity (40ms window,
+px/sec). Physics stays controller-side — inertia, decay, grab-to-stop,
+clamping, anchoring — which is exactly the split `app-gesture` defers
+to chatview2's scroll controller.
+
+Two integration invariants from the applied session's post-review
+audit:
+
+- **Exact hit regions**: `gesture_hit_test` passes exactly the rect the
+  view acts on — chain resolution has no per-event sibling fallthrough,
+  so an over-broad region steals taps from overlaying buttons (the
+  TokenTable lesson).
+- **Explicit priorities**: the session walks children in node-priority
+  order; every interactive layer floating over the chatview (the
+  scroll-to-bottom arrow, the cmd-hint popup) carries `priority` +1
+  above it, or equal-priority tie-breaks can eat its taps.
+
+The migrated old ChatView (`handle_gesture` in `src/ui/chatview/mod.rs`)
+is the behavioral parity reference for this mapping until phase 19
+deletes it. Wheel and PageUp/PageDown stay desktop handlers
+(`handle_mouse_wheel`, `handle_key_down`) feeding `page_tick` — the
+gesture subsystem is touch-only; `EMULATE_TOUCH` desktop emulation
+routes through the session, so the same paths are testable on desktop.
 
 ### Reflow: width, scale, and styling changes
 
@@ -1017,9 +1083,12 @@ Per-type copy text: privmsg contributes its rendered line
 (`<nick> text`, action/notice variants as displayed); filemsg
 contributes its file URL; datemsg contributes its date label; future
 types decide for themselves (a type MAY contribute nothing). Selection
-gestures (click toggle, drag sweep, selection-mode taps), `unselect`,
-and the `select_changed` transition signal are unchanged from the
-current chatview and operate uniformly over all types.
+gestures in gesture-stream terms (mouse click toggle, `Tap` toggle,
+`LongPress` entering selection mode with subsequent `DragMove`
+extending the selection instead of scrolling, drag sweep,
+selection-mode taps), `unselect`, and the `select_changed` transition
+signal are unchanged from the migrated chatview and operate uniformly
+over all types.
 
 ### Wire format
 
@@ -1086,7 +1155,10 @@ per-channel `chat::make()` loop in `schema/mod.rs` disappears; the
 channel label and relay paths in `main.rs` retarget the single chatview
 via `set_channel`. Unread highlighting in the menu keys off
 message-received events carrying the channel instead of per-screen
-layers.
+layers. Overlaying interactive layers (scroll-to-bottom arrow, cmd-hint
+popup) keep explicit `priority` above the chatview2 node — the gesture
+session resolves targets in priority order (see the gesture input
+integration section).
 
 ## Risks / Trade-offs
 
@@ -1111,6 +1183,11 @@ layers.
 - [Two chatviews during migration window (old screens + chatview2)] →
   switchover is a single cutover task in the sequence; old module deleted
   in the same change once parity tests pass.
+- [Over-broad gesture hit region or missing overlay priority steals
+  taps] → `gesture_hit_test` passes exactly the view rect; every
+  floating interactive layer carries `priority` +1 (the session resolves
+  targets in priority order, no sibling fallthrough) — verified on the
+  dev screen with the arrow layer overlaid.
 
 ## Migration Plan
 

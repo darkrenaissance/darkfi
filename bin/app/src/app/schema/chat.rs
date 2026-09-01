@@ -726,6 +726,9 @@ pub async fn make(
     prop.set_f32(atom, Role::App, 3, DOWNARROW_H).unwrap();
     down_layer.set_property_bool(atom, Role::App, "is_visible", false).unwrap();
     down_layer.set_property_u32(atom, Role::App, "z_index", 3).unwrap();
+    // The arrow floats over the chatview (priority 0) — it must be
+    // hit-tested first.
+    down_layer.set_property_u32(atom, Role::App, "priority", 1).unwrap();
     let down_layer = down_layer.setup(|me| Layer::new(me, renderer.clone(), redraw.clone())).await;
     layer_node.link(down_layer.clone());
 
@@ -1352,7 +1355,9 @@ pub async fn make(
     prop.set_f32(atom, Role::App, 2, EMOJIBTN_BOX[2]).unwrap();
     prop.set_f32(atom, Role::App, 3, EMOJIBTN_BOX[3]).unwrap();
 
-    // Chatedit is clicked and requests keyboard. Only show if emoji picker isnt visible.
+    // Chatedit is clicked and requests keyboard. Only show if emoji
+    // picker isnt visible: while the panel is open, tapping the edit
+    // just moves the cursor.
     let (slot, recvr) = Slot::new("reqkeyb");
     chatedit_node.register("focus_request", slot).unwrap();
     let chatedit_node2 = chatedit_node.clone();
@@ -1397,8 +1402,10 @@ pub async fn make(
             }
 
             if emoji_btn_is_visible.get() {
-                // Open emoji panel and close IME keyboard
-                chatedit_node2.call_method("unfocus", vec![]).await.unwrap();
+                // Open emoji panel and hide the keyboard. The edit
+                // stays focused so its cursor remains visible; only
+                // the IME is detached.
+                chatedit_node2.call_method("hide_ime", vec![]).await.unwrap();
 
                 assert!(!emoji_close_is_visible.get());
                 assert!(emoji_h_prop.get() < 0.001);
@@ -1460,6 +1467,9 @@ pub async fn make(
     prop.add_depend(&cmd_vis_rows_prop, 0, "vis_rows");
     cmd_layer_node.set_property_bool(atom, Role::App, "is_visible", false).unwrap();
     cmd_layer_node.set_property_u32(atom, Role::App, "z_index", 3).unwrap();
+    // The hint popup opens over the chatview (priority 0) — it must be
+    // hit-tested first.
+    cmd_layer_node.set_property_u32(atom, Role::App, "priority", 1).unwrap();
     let cmd_layer_node =
         cmd_layer_node.setup(|me| Layer::new(me, renderer.clone(), redraw.clone())).await;
     layer_node.link(cmd_layer_node.clone());

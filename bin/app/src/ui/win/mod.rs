@@ -26,8 +26,8 @@ use crate::{
     gfx::{
         gfxtag, DrawCall, DrawInstruction, GraphicsEventCharSub, GraphicsEventKeyDownSub,
         GraphicsEventKeyUpSub, GraphicsEventMouseButtonDownSub, GraphicsEventMouseButtonUpSub,
-        GraphicsEventMouseMoveSub, GraphicsEventMouseWheelSub, GraphicsEventPublisherPtr,
-        GraphicsEventTouchSub, Point, Rectangle, RenderApi, Renderer,
+        GraphicsEventMouseMoveSub, GraphicsEventMouseWheelSub, GraphicsEventPublisherPtr, Point,
+        Rectangle, RenderApi, Renderer,
     },
     prop::{
         BatchGuardPtr, PropertyAtomicGuard, PropertyDimension, PropertyFloat32, PropertyStr, Role,
@@ -40,10 +40,10 @@ use crate::{
 #[cfg(target_os = "android")]
 use crate::{android, prop::PropertyRect};
 
-use super::{get_children_ordered, get_ui_object3, get_ui_object_ptr, OnModify, RedrawTrigger};
-
-mod gesture;
-pub use gesture::{GestureAction, GestureProcessor};
+use super::{
+    get_children_ordered, get_ui_object3, get_ui_object_ptr, GestureSession, GestureSessionPtr,
+    OnModify, RedrawTrigger,
+};
 
 macro_rules! i { ($($arg:tt)*) => { info!(target: "ui::window", $($arg)*); } }
 macro_rules! d { ($($arg:tt)*) => { debug!(target: "ui::window", $($arg)*); } }
@@ -68,8 +68,8 @@ pub struct Window {
     scale: PropertyFloat32,
     #[cfg(target_os = "android")]
     insets: PropertyRect,
-    /// Gesture processor for recognizing gestures
-    gesture_proc: SyncMutex<GestureProcessor>,
+    /// Window-level gesture recognition and delivery
+    gesture_session: GestureSessionPtr,
     /// Sender side used by window-internal triggers to request a draw pass.
     redraw_tx: RedrawTrigger,
     /// Receiver consumed by the single draw-pass listener task in `start()`.
@@ -81,6 +81,7 @@ impl Window {
         node: SceneNodeWeak,
         renderer: Renderer,
         i18n_fish: I18nBabelFish,
+        ex: ExecutorPtr,
         redraw_tx: RedrawTrigger,
         redraw_rx: async_channel::Receiver<()>,
     ) -> Pimpl {
@@ -88,6 +89,8 @@ impl Window {
         let locale = PropertyStr::wrap(node_ref, Role::Internal, "locale", 0).unwrap();
         let screen_size = PropertyDimension::wrap(node_ref, Role::Internal, "screen_size").unwrap();
         let scale = PropertyFloat32::wrap(node_ref, Role::Internal, "scale", 0).unwrap();
+
+        let gesture_session = GestureSession::new(node.clone(), ex);
 
         let self_ = Arc::new(Self {
             node,
@@ -100,7 +103,7 @@ impl Window {
             scale,
             #[cfg(target_os = "android")]
             insets: PropertyRect::wrap(node_ref, Role::Internal, "insets").unwrap(),
-            gesture_proc: SyncMutex::new(GestureProcessor::new()),
+            gesture_session,
             redraw_tx,
             redraw_rx,
         });
@@ -214,10 +217,6 @@ impl Window {
         let mouse_wheel_task =
             ex.spawn(async move { while Self::process_mouse_wheel(&me2, &ev_sub).await {} });
 
-        let ev_sub = event_pub.subscribe_touch();
-        let me2 = me.clone();
-        let touch_task = ex.spawn(async move { while Self::process_touch(&me2, &ev_sub).await {} });
-
         #[cfg(target_os = "android")]
         let insets_task = {
             let (insets_tx, insets_rx) = async_channel::unbounded();
@@ -264,7 +263,6 @@ impl Window {
             mouse_btn_up_task,
             mouse_move_task,
             mouse_wheel_task,
-            touch_task,
         ];
         tasks.append(&mut on_modify.tasks);
         #[cfg(target_os = "android")]
@@ -399,21 +397,6 @@ impl Window {
         true
     }
 
-    async fn process_touch(me: &Weak<Self>, ev_sub: &GraphicsEventTouchSub) -> bool {
-        let Ok((phase, id, touch_pos)) = ev_sub.recv().await else {
-            t!("Event relayer closed");
-            return false
-        };
-
-        let Some(self_) = me.upgrade() else {
-            // Should not happen
-            panic!("self destroyed before touch_task was stopped!");
-        };
-
-        self_.handle_touch(phase, id, touch_pos).await;
-        true
-    }
-
     fn get_children(&self) -> Vec<SceneNodePtr> {
         let node = self.node.upgrade().unwrap();
         get_children_ordered(&node)
@@ -453,14 +436,18 @@ impl Window {
     }
 
     async fn handle_mouse_btn_down(&self, btn: MouseButton, mut mouse_pos: Point) {
+        if EMULATE_TOUCH {
+            // Mouse-emulated touches produce real gestures through the
+            // session, exactly like device touches. feed_gesture()
+            // applies the window scale itself.
+            self.feed_gesture(TouchPhase::Started, 0, mouse_pos);
+        }
+
         self.local_scale(&mut mouse_pos);
-        for child in self.get_children() {
-            let obj = get_ui_object3(&child);
-            if EMULATE_TOUCH {
-                if obj.handle_touch(TouchPhase::Started, 0, mouse_pos).await {
-                    return
-                }
-            } else {
+
+        if !EMULATE_TOUCH {
+            for child in self.get_children() {
+                let obj = get_ui_object3(&child);
                 if obj.handle_mouse_btn_down(btn.clone(), mouse_pos).await {
                     return
                 }
@@ -469,14 +456,15 @@ impl Window {
     }
 
     async fn handle_mouse_btn_up(&self, btn: MouseButton, mut mouse_pos: Point) {
+        if EMULATE_TOUCH {
+            self.feed_gesture(TouchPhase::Ended, 0, mouse_pos);
+        }
+
         self.local_scale(&mut mouse_pos);
-        for child in self.get_children() {
-            let obj = get_ui_object3(&child);
-            if EMULATE_TOUCH {
-                if obj.handle_touch(TouchPhase::Ended, 0, mouse_pos).await {
-                    return
-                }
-            } else {
+
+        if !EMULATE_TOUCH {
+            for child in self.get_children() {
+                let obj = get_ui_object3(&child);
                 if obj.handle_mouse_btn_up(btn.clone(), mouse_pos).await {
                     return
                 }
@@ -485,14 +473,15 @@ impl Window {
     }
 
     async fn handle_mouse_move(&self, mut mouse_pos: Point) {
+        if EMULATE_TOUCH {
+            self.feed_gesture(TouchPhase::Moved, 0, mouse_pos);
+        }
+
         self.local_scale(&mut mouse_pos);
-        for child in self.get_children() {
-            let obj = get_ui_object3(&child);
-            if EMULATE_TOUCH {
-                if obj.handle_touch(TouchPhase::Moved, 0, mouse_pos).await {
-                    return
-                }
-            } else {
+
+        if !EMULATE_TOUCH {
+            for child in self.get_children() {
+                let obj = get_ui_object3(&child);
                 if obj.handle_mouse_move(mouse_pos).await {
                     return
                 }
@@ -510,51 +499,17 @@ impl Window {
         }
     }
 
-    async fn handle_touch(&self, phase: TouchPhase, id: u64, mut touch_pos: Point) {
-        self.local_scale(&mut touch_pos);
-
-        // Process through gesture recognizer
-        let gesture = {
-            let mut gesture_proc = self.gesture_proc.lock();
-            gesture_proc.process(phase, id, touch_pos)
-        };
-        d!("Touch generated gesture: {gesture:?}");
-
-        if let Some(gesture) = gesture {
-            if self.handle_gesture(gesture).await {
-                // Gesture was handled, stop propagation
-                return
-            }
-        }
-
-        // Fallback to raw touch event (backwards compat)
-        for child in self.get_children() {
-            let obj = get_ui_object3(&child);
-            if obj.handle_touch(phase, id, touch_pos).await {
-                return
-            }
-        }
+    /// The window-level gesture session.
+    pub fn gesture_session(&self) -> &GestureSessionPtr {
+        &self.gesture_session
     }
 
-    pub fn handle_touch_sync(&self, phase: TouchPhase, id: u64, mut touch_pos: Point) -> bool {
+    /// Feed a touch (screen coordinates) into gesture recognition.
+    /// Recognition observes every touch regardless of which widget
+    /// handles it downstream.
+    pub fn feed_gesture(&self, phase: TouchPhase, id: u64, mut touch_pos: Point) {
         self.local_scale(&mut touch_pos);
-        for child in self.get_children() {
-            let obj = get_ui_object3(&child);
-            if obj.handle_touch_sync(phase, id, touch_pos) {
-                return true
-            }
-        }
-        false
-    }
-
-    async fn handle_gesture(&self, gesture: GestureAction) -> bool {
-        for child in self.get_children() {
-            let obj = get_ui_object3(&child);
-            if obj.handle_gesture(gesture.clone()).await {
-                return true
-            }
-        }
-        false
+        self.gesture_session.touch_event(phase, id, touch_pos);
     }
 
     #[instrument(target = "ui::win")]

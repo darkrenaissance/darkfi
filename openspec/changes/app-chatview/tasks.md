@@ -51,13 +51,16 @@ design.md → Development Protocol.
 
 - [ ] 5.1 Implement `src/ui/chatview2/scroll.rs`: internal
   pixels-from-bottom scroll (no scene property), Idle/Drag/Glide/Anim
-  state machine with intents (drag start/move/end, flick, page tick,
+  state machine with intents fed from the gesture subsystem's drag
+  lifecycle (drag start/move/end; flick = threshold on the session's
+  `DragEnd` velocity — no local sampling; page tick,
   scroll_to_bottom), clamping, is_at_bottom indication,
   height-change compensation application, anchor snapshot/resolve with
   bottom shortcut and clamped fallback; verify unit tests pass for
   state transitions (grab cancels motion, wheel coalescing extends the
-  target, flick decays to stop, clamps at 0 and top, scroll_to_bottom,
-  anchor round-trip with inserts above and below)
+  target, flick fed a `DragEnd`-style velocity decays to stop, clamps
+  at 0 and top, scroll_to_bottom, anchor round-trip with inserts above
+  and below)
 - [ ] 5.2 Gate: review + amendments + atomic commit
 
 ## 6. Chatview2 skeleton + dev schema screen
@@ -66,9 +69,11 @@ design.md → Development Protocol.
   `ChatView2` UIObject: properties (rect, shared styling, is_at_bottom
   bool), view-wide method stubs (`set_channel`, `set_filter`,
   `copy_select`, `unselect`, `scroll_to_bottom`, `get_line_ids`,
-  `delete_line`), empty-buffer draw running the visible-window loop,
-  and the node factory; verify `make compile-dev` succeeds and the dev
-  screen renders an empty view
+  `delete_line`), the gesture contract (`gesture_set` chatview-shaped:
+  tap + long-press + vertical drag; exact-rect `gesture_hit_test`;
+  `handle_gesture` stub), empty-buffer draw running the visible-window
+  loop, and the node factory; verify `make compile-dev` succeeds and
+  the dev screen renders an empty view
 - [ ] 6.2 Create the `src/app/schema/test_chatview.rs` dev schema
   (modeled on `schema/test.rs`) hosting the chatview2 node for
   development, gated behind a new `schema-test-chatview` cargo feature
@@ -135,12 +140,14 @@ design.md → Development Protocol.
 ## 11. Selection across types
 
 - [ ] 11.1 Implement selection: chatview-owned selected set,
-  chatview-drawn highlight (no per-type cache invalidation), click
-  toggle, drag sweep, selection-mode taps, per-type `copy_text` joined
-  in display order, `unselect`, `select_changed` transitions; verify
-  unit test for mixed-type copy ordering passes, netdebug
-  `copy_select`/`unselect` behave per spec, and manual drag/toggle
-  selection works visually on the dev screen
+  chatview-drawn highlight (no per-type cache invalidation), mouse
+  click toggle, `Tap` toggle, long-press entering selection mode with
+  subsequent `DragMove` extending the selection instead of scrolling,
+  drag sweep, selection-mode taps, per-type `copy_text` joined in
+  display order, `unselect`, `select_changed` transitions; verify unit
+  test for mixed-type copy ordering passes, netdebug
+  `copy_select`/`unselect` behave per spec, and manual
+  drag/toggle/long-press selection works visually on the dev screen
 - [ ] 11.2 Gate: review + amendments + atomic commit
 
 ## 12. Date separators
@@ -155,15 +162,22 @@ design.md → Development Protocol.
 
 ## 13. Scroll input integration
 
-- [ ] 13.1 Wire the scroll controller to input on the dev screen:
-  1:1 touch/mouse drag, flick inertia, animated half-page wheel with
-  coalescing, PageUp/PageDown keys, clamps, a visible scroll-to-bottom
-  arrow driven by `is_at_bottom` calling `scroll_to_bottom`, and the
-  animator deadline-cadence task; verify trace logs show the intended
-  state transitions per gesture, netdebug `GetPropertyValue is_at_bottom`
-  flips as expected, and visual inspection confirms pixel-exact drag,
-  smooth wheel animation, correct stops at both clamps, and the arrow
-  toggling with position
+- [ ] 13.1 Wire input on the dev screen: touch via `handle_gesture`
+  mapping to the scroll controller per design's gesture integration
+  table (`Down` pauses inertia and resets long-press mode, `DragStart`
+  grabs (kills motion), `DragMove` 1:1 on the chat axis (scroll =
+  scroll0 + dy), `DragEnd` flick on the session velocity, `Up` clears
+  touch-active state), plus `handle_mouse_wheel` and PageUp/PageDown
+  keys feeding `page_tick` (animated half-page with coalescing),
+  clamps, a visible scroll-to-bottom arrow layer (priority +1 above
+  the view) driven by `is_at_bottom` calling `scroll_to_bottom`, and
+  the animator deadline-cadence task; verify the slop dead-zone, 20ms
+  move cadence, and single-fire long-press come from the session (no
+  local recognition), trace logs show the intended state transitions
+  per gesture, netdebug `GetPropertyValue is_at_bottom` flips as
+  expected, the overlaid arrow receives its taps (arbitration), and
+  visual inspection confirms pixel-exact drag, smooth wheel animation,
+  correct stops at both clamps, and the arrow toggling with position
 - [ ] 13.2 Gate: review + amendments + atomic commit
 
 ## 14. Materialization lifecycle and eviction
@@ -220,7 +234,10 @@ design.md → Development Protocol.
   `scroll_to_bottom`; remove the per-channel screen loop in
   `schema/mod.rs`; retarget relay paths in `main.rs` and plugins
   (darkirc insert/confirm to the privmsg node, fud status fan-out to
-  the filemsg node); verify on desktop with darkirc: receiving messages
+  the filemsg node); set explicit node priorities for every interactive
+  layer floating over the chatview (scroll-to-bottom arrow, cmd-hint
+  popup) above it, per the gesture session's priority-ordered
+  targeting; verify on desktop with darkirc: receiving messages
   updates the active channel, switching channels clears/reloads and
   restores each channel's position, and unread indication works via
   signals
@@ -233,8 +250,9 @@ design.md → Development Protocol.
   `make compile-dev` and `make compile-apk` both succeed
 - [ ] 19.2 Full validation: parity checklist from `specs/chatview/spec.md`
   (URLs, selection/copy incl. separators, file messages, actions/notices,
-  unconfirmed, date separators, keys, touch, wheel, restore, reflow) on
+  unconfirmed, date separators, keys, touch incl. slop dead-zone,
+  grab-to-stop, long-press select mode, wheel, restore, reflow) on
   desktop; performance pass scrolling a large history (no slowdown,
   bounded memory via renderer debug stats); android device smoke test
-  (drag, flick, long-press copy, channel switching)
+  (drag, flick, grab-stop, long-press select/copy, channel switching)
 - [ ] 19.3 Gate: final review + atomic commit closing the change

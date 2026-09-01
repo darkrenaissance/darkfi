@@ -17,7 +17,7 @@
  */
 
 use async_trait::async_trait;
-use miniquad::{KeyCode, KeyMods, MouseButton, TouchPhase};
+use miniquad::{KeyCode, KeyMods, MouseButton};
 use std::sync::Arc;
 
 use crate::{
@@ -28,7 +28,7 @@ use crate::{
     ExecutorPtr,
 };
 
-use super::{DrawUpdate, Layer, LayerPtr, RedrawTrigger, UIObject};
+use super::{DrawUpdate, GestureTarget, Layer, LayerPtr, RedrawTrigger, UIObject};
 
 pub type ScrollLayerPtr = Arc<ScrollLayer>;
 
@@ -106,12 +106,16 @@ impl UIObject for ScrollLayer {
         self.inner.handle_mouse_wheel(wheel_pos).await
     }
 
-    async fn handle_touch(&self, phase: TouchPhase, id: u64, touch_pos: Point) -> bool {
-        self.inner.handle_touch(phase, id, touch_pos).await
+    fn gesture_hit_test(&self, pos: Point) -> bool {
+        self.inner.gesture_hit_test(pos)
     }
 
-    fn handle_touch_sync(&self, phase: TouchPhase, id: u64, touch_pos: Point) -> bool {
-        self.inner.handle_touch_sync(phase, id, touch_pos)
+    fn gesture_descend(&self, pos: Point, offset: Point, chain: &mut Vec<GestureTarget>) {
+        self.inner.gesture_descend(pos, offset, chain)
+    }
+
+    async fn handle_gesture(&self, gesture: crate::ui::gesture::GestureAction) -> bool {
+        self.inner.handle_gesture(gesture).await
     }
 
     fn set_i18n(&self, i18n_fish: &I18nBabelFish) {

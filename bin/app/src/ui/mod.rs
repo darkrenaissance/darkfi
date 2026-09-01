@@ -18,7 +18,7 @@
 
 use async_trait::async_trait;
 use futures::stream::{FuturesUnordered, StreamExt};
-use miniquad::{KeyCode, KeyMods, MouseButton, TouchPhase};
+use miniquad::{KeyCode, KeyMods, MouseButton};
 use std::sync::{Arc, OnceLock, Weak};
 
 use crate::{
@@ -57,8 +57,15 @@ mod edit;
 pub use edit::{BaseEdit, BaseEditPtr, BaseEditType};
 pub mod emoji_picker;
 pub use emoji_picker::{EmojiPicker, EmojiPickerPtr};
-mod gesture;
-pub use gesture::GesturePtr;
+pub mod gesture;
+// The full config vocabulary is re-exported for widgets adopting
+// per-node recognizer configs (TapCfg/DragCfg axes + direction); the
+// crate is a binary so not every name has an in-crate use yet.
+#[allow(unused_imports)]
+pub use gesture::{
+    Axes, Direction, DragCfg, GestureAction, GestureConstants, GestureSession, GestureSessionPtr,
+    GestureSet, GestureTarget, LongPressCfg, TapCfg,
+};
 mod image;
 #[allow(unused_imports)]
 pub use image::{Image, ImagePtr};
@@ -83,7 +90,7 @@ pub use text::{Text, TextPtr};
 mod text_scramble;
 pub use text_scramble::{TextScramble, TextScramblePtr};
 mod win;
-pub use win::{GestureAction, Window, WindowPtr};
+pub use win::{Window, WindowPtr};
 
 macro_rules! e { ($($arg:tt)*) => { error!(target: "scene::on_modify", $($arg)*); } }
 macro_rules! t { ($($arg:tt)*) => { trace!(target: "scene::on_modify", $($arg)*); } }
@@ -186,14 +193,24 @@ pub trait UIObject: Sync {
     async fn handle_mouse_wheel(&self, _wheel_pos: Point) -> bool {
         false
     }
-    async fn handle_touch(&self, _phase: TouchPhase, _id: u64, _touch_pos: Point) -> bool {
-        false
+    /// The gestures this widget accepts. Non-participating widgets
+    /// return [`GestureSet::NONE`] and are inert.
+    fn gesture_set(&self) -> GestureSet {
+        GestureSet::NONE
     }
-    async fn handle_gesture(&self, _gesture: GestureAction) -> bool {
+
+    /// Whether this widget is a gesture target at `pos` (given in the
+    /// widget's parent coordinate space, like `handle_gesture`).
+    fn gesture_hit_test(&self, _pos: Point) -> bool {
         false
     }
 
-    fn handle_touch_sync(&self, _phase: TouchPhase, _id: u64, _touch_pos: Point) -> bool {
+    /// Containers: descend the gesture chain under `pos` (the
+    /// container's parent space), translating coordinates. The default
+    /// is a no-op for leaf widgets.
+    fn gesture_descend(&self, _pos: Point, _offset: Point, _chain: &mut Vec<GestureTarget>) {}
+
+    async fn handle_gesture(&self, _gesture: GestureAction) -> bool {
         false
     }
 
@@ -327,7 +344,6 @@ pub fn get_ui_object_ptr(node: &SceneNode3) -> Arc<dyn UIObject + Send> {
         Pimpl::Button(obj) => obj.clone(),
         Pimpl::EmojiPicker(obj) => obj.clone(),
         Pimpl::Shortcut(obj) => obj.clone(),
-        Pimpl::Gesture(obj) => obj.clone(),
         Pimpl::Menu(obj) => obj.clone(),
         Pimpl::TokenTable(obj) => obj.clone(),
         _ => panic!("unhandled type for get_ui_object: {node:?}"),
@@ -347,7 +363,6 @@ pub fn get_ui_object3<'a>(node: &'a SceneNode3) -> &'a dyn UIObject {
         Pimpl::Button(obj) => obj.as_ref(),
         Pimpl::EmojiPicker(obj) => obj.as_ref(),
         Pimpl::Shortcut(obj) => obj.as_ref(),
-        Pimpl::Gesture(obj) => obj.as_ref(),
         Pimpl::Menu(obj) => obj.as_ref(),
         Pimpl::TokenTable(obj) => obj.as_ref(),
         _ => panic!("unhandled type for get_ui_object: {node:?}"),

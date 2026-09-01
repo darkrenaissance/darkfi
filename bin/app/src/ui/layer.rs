@@ -17,7 +17,7 @@
  */
 
 use async_trait::async_trait;
-use miniquad::{KeyCode, KeyMods, MouseButton, TouchPhase};
+use miniquad::{KeyCode, KeyMods, MouseButton};
 use parking_lot::Mutex as SyncMutex;
 use rand::{rngs::OsRng, Rng};
 use std::sync::Arc;
@@ -34,8 +34,8 @@ use crate::{
 };
 
 use super::{
-    get_children_ordered, get_ui_object3, get_ui_object_ptr, DrawUpdate, OnModify, RedrawTrigger,
-    UIObject,
+    gesture, get_children_ordered, get_ui_object3, get_ui_object_ptr, DrawUpdate, GestureTarget,
+    OnModify, RedrawTrigger, UIObject,
 };
 
 macro_rules! t { ($($arg:tt)*) => { trace!(target: "ui:layer", $($arg)*); } }
@@ -283,31 +283,51 @@ impl UIObject for Layer {
         }
         false
     }
-    async fn handle_touch(&self, phase: TouchPhase, id: u64, mut touch_pos: Point) -> bool {
+    fn gesture_hit_test(&self, pos: Point) -> bool {
         if !self.is_visible.get() {
             return false
         }
-        touch_pos -= self.rect.get().pos();
+
+        let local = pos - self.rect.get().pos();
         for child in self.get_children() {
             let obj = get_ui_object3(&child);
-            if obj.handle_touch(phase, id, touch_pos).await {
+            if obj.gesture_hit_test(local) {
                 return true
             }
         }
+
         false
     }
 
-    fn handle_touch_sync(&self, phase: TouchPhase, id: u64, mut touch_pos: Point) -> bool {
+    fn gesture_descend(&self, pos: Point, offset: Point, chain: &mut Vec<GestureTarget>) {
+        if !self.is_visible.get() {
+            return
+        }
+
+        let rect_pos = self.rect.get().pos();
+        let local = pos - rect_pos;
+        let children: Vec<_> =
+            self.get_children().iter().map(|child| get_ui_object_ptr(child)).collect();
+        gesture::scan_children(&children, local, offset + rect_pos, chain);
+    }
+
+    async fn handle_gesture(&self, gesture: gesture::GestureAction) -> bool {
         if !self.is_visible.get() {
             return false
         }
-        touch_pos -= self.rect.get().pos();
+
+        let mut gesture = gesture;
+        let rect_pos = self.rect.get().pos();
+        gesture.translate(crate::gfx::Vector { x: -rect_pos.x, y: -rect_pos.y });
+
         for child in self.get_children() {
             let obj = get_ui_object3(&child);
-            if obj.handle_touch_sync(phase, id, touch_pos) {
+            if obj.handle_gesture(gesture.clone()).await {
+                t!("handle_gesture swallowed by {child:?}");
                 return true
             }
         }
+
         false
     }
 

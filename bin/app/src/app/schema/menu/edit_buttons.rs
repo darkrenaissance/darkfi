@@ -105,7 +105,8 @@ pub async fn create_edit_buttons(
     prop.set_expr(atom, Role::App, 2, code).unwrap();
     prop.set_f32(atom, Role::App, 3, MENU_BTN_H).unwrap();
     node.set_property_bool(atom, Role::App, "is_visible", false).unwrap();
-    node.set_property_u32(atom, Role::App, "z_index", 2).unwrap();
+    // The edit-mode bar floats above the version block (z_index 3)
+    node.set_property_u32(atom, Role::App, "z_index", 4).unwrap();
     node.set_property_u32(atom, Role::App, "priority", 1).unwrap();
     let editlayer_node =
         node.setup(|me| Layer::new(me, app.renderer.clone(), app.redraw_trigger.clone())).await;

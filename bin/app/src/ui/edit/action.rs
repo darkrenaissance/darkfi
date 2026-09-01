@@ -138,6 +138,17 @@ impl ActionMode {
         None
     }
 
+    /// Non-consuming hit test: whether `pos` (widget-local) lands on a
+    /// menu item. Used for gesture hit-testing so the menu overlay can
+    /// be grabbed without consuming it.
+    pub fn hit(&self, pos: Point) -> bool {
+        let menu = self.menu.lock();
+        let Some(menu) = &*menu else { return false };
+
+        let local_pos = pos - menu.pos;
+        menu.items.iter().any(|item| item.rect.contains(local_pos))
+    }
+
     /// Called by the parent layout
     pub fn get_instrs(&self) -> Vec<DrawInstruction> {
         let Some(menu) = &*self.menu.lock() else { return vec![] };

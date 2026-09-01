@@ -39,7 +39,7 @@ use crate::{
 
 pub mod locale;
 use locale::read_locale_ftl;
-mod node;
+pub mod node;
 use node::create_window;
 pub mod schema;
 
@@ -136,6 +136,7 @@ impl App {
                     me,
                     self.renderer.clone(),
                     i18n_fish.clone(),
+                    self.ex.clone(),
                     self.redraw_trigger.clone(),
                     self.redraw_rx.clone(),
                 )

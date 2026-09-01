@@ -157,23 +157,6 @@ pub fn create_shortcut(name: &str) -> SceneNode {
 }
 
 #[allow(dead_code)]
-pub fn create_gesture(name: &str) -> SceneNode {
-    let mut node = SceneNode::new(name, SceneNodeType::Gesture);
-
-    let prop = Property::new("priority", PropertyType::Uint32, PropertySubType::Null);
-    node.add_property(prop).unwrap();
-
-    node.add_signal(
-        "gesture",
-        "Gesture triggered",
-        vec![("distance", "Distance", CallArgType::Float32)],
-    )
-    .unwrap();
-
-    node
-}
-
-#[allow(dead_code)]
 pub fn create_image(name: &str) -> SceneNode {
     let mut node = SceneNode::new(name, SceneNodeType::Image);
 
@@ -529,6 +512,7 @@ pub fn create_baseedit(name: &str) -> SceneNode {
     node.add_method("insert_text", vec![("text", "Text", CallArgType::Str)], None).unwrap();
     node.add_method("focus", vec![], None).unwrap();
     node.add_method("unfocus", vec![], None).unwrap();
+    node.add_method("hide_ime", vec![], None).unwrap();
 
     node
 }

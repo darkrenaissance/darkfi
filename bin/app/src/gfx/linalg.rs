@@ -54,7 +54,7 @@ impl Div<f32> for Dimension {
     }
 }
 
-#[derive(Clone, Copy, Default, SerialEncodable, SerialDecodable)]
+#[derive(Clone, Copy, Default, PartialEq, SerialEncodable, SerialDecodable)]
 pub struct Point {
     pub x: f32,
     pub y: f32,
@@ -395,7 +395,7 @@ pub struct Segment {
     pub end: Point,
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Vector {
     pub x: f32,
     pub y: f32,

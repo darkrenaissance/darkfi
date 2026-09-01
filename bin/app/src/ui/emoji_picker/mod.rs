@@ -18,7 +18,7 @@
 
 use async_trait::async_trait;
 use darkfi_serial::Encodable;
-use miniquad::{MouseButton, TouchPhase};
+use miniquad::MouseButton;
 use parking_lot::Mutex as SyncMutex;
 use rand::{rngs::OsRng, Rng};
 use std::sync::{
@@ -36,7 +36,7 @@ use crate::{
     ExecutorPtr,
 };
 
-use super::{DrawUpdate, OnModify, RedrawTrigger, UIObject};
+use super::{DrawUpdate, GestureAction, GestureSet, OnModify, RedrawTrigger, UIObject};
 
 mod default;
 use default::DEFAULT_EMOJI_LIST;
@@ -45,13 +45,6 @@ pub use emoji::{EmojiMeshes, EmojiMeshesPtr};
 
 macro_rules! d { ($($arg:tt)*) => { debug!(target: "ui::emoji_picker", $($arg)*) } }
 macro_rules! t { ($($arg:tt)*) => { trace!(target: "ui::emoji_picker", $($arg)*) } }
-
-#[derive(Clone)]
-struct TouchInfo {
-    start_pos: Point,
-    start_scroll: f32,
-    is_scroll: bool,
-}
 
 pub type EmojiPickerPtr = Arc<EmojiPicker>;
 
@@ -79,7 +72,9 @@ pub struct EmojiPicker {
     /// are evicted automatically.
     draw_cache: EpochCache<Vec<DrawInstruction>>,
     is_mouse_hover: AtomicBool,
-    touch_info: SyncMutex<Option<TouchInfo>>,
+    /// Active 1:1 scroll drag: (finger y at drag start, scroll at drag
+    /// start), both in the picker's parent space.
+    drag_state: SyncMutex<Option<(f32, f32)>>,
 }
 
 impl EmojiPicker {
@@ -120,7 +115,7 @@ impl EmojiPicker {
             redraw,
             draw_cache,
             is_mouse_hover: AtomicBool::new(false),
-            touch_info: SyncMutex::new(None),
+            drag_state: SyncMutex::new(None),
         });
 
         Pimpl::EmojiPicker(self_)
@@ -368,70 +363,43 @@ impl UIObject for EmojiPicker {
         true
     }
 
-    async fn handle_touch(&self, phase: TouchPhase, id: u64, touch_pos: Point) -> bool {
-        // Ignore multi-touch
-        if id != 0 {
-            return false
-        }
+    fn gesture_set(&self) -> GestureSet {
+        GestureSet::SCROLL_VERT
+    }
 
-        let atom = &mut self.redraw.make_guard(gfxtag!("EmojiPicker::handle_touch"));
+    fn gesture_hit_test(&self, pos: Point) -> bool {
+        self.rect.get().contains(pos)
+    }
 
-        let rect = self.rect.get();
-        let pos = touch_pos - Point::new(rect.x, rect.y);
-
-        // We need this cos you cannot hold mutex and call async fn
-        // todo: clean this up
-        let mut emoji_is_clicked = false;
-        {
-            match phase {
-                TouchPhase::Started => {
-                    let mut touch_info = self.touch_info.lock();
-                    if !rect.contains(touch_pos) {
-                        return false
-                    }
-
-                    *touch_info = Some(TouchInfo {
-                        start_pos: pos,
-                        start_scroll: self.scroll.get(),
-                        is_scroll: false,
-                    });
-                }
-                TouchPhase::Moved => {
-                    let (touch_info, y_diff) = {
-                        let mut touch_info = self.touch_info.lock();
-                        let Some(touch_info) = touch_info.as_mut() else {
-                            return false;
-                        };
-
-                        let y_diff = touch_info.start_pos.y - pos.y;
-                        if y_diff.abs() > 0.5 {
-                            touch_info.is_scroll = true;
-                        }
-                        (touch_info.clone(), y_diff)
-                    };
-
-                    if touch_info.is_scroll {
-                        let mut scroll = touch_info.start_scroll + y_diff;
-                        scroll = scroll.clamp(0., self.max_scroll());
-                        self.scroll.set(atom, scroll);
-
-                        self.draw_cache.clear();
-                    }
-                }
-                TouchPhase::Ended | TouchPhase::Cancelled => {
-                    let touch_info = std::mem::take(&mut *self.touch_info.lock());
-                    let Some(touch_info) = touch_info else { return false };
-                    if !touch_info.is_scroll {
-                        emoji_is_clicked = true;
-                    }
-                }
+    async fn handle_gesture(&self, gesture: GestureAction) -> bool {
+        match gesture {
+            GestureAction::DragStart { start } => {
+                *self.drag_state.lock() = Some((start.y, self.scroll.get()));
+                true
             }
-        }
-        if emoji_is_clicked {
-            self.click_emoji(pos).await;
-        }
+            GestureAction::DragMove { curr, .. } => {
+                let Some((start_y, start_scroll)) = *self.drag_state.lock() else { return false };
 
-        true
+                let scroll = (start_scroll + start_y - curr.y).clamp(0., self.max_scroll());
+                let atom = &mut self.redraw.make_guard(gfxtag!("EmojiPicker::drag"));
+                self.scroll.set(atom, scroll);
+                self.draw_cache.clear();
+
+                true
+            }
+            GestureAction::DragEnd { .. } => {
+                // Flick inertia is deliberately not adopted: the picker
+                // keeps its dead-stop release.
+                *self.drag_state.lock() = None;
+                true
+            }
+            GestureAction::Tap { pos } => {
+                let rect = self.rect.get();
+                self.click_emoji(pos - rect.pos()).await;
+                true
+            }
+            _ => false,
+        }
     }
 }
 

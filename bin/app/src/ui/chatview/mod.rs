@@ -16,8 +16,6 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use super::long_press_timeout;
-
 use async_lock::Mutex as AsyncMutex;
 use async_trait::async_trait;
 use atomic_float::AtomicF32;
@@ -29,7 +27,6 @@ use parking_lot::Mutex as SyncMutex;
 use rand::{rngs::OsRng, Rng};
 use regex::Regex;
 use std::{
-    collections::VecDeque,
     io::Cursor,
     sync::{
         atomic::{AtomicBool, AtomicU32, Ordering},
@@ -56,7 +53,7 @@ use crate::{
     ExecutorPtr,
 };
 
-use super::{DrawUpdate, OnModify, RedrawTrigger, UIObject};
+use super::{DrawUpdate, GestureAction, GestureSet, OnModify, RedrawTrigger, UIObject};
 
 macro_rules! d { ($($arg:tt)*) => { debug!(target: "ui::chatview", $($arg)*); } }
 macro_rules! t { ($($arg:tt)*) => { trace!(target: "ui::chatview", $($arg)*); } }
@@ -67,10 +64,6 @@ const BIG_EPSILON: f32 = 0.05;
 /// Mouse must move more than this many pixels while held to count as a drag
 /// (which only selects) rather than a click (which toggles).
 const SELECT_DRAG_THRESHOLD: f32 = 2.;
-
-/// Finger must stay within this many pixels of the touch-start position to
-/// count as "stationary" for long-hold selection on touch screens.
-const TOUCH_STATIONARY_THRESHOLD: f32 = 10.;
 
 /// Tracks an in-progress mouse selection gesture so we can distinguish a
 /// stationary click (toggles the line) from a drag (only ever selects).
@@ -122,50 +115,15 @@ impl std::fmt::Display for MessageId {
 
 const PRELOAD_PAGES: usize = 1;
 
-#[derive(Clone)]
-struct TouchInfo {
-    start_scroll: f32,
-    start_y: f32,
-    start_instant: std::time::Instant,
-
-    /// Used for flick scrolling
-    samples: VecDeque<(std::time::Instant, f32)>,
-
-    last_instant: std::time::Instant,
-    last_y: f32,
-
-    /// Selection started?
-    is_select_mode: Option<bool>,
-}
-
-impl TouchInfo {
-    fn new(start_scroll: f32, y: f32) -> Self {
-        Self {
-            start_scroll,
-            start_y: y,
-            start_instant: std::time::Instant::now(),
-            samples: VecDeque::from([(std::time::Instant::now(), y)]),
-            last_instant: std::time::Instant::now(),
-            last_y: y,
-            is_select_mode: None,
-        }
-    }
-
-    fn push_sample(&mut self, y: f32) {
-        self.samples.push_back((std::time::Instant::now(), y));
-
-        // Now drop all old samples older than 40ms
-        while let Some((instant, _)) = self.samples.front() {
-            if instant.elapsed().as_micros() <= 40_000 {
-                break
-            }
-            self.samples.pop_front().unwrap();
-        }
-    }
-
-    fn first_sample(&self) -> Option<(f32, f32)> {
-        self.samples.front().map(|(t, s)| (t.elapsed().as_micros() as f32 / 1000., *s))
-    }
+/// What the fired long-press chose for this touch.
+#[derive(Clone, Copy, PartialEq)]
+enum LongPressMode {
+    /// No long-press fired
+    None,
+    /// Line selection started; drags extend it, no scroll inertia
+    Select,
+    /// URL copied with a toast; drags scroll, no inertia
+    UrlToast,
 }
 
 pub type ChatViewPtr = Arc<ChatView>;
@@ -229,8 +187,10 @@ pub struct ChatView {
 
     /// Used for detecting when scrolling view
     mouse_pos: SyncMutex<Point>,
-    /// Touch scrolling
-    touch_info: SyncMutex<Option<TouchInfo>>,
+    /// Touch scrolling: (finger y at drag start, scroll at drag start)
+    drag_state: SyncMutex<Option<(f32, f32)>>,
+    /// The mode the touch's long-press resolved to
+    lp_mode: SyncMutex<LongPressMode>,
     touch_is_active: AtomicBool,
 
     rect: PropertyRect,
@@ -278,9 +238,6 @@ pub struct ChatView {
     link_toast: SyncMutex<Option<LinkToast>>,
     /// Re-arm counter so a stale dismiss task won't clear a newer toast.
     toast_version: AtomicU32,
-
-    /// Re-arm counter so a stale long-press timer won't fire for a newer touch.
-    touch_hold_version: AtomicU32,
 
     /// Weak self-reference so handlers can spawn detached tasks.
     me: Weak<Self>,
@@ -381,7 +338,8 @@ impl ChatView {
             dc_key: OsRng.gen(),
 
             mouse_pos: SyncMutex::new(Point::from([0., 0.])),
-            touch_info: SyncMutex::new(None),
+            drag_state: SyncMutex::new(None),
+            lp_mode: SyncMutex::new(LongPressMode::None),
             touch_is_active: AtomicBool::new(false),
 
             rect,
@@ -416,7 +374,6 @@ impl ChatView {
             url_copy_duration,
             link_toast: SyncMutex::new(None),
             toast_version: AtomicU32::new(0),
-            touch_hold_version: AtomicU32::new(0),
             me: me.clone(),
             ex,
         });
@@ -655,41 +612,6 @@ impl ChatView {
 
         self.redraw.trigger();
         self.notify_select_changed(has, had).await;
-    }
-
-    fn end_touch_phase(&self, touch_y: f32) {
-        // Cancel any pending long-press timer.
-        self.touch_hold_version.fetch_add(1, Ordering::SeqCst);
-
-        // Now calculate scroll acceleration
-        let touch_info = std::mem::replace(&mut *self.touch_info.lock(), None);
-        let Some(touch_info) = &touch_info else { return };
-
-        self.touch_is_active.store(false, Ordering::Relaxed);
-
-        // No scroll accel when selection was active.
-        if touch_info.is_select_mode == Some(true) {
-            return
-        }
-
-        let Some((time, sample_y)) = touch_info.first_sample() else { return };
-        let dist = touch_y - sample_y;
-
-        // Ignore sub-ms events
-        if time < 1. {
-            error!(target: "ui::chatview", "Received a sub-ms touch event!");
-            return
-        }
-
-        //let speed = dist / time;
-        //self.speed.fetch_add(speed, Ordering::Relaxed);
-        //debug!(target: "ui::chatview", "speed = {dist} / {time} = {speed}");
-
-        let accel = self.scroll_start_accel.get() * dist / time;
-        let touch_time = touch_info.start_instant.elapsed();
-        t!("accel = {dist} / {time} = {accel},  touch = {touch_time:?}");
-        self.speed.fetch_add(accel, Ordering::Relaxed);
-        self.motion_cv.notify();
     }
 
     async fn add_line_to_db(
@@ -1069,51 +991,54 @@ impl ChatView {
         .detach();
     }
 
-    /// Called by the long-press timer after `select_hold_time` elapses.
-    /// If the finger is still down and within the stationary threshold, starts
-    /// text selection (or copies the URL if the finger is on one).
-    async fn long_hold_fire(&self, version: u32, start_pos: Point) {
-        // Cancelled by Ended/Cancelled or a newer touch.
-        if self.touch_hold_version.load(Ordering::SeqCst) != version {
-            return
-        }
-
-        // Touch ended or still undecided?
-        let (start_y, last_y) = {
-            let touch_info = self.touch_info.lock();
-            let Some(ti) = &*touch_info else { return };
-            (ti.start_y, ti.last_y)
-        };
-
-        // Finger moved beyond the stationary threshold — it's a scroll.
-        if (last_y - start_y).abs() > TOUCH_STATIONARY_THRESHOLD {
-            if let Some(ti) = &mut *self.touch_info.lock() {
-                ti.is_select_mode = Some(false);
-            }
-            return
-        }
-
+    /// Long-press resolved by the recognizer: copy the URL under the
+    /// finger with a toast, or start line selection.
+    async fn handle_long_press(&self, pos: Point) {
         let rect = self.rect.get();
 
         // URL under the finger takes priority: copy it, don't select.
-        let msgbuf_pos = self.to_msgbuf_pos(start_pos);
+        let msgbuf_pos = self.to_msgbuf_pos(pos);
         let mut msgbuf = self.msgbuf.lock().await;
         let on_url = msgbuf.url_at(&rect, msgbuf_pos.x, msgbuf_pos.y).await;
         drop(msgbuf);
 
         if let Some(url) = on_url {
-            self.show_toast(&url, start_pos - rect.pos()).await;
-            if let Some(ti) = &mut *self.touch_info.lock() {
-                ti.is_select_mode = Some(false);
-            }
+            *self.lp_mode.lock() = LongPressMode::UrlToast;
+            self.show_toast(&url, pos - rect.pos()).await;
             return
         }
 
         // Not on a URL: start text selection.
-        if let Some(ti) = &mut *self.touch_info.lock() {
-            ti.is_select_mode = Some(true);
+        *self.lp_mode.lock() = LongPressMode::Select;
+        self.select_line(pos.y).await;
+    }
+
+    /// Tap resolved by the recognizer: forward to the message under
+    /// the touch (opens URLs, downloads files), or toggle line
+    /// selection when selection is active.
+    async fn handle_tap(&self, pos: Point) {
+        let mut msgbuf = self.msgbuf.lock().await;
+        let msgbuf_pos = self.to_msgbuf_pos(pos);
+        let mut is_handled = false;
+        if let Some((msg, msg_top)) = msgbuf.get_line(&self.rect.get(), msgbuf_pos.y).await {
+            is_handled = msg
+                .handle_touch(
+                    TouchPhase::Ended,
+                    0,
+                    Point::new(msgbuf_pos.x, msg_top - msgbuf_pos.y),
+                )
+                .await
         }
-        self.select_line(start_pos.y).await;
+        drop(msgbuf);
+
+        // Not a URL/file tap and selection mode is active: toggle the line.
+        if !is_handled && self.select_active.load(Ordering::Relaxed) {
+            if self.is_line_selected(pos.y).await {
+                self.deselect_line(pos.y).await;
+            } else {
+                self.select_line(pos.y).await;
+            }
+        }
     }
 }
 
@@ -1434,141 +1359,78 @@ impl UIObject for ChatView {
         true
     }
 
-    async fn handle_touch(&self, phase: TouchPhase, id: u64, touch_pos: Point) -> bool {
-        // Ignore multi-touch
-        if id != 0 {
-            return false
-        }
+    fn gesture_set(&self) -> GestureSet {
+        GestureSet::CHATVIEW
+    }
 
-        let rect = self.rect.get();
-        //t!("handle_touch({phase:?}, {id},{id},  {touch_pos:?})");
+    fn gesture_hit_test(&self, pos: Point) -> bool {
+        self.rect.get().contains(pos)
+    }
 
-        let touch_y = touch_pos.y;
-
-        if !rect.contains(touch_pos) {
-            match phase {
-                TouchPhase::Started => *self.touch_info.lock() = None,
-                _ => self.end_touch_phase(touch_y),
-            }
-            return false
-        }
-
-        let hold_ms = long_press_timeout() as u64;
-
-        // Simulate mouse events
-        match phase {
-            TouchPhase::Started => {
+    async fn handle_gesture(&self, gesture: GestureAction) -> bool {
+        match gesture {
+            GestureAction::Down { .. } => {
+                // A new touch resets the long-press mode and pauses
+                // the inertia task while the finger is down
+                *self.lp_mode.lock() = LongPressMode::None;
+                *self.drag_state.lock() = None;
                 self.touch_is_active.store(true, Ordering::Relaxed);
-
-                *self.touch_info.lock() = Some(TouchInfo::new(self.scroll.get(), touch_y));
-
-                // Arm the long-press timer for text selection.
-                let version = self.touch_hold_version.fetch_add(1, Ordering::SeqCst) + 1;
-                let me = self.me.clone();
-                let ex = self.ex.clone();
-                let start_pos = touch_pos;
-                ex.spawn(async move {
-                    msleep(hold_ms).await;
-                    let Some(self_) = me.upgrade() else { return };
-                    self_.long_hold_fire(version, start_pos).await;
-                })
-                .detach();
+                true
             }
-            TouchPhase::Moved => {
-                let (start_scroll, start_y, start_elapsed, do_update, is_select_mode) = {
-                    let mut touch_info = self.touch_info.lock();
-                    let Some(touch_info) = &mut *touch_info else { return false };
+            GestureAction::DragStart { start } => {
+                // A grab kills running inertia and owns the scroll
+                self.speed.store(0., Ordering::Relaxed);
+                *self.drag_state.lock() = Some((start.y, self.scroll.get()));
+                true
+            }
+            GestureAction::DragMove { curr, .. } => {
+                // Extending a long-press selection instead of scrolling
+                if *self.lp_mode.lock() == LongPressMode::Select {
+                    self.select_line(curr.y).await;
+                    return true
+                }
 
-                    touch_info.last_y = touch_y;
-
-                    let start_scroll = touch_info.start_scroll;
-                    let start_y = touch_info.start_y;
-
-                    let start_elapsed =
-                        touch_info.start_instant.elapsed().as_micros() as f32 / 1000.;
-                    let is_select_mode = touch_info.is_select_mode.clone();
-
-                    touch_info.push_sample(touch_y);
-
-                    // Only update screen every 20ms. Avoid wasting cycles.
-                    let last_elapsed = touch_info.last_instant.elapsed().as_micros();
-                    let do_update = last_elapsed > 20_000;
-                    if do_update {
-                        touch_info.last_instant = std::time::Instant::now();
-                    }
-
-                    (start_scroll, start_y, start_elapsed, do_update, is_select_mode)
+                let scroll = {
+                    let drag_state = self.drag_state.lock();
+                    let Some((start_y, start_scroll)) = *drag_state else { return false };
+                    // ChatView's scroll grows back into history (the
+                    // opposite axis of the emoji/menu scrollers), so
+                    // the finger offset adds: scroll = start + dy.
+                    start_scroll + curr.y - start_y
                 };
 
-                t!("touch phase moved, is_select_mode={is_select_mode:?}");
-
-                // When scrolling if we suddenly grab the screen for more than a brief period
-                // of time then stop the scrolling completely.
-                if start_elapsed > 200. {
-                    t!("Stopping scroll accel");
-                    self.speed.store(0., Ordering::Relaxed);
-                }
-
-                // Only update every so often to prevent wasting resources.
-                if !do_update {
-                    return true
-                }
-
-                // We are in selection mode so don't scroll the screen until touch phase ends.
-                if is_select_mode == Some(true) {
-                    self.select_line(touch_y).await;
-                    return true
-                }
-
-                let dist = touch_y - start_y;
-                // No movement so just return
-                if dist.abs() < BIG_EPSILON {
-                    return true
-                }
-                let scroll = start_scroll + dist;
-                let atom = &mut self.redraw.make_guard(gfxtag!("ChatView::handle_touch_scroll"));
+                let atom = &mut self.redraw.make_guard(gfxtag!("ChatView::handle_gesture_scroll"));
                 self.scrollview(scroll, atom).await;
+                true
             }
-            TouchPhase::Ended | TouchPhase::Cancelled => {
-                let (start_y, is_select_mode) = {
-                    let touch_info = self.touch_info.lock();
-                    let Some(touch_info) = &*touch_info else { return true };
-                    (touch_info.start_y, touch_info.is_select_mode)
-                };
+            GestureAction::DragEnd { vel, .. } => {
+                *self.drag_state.lock() = None;
 
-                // If the timer never fired and movement was minimal, it is a tap.
-                if is_select_mode.is_none() && (touch_y - start_y).abs() < BIG_EPSILON {
-                    // A tap forwards to the message first (opens a URL / downloads a file).
-                    let mut msgbuf = self.msgbuf.lock().await;
-                    let msgbuf_pos = self.to_msgbuf_pos(touch_pos);
-                    let mut is_handled = false;
-                    if let Some((msg, msg_top)) =
-                        msgbuf.get_line(&self.rect.get(), msgbuf_pos.y).await
-                    {
-                        is_handled = msg
-                            .handle_touch(
-                                TouchPhase::Ended,
-                                0,
-                                Point::new(msgbuf_pos.x, msg_top - msgbuf_pos.y),
-                            )
-                            .await
-                    }
-                    drop(msgbuf);
-
-                    // Not a URL/file tap and selection mode is active: toggle the line.
-                    if !is_handled && self.select_active.load(Ordering::Relaxed) {
-                        if self.is_line_selected(touch_y).await {
-                            self.deselect_line(touch_y).await;
-                        } else {
-                            self.select_line(touch_y).await;
-                        }
-                    }
+                // No scroll accel when selection was active
+                if *self.lp_mode.lock() == LongPressMode::Select {
+                    return true
                 }
 
-                self.end_touch_phase(touch_y);
+                // Feed inertia from the release velocity, reproducing
+                // the old dist-over-sample-window formula (px/ms).
+                let accel = self.scroll_start_accel.get() * vel.y / 1000.;
+                self.speed.fetch_add(accel, Ordering::Relaxed);
+                self.motion_cv.notify();
+                true
+            }
+            GestureAction::Up { .. } => {
+                self.touch_is_active.store(false, Ordering::Relaxed);
+                true
+            }
+            GestureAction::LongPress { pos } => {
+                self.handle_long_press(pos).await;
+                true
+            }
+            GestureAction::Tap { pos } => {
+                self.handle_tap(pos).await;
+                true
             }
         }
-        true
     }
 }
 

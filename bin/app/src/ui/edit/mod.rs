@@ -16,13 +16,12 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use super::long_press_timeout;
 use async_trait::async_trait;
 use atomic_float::AtomicF32;
 use darkfi::system::msleep;
 use darkfi_serial::Decodable;
 use futures::FutureExt;
-use miniquad::{KeyCode, KeyMods, MouseButton, TouchPhase};
+use miniquad::{KeyCode, KeyMods, MouseButton};
 use parking_lot::Mutex as SyncMutex;
 use rand::{rngs::OsRng, Rng};
 use std::{
@@ -57,14 +56,14 @@ const ACTION_COPY: u32 = 0;
 const ACTION_PASTE: u32 = 1;
 const ACTION_SELALL: u32 = 2;
 
-use super::{DrawUpdate, OnModify, RedrawTrigger, UIObject};
+use super::{DrawUpdate, GestureAction, GestureSet, OnModify, RedrawTrigger, UIObject};
 
 mod action;
 mod filter;
 use filter::{ALLOWED_KEYCODES, DISALLOWED_CHARS};
 mod behave;
 pub use behave::BaseEditType;
-use behave::{EditorBehavior, MultiLine, ScrollDir, SingleLine};
+use behave::{EditorBehavior, MultiLine, SingleLine};
 mod repeat;
 use repeat::{PressedKey, PressedKeysSmoothRepeat};
 
@@ -97,66 +96,38 @@ macro_rules! ed {
     };
 }
 
+/// What the touch armed at `Down`.
 #[derive(Debug, Clone)]
-enum TouchStateAction {
+enum TouchArm {
+    /// Nothing armed (no touch, or the action menu consumed the press)
     Inactive,
-    Started { pos: Point, instant: std::time::Instant },
-    StartSelect,
-    Select,
-    DragSelectHandle { side: isize },
-    ScrollVert { start_pos: Point, scroll_start: f32 },
-    SetCursorPos,
+    /// The touch began inside the rect; drags may engage scrolling
+    Pressed,
+    /// A selection handle was grabbed; the precision drag adjusts the
+    /// selection endpoint from the first movement
+    Handle { side: isize },
 }
 
+/// What a `Pressed` touch's drag engaged as.
+#[derive(Debug, Clone)]
+enum DragMode {
+    /// Not yet engaged (movement below the travel threshold)
+    Undecided,
+    /// Content scrolling along the scroll direction
+    Scroll,
+    /// Off-direction movement; the cursor is set at release (no-op
+    /// while dragging, as before)
+    Cursor,
+}
+
+/// Gesture-touch state, armed at `Down` and driven by the drag
+/// lifecycle.
 struct TouchInfo {
-    state: TouchStateAction,
-    scroll: Arc<AtomicF32>,
-    scroll_ctrl: ScrollDir,
-}
-
-impl TouchInfo {
-    fn new(scroll: Arc<AtomicF32>, scroll_ctrl: ScrollDir) -> Self {
-        Self { state: TouchStateAction::Inactive, scroll, scroll_ctrl }
-    }
-
-    fn start(&mut self, pos: Point) {
-        debug!(target: "ui::chatedit::touch", "start touch: Started state");
-        self.state = TouchStateAction::Started { pos, instant: std::time::Instant::now() };
-    }
-
-    fn stop(&mut self) -> TouchStateAction {
-        debug!(target: "ui::chatedit::touch", "stop touch: Inactive state");
-        std::mem::replace(&mut self.state, TouchStateAction::Inactive)
-    }
-
-    fn update(&mut self, pos: &Point) {
-        match &self.state {
-            TouchStateAction::Started { pos: start_pos, instant } => {
-                let travel_dist_sq = pos.dist_sq(*start_pos);
-                let grad = (pos.y - start_pos.y) / (pos.x - start_pos.x);
-                let elapsed = instant.elapsed().as_millis();
-                //debug!(target: "ui::chatedit::touch", "TouchInfo::update() [travel_dist_sq={travel_dist_sq}, grad={grad}]");
-
-                if travel_dist_sq < HOLD_TRAVEL_THRESHOLD_SQ {
-                    if elapsed > long_press_timeout() as u128 {
-                        debug!(target: "ui::chatedit::touch", "update touch state: Started -> StartSelect");
-                        self.state = TouchStateAction::StartSelect;
-                    }
-                } else if self.scroll_ctrl.cmp(grad) {
-                    // Vertical movement
-                    debug!(target: "ui::chatedit::touch", "update touch state: Started -> ScrollVert");
-                    let scroll_start = self.scroll.load(Ordering::Relaxed);
-                    self.state =
-                        TouchStateAction::ScrollVert { start_pos: *start_pos, scroll_start };
-                } else {
-                    // Horizontal movement
-                    debug!(target: "ui::chatedit::touch", "update touch state: Started -> SetCursorPos");
-                    self.state = TouchStateAction::SetCursorPos;
-                }
-            }
-            _ => {}
-        }
-    }
+    arm: SyncMutex<TouchArm>,
+    /// The engaged drag mode for a `Pressed` touch
+    mode: SyncMutex<DragMode>,
+    /// Scroll-drag baseline: (touch pos at drag start, scroll then)
+    scroll_drag: SyncMutex<Option<(Point, f32)>>,
 }
 
 pub type BaseEditPtr = Arc<BaseEdit>;
@@ -224,7 +195,7 @@ pub struct BaseEdit {
     sel_sender: SyncMutex<Option<async_channel::Sender<Option<(Point, Option<isize>)>>>>,
     scroll: Arc<AtomicF32>,
 
-    touch_info: SyncMutex<TouchInfo>,
+    touch_info: TouchInfo,
     is_phone_select: AtomicBool,
 
     parent_rect: Arc<SyncMutex<Option<Rectangle>>>,
@@ -403,7 +374,11 @@ impl BaseEdit {
             sel_sender: SyncMutex::new(None),
             scroll: scroll.clone(),
 
-            touch_info: SyncMutex::new(TouchInfo::new(scroll, behave.scroll_ctrl())),
+            touch_info: TouchInfo {
+                arm: SyncMutex::new(TouchArm::Inactive),
+                mode: SyncMutex::new(DragMode::Undecided),
+                scroll_drag: SyncMutex::new(None),
+            },
             is_phone_select: AtomicBool::new(false),
 
             parent_rect,
@@ -586,9 +561,7 @@ impl BaseEdit {
             'v' => {
                 if action_mod {
                     if let Some(txt) = clipboard::get() {
-                        self.editor.lock().insert(&txt, atom);
-                        // Maybe insert should call this?
-                        self.behave.apply_cursor_scroll();
+                        self.insert_text(&txt, atom);
                     }
                 }
             }
@@ -724,6 +697,17 @@ impl BaseEdit {
         true
     }
 
+    /// Insert text programmatically at the selection. Inserting
+    /// collapses the selection, so any phone-style selection (and its
+    /// handles/action menu) must be finished too — the draw pass
+    /// asserts a non-collapsed selection while phone-select is
+    /// active. Keeps the cursor scrolled into view.
+    fn insert_text(&self, txt: &str, atom: &mut PropertyAtomicGuard) {
+        self.editor.lock().insert(txt, atom);
+        self.behave.apply_cursor_scroll();
+        self.finish_select(atom);
+    }
+
     /// This will select the entire word rather than move the cursor to that location
     fn start_touch_select(&self, touch_pos: Point, atom: &mut PropertyAtomicGuard) {
         ed!("start_touch_select({touch_pos:?}) before=[{}]", self.dbg_state());
@@ -740,8 +724,11 @@ impl BaseEdit {
         self.hide_cursor.store(true, Ordering::Relaxed);
     }
 
-    fn handle_touch_start(&self, touch_pos: Point) -> bool {
-        ed!("handle_touch_start({touch_pos:?}) before=[{}]", self.dbg_state());
+    /// `Down` passthrough: arm the touch. Grabbing a selection handle
+    /// is a zero-threshold action; the action menu consumes the press;
+    /// otherwise the press waits for recognition.
+    fn gesture_down(&self, touch_pos: Point) -> bool {
+        ed!("gesture_down({touch_pos:?}) before=[{}]", self.dbg_state());
 
         let rect = self.rect.get();
         let local_pos = touch_pos - rect.pos();
@@ -749,12 +736,14 @@ impl BaseEdit {
         // Grabbing a select handle must keep the action menu visible: the
         // user adjusts the selection, then taps Copy/Paste. Check the drag
         // BEFORE interact(), which consumes the menu.
-        if self.try_handle_drag(touch_pos) {
-            ed!("handle_touch_start: handled by drag handle");
+        if let Some(side) = self.select_handle_at(touch_pos) {
+            *self.touch_info.arm.lock() = TouchArm::Handle { side };
+            *self.touch_info.mode.lock() = DragMode::Undecided;
+            ed!("gesture_down: grabbing select handle side={side}");
             return true
         }
 
-        let atom = &mut self.redraw.make_guard(gfxtag!("BaseEdit::handle_touch_start_action"));
+        let atom = &mut self.redraw.make_guard(gfxtag!("BaseEdit::gesture_down_action"));
         if let Some(action_id) = self.action_mode.interact(local_pos) {
             match action_id {
                 ACTION_COPY => {
@@ -764,9 +753,7 @@ impl BaseEdit {
                 }
                 ACTION_PASTE => {
                     if let Some(txt) = clipboard::get() {
-                        self.editor.lock().insert(&txt, atom);
-                        self.behave.apply_cursor_scroll();
-                        self.finish_select(atom);
+                        self.insert_text(&txt, atom);
                     }
                 }
                 ACTION_SELALL => {
@@ -786,14 +773,13 @@ impl BaseEdit {
         }
 
         if !rect.contains(touch_pos) {
-            ed!("handle_touch_start: outside rect={rect:?}, ignoring");
-            t!("rect!cont rect={rect:?}, touch_pos={touch_pos:?}");
+            ed!("gesture_down: outside rect={rect:?}, ignoring");
             return false
         }
 
-        let mut touch_info = self.touch_info.lock();
-        touch_info.start(touch_pos);
-        ed!("handle_touch_start: touch started, waiting for move/end");
+        *self.touch_info.arm.lock() = TouchArm::Pressed;
+        *self.touch_info.mode.lock() = DragMode::Undecided;
+        ed!("gesture_down: touch started, waiting for move/end");
         true
     }
 
@@ -805,9 +791,12 @@ impl BaseEdit {
         endpoints
     }
 
-    fn try_handle_drag(&self, mut touch_pos: Point) -> bool {
+    /// Which selection handle (if any) is grabbable at `touch_pos`
+    /// (parent space). Non-mutating probe used for both arming and
+    /// gesture hit-testing.
+    fn select_handle_at(&self, mut touch_pos: Point) -> Option<isize> {
         let editor = self.editor.lock();
-        let Some((mut first, mut last)) = self.get_select_handles(&editor) else { return false };
+        let (mut first, mut last) = self.get_select_handles(&editor)?;
 
         self.abs_to_local(&mut touch_pos);
 
@@ -828,167 +817,211 @@ impl BaseEdit {
         let is_first = first_dist_sq <= TOUCH_RADIUS_SQ;
         let is_last = last_dist_sq <= TOUCH_RADIUS_SQ;
 
-        let mut side = 0;
-
         if is_first && is_last {
             // Are we closer to the first or last?
             // Break the tie
             if first_dist_sq < last_dist_sq {
-                side = -1;
+                Some(-1)
             } else {
-                side = 1;
+                Some(1)
             }
         } else if is_first {
-            side = -1;
+            Some(-1)
         } else if is_last {
-            side = 1;
+            Some(1)
+        } else {
+            None
         }
-
-        if side != 0 {
-            d!("start touch: DragSelectHandle state [side={side}]");
-            // Set touch_state status to enable begin dragging them
-            let mut touch_info = self.touch_info.lock();
-            touch_info.state = TouchStateAction::DragSelectHandle { side };
-            ed!("try_handle_drag: grabbing select handle side={side}");
-            return true
-        }
-
-        ed!("try_handle_drag: no handle grabbed");
-        false
     }
 
-    fn handle_touch_move(&self, mut touch_pos: Point) -> bool {
-        if !self.is_active.get() {
-            return false
+    /// Selection-handle drag: follow the finger with autoscroll when
+    /// it leaves the rect.
+    fn drag_select_handle(&self, touch_pos: Point, side: isize) {
+        // The IME can collapse the selection (finishing phone-select
+        // mode) while a handle drag is in progress. Abort the drag
+        // instead of asserting on the stale state.
+        if !self.is_phone_select.load(Ordering::Relaxed) {
+            ed!("drag_select_handle: phone select finished mid-drag, aborting");
+            *self.touch_info.arm.lock() = TouchArm::Inactive;
+            return
         }
 
-        // We must update with non relative touch_pos bcos when doing vertical scrolling
-        // we will modify the scroll, which is used by abs_to_local(), which is used
-        // to then calculate the max scroll. So it ends up jumping around.
-        // We use the abs touch_pos without scroll adjust applied for vert scrolling.
-        let touch_state = {
-            let mut touch_info = self.touch_info.lock();
-            touch_info.update(&touch_pos);
-            touch_info.state.clone()
+        let rect = self.rect.get();
+        let is_touch_hover = rect.contains(touch_pos);
+
+        let sel_sender = self.sel_sender.lock().clone().unwrap();
+        // Finger outside rect?
+        // If so we gotta scroll it while selecting.
+        if !is_touch_hover {
+            // This process will begin selecting text and applying scroll too.
+            sel_sender.try_send(Some((touch_pos, Some(side)))).unwrap();
+        } else {
+            // Stop any existing select/scroll process
+            sel_sender.try_send(None).unwrap();
+            // Finger is inside so just select the text once and be done.
+            self.handle_select(touch_pos, Some(side));
+        }
+    }
+
+    /// `Pressed`-touch drag movement: engage scrolling once the travel
+    /// crosses the threshold along the scroll direction, mirroring the
+    /// old gradient check.
+    fn drag_pressed(&self, touch_pos: Point) {
+        let (mode, scroll_drag) = {
+            let mode = self.touch_info.mode.lock().clone();
+            let scroll_drag = *self.touch_info.scroll_drag.lock();
+            (mode, scroll_drag)
         };
-        ed!("handle_touch_move({touch_pos:?}) touch_state={touch_state:?}");
-        //t!("handle_touch_move({touch_pos:?})  touch_state={touch_state:?}");
-        match &touch_state {
-            TouchStateAction::Inactive => return false,
-            TouchStateAction::StartSelect => {
-                let mut menu = action::Menu::new(
-                    self.font_size.get(),
-                    self.action_fg_color.get(),
-                    self.action_bg_color.get(),
-                    self.action_padding.get(),
-                    self.action_spacing.get(),
-                    self.window_scale.get(),
-                );
 
-                let atom =
-                    &mut self.redraw.make_guard(gfxtag!("BaseEdit::TouchStateAction::StartSelect"));
+        match mode {
+            DragMode::Undecided => {
+                let Some((start_pos, scroll_start)) = scroll_drag else { return };
 
-                if self.text.get().is_empty() {
-                    menu.add("Paste", ACTION_PASTE);
-                    // Set the menu pos to the current cursor pos
-                    menu.pos = self.get_cursor_pos();
-
-                    self.touch_info.lock().state = TouchStateAction::Inactive;
-                } else {
-                    menu.add("Copy", ACTION_COPY);
-                    menu.add("Paste", ACTION_PASTE);
-                    menu.add("Select All", ACTION_SELALL);
-
-                    self.abs_to_local(&mut touch_pos);
-                    self.start_touch_select(touch_pos, atom);
-
-                    {
-                        let editor = self.editor.lock();
-                        let (curs_lhs, _) = self.get_select_handles(&editor).unwrap();
-                        // Set the menu pos to the LHS of the selection
-                        menu.pos = curs_lhs + self.behave.inner_pos();
-                    }
-
-                    // Adjust menu pos so RHS doesnt leave the RHS of this widget
-                    let rect = self.rect.get();
-                    if menu.pos.x + menu.total_width() > rect.w {
-                        menu.pos.x = rect.w - menu.total_width();
-                    }
-
-                    d!("touch state: StartSelect -> Select");
-                    self.touch_info.lock().state = TouchStateAction::Select;
-                }
-                self.action_mode.set(menu);
-                ed!("handle_touch_move: StartSelect handled");
-            }
-            TouchStateAction::DragSelectHandle { side } => {
-                // The IME can collapse the selection (finishing phone-select
-                // mode) while a handle drag is in progress. Abort the drag
-                // instead of asserting on the stale state.
-                if !self.is_phone_select.load(Ordering::Relaxed) {
-                    ed!("handle_touch_move: phone select finished mid-drag, aborting");
-                    self.touch_info.lock().state = TouchStateAction::Inactive;
-                    return true
+                let travel_dist_sq = touch_pos.dist_sq(start_pos);
+                if travel_dist_sq < HOLD_TRAVEL_THRESHOLD_SQ {
+                    return
                 }
 
-                let rect = self.rect.get();
-                let is_touch_hover = rect.contains(touch_pos);
-
-                let sel_sender = self.sel_sender.lock().clone().unwrap();
-                // Mouse is outside rect?
-                // If so we gotta scroll it while selecting.
-                if !is_touch_hover {
-                    // This process will begin selecting text and applying scroll too.
-                    sel_sender.try_send(Some((touch_pos, Some(*side)))).unwrap();
+                let grad = (touch_pos.y - start_pos.y) / (touch_pos.x - start_pos.x);
+                if self.behave.scroll_ctrl().cmp(grad) {
+                    // Vertical movement engages content scrolling
+                    *self.touch_info.mode.lock() = DragMode::Scroll;
+                    *self.touch_info.scroll_drag.lock() = Some((start_pos, scroll_start));
                 } else {
-                    // Stop any existing select/scroll process
-                    sel_sender.try_send(None).unwrap();
-                    // Mouse is inside so just select the text once and be done.
-                    self.handle_select(touch_pos, Some(*side));
+                    // Off-direction movement; cursor is set on release
+                    *self.touch_info.mode.lock() = DragMode::Cursor;
                 }
             }
-            TouchStateAction::ScrollVert { start_pos, scroll_start } => {
-                let travel_dist = self.behave.scroll_ctrl().travel(*start_pos, touch_pos);
+            DragMode::Scroll => {
+                let Some((start_pos, scroll_start)) = scroll_drag else { return };
+
+                let travel_dist = self.behave.scroll_ctrl().travel(start_pos, touch_pos);
                 let mut scroll = scroll_start + travel_dist;
                 scroll = scroll.clamp(0., self.behave.max_scroll());
                 if (self.scroll.load(Ordering::Relaxed) - scroll).abs() < VERT_SCROLL_UPDATE_INC {
-                    return true
+                    return
                 }
                 self.scroll.store(scroll, Ordering::Release);
                 self.redraw.trigger();
             }
-            TouchStateAction::SetCursorPos => {
-                // TBH I can't even see the cursor under my thumb so I'll just
-                // comment this for now.
+            DragMode::Cursor => {
+                // Off-direction movement: nothing while dragging; the
+                // cursor is positioned at release (see gesture_up).
             }
-            _ => {}
         }
-        true
     }
-    async fn handle_touch_end(&self, mut touch_pos: Point) -> bool {
-        //t!("handle_touch_end({touch_pos:?})");
-        self.abs_to_local(&mut touch_pos);
 
-        let state = self.touch_info.lock().stop();
-        ed!("handle_touch_end({touch_pos:?}) final_state={state:?}");
-        match state {
-            TouchStateAction::Inactive => return false,
-            TouchStateAction::Started { pos: _, instant: _ } | TouchStateAction::SetCursorPos => {
-                let atom = &mut self.redraw.make_guard(gfxtag!("BaseEdit::handle_touch_end"));
-                self.touch_set_cursor_pos(atom, touch_pos);
+    /// `LongPress` resolved by the recognizer: select the word under
+    /// the finger and show the copy/paste action menu while the finger
+    /// is still down.
+    fn gesture_long_press(&self, touch_pos: Point) {
+        ed!("gesture_long_press({touch_pos:?}) before=[{}]", self.dbg_state());
+
+        let mut menu = action::Menu::new(
+            self.font_size.get(),
+            self.action_fg_color.get(),
+            self.action_bg_color.get(),
+            self.action_padding.get(),
+            self.action_spacing.get(),
+            self.window_scale.get(),
+        );
+
+        let atom = &mut self.redraw.make_guard(gfxtag!("BaseEdit::gesture_long_press"));
+
+        let mut local_pos = touch_pos;
+        self.abs_to_local(&mut local_pos);
+
+        if self.text.get().is_empty() {
+            menu.add("Paste", ACTION_PASTE);
+            // Set the menu pos to the current cursor pos
+            menu.pos = self.get_cursor_pos();
+
+            *self.touch_info.arm.lock() = TouchArm::Inactive;
+        } else {
+            menu.add("Copy", ACTION_COPY);
+            menu.add("Paste", ACTION_PASTE);
+            menu.add("Select All", ACTION_SELALL);
+
+            self.start_touch_select(local_pos, atom);
+
+            {
+                let editor = self.editor.lock();
+                let (curs_lhs, _) = self.get_select_handles(&editor).unwrap();
+                // Set the menu pos to the LHS of the selection
+                menu.pos = curs_lhs + self.behave.inner_pos();
             }
-            _ => {}
+
+            // Adjust menu pos so RHS doesnt leave the RHS of this widget
+            let rect = self.rect.get();
+            if menu.pos.x + menu.total_width() > rect.w {
+                menu.pos.x = rect.w - menu.total_width();
+            }
+
+            // Word-selected: release must not set the cursor
+            *self.touch_info.arm.lock() = TouchArm::Inactive;
+        }
+        self.action_mode.set(menu);
+    }
+
+    /// `DragMove` driven by the precision drag recognizer: handle
+    /// drag, content scroll, or nothing, per the armed state.
+    fn gesture_drag_move(&self, touch_pos: Point) -> bool {
+        if !self.is_active.get() {
+            return false
+        }
+
+        let arm = self.touch_info.arm.lock().clone();
+        ed!("gesture_drag_move({touch_pos:?}) arm={arm:?}");
+
+        match arm {
+            TouchArm::Inactive => false,
+            TouchArm::Handle { side } => {
+                self.drag_select_handle(touch_pos, side);
+                true
+            }
+            TouchArm::Pressed => {
+                self.drag_pressed(touch_pos);
+                true
+            }
+        }
+    }
+
+    /// `Up` passthrough: finalize the touch. A `Pressed` release that
+    /// did not engage scrolling positions the cursor (this covers the
+    /// tap, the tap/long-press dead zone, and off-direction drags —
+    /// exactly the old release behavior). Also stops selection
+    /// autoscroll and requests focus.
+    async fn gesture_up(&self, touch_pos: Point) -> bool {
+        let arm = std::mem::replace(&mut *self.touch_info.arm.lock(), TouchArm::Inactive);
+        let mode = std::mem::replace(&mut *self.touch_info.mode.lock(), DragMode::Undecided);
+        *self.touch_info.scroll_drag.lock() = None;
+        ed!("gesture_up({touch_pos:?}) final_arm={arm:?} mode={mode:?}");
+
+        if matches!(arm, TouchArm::Inactive) {
+            return false
+        }
+
+        if matches!(arm, TouchArm::Pressed) && !matches!(mode, DragMode::Scroll) {
+            let mut local_pos = touch_pos;
+            self.abs_to_local(&mut local_pos);
+            let atom = &mut self.redraw.make_guard(gfxtag!("BaseEdit::gesture_up"));
+            self.touch_set_cursor_pos(atom, local_pos);
         }
 
         // Stop any selection scrolling
         let scroll_sender = self.sel_sender.lock().clone().unwrap();
         scroll_sender.try_send(None).unwrap();
 
-        let mut need_focus = !self.is_focused.get();
-        #[cfg(target_os = "android")]
-        if !is_ime_visible() {
-            need_focus = true;
-        }
+        let need_focus = {
+            #[cfg(target_os = "android")]
+            {
+                !self.is_focused.get() || !is_ime_visible()
+            }
+            #[cfg(not(target_os = "android"))]
+            {
+                !self.is_focused.get()
+            }
+        };
 
         if need_focus {
             let node = self.node();
@@ -1357,8 +1390,7 @@ impl BaseEdit {
         };
 
         let atom = &mut self_.redraw.make_guard(gfxtag!("BaseEdit::process_insert_text_method"));
-        self_.editor.lock().insert(&text, atom);
-        self_.action_mode.clear();
+        self_.insert_text(&text, atom);
         ed!("insert_text method: inserted {text:?} after=[{}]", self_.dbg_state());
         true
     }
@@ -1414,6 +1446,29 @@ impl BaseEdit {
         true
     }
 
+    /// Hides the IME soft keyboard without leaving the focused state:
+    /// the cursor stays visible. Used when an overlay (the emoji
+    /// picker panel) replaces the keyboard.
+    async fn process_hide_ime_method(me: &Weak<Self>, sub: &MethodCallSub) -> bool {
+        let Ok(method_call) = sub.receive().await else {
+            debug!(target: "ui::chatedit", "Event relayer closed");
+            return false
+        };
+
+        t!("method called: hide_ime({method_call:?})");
+        assert!(method_call.send_res.is_none());
+        assert!(method_call.data.is_empty());
+
+        let Some(self_) = me.upgrade() else {
+            // Should not happen
+            panic!("self destroyed before hide_ime_method_task was stopped!");
+        };
+
+        self_.editor.lock().unfocus();
+        ed!("hide_ime method: done after=[{}]", self_.dbg_state());
+        true
+    }
+
     #[cfg(target_os = "android")]
     fn handle_android_event(&self, state: AndroidTextInputState) {
         if !self.is_active.get() {
@@ -1428,10 +1483,7 @@ impl BaseEdit {
         // selection and finish phone-select mode, making the handles
         // vanish. Drop it: the next drag update re-asserts the real
         // selection.
-        let drag_in_progress = {
-            let touch_info = self.touch_info.lock();
-            matches!(touch_info.state, TouchStateAction::DragSelectHandle { .. })
-        };
+        let drag_in_progress = { matches!(*self.touch_info.arm.lock(), TouchArm::Handle { .. }) };
         if drag_in_progress && state.select.0 == state.select.1 {
             ed!("handle_android_event: DROP collapsed IME echo mid-drag state={state:?}");
             return
@@ -1547,6 +1599,11 @@ impl UIObject for BaseEdit {
         let unfocus_task =
             ex.spawn(async move { while Self::process_unfocus_method(&me2, &method_sub).await {} });
 
+        let method_sub = node_ref.subscribe_method_call("hide_ime").unwrap();
+        let me2 = me.clone();
+        let hide_ime_task = ex
+            .spawn(async move { while Self::process_hide_ime_method(&me2, &method_sub).await {} });
+
         let mut on_modify = OnModify::new(ex.clone(), self.node.clone(), me.clone());
         on_modify.when_change_external(self.is_focused.prop(), Self::change_focus);
 
@@ -1660,7 +1717,7 @@ impl UIObject for BaseEdit {
             }
         });
 
-        let mut tasks = vec![insert_text_task, focus_task, unfocus_task, sel_task];
+        let mut tasks = vec![insert_text_task, focus_task, unfocus_task, hide_ime_task, sel_task];
         tasks.append(&mut on_modify.tasks);
 
         #[cfg(target_os = "android")]
@@ -1746,11 +1803,8 @@ impl UIObject for BaseEdit {
 
         t!("Key {:?} has {} actions", key, actions);
         let key_str = key.to_string().repeat(actions as usize);
-        self.editor.lock().insert(&key_str, atom);
-        self.behave.apply_cursor_scroll();
+        self.insert_text(&key_str, atom);
         self.pause_blinking();
-        // Any edit invalidates the action menu's selection
-        self.action_mode.clear();
         ed!("handle_char: inserted {key_str:?} after=[{}]", self.dbg_state());
         true
     }
@@ -1891,9 +1945,7 @@ impl UIObject for BaseEdit {
                 }
                 ACTION_PASTE => {
                     if let Some(txt) = clipboard::get() {
-                        self.editor.lock().insert(&txt, atom);
-                        self.behave.apply_cursor_scroll();
-                        self.finish_select(atom);
+                        self.insert_text(&txt, atom);
                     }
                 }
                 ACTION_SELALL => {
@@ -1963,40 +2015,56 @@ impl UIObject for BaseEdit {
         true
     }
 
-    /// Runs on the Stage thread inside the miniquad event callback.
-    /// Converted to mutate + trigger: state mutations happen inline and the
-    /// redraw is enqueued for the serialized draw pass (one extra hop of
-    /// latency for drag-handle feedback; see design.md D6).
-    fn handle_touch_sync(&self, phase: TouchPhase, id: u64, touch_pos: Point) -> bool {
-        if !self.is_active.get() {
-            return false
-        }
-
-        // Ignore multi-touch
-        if id != 0 {
-            return false
-        }
-
-        match phase {
-            TouchPhase::Started => self.handle_touch_start(touch_pos),
-            TouchPhase::Moved => self.handle_touch_move(touch_pos),
-            TouchPhase::Ended | TouchPhase::Cancelled => false,
-        }
+    fn gesture_set(&self) -> GestureSet {
+        GestureSet::EDIT
     }
 
-    async fn handle_touch(&self, phase: TouchPhase, id: u64, touch_pos: Point) -> bool {
+    fn gesture_hit_test(&self, pos: Point) -> bool {
         if !self.is_active.get() {
             return false
         }
 
-        // Ignore multi-touch
-        if id != 0 {
+        let rect = self.rect.get();
+        if rect.contains(pos) {
+            return true
+        }
+
+        // The selection handles and the action menu render outside the
+        // rect but must stay grabbable.
+        if self.select_handle_at(pos).is_some() {
+            return true
+        }
+
+        self.action_mode.hit(pos - rect.pos())
+    }
+
+    async fn handle_gesture(&self, gesture: GestureAction) -> bool {
+        if !self.is_active.get() {
             return false
         }
 
-        match phase {
-            TouchPhase::Started | TouchPhase::Moved | TouchPhase::Cancelled => false,
-            TouchPhase::Ended => self.handle_touch_end(touch_pos).await,
+        match gesture {
+            GestureAction::Down { pos } => self.gesture_down(pos),
+            GestureAction::DragStart { start } => {
+                // Scroll-drag baseline; handle drags ignore it
+                *self.touch_info.scroll_drag.lock() =
+                    Some((start, self.scroll.load(Ordering::Relaxed)));
+                true
+            }
+            GestureAction::DragMove { curr, .. } => self.gesture_drag_move(curr),
+            GestureAction::LongPress { pos } => {
+                self.gesture_long_press(pos);
+                true
+            }
+            GestureAction::Tap { pos } => {
+                let mut local_pos = pos;
+                self.abs_to_local(&mut local_pos);
+                let atom = &mut self.redraw.make_guard(gfxtag!("BaseEdit::gesture_tap"));
+                self.touch_set_cursor_pos(atom, local_pos);
+                true
+            }
+            GestureAction::Up { pos } => self.gesture_up(pos).await,
+            _ => false,
         }
     }
 }
@@ -2006,5 +2074,91 @@ impl UIObject for BaseEdit {
 impl std::fmt::Debug for BaseEdit {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         write!(f, "{:?}", self.node.upgrade().unwrap())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    use crate::{
+        app::node::create_multiline_edit,
+        gfx::Renderer,
+        prop::{Property, PropertySubType, PropertyType},
+        scene::{Pimpl, SceneNode, SceneNodeType},
+        ui::RedrawTrigger,
+    };
+
+    /// Inserting programmatically (emoji insert, paste) collapses the
+    /// selection. Any phone-style selection must be finished at the
+    /// same time, or the next draw pass asserts in
+    /// `get_select_handles` (phone-select handles over a collapsed
+    /// selection). See the on-device crash at edit/mod.rs:782.
+    #[test]
+    fn programmatic_insert_finishes_phone_select() {
+        smol::block_on(async {
+            let (redraw_tx, _redraw_rx) = RedrawTrigger::new();
+            let (method_tx, _method_rx) = async_channel::unbounded();
+            let renderer = Renderer::new(method_tx);
+            let ex: ExecutorPtr = Arc::new(smol::Executor::new());
+
+            let node = create_multiline_edit("editz");
+            {
+                let atom = &mut PropertyAtomicGuard::none();
+                node.set_property_bool(atom, Role::App, "is_active", true).unwrap();
+                let rect = node.get_property("rect").unwrap();
+                for (i, v) in [0., 0., 400., 200.].into_iter().enumerate() {
+                    rect.set_f32(atom, Role::App, i, v).unwrap();
+                }
+                let height_range = node.get_property("height_range").unwrap();
+                height_range.set_f32(atom, Role::App, 0, 20.).unwrap();
+                height_range.set_f32(atom, Role::App, 1, 200.).unwrap();
+                node.set_property_f32(atom, Role::App, "font_size", 18.).unwrap();
+                node.set_property_f32(atom, Role::App, "lineheight", 1.).unwrap();
+                node.set_property_f32(atom, Role::App, "baseline", 14.).unwrap();
+                node.set_property_f32(atom, Role::App, "cursor_descent", 6.).unwrap();
+                let padding = node.get_property("padding").unwrap();
+                for i in 0..4 {
+                    padding.set_f32(atom, Role::App, i, 2.).unwrap();
+                }
+            }
+
+            let mut scratch = SceneNode::new("scratch", SceneNodeType::Layer);
+            let mut prop = Property::new("scale", PropertyType::Float32, PropertySubType::Null);
+            prop.set_defaults_f32(vec![1.]).unwrap();
+            scratch.add_property(prop).unwrap();
+            let window_scale = PropertyFloat32::wrap(&scratch, Role::App, "scale", 0).unwrap();
+
+            let node = node
+                .setup(|me| {
+                    BaseEdit::new(
+                        me,
+                        window_scale,
+                        renderer,
+                        redraw_tx,
+                        BaseEditType::MultiLine,
+                        ex,
+                    )
+                })
+                .await;
+            let Pimpl::Edit(edit) = node.pimpl() else { panic!() };
+
+            {
+                let atom = &mut PropertyAtomicGuard::none();
+                node.set_property_str(atom, Role::App, "text", "hello world").unwrap();
+            }
+            edit.on_text_prop_changed();
+
+            // Simulate an active phone-style selection
+            edit.is_phone_select.store(true, Ordering::Relaxed);
+            edit.hide_cursor.store(true, Ordering::Relaxed);
+
+            let atom = &mut PropertyAtomicGuard::none();
+            edit.insert_text("X", atom);
+
+            assert!(!edit.is_phone_select.load(Ordering::Relaxed), "phone select must finish");
+            assert!(!edit.hide_cursor.load(Ordering::Relaxed), "cursor must be re-enabled");
+            assert!(edit.select_text.is_null(0).unwrap(), "selection text must clear");
+        });
     }
 }

@@ -17,7 +17,7 @@
  */
 
 use async_trait::async_trait;
-use miniquad::{MouseButton, TouchPhase};
+use miniquad::MouseButton;
 use parking_lot::Mutex as SyncMutex;
 use rand::{rngs::OsRng, Rng};
 use std::sync::{
@@ -34,7 +34,7 @@ use crate::{
     ExecutorPtr,
 };
 
-use super::{DrawUpdate, OnModify, RedrawTrigger, UIObject};
+use super::{DrawUpdate, GestureAction, GestureSet, OnModify, RedrawTrigger, UIObject};
 
 macro_rules! d { ($($arg:tt)*) => { debug!(target: "ui::button", $($arg)*); } }
 macro_rules! t { ($($arg:tt)*) => { trace!(target: "ui::button", $($arg)*); } }
@@ -188,56 +188,22 @@ impl UIObject for Button {
         true
     }
 
-    async fn handle_touch(&self, phase: TouchPhase, id: u64, touch_pos: Point) -> bool {
-        //t!("handle_touch({phase:?}, {id}, {touch_pos:?})");
-        if !self.is_active.get() {
-            return false
-        }
-
-        // Ignore multi-touch
-        if id != 0 {
-            return false
-        }
-
-        let rect = self.rect.get();
-        if !rect.contains(touch_pos) {
-            //t!("not inside rect");
-            return false
-        }
-
-        // Simulate mouse events
-        match phase {
-            TouchPhase::Started => self.handle_mouse_btn_down(MouseButton::Left, touch_pos).await,
-            TouchPhase::Moved => false,
-            TouchPhase::Ended => self.handle_mouse_btn_up(MouseButton::Left, touch_pos).await,
-            TouchPhase::Cancelled => false,
-        }
+    fn gesture_set(&self) -> GestureSet {
+        GestureSet::TAP
     }
 
-    fn handle_touch_sync(&self, phase: TouchPhase, id: u64, touch_pos: Point) -> bool {
-        if !self.is_active.get() {
-            return false
-        }
+    fn gesture_hit_test(&self, pos: Point) -> bool {
+        self.is_active.get() && self.rect.get().contains(pos)
+    }
 
-        // Ignore multi-touch
-        if id != 0 {
-            return false
-        }
+    async fn handle_gesture(&self, gesture: GestureAction) -> bool {
+        let GestureAction::Tap { pos: _ } = gesture else { return false };
 
-        let rect = self.rect.get();
-        if !rect.contains(touch_pos) {
-            return false
-        }
+        d!("Button clicked!");
+        let node = self.node.upgrade().unwrap();
+        node.trigger("click", vec![]).await.unwrap();
 
-        match phase {
-            TouchPhase::Started => {
-                self.mouse_btn_held.store(true, Ordering::Relaxed);
-                true
-            }
-            TouchPhase::Moved => false,
-            TouchPhase::Ended => false,
-            TouchPhase::Cancelled => false,
-        }
+        true
     }
 }
 

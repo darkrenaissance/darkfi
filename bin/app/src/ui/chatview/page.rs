@@ -887,8 +887,11 @@ impl UIObject for FileMessage {
         }
         true
     }
+}
 
-    async fn handle_touch(&self, phase: TouchPhase, _id: u64, touch_pos: Point) -> bool {
+impl FileMessage {
+    /// Tap on the file area downloads the file (idle/error states).
+    pub(super) async fn handle_touch(&self, phase: TouchPhase, _id: u64, touch_pos: Point) -> bool {
         if phase != TouchPhase::Ended {
             return false
         }
@@ -1101,7 +1104,12 @@ impl UIObject for Message {
             Self::File(m) => m.handle_mouse_btn_up(btn, mouse_pos).await,
         }
     }
-    async fn handle_touch(&self, phase: TouchPhase, id: u64, touch_pos: Point) -> bool {
+}
+
+impl Message {
+    /// Tap forwarding into the message content: opens URLs, downloads
+    /// files. Returns true if the message consumed the tap.
+    pub(super) async fn handle_touch(&self, phase: TouchPhase, id: u64, touch_pos: Point) -> bool {
         match self {
             Self::Priv(m) => m.handle_touch(phase, touch_pos).await,
             Self::Date(_) => false,
