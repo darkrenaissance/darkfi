@@ -154,7 +154,9 @@ impl<const WINDOW_SIZE: usize, const NUM_BITS: usize> NativeRangeCheckChip<WINDO
             .chain(std::iter::repeat_n(false, WINDOW_SIZE - (NUM_BITS % WINDOW_SIZE)))
             .collect();
 
-        bits.chunks_exact(WINDOW_SIZE)
+        bits.as_chunks::<WINDOW_SIZE>()
+            .0
+            .iter()
             .map(|x| {
                 // Because bits <= WINDOW_SIZE * NUM_BITS, the last window may be
                 // smaller than WINDOW_SIZE.
