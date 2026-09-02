@@ -1318,7 +1318,32 @@ impl EventHandler for Stage {
         let god = GOD.get().unwrap();
         god.stop_app();
     }
+
+    fn window_minimized_event(&mut self) {
+        debug!(target: "gfx", "window minimized");
+        #[cfg(target_os = "android")]
+        {
+            miniquad::window::set_sleep_interval(None);
+
+            // Drive the screen-off transition here instead of waiting for the
+            // next update() tick: with the event loop paused there may be no
+            // ticks until the screen comes back on.
+            self.screen_state = ScreenState::SwitchOff;
+            self.event_pub.notify_screen_changed(false);
+            self.pruner.drain(&self.method_recv);
+        }
+    }
+
+    fn window_restored_event(&mut self) {
+        debug!(target: "gfx", "window restored");
+        #[cfg(target_os = "android")]
+        miniquad::window::set_sleep_interval(Some(SLEEP_INTERVAL_MS));
+    }
 }
+
+/// Android: periodic wakeup interval for the blocking event loop.
+/// Used in the `Conf` and restored in `window_restored_event`.
+const SLEEP_INTERVAL_MS: u32 = 40;
 
 pub fn run_gui(linux_backend: miniquad::conf::LinuxBackend) {
     let mut window_width = 1024;
@@ -1339,8 +1364,7 @@ pub fn run_gui(linux_backend: miniquad::conf::LinuxBackend) {
             linux_backend,
             #[cfg(target_os = "android")]
             blocking_event_loop: true,
-            #[cfg(target_os = "android")]
-            sleep_interval_ms: Some(40),
+            sleep_interval_ms: Some(SLEEP_INTERVAL_MS),
             android_panic_hook: false,
             ..Default::default()
         },

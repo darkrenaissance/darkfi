@@ -9,7 +9,7 @@ homepage = "https://dark.fi"
 repository = "https://git.dark.fi/darkrenaissance/darkfi"
 
 [dependencies]
-miniquad = { git = "https://github.com/not-fl3/miniquad" }
+miniquad = { git = "https://github.com/narodnik/miniquad" }
 
 image = "0.25.9"
 qoi = "0.4.1"
