@@ -67,7 +67,9 @@ indoc = "2.0.7"
 # Sound playback for UI events.
 # Git master: uses cpal 0.18 which has native pulseaudio/pipewire backends
 # (cpal 0.17 is ALSA-only and fails when pipewire owns the default device).
-rodio = { git = "https://github.com/RustAudio/rodio", default-features = false, features = ["playback", "vorbis", "pulseaudio"] }
+# "experimental" gates MixerDeviceSink::pause()/play(), used on Android to
+# pause the stream while idle so it holds no system wakelock.
+rodio = { git = "https://github.com/RustAudio/rodio", default-features = false, features = ["playback", "vorbis", "pulseaudio", "experimental"] }
 
 # This makes a HUGE difference to decoding speed.
 # Over 160s to like 2s.

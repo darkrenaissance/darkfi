@@ -6559,6 +6559,7 @@ name = "rodio"
 version = "0.22.2"
 source = "git+https://github.com/RustAudio/rodio#880aaba54b00aead53651ed1ccbdb672d1375a95"
 dependencies = [
+ "atomic_float",
  "cpal",
  "dasp_sample",
  "rubato",

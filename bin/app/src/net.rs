@@ -24,7 +24,7 @@ use zeromq::{Socket, SocketRecv, SocketSend};
 use crate::{
     app::node::{create_layer, create_vector_art},
     error::{Error, Result},
-    expr::{decompile, MachineGlobals, Compiler, SExprCode, SExprMachine, SExprVal},
+    expr::{decompile, Compiler, MachineGlobals, SExprCode, SExprMachine, SExprVal},
     gfx::{gfxtag, Renderer},
     prop::{PropertyType, Role},
     scene::{Pimpl, SceneNodeId, SceneNodePtr, SceneNodeType, ScenePath, Slot},
@@ -373,9 +373,9 @@ impl ZeroMQAdapter {
                         let mut names: Vec<String> =
                             prop.get_depends().into_iter().map(|d| d.local_name).collect();
                         names.extend(
-                            ["w", "h", "parent_w", "parent_h", "rect_w", "rect_h"].iter().map(
-                                |s| s.to_string(),
-                            ),
+                            ["w", "h", "parent_w", "parent_h", "rect_w", "rect_h"]
+                                .iter()
+                                .map(|s| s.to_string()),
                         );
                         check_expr(&code, &names)?;
                         prop.set_expr(atom, Role::User, prop_i, code)?;
