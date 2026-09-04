@@ -43,7 +43,7 @@ use crate::{
 // TODO: should be configurable at runtime
 //const DARKFID_ENDPOINT: &str = "tcp://127.0.0.1:18345";
 /// Testnet endpoint from drk_config.toml
-const DARKFID_ENDPOINT_TCP: &str = "tcp://127.0.0.1:18345";
+const DARKFID_ENDPOINT_TCP: &str = "tcp+tls://node0.testnet.dark.fi:18345";
 /// TODO: replace with the real darkfid tor endpoint
 const DARKFID_ENDPOINT_TOR: &str = "tor://darkfid-tor-placeholder.onion:18345";
 const DARKFID_RETRY_TIME: u64 = 20;

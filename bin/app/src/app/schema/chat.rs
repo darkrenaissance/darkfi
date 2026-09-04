@@ -620,11 +620,12 @@ pub async fn make(
         .await;
     layer_node.link(chatview_node.clone());
 
-    let tree_name = "#dev__chat_tree_v2";
-    let tree = kv_db.open_tree_default(&tree_name).unwrap();
-    if tree.is_empty().expect("cannot read dev chat tree") {
-        populate_tree(&tree);
-    }
+    // Debug stuff
+    //let tree_name = "#dev__chat_tree_v2";
+    //let tree = kv_db.open_tree_default(&tree_name).unwrap();
+    //if tree.is_empty().expect("cannot read dev chat tree") {
+    //    populate_tree(&tree);
+    //}
 
     // The label follows the bound channel.
     {
