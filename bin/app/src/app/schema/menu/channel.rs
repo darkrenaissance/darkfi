@@ -155,7 +155,7 @@ mod ui_consts {
 }
 
 async fn unfocus_editors(content: &SceneNodePtr) {
-    for name in ["channel_search", "nick_edit", "secret_edit"] {
+    for name in ["nick_edit", "secret_edit"] {
         let node = content.lookup_node(format!("/content_area/{name}")).unwrap();
         node.call_method("unfocus", vec![]).await.unwrap();
     }
@@ -436,7 +436,7 @@ pub async fn make(
     prop.set_default_f32(0, 0.).unwrap();
     prop.set_default_f32(1, LABEL_LINESPACE).unwrap();
     prop.set_default_expr(2, expr::load_var("w")).unwrap();
-    let code = cc.compile("8. * CHATEDIT_PAD + 4. * CHATEDIT_HEIGHT").unwrap();
+    let code = cc.compile("4. * CHATEDIT_PAD + 3. * CHATEDIT_HEIGHT").unwrap();
     prop.set_default_expr(3, code).unwrap();
     node.set_property_u32(atom, Role::App, "z_index", 0).unwrap();
     node.set_property_u32(atom, Role::App, "priority", 0).unwrap();
@@ -504,19 +504,6 @@ pub async fn make(
         CONTENT_OUTLINE_SIZE,
         COLOR_CYAN,
     );
-    // second horizontal line + gradient
-    shape.add_outline(
-        expr::const_f32(0.),
-        cc.compile("LABEL_LINESPACE + 5. * CHATEDIT_PAD + 3. * CHATEDIT_HEIGHT").unwrap(),
-        expr::load_var("w"),
-        cc.compile(
-            "LABEL_LINESPACE + 5. * CHATEDIT_PAD + 3. * CHATEDIT_HEIGHT + CONTENT_OUTLINE_SIZE",
-        )
-        .unwrap(),
-        CONTENT_OUTLINE_SIZE,
-        COLOR_CYAN,
-    );
-
     node.set_property_shape(atom, Role::App, "shape", shape).unwrap();
     let node =
         node.setup(|me| VectorArt::new(me, app.renderer.clone(), app.redraw_trigger.clone())).await;
@@ -708,119 +695,6 @@ pub async fn make(
             )
         })
         .await;
-    content_area.link(node);
-
-    let node = create_singleline_edit("channel_search");
-    node.set_property_bool(atom, Role::App, "is_active", true).unwrap();
-    node.set_property_bool(atom, Role::App, "is_focused", false).unwrap();
-
-    let prop = node.get_property("rect").unwrap();
-    prop.set_default_f32(0, CHATEDIT_PAD).unwrap();
-    prop.set_default_f32(1, LABEL_LINESPACE + 7. * CHATEDIT_PAD + 3. * CHATEDIT_HEIGHT).unwrap();
-    let code = cc.compile("parent_w - 2 * CHATEDIT_PAD").unwrap();
-    prop.set_default_expr(2, code).unwrap();
-    prop.set_default_f32(3, CHATEDIT_HEIGHT).unwrap();
-
-    let prop = node.get_property("padding").unwrap();
-    prop.set_default_f32(0, 0.).unwrap();
-    prop.set_default_f32(1, 0.).unwrap();
-    prop.set_default_f32(2, TEXTBAR_BASELINE / 2.).unwrap();
-    prop.set_default_f32(3, 15.).unwrap();
-    node.get_property("baseline").unwrap().set_default_f32(0, TEXTBAR_BASELINE).unwrap();
-    node.get_property("font_size").unwrap().set_default_f32(0, FONTSIZE * 0.88).unwrap();
-
-    let prop = node.get_property("text_color").unwrap();
-    prop.set_default_f32_multi(&[1., 1., 1., 1.]).unwrap();
-    let prop = node.get_property("text_hi_color").unwrap();
-    prop.set_default_f32_multi(&[0.44, 0.96, 1., 1.]).unwrap();
-    let prop = node.get_property("text_cmd_color").unwrap();
-    prop.set_default_f32_multi(&[0.64, 1., 0.83, 1.]).unwrap();
-    let prop = node.get_property("cursor_color").unwrap();
-    prop.set_default_f32_multi(&[0.816, 0.627, 1., 1.]).unwrap();
-    node.set_property_f32(atom, Role::App, "cursor_ascent", CHATEDIT_CURSOR_ASCENT).unwrap();
-    node.set_property_f32(atom, Role::App, "cursor_descent", CHATEDIT_CURSOR_DESCENT).unwrap();
-    node.set_property_f32(atom, Role::App, "select_ascent", CHATEDIT_SELECT_ASCENT).unwrap();
-    node.set_property_f32(atom, Role::App, "select_descent", CHATEDIT_SELECT_DESCENT).unwrap();
-    node.set_property_f32(atom, Role::App, "handle_descent", CHATEDIT_HANDLE_DESCENT).unwrap();
-    node.get_property("action_padding").unwrap().set_default_f32(0, ACTION_PADDING).unwrap();
-    node.get_property("action_spacing").unwrap().set_default_f32(0, ACTION_SPACING).unwrap();
-    let prop = node.get_property("hi_bg_color").unwrap();
-    prop.set_default_f32_multi(&[0.027, 0.039, 0.039, 0.6]).unwrap();
-    let prop = node.get_property("cmd_bg_color").unwrap();
-    prop.set_default_f32_multi(&[0., 0.30, 0.25, 1.]).unwrap();
-    node.set_property_u32(atom, Role::App, "z_index", 6).unwrap();
-    node.set_property_u32(atom, Role::App, "priority", 3).unwrap();
-    //node.set_property_bool(atom, Role::App, "debug", true).unwrap();
-
-    node.set_property_str(atom, Role::App, "placeholder_text", "search").unwrap();
-    let prop = node.get_property("placeholder_color").unwrap();
-    prop.set_default_f32_multi(&[
-        COLOR_MINT_OP[0],
-        COLOR_MINT_OP[1],
-        COLOR_MINT_OP[2],
-        COLOR_MINT_OP[3],
-    ])
-    .unwrap();
-
-    let node = node
-        .setup(|me| {
-            BaseEdit::new(
-                me,
-                window_scale.clone(),
-                app.renderer.clone(),
-                app.redraw_trigger.clone(),
-                BaseEditType::SingleLine,
-                app.ex.clone(),
-            )
-        })
-        .await;
-    let search_node = node.clone();
-    content_area.link(node);
-
-    let node = create_vector_art("search_bg");
-    let prop = node.get_property("rect").unwrap();
-    prop.set_default_f32(0, CHATEDIT_PAD).unwrap();
-    prop.set_default_f32(1, LABEL_LINESPACE + 7. * CHATEDIT_PAD + 3. * CHATEDIT_HEIGHT).unwrap();
-    let code = cc.compile("w - 2 * CHATEDIT_PAD").unwrap();
-    prop.set_default_expr(2, code).unwrap();
-    prop.set_default_f32(3, CHATEDIT_HEIGHT).unwrap();
-    node.set_property_u32(atom, Role::App, "z_index", 4).unwrap();
-
-    let mut shape = VectorShape::new();
-    shape.add_filled_box(
-        expr::const_f32(0.),
-        expr::const_f32(0.),
-        expr::load_var("w"),
-        expr::load_var("h"),
-        [0., 0., 0., 0.5],
-    );
-
-    node.set_property_shape(atom, Role::App, "shape", shape).unwrap();
-    let node =
-        node.setup(|me| VectorArt::new(me, app.renderer.clone(), app.redraw_trigger.clone())).await;
-    content_area.link(node);
-
-    let node = create_vector_art("search_outline");
-    let prop = node.get_property("rect").unwrap();
-    prop.set_default_f32(0, CHATEDIT_PAD).unwrap();
-    prop.set_default_f32(1, LABEL_LINESPACE + 7. * CHATEDIT_PAD + 3. * CHATEDIT_HEIGHT).unwrap();
-    let code = cc.compile("w - 2 * CHATEDIT_PAD").unwrap();
-    prop.set_default_expr(2, code).unwrap();
-    prop.set_default_f32(3, CHATEDIT_HEIGHT).unwrap();
-    node.set_property_u32(atom, Role::App, "z_index", 7).unwrap();
-    let mut shape = VectorShape::new();
-    shape.add_outline(
-        expr::const_f32(0.),
-        expr::const_f32(0.),
-        expr::load_var("w"),
-        expr::load_var("h"),
-        0.5,
-        [0.3, 0.3, 0.3, 1.],
-    );
-
-    node.set_property_shape(atom, Role::App, "shape", shape).unwrap();
-    let node =
-        node.setup(|me| VectorArt::new(me, app.renderer.clone(), app.redraw_trigger.clone())).await;
     content_area.link(node);
 
     let node = create_singleline_edit("nick_edit");
@@ -1294,10 +1168,10 @@ pub async fn make(
     let node = create_menu("channel_menu");
     let prop = node.get_property("rect").unwrap();
     prop.set_default_f32(0, 0.).unwrap();
-    prop.set_default_f32(1, LABEL_LINESPACE + 8. * CHATEDIT_PAD + 4. * CHATEDIT_HEIGHT).unwrap();
+    prop.set_default_f32(1, LABEL_LINESPACE + 4. * CHATEDIT_PAD + 3. * CHATEDIT_HEIGHT).unwrap();
     prop.set_default_expr(2, expr::load_var("w")).unwrap();
     let code =
-        cc.compile("h - (LABEL_LINESPACE + 8. * CHATEDIT_PAD + 4. * CHATEDIT_HEIGHT)").unwrap();
+        cc.compile("h - (LABEL_LINESPACE + 4. * CHATEDIT_PAD + 3. * CHATEDIT_HEIGHT)").unwrap();
     prop.set_default_expr(3, code).unwrap();
     node.set_property_u32(atom, Role::App, "z_index", 0).unwrap();
     node.set_property_u32(atom, Role::App, "priority", 0).unwrap();
@@ -1408,7 +1282,7 @@ pub async fn make(
     btns.connect_edit_handlers(app, &menu_node, None);
 
     // Only one input field may be focused (caret visible)
-    edit_switch(&mut app.tasks.lock(), &[search_node, nickedit_node, secedit_node], app.ex.clone());
+    edit_switch(&mut app.tasks.lock(), &[nickedit_node, secedit_node], app.ex.clone());
 
     // Register select signal on nick_menu
     let (slot, recvr) = Slot::new("channel_selected");

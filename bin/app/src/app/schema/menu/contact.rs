@@ -95,6 +95,9 @@ mod android_ui_consts {
     pub const COPY_WIDTH: f32 = 200.;
     pub const COPY_SCALE: f32 = 35.;
     pub const COPY_BTN_SIZE: f32 = CHATEDIT_HEIGHT;
+    pub const PUBKEY_FONTSIZE: f32 = 36.;
+    pub const PUBKEY_LABEL_FONTSIZE: f32 = 30.;
+    pub const PUBKEY_LABEL_LINEHEIGHT: f32 = 1.5;
     pub const CONTENT_OUTLINE_SIZE: f32 = 0.5;
     pub const TAB_LABEL_X: f32 = 90.;
     pub const CHANNELS_TAB_ICON_GAP: f32 = 12.;
@@ -146,6 +149,9 @@ mod ui_consts {
     pub const COPY_WIDTH: f32 = 100.;
     pub const COPY_SCALE: f32 = 15.;
     pub const COPY_BTN_SIZE: f32 = CHATEDIT_HEIGHT;
+    pub const PUBKEY_FONTSIZE: f32 = 15.;
+    pub const PUBKEY_LABEL_FONTSIZE: f32 = 10.;
+    pub const PUBKEY_LABEL_LINEHEIGHT: f32 = 1.5;
     pub const CONTENT_OUTLINE_SIZE: f32 = 0.3;
     pub const TAB_LABEL_X: f32 = 45.;
     pub const CHANNELS_TAB_ICON_GAP: f32 = 6.;
@@ -155,7 +161,7 @@ mod ui_consts {
 }
 
 async fn unfocus_editors(content: &SceneNodePtr) {
-    for name in ["contact_search", "nick_edit", "secret_edit"] {
+    for name in ["nick_edit", "secret_edit"] {
         let node = content.lookup_node(format!("/content_area/{name}")).unwrap();
         node.call_method("unfocus", vec![]).await.unwrap();
     }
@@ -186,6 +192,7 @@ pub async fn make(
     cc.add_const_f32("MENU_BTN_W_L", MENU_BTN_W_L);
     cc.add_const_f32("COPY_WIDTH", COPY_WIDTH);
     cc.add_const_f32("COPY_BTN_SIZE", COPY_BTN_SIZE);
+    cc.add_const_f32("PUBKEY_FONTSIZE", PUBKEY_FONTSIZE);
     cc.add_const_f32("CHANNEL_ITEM_HEIGHT", CHANNEL_ITEM_HEIGHT);
     cc.add_const_f32("MENU_FADE", MENU_FADE);
 
@@ -712,74 +719,89 @@ pub async fn make(
         .await;
     content_area.link(node);
 
-    let node = create_singleline_edit("contact_search");
-    node.set_property_bool(atom, Role::App, "is_active", true).unwrap();
-    node.set_property_bool(atom, Role::App, "is_focused", false).unwrap();
-
+    // "YOUR PUBLIC KEY" label
+    let node = create_text("pubkey_label");
     let prop = node.get_property("rect").unwrap();
     prop.set_default_f32(0, CHATEDIT_PAD).unwrap();
-    prop.set_default_f32(1, LABEL_LINESPACE + 7. * CHATEDIT_PAD + 3. * CHATEDIT_HEIGHT).unwrap();
-    let code = cc.compile("parent_w - 2 * CHATEDIT_PAD").unwrap();
+    prop.set_default_f32(1, LABEL_LINESPACE + 6. * CHATEDIT_PAD + 3. * CHATEDIT_HEIGHT).unwrap();
+    let code = cc.compile("w - 2 * CHATEDIT_PAD").unwrap();
     prop.set_default_expr(2, code).unwrap();
-    prop.set_default_f32(3, CHATEDIT_HEIGHT).unwrap();
-
-    let prop = node.get_property("padding").unwrap();
-    prop.set_default_f32(0, 0.).unwrap();
-    prop.set_default_f32(1, 0.).unwrap();
-    prop.set_default_f32(2, TEXTBAR_BASELINE / 2.).unwrap();
-    prop.set_default_f32(3, 15.).unwrap();
-    node.get_property("baseline").unwrap().set_default_f32(0, TEXTBAR_BASELINE).unwrap();
-    node.get_property("font_size").unwrap().set_default_f32(0, FONTSIZE * 0.88).unwrap();
-
-    let prop = node.get_property("text_color").unwrap();
-    prop.set_default_f32_multi(&[1., 1., 1., 1.]).unwrap();
-    let prop = node.get_property("text_hi_color").unwrap();
-    prop.set_default_f32_multi(&[0.44, 0.96, 1., 1.]).unwrap();
-    let prop = node.get_property("text_cmd_color").unwrap();
-    prop.set_default_f32_multi(&[0.64, 1., 0.83, 1.]).unwrap();
-    let prop = node.get_property("cursor_color").unwrap();
-    prop.set_default_f32_multi(&[0.816, 0.627, 1., 1.]).unwrap();
-    node.set_property_f32(atom, Role::App, "cursor_ascent", CHATEDIT_CURSOR_ASCENT).unwrap();
-    node.set_property_f32(atom, Role::App, "cursor_descent", CHATEDIT_CURSOR_DESCENT).unwrap();
-    node.set_property_f32(atom, Role::App, "select_ascent", CHATEDIT_SELECT_ASCENT).unwrap();
-    node.set_property_f32(atom, Role::App, "select_descent", CHATEDIT_SELECT_DESCENT).unwrap();
-    node.set_property_f32(atom, Role::App, "handle_descent", CHATEDIT_HANDLE_DESCENT).unwrap();
-    node.get_property("action_padding").unwrap().set_default_f32(0, ACTION_PADDING).unwrap();
-    node.get_property("action_spacing").unwrap().set_default_f32(0, ACTION_SPACING).unwrap();
-    let prop = node.get_property("hi_bg_color").unwrap();
-    prop.set_default_f32_multi(&[0.027, 0.039, 0.039, 0.6]).unwrap();
-    let prop = node.get_property("cmd_bg_color").unwrap();
-    prop.set_default_f32_multi(&[0., 0.30, 0.25, 1.]).unwrap();
+    prop.set_default_f32(3, PUBKEY_LABEL_FONTSIZE * PUBKEY_LABEL_LINEHEIGHT).unwrap();
     node.set_property_u32(atom, Role::App, "z_index", 6).unwrap();
-    node.set_property_u32(atom, Role::App, "priority", 3).unwrap();
-    //node.set_property_bool(atom, Role::App, "debug", true).unwrap();
-
-    node.set_property_str(atom, Role::App, "placeholder_text", "search").unwrap();
-    let prop = node.get_property("placeholder_color").unwrap();
-    prop.set_default_f32_multi(&[
-        COLOR_MINT_OP[0],
-        COLOR_MINT_OP[1],
-        COLOR_MINT_OP[2],
-        COLOR_MINT_OP[3],
-    ])
-    .unwrap();
+    node.get_property("font_size").unwrap().set_default_f32(0, PUBKEY_LABEL_FONTSIZE).unwrap();
+    node.get_property("lineheight").unwrap().set_default_f32(0, PUBKEY_LABEL_LINEHEIGHT).unwrap();
+    node.set_property_str(atom, Role::App, "text", "YOUR PUBLIC KEY").unwrap();
+    node.set_property_bool(atom, Role::App, "use_i18n", false).unwrap();
+    // Generic text token; scifi theme recolours it
+    let theme = app.sg_root.lookup_node("/theme").unwrap();
+    wire_color(&node, "text_color", &theme, "text_color").unwrap();
 
     let node = node
         .setup(|me| {
-            BaseEdit::new(
+            Text::new(
                 me,
                 window_scale.clone(),
                 app.renderer.clone(),
+                i18n_fish.clone(),
                 app.redraw_trigger.clone(),
-                BaseEditType::SingleLine,
-                app.ex.clone(),
             )
         })
         .await;
-    let search_node = node.clone();
     content_area.link(node);
 
-    let node = create_vector_art("search_bg");
+    let node = create_text("pubkey_text");
+    let prop = node.get_property("rect").unwrap();
+    prop.set_default_f32(0, 2. * CHATEDIT_PAD).unwrap();
+    let code = cc
+        .compile(
+            "LABEL_LINESPACE + 7. * CHATEDIT_PAD + 3.5 * CHATEDIT_HEIGHT - PUBKEY_FONTSIZE / 2.",
+        )
+        .unwrap();
+    prop.set_default_expr(1, code).unwrap();
+    let code = cc.compile("w - 3 * CHATEDIT_PAD - COPY_BTN_SIZE").unwrap();
+    prop.set_default_expr(2, code).unwrap();
+    prop.set_default_f32(3, PUBKEY_FONTSIZE * 1.2).unwrap();
+    node.set_property_u32(atom, Role::App, "z_index", 6).unwrap();
+    node.get_property("font_size").unwrap().set_default_f32(0, PUBKEY_FONTSIZE).unwrap();
+    node.set_property_bool(atom, Role::App, "use_i18n", false).unwrap();
+    // Neutral token baseline (minimal); scifi overrides with its own
+    // readout green — see `theme::scifi`.
+    wire_color(&node, "text_color", &theme, "text_color").unwrap();
+
+    let node = node
+        .setup(|me| {
+            Text::new(
+                me,
+                window_scale.clone(),
+                app.renderer.clone(),
+                i18n_fish.clone(),
+                app.redraw_trigger.clone(),
+            )
+        })
+        .await;
+    let pubkey_text = node.clone();
+    content_area.link(node);
+
+    // Update the pubkey text when the contacts screen is shown
+    let sg_root = app.sg_root.clone();
+    let redraw = app.redraw_trigger.clone();
+    let contact_vis = contact_is_visible.clone();
+    let contact_vis_sub = contact_vis.prop().subscribe_modify();
+    let listen_vis = app.ex.spawn(async move {
+        while let Ok(_) = contact_vis_sub.receive().await {
+            if !contact_vis.get() {
+                continue;
+            }
+            if let Some(darkirc) = sg_root.lookup_node("/plugin/darkirc") {
+                let key = darkirc.get_property("dm_public").unwrap().get_str(0).unwrap();
+                let atom = &mut redraw.make_guard(gfxtag!("contacts pubkey refresh"));
+                pubkey_text.set_property_str(atom, Role::App, "text", &key).unwrap();
+            }
+        }
+    });
+    app.tasks.lock().push(listen_vis);
+
+    let node = create_vector_art("pubkey_bg");
     let prop = node.get_property("rect").unwrap();
     prop.set_default_f32(0, CHATEDIT_PAD).unwrap();
     prop.set_default_f32(1, LABEL_LINESPACE + 7. * CHATEDIT_PAD + 3. * CHATEDIT_HEIGHT).unwrap();
@@ -802,7 +824,7 @@ pub async fn make(
         node.setup(|me| VectorArt::new(me, app.renderer.clone(), app.redraw_trigger.clone())).await;
     content_area.link(node);
 
-    let node = create_vector_art("search_outline");
+    let node = create_vector_art("pubkey_outline");
     let prop = node.get_property("rect").unwrap();
     prop.set_default_f32(0, CHATEDIT_PAD).unwrap();
     prop.set_default_f32(1, LABEL_LINESPACE + 7. * CHATEDIT_PAD + 3. * CHATEDIT_HEIGHT).unwrap();
@@ -816,13 +838,62 @@ pub async fn make(
         expr::const_f32(0.),
         expr::load_var("w"),
         expr::load_var("h"),
-        0.5,
+        CONTENT_OUTLINE_SIZE,
         [0.3, 0.3, 0.3, 1.],
     );
 
     node.set_property_shape(atom, Role::App, "shape", shape).unwrap();
     let node =
         node.setup(|me| VectorArt::new(me, app.renderer.clone(), app.redraw_trigger.clone())).await;
+    content_area.link(node);
+
+    let node = create_vector_art("pubkey_copy_btn_bg");
+    let prop = node.get_property("rect").unwrap();
+    let code = cc.compile("w - CHATEDIT_PAD - COPY_BTN_SIZE / 2.").unwrap();
+    prop.set_default_expr(0, code).unwrap();
+    prop.set_default_f32(
+        1,
+        LABEL_LINESPACE + 7. * CHATEDIT_PAD + 3. * CHATEDIT_HEIGHT + COPY_BTN_SIZE / 2.,
+    )
+    .unwrap();
+    prop.set_default_f32(2, COPY_BTN_SIZE).unwrap();
+    prop.set_default_f32(3, COPY_BTN_SIZE).unwrap();
+    node.set_property_u32(atom, Role::App, "z_index", 8).unwrap();
+
+    let shape = shape::create_copy(COLOR_CYAN).scaled(COPY_SCALE);
+    node.set_property_shape(atom, Role::App, "shape", shape).unwrap();
+    let node =
+        node.setup(|me| VectorArt::new(me, app.renderer.clone(), app.redraw_trigger.clone())).await;
+    content_area.link(node);
+
+    // Copy our public key to the clipboard
+    let node = create_button("pubkey_copy_btn");
+    node.set_property_bool(atom, Role::App, "is_active", true).unwrap();
+    let prop = node.get_property("rect").unwrap();
+    let code = cc.compile("w - CHATEDIT_PAD - COPY_BTN_SIZE").unwrap();
+    prop.set_default_expr(0, code).unwrap();
+    prop.set_default_f32(1, LABEL_LINESPACE + 7. * CHATEDIT_PAD + 3. * CHATEDIT_HEIGHT).unwrap();
+    prop.set_default_f32(2, COPY_BTN_SIZE).unwrap();
+    prop.set_default_f32(3, COPY_BTN_SIZE).unwrap();
+    node.set_property_u32(atom, Role::App, "z_index", 9).unwrap();
+    node.set_property_u32(atom, Role::App, "priority", 5).unwrap();
+
+    let (slot, recvr) = Slot::new("pubkey_copy_clicked");
+    node.register("click", slot).unwrap();
+    let sg_root = app.sg_root.clone();
+    let listen_click = app.ex.spawn(async move {
+        while let Ok(_) = recvr.recv().await {
+            debug!(target: "app::menu", "pubkey copy button clicked");
+            if let Some(darkirc) = sg_root.lookup_node("/plugin/darkirc") {
+                let key = darkirc.get_property("dm_public").unwrap().get_str(0).unwrap();
+                clipboard::set(&key);
+            }
+        }
+    });
+    app.tasks.lock().push(listen_click);
+
+    let node =
+        node.setup(|me| Button::new(me, app.renderer.clone(), app.redraw_trigger.clone())).await;
     content_area.link(node);
 
     let node = create_singleline_edit("nick_edit");
@@ -1419,7 +1490,7 @@ pub async fn make(
     app.tasks.lock().push(listen_select);
 
     // Only one input field may be focused (caret visible)
-    edit_switch(&mut app.tasks.lock(), &[search_node, nickedit_node, secedit_node], app.ex.clone());
+    edit_switch(&mut app.tasks.lock(), &[nickedit_node, secedit_node], app.ex.clone());
 
     content
 }
