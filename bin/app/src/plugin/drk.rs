@@ -17,6 +17,7 @@
  */
 
 use std::{
+    collections::BTreeMap,
     io::Cursor,
     sync::{Arc, OnceLock, Weak},
 };
@@ -37,10 +38,18 @@ use darkfi::{
     util::encoding::base64,
     Error as DarkFiError, Result as DarkFiResult,
 };
-use darkfi_money_contract::model::TokenId;
-use darkfi_sdk::crypto::keypair::{Address, Network, PublicKey, StandardAddress};
-use darkfi_serial::{deserialize_async, serialize, Decodable, Encodable};
-use drk::Drk;
+use darkfi_money_contract::{
+    model::TokenId, MONEY_CONTRACT_COIN_MERKLE_TREE, MONEY_CONTRACT_INFO_TREE,
+    MONEY_CONTRACT_LATEST_COIN_ROOT,
+};
+use darkfi_sdk::crypto::{
+    contract_id::MONEY_CONTRACT_ID,
+    keypair::{Address, Network, PublicKey, StandardAddress},
+    MerkleNode, MerkleTree,
+};
+use darkfi_serial::{deserialize, deserialize_async, serialize, Decodable, Encodable};
+use drk::{money::KVDB_MERKLE_TREES_MONEY, rpc::DarkfidRpcClient, Drk};
+use kvdb_overlay::Batch;
 
 use crate::{
     error::{Error, Result},
@@ -57,6 +66,7 @@ const DARKFID_ENDPOINT_TCP: &str = "tcp+tls://node0.testnet.dark.fi:18345";
 const DARKFID_ENDPOINT_TOR: &str = "tor://darkfid-tor-placeholder.onion:18345";
 const DARKFID_RETRY_TIME: u64 = 20;
 const BLOCK_BATCHES_BUFFER: usize = 3;
+const NEW_WALLET_INIT_RETRY_TIME: u64 = 5;
 
 #[cfg(target_os = "android")]
 mod paths {
@@ -136,6 +146,7 @@ pub struct DrkPlugin {
     sg_root: SceneNodePtr,
     tasks: OnceLock<Vec<smol::Task<()>>>,
     net_transport: PropertyEnum,
+    subscribe_task: SyncMutex<Option<StoppableTaskPtr>>,
 
     drk: Arc<RwLock<Drk>>,
     build_tx_channel: smol::channel::Sender<BuildTxRequest>,
@@ -223,6 +234,7 @@ impl DrkPlugin {
             drk: drk.into_ptr(),
             build_tx_channel: build_tx_tx,
             net_transport,
+            subscribe_task: SyncMutex::new(None),
             last_balances: SyncMutex::new(None),
             ex: ex.clone(),
         });
@@ -298,16 +310,12 @@ impl DrkPlugin {
     /// Endpoint for the darkfid daemon connection, derived from the
     /// `net.transport` setting
     fn endpoint(&self) -> Url {
-        // Disabled pending drk changes
-        /*
         let endpoint = match self.net_transport.get().as_str() {
             "tor" => DARKFID_ENDPOINT_TOR,
             "tcp" => DARKFID_ENDPOINT_TCP,
             unhandled => panic!("Unhandled net.transport value: {unhandled}"),
         };
         Url::parse(endpoint).unwrap()
-        */
-        Url::parse(DARKFID_ENDPOINT_TCP).unwrap()
     }
 
     pub async fn get_default_address(&self) -> Result<String> {
@@ -351,6 +359,118 @@ impl DrkPlugin {
         Ok(result)
     }
 
+    /// Fetch the Money contract's `info` state tree records from darkfid.
+    async fn fetch_money_info(drk: &Drk) -> DarkFiResult<BTreeMap<Vec<u8>, Vec<u8>>> {
+        let params = JsonValue::Array(vec![
+            JsonValue::String(MONEY_CONTRACT_ID.to_string()),
+            JsonValue::String(MONEY_CONTRACT_INFO_TREE.to_string()),
+        ]);
+        let rep = drk.darkfid_daemon_request("blockchain.get_contract_state", &params).await?;
+        let rep_str = rep.get::<String>().ok_or_else(|| {
+            DarkFiError::Custom(
+                "Malformed reply: contract state result is not a string".to_string(),
+            )
+        })?;
+        let bytes = base64::decode(rep_str).ok_or_else(|| {
+            DarkFiError::Custom("Malformed reply: contract state is not valid base64".to_string())
+        })?;
+        let records: BTreeMap<Vec<u8>, Vec<u8>> = deserialize_async(&bytes).await?;
+        Ok(records)
+    }
+
+    /// Initialize a brand-new wallet at the chain tip.
+    async fn new_wallet_init(&self) -> DarkFiResult<()> {
+        let drk = self.drk.read().await;
+
+        // Only an empty wallet may be initialized here
+        let (last_height, last_hash) = drk
+            .get_last_scanned_block()
+            .map_err(|e| DarkFiError::Custom(format!("Could not get last scanned block: {e}")))?;
+        if last_height != 0 || last_hash != "-" || !drk.get_coins(true).await?.is_empty() {
+            return Err(DarkFiError::Custom(
+                "new_wallet_init called on a non-empty wallet".to_string(),
+            ))
+        }
+
+        let (tip_height, tip_hash) = drk.get_last_confirmed_block().await?;
+        if tip_height == 0 {
+            // Genesis-only chain
+            return Ok(())
+        }
+
+        // Tree and root come from one consistent state snapshot
+        let records = Self::fetch_money_info(&drk).await?;
+
+        // Decode the Money coin tree
+        let tree_bytes = records.get(MONEY_CONTRACT_COIN_MERKLE_TREE).ok_or_else(|| {
+            DarkFiError::Custom("Coin tree not found in contract state".to_string())
+        })?;
+        let (_, rest) = tree_bytes.split_at_checked(4).ok_or_else(|| {
+            DarkFiError::Custom("Malformed coin tree record: missing set size prefix".to_string())
+        })?;
+        let tree: MerkleTree = deserialize(rest)?;
+        let mut tree = MerkleTree::from_parts(
+            tree.prior_bridges().to_vec(),
+            tree.current_bridge().clone(),
+            tree.marked_indices().clone(),
+            tree.checkpoints().clone(),
+            u32::MAX as usize,
+        )
+        .map_err(|_| DarkFiError::Custom("Invalid coin tree record".to_string()))?;
+
+        let root_bytes = records.get(MONEY_CONTRACT_LATEST_COIN_ROOT).ok_or_else(|| {
+            DarkFiError::Custom("Latest coin root not found in contract state".to_string())
+        })?;
+        let latest_root: MerkleNode = deserialize(root_bytes)?;
+        if tree.root(0) != Some(latest_root) {
+            return Err(DarkFiError::Custom(
+                "Fetched coin tree root does not match the chain's latest coin root".to_string(),
+            ))
+        }
+
+        // Re-read the tip in case the chain advanced between reads
+        let (tip_height2, tip_hash2) = drk.get_last_confirmed_block().await?;
+        if tip_height != tip_height2 || tip_hash != tip_hash2 {
+            return Err(DarkFiError::Custom(format!(
+                "Tip moved during sync ({tip_height} -> {tip_height2})"
+            )))
+        }
+
+        // Make the snapshot point rewindable by `reset_to_height`
+        tree.checkpoint(tip_height as usize);
+
+        let mut merkle_batch = Batch::new();
+        merkle_batch.insert(KVDB_MERKLE_TREES_MONEY, &serialize(&tree));
+        let mut scanned_batch = Batch::new();
+        scanned_batch
+            .insert(&tip_height.to_be_bytes(), &serialize(&(tip_hash.clone(), "-".to_string())));
+
+        drk.cache.kvdb.atomic_write(&[
+            (&drk.cache.merkle_trees, &merkle_batch),
+            (&drk.cache.scanned_blocks, &scanned_batch),
+        ])?;
+        drk.cache.kvdb.flush_default_mode()?;
+
+        i!(
+            "New wallet state initialized at height {tip_height}, scanning starts from {}",
+            tip_height + 1
+        );
+
+        Ok(())
+    }
+
+    /// Decode a single base64-encoded serialized block entry from darkfid.
+    async fn decode_block_param(param: &JsonValue) -> DarkFiResult<BlockInfo> {
+        let param_str = param.get::<String>().ok_or_else(|| {
+            DarkFiError::Custom("Malformed reply: block entry is not a string".to_string())
+        })?;
+        let bytes = base64::decode(param_str).ok_or_else(|| {
+            DarkFiError::Custom("Malformed reply: block entry is not valid base64".to_string())
+        })?;
+        let block = deserialize_async(&bytes).await?;
+        Ok(block)
+    }
+
     /// Get a batch of blocks from darkfid starting at `height` using the provided client.
     async fn fetch_blocks(rpc_client: &RpcClient, height: u32) -> DarkFiResult<Vec<BlockInfo>> {
         let req = JsonRequest::new(
@@ -359,13 +479,12 @@ impl DrkPlugin {
         );
 
         let rep = rpc_client.request(req).await?;
-        let params_array = rep.get::<Vec<JsonValue>>().unwrap();
+        let params_array = rep.get::<Vec<JsonValue>>().ok_or_else(|| {
+            DarkFiError::Custom("Malformed reply: get_blocks result is not an array".to_string())
+        })?;
         let mut blocks = Vec::with_capacity(params_array.len());
         for param in params_array {
-            let param_str = param.get::<String>().unwrap();
-            let bytes = base64::decode(param_str).unwrap();
-            let block = deserialize_async(&bytes).await?;
-            blocks.push(block);
+            blocks.push(Self::decode_block_param(param).await?);
         }
         Ok(blocks)
     }
@@ -375,9 +494,28 @@ impl DrkPlugin {
         let drk = self.drk.read().await;
 
         // Grab last scanned block height
-        let (mut height, hash) = drk
+        let (mut height, mut hash) = drk
             .get_last_scanned_block()
             .map_err(|e| DarkFiError::Custom(format!("Could not get last scanned block: {e}")))?;
+
+        // Never resume past a height that has no tree checkpoint
+        let anchor =
+            drk.get_money_tree().await?.checkpoints().back().map(|c| *c.id() as u32).unwrap_or(0);
+        if height > anchor {
+            let mut batch = Batch::new();
+            for h in anchor + 1..=height {
+                batch.remove(&h.to_be_bytes());
+            }
+            drk.cache.kvdb.atomic_write(&[
+                (&drk.cache.scanned_blocks, &batch),
+                (&drk.cache.state_inverse_diff, &batch),
+            ])?;
+            height = anchor;
+            hash = drk
+                .get_scanned_block(&height)
+                .map_err(|e| DarkFiError::Custom(format!("Could not get scanned block: {e}")))?
+                .0;
+        }
 
         // Grab our last scanned block from darkfid
         let block = match drk.get_block_by_height(height).await {
@@ -387,20 +525,39 @@ impl DrkPlugin {
         };
 
         // Check if a reorg has happened
-        if block.is_none() || hash != block.unwrap().hash().to_string() {
-            height = self
+        if !block.as_ref().is_some_and(|b| b.hash().to_string() == hash) {
+            match self
                 .handle_reorg(&drk, height)
                 .await
-                .map_err(|e| DarkFiError::Custom(format!("Could not find common ancestor: {e}")))?;
+                .map_err(|e| DarkFiError::Custom(format!("Could not find common ancestor: {e}")))?
+            {
+                // The wallet was reset and re-initialized
+                None => return Ok(()),
+                Some(h) => height = h,
+            }
         }
 
         // If last scanned block is genesis(0) we reset,
         // otherwise continue with the next block height.
         if height == 0 {
-            let _ = drk.reset(&mut vec![]).await;
+            drk.reset(&mut vec![])
+                .await
+                .map_err(|e| DarkFiError::Custom(format!("Wallet state reset failed: {e}")))?;
+            self.emit_balances_updated().await;
         } else {
             height += 1;
         }
+
+        // The expected previous block hash
+        let mut expected_prev = if height > 0 {
+            Some(
+                drk.get_scanned_block(&(height - 1))
+                    .map_err(|e| DarkFiError::Custom(format!("Could not get scanned block: {e}")))?
+                    .0,
+            )
+        } else {
+            None
+        };
 
         // Grab last confirmed block height
         let (mut last_height, _) = drk.get_last_confirmed_block().await?;
@@ -464,27 +621,45 @@ impl DrkPlugin {
         // Update scan progress
         self.emit_progress_update(height - start_height, last_height - start_height).await;
 
-        // Process blocks from the channel until we've reached last_height
+        // Process blocks from the channel until it closes
+        let original_last_height = last_height;
         let mut processing_error = None;
-        while height < last_height {
+        loop {
             let blocks = match block_rx.recv().await {
                 Ok(b) => b,
                 Err(e) => {
-                    processing_error =
-                        Some(DarkFiError::Custom(format!("Block channel error: {e}")));
+                    // Channel closed: the fetcher finished or died early
+                    if height < original_last_height && processing_error.is_none() {
+                        processing_error = Some(DarkFiError::Custom(format!(
+                            "Block fetcher ended early at height {height} (expected up to {original_last_height}): {e}"
+                        )));
+                    }
                     break;
                 }
             };
 
             if blocks.is_empty() {
-                e!("Received empty block batch from fetcher");
+                processing_error = Some(DarkFiError::Custom(
+                    "Received empty block batch from fetcher".to_string(),
+                ));
                 break;
             }
 
             let old_nullifiers = cache.owncoins_nullifiers.clone();
 
-            // Scan each block and stop on error
+            // Scan each block, verifying the batch chains to our scan state
             for block in blocks {
+                let block_height = block.header.height;
+                if let Some(prev) = &expected_prev {
+                    if &block.header.previous.to_string() != prev {
+                        processing_error = Some(DarkFiError::Custom(format!(
+                            "Non-contiguous block batch: block {block_height} does not chain to {prev}"
+                        )));
+                        break;
+                    }
+                }
+                expected_prev = Some(block.header.hash().to_string());
+
                 let drk = self.drk.read().await;
                 if let Err(e) = drk.scan_block(&mut cache, &block).await {
                     processing_error = Some(e);
@@ -526,33 +701,90 @@ impl DrkPlugin {
         Ok(())
     }
 
-    /// Subscribe to blocks from darkfid and scan them individually.
-    async fn subscribe_blocks(
+    /// Handle a subscribed block. Returns `Ok(false)` when a below-floor
+    /// reorg reset the wallet: the caller must abort the subscription.
+    async fn handle_subscribed_block(
         &self,
-        rpc_task: StoppableTaskPtr,
-        endpoint: Url,
-    ) -> DarkFiResult<()> {
-        let mut last_scanned_height = loop {
+        last_scanned_height: &mut u32,
+        block: BlockInfo,
+    ) -> DarkFiResult<bool> {
+        i!("Received block {}", block.header.height);
+
+        let drk = self.drk.read().await;
+        if block.header.height <= *last_scanned_height {
+            let reset_height = block.header.height.saturating_sub(1);
+
+            // Can't handle a reorg to below the earliest wallet state
+            if self.scanned_floor(&drk)?.is_some_and(|floor| reset_height < floor) {
+                drop(drk);
+                self.handle_full_reset().await;
+                return Ok(false)
+            }
+
+            if let Err(e) = drk.reset_to_height(reset_height, &mut vec![]).await {
+                return Err(DarkFiError::Custom(format!("Wallet state reset failed: {e}")))
+            }
+
+            // Scan genesis again if needed
+            if reset_height == 0 {
+                let genesis = match drk.get_block_by_height(reset_height).await {
+                    Ok(b) => b,
+                    Err(e) => {
+                        return Err(DarkFiError::Custom(format!("RPC client request failed: {e}")))
+                    }
+                };
+                let mut scan_cache = drk.scan_cache(false).await?;
+                if let Err(e) = drk.scan_block(&mut scan_cache, &genesis).await {
+                    return Err(DarkFiError::Custom(format!("Scanning block failed: {e}")))
+                };
+            }
+        }
+
+        // The subscribed block must chain to our scanned state
+        if block.header.height > 0 {
+            let (prev_scanned_hash, _) =
+                drk.get_scanned_block(&(block.header.height - 1)).map_err(|e| {
+                    DarkFiError::Custom(format!(
+                        "Missing scanned block record at height {}: {e}",
+                        block.header.height - 1
+                    ))
+                })?;
+            if prev_scanned_hash != block.header.previous.to_string() {
+                return Err(DarkFiError::Custom(format!(
+                    "Subscribed block {} does not chain to scanned block {}",
+                    block.header.height,
+                    block.header.height - 1
+                )))
+            }
+        }
+
+        let mut scan_cache = drk.scan_cache(false).await?;
+        let old_nullifiers = scan_cache.owncoins_nullifiers.clone();
+
+        if let Err(e) = drk.scan_block(&mut scan_cache, &block).await {
+            return Err(DarkFiError::Custom(format!("Scanning block failed: {e}")))
+        }
+
+        if scan_cache.owncoins_nullifiers != old_nullifiers {
+            self.emit_balances_updated().await;
+        }
+
+        // Set new last scanned block height
+        *last_scanned_height = block.header.height;
+
+        Ok(true)
+    }
+
+    /// Scan until the scanned tip matches darkfid's confirmed tip.
+    /// Returns the scanned tip, used as the subscription baseline.
+    async fn catch_up_to_tip(&self) -> DarkFiResult<u32> {
+        loop {
             // First we do a clean scan
             if let Err(e) = self.scan_blocks().await {
                 return Err(DarkFiError::Custom(format!("Failed during scanning: {e}")))
             }
 
-            // Grab last confirmed block height
-            let drk = self.drk.read().await;
-            let (last_confirmed_height, _) = drk.get_last_confirmed_block().await?;
-            drop(drk);
-
-            // Handle genesis(0) block
-            if last_confirmed_height == 0 {
-                if let Err(e) = self.scan_blocks().await {
-                    return Err(DarkFiError::Custom(format!(
-                        "Scanning from genesis block failed: {e}"
-                    )))
-                }
-            }
-
-            // Grab last confirmed block again
+            // Grab last confirmed block
             let drk = self.drk.read().await;
             let (last_confirmed_height, last_confirmed_hash) =
                 drk.get_last_confirmed_block().await?;
@@ -568,6 +800,11 @@ impl DrkPlugin {
             };
             drop(drk);
 
+            // The wallet was fully reset
+            if last_scanned_height == 0 && last_scanned_hash == "-" {
+                return Err(DarkFiError::Custom("Wallet was reset during catch-up".to_string()))
+            }
+
             // Rescan if other blocks have been created while we were scanning
             if last_confirmed_height != last_scanned_height ||
                 last_confirmed_hash != last_scanned_hash
@@ -575,16 +812,44 @@ impl DrkPlugin {
                 continue
             }
 
-            break last_scanned_height
-        };
+            return Ok(last_scanned_height)
+        }
+    }
+
+    /// Call catch_up_to_tip() then subscribe to blocks from darkfid.
+    async fn subscribe_blocks(&self, rpc_task: StoppableTaskPtr) -> DarkFiResult<()> {
+        // Brand-new wallets (nothing scanned, no coins) are inited by
+        // fetching the current money tree from darkfid.
+        let drk = self.drk.read().await;
+        let (last_height, last_hash) = drk
+            .get_last_scanned_block()
+            .map_err(|e| DarkFiError::Custom(format!("Could not get last scanned block: {e}")))?;
+        let is_new_wallet =
+            last_height == 0 && last_hash == "-" && drk.get_coins(true).await?.is_empty();
+        drop(drk);
+
+        if is_new_wallet {
+            i!("New wallet detected, initializing state at the chain tip...");
+            loop {
+                if let Err(e) = self.new_wallet_init().await {
+                    e!("New wallet init attempt failed: {e}");
+                    i!("Retrying new wallet init in {NEW_WALLET_INIT_RETRY_TIME} seconds...");
+                    sleep(NEW_WALLET_INIT_RETRY_TIME).await;
+                    continue
+                }
+                break
+            }
+        }
+
+        let mut last_scanned_height = self.catch_up_to_tip().await?;
 
         let publisher = Publisher::new();
         let subscription = publisher.clone().subscribe().await;
         let _publisher = publisher.clone();
-        let rpc_client = Arc::new(RpcClient::new(endpoint.clone(), self.ex.clone()).await?);
+        let rpc_client = Arc::new(RpcClient::new(self.endpoint(), self.ex.clone()).await?);
         let rpc_client_ = rpc_client.clone();
 
-        rpc_task.start(
+        rpc_task.clone().start(
             async move {
                 let req = JsonRequest::new("blockchain.subscribe_blocks", JsonValue::Array(vec![]));
                 rpc_client_.subscribe(req, _publisher).await
@@ -616,51 +881,6 @@ impl DrkPlugin {
             let _ = node.trigger("connect", serialize(&(3u8, String::new()))).await;
         }
 
-        // Handle block from darkfid
-        let mut on_block = async |block: BlockInfo| -> DarkFiResult<()> {
-            i!("Received block {}", block.header.height);
-
-            let drk = self.drk.read().await;
-            if block.header.height <= last_scanned_height {
-                let reset_height = block.header.height.saturating_sub(1);
-                if let Err(e) = drk.reset_to_height(reset_height, &mut vec![]).await {
-                    return Err(DarkFiError::Custom(format!("Wallet state reset failed: {e}")))
-                }
-
-                // Scan genesis again if needed
-                if reset_height == 0 {
-                    let genesis = match drk.get_block_by_height(reset_height).await {
-                        Ok(b) => b,
-                        Err(e) => {
-                            return Err(DarkFiError::Custom(format!(
-                                "RPC client request failed: {e}"
-                            )))
-                        }
-                    };
-                    let mut scan_cache = drk.scan_cache(false).await?;
-                    if let Err(e) = drk.scan_block(&mut scan_cache, &genesis).await {
-                        return Err(DarkFiError::Custom(format!("Scanning block failed: {e}")))
-                    };
-                }
-            }
-
-            let mut scan_cache = drk.scan_cache(false).await?;
-            let old_nullifiers = scan_cache.owncoins_nullifiers.clone();
-
-            if let Err(e) = drk.scan_block(&mut scan_cache, &block).await {
-                return Err(DarkFiError::Custom(format!("Scanning block failed: {e}")))
-            }
-
-            if scan_cache.owncoins_nullifiers != old_nullifiers {
-                self.emit_balances_updated().await;
-            }
-
-            // Set new last scanned block height
-            last_scanned_height = block.header.height;
-
-            Ok(())
-        };
-
         // Wait for blocks from darkfid
         i!("Blockchain is fully scanned, waiting for blocks...");
         let e = 'outer: loop {
@@ -679,7 +899,11 @@ impl DrkPlugin {
                             "Received notification params are not an array".to_string(),
                         )
                     }
-                    let params = n.params.get::<Vec<JsonValue>>().unwrap();
+                    let Some(params) = n.params.get::<Vec<JsonValue>>() else {
+                        break DarkFiError::UnexpectedJsonRpc(
+                            "Notification parameters are not a JSON array".to_string(),
+                        )
+                    };
                     if params.is_empty() {
                         break DarkFiError::UnexpectedJsonRpc(
                             "Notification parameters are empty".to_string(),
@@ -687,12 +911,19 @@ impl DrkPlugin {
                     }
 
                     for param in params {
-                        let param = param.get::<String>().unwrap();
-                        let bytes = base64::decode(param).unwrap();
-                        let block: BlockInfo = deserialize_async(&bytes).await?;
+                        let block = match Self::decode_block_param(param).await {
+                            Ok(b) => b,
+                            Err(e) => break 'outer e,
+                        };
 
-                        if let Err(e) = on_block(block).await {
-                            break 'outer e
+                        match self.handle_subscribed_block(&mut last_scanned_height, block).await {
+                            Ok(true) => continue,
+                            // Below-floor reorg reset the wallet
+                            Ok(false) => {
+                                rpc_task.stop().await;
+                                return Ok(())
+                            }
+                            Err(e) => break 'outer e,
                         }
                     }
                 }
@@ -711,15 +942,67 @@ impl DrkPlugin {
             }
         };
 
-        e!("Subscription closed: {e}");
+        rpc_task.stop().await;
         Err(e)
     }
 
-    /// Find the exact block height the reorg happened
-    async fn handle_reorg(&self, drk: &Drk, mut height: u32) -> DarkFiResult<u32> {
+    /// Lowest height whose wallet state we possess: the earliest scanned
+    /// block record. `None` when nothing was ever scanned.
+    fn scanned_floor(&self, drk: &Drk) -> DarkFiResult<Option<u32>> {
+        let records = drk.get_scanned_block_records().map_err(|e| {
+            DarkFiError::Custom(format!("Could not get scanned block records: {e}"))
+        })?;
+        Ok(records.iter().map(|(height, _, _)| *height).min())
+    }
+
+    /// Full reset after a reorg below the earliest wallet state: wipe
+    /// everything and re-initialize at the current tip.
+    async fn handle_full_reset(&self) {
+        e!("Reorg reached below the earliest wallet state, resetting and re-initializing");
+
+        loop {
+            let drk = self.drk.read().await;
+            let result = drk.reset(&mut vec![]).await;
+            drop(drk);
+
+            self.emit_balances_updated().await;
+
+            match result {
+                Ok(()) => break,
+                Err(e) => {
+                    e!("Wallet reset attempt failed: {e}");
+                    i!("Retrying wallet reset in {NEW_WALLET_INIT_RETRY_TIME} seconds...");
+                    sleep(NEW_WALLET_INIT_RETRY_TIME).await;
+                }
+            }
+        }
+
+        loop {
+            if let Err(e) = self.new_wallet_init().await {
+                e!("New wallet init attempt failed: {e}");
+                i!("Retrying new wallet init in {NEW_WALLET_INIT_RETRY_TIME} seconds...");
+                sleep(NEW_WALLET_INIT_RETRY_TIME).await;
+                continue
+            }
+            break
+        }
+    }
+
+    /// Find the exact block height the reorg happened. If it happened below
+    /// the earliest wallet state, the wallet is fully reset and re-initialized
+    /// at the current tip, and `Ok(None)` is returned.
+    async fn handle_reorg(&self, drk: &Drk, mut height: u32) -> DarkFiResult<Option<u32>> {
         i!("Reorg detected, finding common ancestor...");
+        let floor = self.scanned_floor(drk)?;
+        let start_height = height;
         height = height.saturating_sub(1);
         while height != 0 {
+            // Below the earliest wallet state
+            if floor.is_some_and(|floor| height < floor) {
+                self.handle_full_reset().await;
+                return Ok(None)
+            }
+
             // Grab our scanned block hash for that height
             let (scanned_block_hash, _) =
                 drk.get_scanned_block(&height).map_err(|e| DarkFiError::Custom(e.to_string()))?;
@@ -736,7 +1019,7 @@ impl DrkPlugin {
             };
 
             // Continue to previous one if they don't match
-            if block.is_none() || scanned_block_hash != block.unwrap().hash().to_string() {
+            if !block.as_ref().is_some_and(|b| b.hash().to_string() == scanned_block_hash) {
                 height = height.saturating_sub(1);
                 continue
             }
@@ -745,9 +1028,12 @@ impl DrkPlugin {
             drk.reset_to_height(height, &mut vec![])
                 .await
                 .map_err(|e| DarkFiError::Custom(e.to_string()))?;
+
+            self.emit_balances_updated().await;
             break
         }
-        Ok(height)
+        i!("Found common ancestor: {height} ({}-block reorg)", start_height - height);
+        Ok(Some(height))
     }
 
     /// Emit balances_updated signal with the balances encoded in the payload.
@@ -933,7 +1219,7 @@ impl DrkPlugin {
 
     async fn process_get_tx_status(me: &Weak<Self>, sub: &MethodCallSub) -> bool {
         let Ok(method_call) = sub.receive().await else {
-            d!("get_tx_history method closed");
+            d!("get_tx_status method closed");
             return false
         };
 
@@ -973,7 +1259,7 @@ impl DrkPlugin {
             if status.text().encode(&mut cur).is_ok() {
                 let _ = send_res.send(cur.into_inner()).await;
             } else {
-                e!("Failed to encode balances");
+                e!("Failed to encode tx status");
                 let _ = send_res.send(vec![]).await;
             }
         } else {
@@ -1127,59 +1413,105 @@ impl DrkPlugin {
                 let endpoint = self2.endpoint();
                 i!("Attempting to connect to darkfid daemon at {}", endpoint);
                 let subscribe_rpc_task = StoppableTask::new();
+                let subscribe_rpc_task_ = subscribe_rpc_task.clone();
 
                 if let Some(node) = self2.node.upgrade() {
                     let _ = node.trigger("connect", serialize(&(0u8, String::new()))).await;
                 }
 
-                if let Err(e) = self2.subscribe_blocks(subscribe_rpc_task, endpoint).await {
-                    e!("Failed during drk scanning: {e}");
-                    if let Some(node) = self2.node.upgrade() {
-                        let _ = node.trigger("connect", serialize(&(0u8, String::new()))).await;
+                let task = StoppableTask::new();
+                *self2.subscribe_task.lock() = Some(task.clone());
+                let (task_res_tx, task_res_rx) = smol::channel::bounded(1);
+                let self3 = self2.clone();
+                task.clone().start(
+                    async move {
+                        let res = self3.subscribe_blocks(subscribe_rpc_task).await;
+                        let _ = task_res_tx.send(res).await;
+                        Ok(())
+                    },
+                    |res| async move {
+                        match res {
+                            Ok(()) | Err(DarkFiError::DetachedTaskStopped) => {}
+                            Err(e) => {
+                                e!("Session task error: {e}");
+                            }
+                        }
+                    },
+                    DarkFiError::DetachedTaskStopped,
+                    self2.ex.clone(),
+                );
+
+                let res = match task_res_rx.recv().await {
+                    Ok(res) => res,
+                    Err(_) => {
+                        i!("Subscribe task cancelled");
+                        Err(DarkFiError::DetachedTaskStopped)
                     }
-                    i!("Retrying connection to darkfid in {} seconds...", DARKFID_RETRY_TIME);
-                    sleep(DARKFID_RETRY_TIME).await;
+                };
+
+                subscribe_rpc_task_.stop_nowait();
+
+                let reset = match res {
+                    Ok(()) => true,
+                    Err(e) => {
+                        e!("Failed during drk scanning: {e}");
+                        false
+                    }
+                };
+                *self2.subscribe_task.lock() = None;
+
+                if let Some(node) = self2.node.upgrade() {
+                    let _ = node.trigger("connect", serialize(&(0u8, String::new()))).await;
+                }
+
+                // Endpoint changed while we were connected, no need to sleep
+                if self2.endpoint() != endpoint {
                     continue
                 }
 
-                if let Some(node) = self2.node.upgrade() {
-                    let _ = node.trigger("connect", serialize(&(0u8, String::new()))).await;
+                if !reset {
+                    i!("Retrying connection to darkfid in {} seconds...", DARKFID_RETRY_TIME);
+                    sleep(DARKFID_RETRY_TIME).await;
                 }
-
-                i!("Retrying connection to darkfid in {} seconds...", DARKFID_RETRY_TIME);
-                sleep(DARKFID_RETRY_TIME).await;
             }
         });
 
-        // NOTE: Disabled pending the drk scan_blocks upgrade. The current
-        // drk impl doesn't support restarting the rpc_task, but once we
-        // upgrade it, it will be trivial to fix in our custom loop.
-        //let net_transport = self.net_transport.clone();
-        //let net_transport_sub = net_transport.prop().subscribe_modify();
-        //let drk2 = self.drk.clone();
-        //let rpc_task_lock = self.rpc_task.clone();
-        //let ex_ = ex.clone();
-        //let transport_task = ex.spawn(async move {
-        //    while let Ok(_) = net_transport_sub.receive().await {
-        //        let transport = net_transport.get();
-        //        let endpoint = endpoint_for_transport(&transport);
-        //        i!("Transport changed to {transport}, restarting darkfid connection at {endpoint}");
-        //
-        //        {
-        //            let mut drk = drk2.write().await;
-        //            let _ = drk.stop_rpc_client().await;
-        //            drk.rpc_client = Some(RwLock::new(
-        //                DarkfidRpcClient::new(endpoint.clone(), ex_.clone()).await,
-        //            ));
-        //        }
-        //
-        //        if let Some(rpc_task) = &*rpc_task_lock.read().await {
-        //            rpc_task.stop().await;
-        //        }
-        //    }
-        //});
+        let net_transport = self.net_transport.clone();
+        let net_transport_sub = net_transport.prop().subscribe_modify();
+        let me3 = Arc::downgrade(&self);
+        let ex_ = self.ex.clone();
+        let transport_task = self.ex.spawn(async move {
+            while let Ok(_) = net_transport_sub.receive().await {
+                let Some(self2) = me3.upgrade() else { break };
+                let transport = net_transport.get();
+                let endpoint = self2.endpoint();
+                i!("Transport changed to {transport}, restarting darkfid connection at {endpoint}");
 
-        let mut all_tasks = vec![subscribe_task];
+                // Cancel the scan/subscribe task
+                let subscribe_task = {
+                    let mut task = self2.subscribe_task.lock();
+                    task.take()
+                };
+                if let Some(subscribe_task) = &subscribe_task {
+                    subscribe_task.stop_nowait();
+                }
+
+                // Stop drk's rpc client
+                let old_client = {
+                    let mut drk = self2.drk.write().await;
+                    drk.rpc_client.take()
+                };
+                if let Some(old_client) = old_client {
+                    old_client.read().await.stop().await;
+                }
+
+                // Swap drk's rpc client over to the new endpoint
+                let new_client = DarkfidRpcClient::new(endpoint, ex_.clone()).await;
+                self2.drk.write().await.rpc_client = Some(RwLock::new(new_client));
+            }
+        });
+
+        let mut all_tasks = vec![subscribe_task, transport_task];
         all_tasks.extend(tasks);
         self.tasks.set(all_tasks).unwrap();
     }
