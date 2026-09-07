@@ -25,7 +25,7 @@ use smol::channel::unbounded;
 
 use crate::{
     app::{
-        node::{create_button, create_layer, create_text, create_vector_art},
+        node::{create_button, create_layer, create_shortcut, create_text, create_vector_art},
         schema::COLOR_SCHEME,
         App,
     },
@@ -33,9 +33,9 @@ use crate::{
     gfx::{gfxtag, Renderer},
     mesh::{COLOR_CYAN, COLOR_TEAL},
     prop::{PropertyAtomicGuard, PropertyFloat32, Role},
-    scene::{Pimpl, SceneNodePtr},
+    scene::{Pimpl, SceneNodePtr, Slot},
     text,
-    ui::{Button, Layer, RedrawTrigger, Text, VectorArt, VectorShape},
+    ui::{Button, Layer, RedrawTrigger, Shortcut, Text, VectorArt, VectorShape},
     util::i18n::I18nBabelFish,
 };
 
@@ -107,6 +107,37 @@ pub async fn update_amount_screen(
     }
 
     balance
+}
+
+/// Creates a back shortcut on a wallet subscreen layer. Pressing back
+/// hides the layer and returns to the main wallet screen.
+pub async fn create_back_shortcut(app: &App, atom: &mut PropertyAtomicGuard, layer: &SceneNodePtr) {
+    let node = create_shortcut("back_shortcut");
+    #[cfg(target_os = "android")]
+    node.set_property_str(atom, Role::App, "key", "back").unwrap();
+    #[cfg(target_os = "macos")]
+    node.set_property_str(atom, Role::App, "key", "logo+left").unwrap();
+    #[cfg(all(not(target_os = "android"), not(target_os = "macos")))]
+    node.set_property_str(atom, Role::App, "key", "alt+left").unwrap();
+    node.set_property_u32(atom, Role::App, "priority", 10).unwrap();
+
+    let (slot, recvr) = Slot::new("back_pressed");
+    node.register("shortcut", slot).unwrap();
+    let sg_root = app.sg_root.clone();
+    let redraw = app.redraw_trigger.clone();
+    let layer_clone = layer.clone();
+    let listen_back = app.ex.spawn(async move {
+        while let Ok(_) = recvr.recv().await {
+            let atom = &mut redraw.make_guard(gfxtag!("wallet back shortcut"));
+            layer_clone.set_property_bool(atom, Role::App, "is_visible", false).unwrap();
+            let main_layer = sg_root.lookup_node("/window/content/wallet/main_layer").unwrap();
+            main_layer.set_property_bool(atom, Role::App, "is_visible", true).unwrap();
+        }
+    });
+    app.tasks.lock().unwrap().push(listen_back);
+
+    let node = node.setup(|me| Shortcut::new(me)).await;
+    layer.link(node);
 }
 
 /// Creates a title text node with separator line.

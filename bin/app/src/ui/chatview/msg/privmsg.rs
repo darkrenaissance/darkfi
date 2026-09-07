@@ -928,8 +928,11 @@ fn sanitize_url(raw: &str) -> Option<String> {
     if trimmed.chars().any(|c| c.is_control()) {
         return None
     }
-    let candidate =
-        if trimmed.starts_with("www.") { format!("https://{trimmed}") } else { trimmed.to_string() };
+    let candidate = if trimmed.starts_with("www.") {
+        format!("https://{trimmed}")
+    } else {
+        trimmed.to_string()
+    };
     let url = Url::parse(&candidate).ok()?;
     match url.scheme() {
         "http" | "https" | "fud" => Some(url.to_string()),
@@ -1415,12 +1418,15 @@ mod tests {
     fn url_sanitization() {
         use super::sanitize_url;
         assert_eq!(sanitize_url("https://example.com/").as_deref(), Some("https://example.com/"));
-        assert_eq!(sanitize_url("https://example.com/path.").as_deref(), Some("https://example.com/path"));
-        assert_eq!(sanitize_url("https://example.com/a,b!").as_deref(), Some("https://example.com/a,b"));
         assert_eq!(
-            sanitize_url("www.example.com/x").as_deref(),
-            Some("https://www.example.com/x")
+            sanitize_url("https://example.com/path.").as_deref(),
+            Some("https://example.com/path")
         );
+        assert_eq!(
+            sanitize_url("https://example.com/a,b!").as_deref(),
+            Some("https://example.com/a,b")
+        );
+        assert_eq!(sanitize_url("www.example.com/x").as_deref(), Some("https://www.example.com/x"));
         // Interior control characters (incl. NUL): rejected. A trailing
         // one is trimmed — the cleaned URL stays usable.
         assert_eq!(sanitize_url("https://evil.com/\u{0}x"), None);

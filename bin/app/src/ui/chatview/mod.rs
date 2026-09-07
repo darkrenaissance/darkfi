@@ -315,13 +315,8 @@ impl ChatView {
             is_at_bottom,
             hi_bg_color: PropertyColor::wrap(node_ref, Role::Internal, "hi_bg_color")
                 .expect("chatview hi_bg_color"),
-            wheel_page_frac: PropertyFloat32::wrap(
-                node_ref,
-                Role::Internal,
-                "wheel_page_frac",
-                0,
-            )
-            .expect("chatview wheel_page_frac"),
+            wheel_page_frac: PropertyFloat32::wrap(node_ref, Role::Internal, "wheel_page_frac", 0)
+                .expect("chatview wheel_page_frac"),
             channel_prop: crate::prop::PropertyStr::wrap(node_ref, Role::Internal, "channel", 0)
                 .expect("chatview channel"),
 

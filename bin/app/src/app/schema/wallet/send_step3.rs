@@ -74,6 +74,7 @@ pub async fn make(
         .setup(|me| Layer::new(me, app.renderer.clone(), app.redraw_trigger.clone()))
         .await;
     wallet_layer.link(send_step3_layer.clone());
+    create_back_shortcut(app, atom, &send_step3_layer).await;
     let step3_is_visible =
         PropertyBool::wrap(&send_step3_layer, Role::App, "is_visible", 0).unwrap();
 

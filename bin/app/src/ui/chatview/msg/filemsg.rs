@@ -216,7 +216,8 @@ impl FileMsgNode {
         let hash = url.host_str().unwrap_or("???");
         let short = if hash.chars().count() >= 12 {
             let head: String = hash.chars().take(4).collect();
-            let tail: String = hash.chars().rev().take(4).collect::<Vec<_>>().into_iter().rev().collect();
+            let tail: String =
+                hash.chars().rev().take(4).collect::<Vec<_>>().into_iter().rev().collect();
             format!("{head}...{tail}")
         } else {
             hash.to_string()

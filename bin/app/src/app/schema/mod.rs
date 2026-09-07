@@ -26,8 +26,8 @@ use kvdb_overlay::Database as KvDb;
 use crate::{
     app::{
         node::{
-            create_button, create_layer, create_text, create_text_scramble, create_vector_art,
-            create_video,
+            create_button, create_layer, create_shortcut, create_text, create_text_scramble,
+            create_vector_art, create_video,
         },
         App,
     },
@@ -37,7 +37,9 @@ use crate::{
     prop::{PropertyAtomicGuard, PropertyEnum, PropertyFloat32, PropertyStr, Role},
     scene::{SceneNodePtr, Slot},
     sfx, shape,
-    ui::{emoji_picker, Button, Layer, Text, TextScramble, VectorArt, VectorShape, Video},
+    ui::{
+        emoji_picker, Button, Layer, Shortcut, Text, TextScramble, VectorArt, VectorShape, Video,
+    },
     util::{clipboard, i18n::I18nBabelFish},
 };
 
@@ -677,9 +679,9 @@ pub async fn make(
     });
     app.tasks.lock().unwrap().push(reconnect_task);
 
-    let node =
+    let reconnect_btn =
         node.setup(|me| Button::new(me, app.renderer.clone(), app.redraw_trigger.clone())).await;
-    netlayer_node.link(node);
+    netlayer_node.link(reconnect_btn.clone());
 
     // Overlay layer toggled by the netstatus logo. Sits on top of everything
     // except the header strip, so the logo stays visible and clickable.
@@ -699,6 +701,32 @@ pub async fn make(
         .setup(|me| Layer::new(me, app.renderer.clone(), app.redraw_trigger.clone()))
         .await;
     chat_layer.link(overlay_node.clone());
+
+    // Back shortcut: when the overlay is shown, pressing back just hides it
+    // instead of navigating back. The overlay layer has a higher priority
+    // than the subscreen layers, so this swallows the key first. It reuses
+    // the reconnect button's click handler so the hide path stays shared.
+    let node = create_shortcut("back_shortcut");
+    #[cfg(target_os = "android")]
+    node.set_property_str(atom, Role::App, "key", "back").unwrap();
+    #[cfg(target_os = "macos")]
+    node.set_property_str(atom, Role::App, "key", "logo+left").unwrap();
+    #[cfg(all(not(target_os = "android"), not(target_os = "macos")))]
+    node.set_property_str(atom, Role::App, "key", "alt+left").unwrap();
+    node.set_property_u32(atom, Role::App, "priority", 10).unwrap();
+
+    let (slot, recvr) = Slot::new("back_pressed");
+    node.register("shortcut", slot).unwrap();
+    let reconnect_btn_clone = reconnect_btn.clone();
+    let listen_back = ex.spawn(async move {
+        while let Ok(_) = recvr.recv().await {
+            reconnect_btn_clone.trigger("click", vec![]).await.unwrap();
+        }
+    });
+    overlay_node.push_task(listen_back);
+
+    let node = node.setup(|me| Shortcut::new(me)).await;
+    overlay_node.link(node);
 
     // Placeholder single-color background filling the whole overlay
     let node = create_vector_art("overlay_bg");
