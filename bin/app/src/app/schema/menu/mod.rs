@@ -16,7 +16,9 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+use bs58;
 use darkfi_serial::{deserialize, Encodable};
+use futures::FutureExt;
 use kvdb_overlay::Database as KvDb;
 use std::io::Write;
 use ui_consts::*;
@@ -30,7 +32,7 @@ use crate::{
     db::AppDbPtr,
     expr,
     gfx::gfxtag,
-    mesh::COLOR_CYAN,
+    mesh::{COLOR_CYAN, COLOR_INACTIVE},
     prop::{PropertyAtomicGuard, PropertyBool, PropertyFloat32, Role},
     scene::{SceneNodePtr, Slot},
     sfx, shape,
@@ -634,4 +636,50 @@ pub async fn setup_settings_button(app: &App, chat_layer: SceneNodePtr) {
 
     let node = node.setup(|me| Button::new(me, renderer, redraw)).await;
     mainlayer_node.link(node);
+}
+
+fn valid_key(s: &str) -> bool {
+    bs58::decode(s).into_vec().is_ok_and(|bytes| bytes.len() == 32)
+}
+
+/// Grey an add button out until its name and key are valid
+pub fn setup_add_button_validity(
+    app: &App,
+    nickedit_node: &SceneNodePtr,
+    secedit_node: &SceneNodePtr,
+    add_label: SceneNodePtr,
+    btns_bg: SceneNodePtr,
+    btns_bg_grey: SceneNodePtr,
+    valid_tag: &'static str,
+) {
+    let name_text = nickedit_node.get_property("text").unwrap();
+    let key_text = secedit_node.get_property("text").unwrap();
+    let name_sub = name_text.subscribe_modify();
+    let key_sub = key_text.subscribe_modify();
+    let redraw = app.redraw_trigger.clone();
+    let nickedit_handle = nickedit_node.clone();
+    let keyedit_handle = secedit_node.clone();
+    let listen_valid = app.ex.spawn(async move {
+        loop {
+            futures::select! {
+                _ = name_sub.receive().fuse() => {},
+                _ = key_sub.receive().fuse() => {},
+            }
+
+            let name = nickedit_handle.get_property_str("text").unwrap();
+            let key = keyedit_handle.get_property_str("text").unwrap();
+            let valid = !name.is_empty() && valid_key(&key);
+
+            let atom = &mut redraw.make_guard(gfxtag!(valid_tag));
+            btns_bg.set_property_bool(atom, Role::App, "is_visible", valid).unwrap();
+            btns_bg_grey.set_property_bool(atom, Role::App, "is_visible", !valid).unwrap();
+            let color = if valid { COLOR_CYAN } else { COLOR_INACTIVE };
+            let prop = add_label.get_property("text_color").unwrap();
+            prop.set_f32(atom, Role::App, 0, color[0]).unwrap();
+            prop.set_f32(atom, Role::App, 1, color[1]).unwrap();
+            prop.set_f32(atom, Role::App, 2, color[2]).unwrap();
+            prop.set_f32(atom, Role::App, 3, color[3]).unwrap();
+        }
+    });
+    app.tasks.lock().push(listen_valid);
 }

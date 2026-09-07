@@ -37,7 +37,7 @@ use super::{
     super::{append_joined_channel, chat},
     edit_buttons,
     edit_switch::edit_switch,
-    BTN_TEXT_Y, CHANNEL_ITEM_HEIGHT, MENU_BTN_W_L,
+    setup_add_button_validity, valid_key, BTN_TEXT_Y, CHANNEL_ITEM_HEIGHT, MENU_BTN_W_L,
 };
 use crate::{
     app::{
@@ -1236,7 +1236,35 @@ pub async fn make(
     node.set_property_shape(atom, Role::App, "shape", shape).unwrap();
     let node =
         node.setup(|me| VectorArt::new(me, app.renderer.clone(), app.redraw_trigger.clone())).await;
-    editlayer_node.link(node);
+    node.set_property_bool(atom, Role::App, "is_visible", false).unwrap();
+    editlayer_node.link(node.clone());
+    let btns_bg = node;
+
+    // Grey outline for the invalid state
+    let node = create_vector_art("btns_bg_grey");
+    let prop = node.get_property("rect").unwrap();
+    prop.set_f32(atom, Role::App, 0, 0.).unwrap();
+    prop.set_f32(atom, Role::App, 1, 0.).unwrap();
+    prop.set_expr(atom, Role::App, 2, expr::load_var("w")).unwrap();
+    prop.set_expr(atom, Role::App, 3, expr::load_var("h")).unwrap();
+    node.set_property_u32(atom, Role::App, "z_index", 0).unwrap();
+    node.set_property_bool(atom, Role::App, "is_visible", true).unwrap();
+
+    let mut shape = VectorShape::new();
+    shape.add_outline(
+        expr::const_f32(0.),
+        expr::const_f32(0.),
+        expr::const_f32(MENU_BTN_W_L + 45.),
+        expr::load_var("h"),
+        CONTENT_OUTLINE_SIZE,
+        COLOR_INACTIVE,
+    );
+
+    node.set_property_shape(atom, Role::App, "shape", shape).unwrap();
+    let node =
+        node.setup(|me| VectorArt::new(me, app.renderer.clone(), app.redraw_trigger.clone())).await;
+    editlayer_node.link(node.clone());
+    let btns_bg_grey = node;
 
     let node = create_button("addcontact_btn");
     node.set_property_bool(atom, Role::App, "is_active", true).unwrap();
@@ -1268,8 +1296,15 @@ pub async fn make(
     node.set_property_bool(atom, Role::App, "use_i18n", false).unwrap();
 
     let prop = node.get_property("text_color").unwrap();
-    prop.set_default_f32_multi(&[COLOR_CYAN[0], COLOR_CYAN[1], COLOR_CYAN[2], COLOR_CYAN[3]])
-        .unwrap();
+    // The add buttons start greyed out until name and key are valid; the
+    // validity watcher below flips this to cyan.
+    prop.set_default_f32_multi(&[
+        COLOR_INACTIVE[0],
+        COLOR_INACTIVE[1],
+        COLOR_INACTIVE[2],
+        COLOR_INACTIVE[3],
+    ])
+    .unwrap();
 
     let node = node
         .setup(|me| {
@@ -1282,7 +1317,19 @@ pub async fn make(
             )
         })
         .await;
-    editlayer_node.link(node);
+    editlayer_node.link(node.clone());
+    let addcontact_label = node;
+
+    // Grey the button out until name and key are valid
+    setup_add_button_validity(
+        app,
+        &nickedit_node,
+        &secedit_node,
+        addcontact_label,
+        btns_bg,
+        btns_bg_grey,
+        "addcontact_valid",
+    );
 
     // Create cancel/done edit buttons at bottom of screen
     let btns =
@@ -1404,14 +1451,11 @@ pub async fn make(
                 continue;
             }
 
-            let Ok(public_bytes) = bs58::decode(&public_str).into_vec() else {
-                w!("Failed to decode contact public key base58");
-                continue;
-            };
-            if public_bytes.len() != 32 {
-                w!("Invalid public key length: {} (expected 32)", public_bytes.len());
+            if !valid_key(&public_str) {
+                w!("Invalid contact public key: expected a 32-byte key in base58");
                 continue;
             }
+            let public_bytes = bs58::decode(&public_str).into_vec().unwrap();
             let mut public = [0u8; 32];
             public.copy_from_slice(&public_bytes);
 
