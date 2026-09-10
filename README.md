@@ -7,7 +7,6 @@
 
 We aim to proliferate [anonymous digital
 markets](https://dark.fi/manifesto.html) by means of strong cryptography
-and peer-to-peer networks. We are establishing an online zone of freedom
 that is resistant to the surveillance state.
 
 > Unfortunately, the law hasn’t kept pace with technology, and this disconnect
