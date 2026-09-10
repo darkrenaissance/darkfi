@@ -34,7 +34,7 @@ use crate::{
     },
     expr::{self, Compiler},
     gfx::{gfxtag, Point, Renderer},
-    mesh::{rgba, COLOR_RED, COLOR_WHITE},
+    mesh::{rgba, COLOR_CYAN, COLOR_RED},
     prop::{
         Property, PropertyAtomicGuard, PropertyBool, PropertyFloat32, PropertyStr, PropertySubType,
         PropertyType, Role,
@@ -107,8 +107,8 @@ mod android_ui_consts {
     pub const ACTION_SPACING: f32 = 8.;
     pub const BACK_SEP_W: f32 = 1.;
 
-    pub const COPY_BTN_SCALE: f32 = 40.;
-    pub const COPY_BTN_X_OFF: f32 = 60.;
+    pub const COPY_BTN_SCALE: f32 = 38.;
+    pub const COPY_BTN_X_OFF: f32 = 70.;
     pub const COPY_BTN_Y: f32 = 70.;
 
     pub const SELECT_CLOSE_X: f32 = 70.;
@@ -191,9 +191,9 @@ mod ui_consts {
     pub const ACTION_SPACING: f32 = 4.;
     pub const BACK_SEP_W: f32 = 0.5;
 
-    pub const COPY_BTN_SCALE: f32 = 20.;
+    pub const COPY_BTN_SCALE: f32 = 19.;
     pub const COPY_BTN_X_OFF: f32 = 30.;
-    pub const COPY_BTN_Y: f32 = 27.;
+    pub const COPY_BTN_Y: f32 = 30.;
 
     pub const SELECT_CLOSE_X: f32 = 40.;
     pub const SELECT_CLOSE_Y: f32 = 30.;
@@ -861,7 +861,7 @@ pub async fn make(
     prop.set_f32(atom, Role::App, 2, 400.).unwrap();
     prop.set_f32(atom, Role::App, 3, CHATEDIT_HEIGHT).unwrap();
     node.set_property_u32(atom, Role::App, "z_index", 1).unwrap();
-    let shape = shape::create_copy(COLOR_WHITE).scaled(COPY_BTN_SCALE);
+    let shape = shape::create_copy(COLOR_CYAN).scaled(COPY_BTN_SCALE);
     node.set_property_shape(atom, Role::App, "shape", shape).unwrap();
     let node = node.setup(|me| VectorArt::new(me, renderer.clone(), redraw.clone())).await;
     select_layer.link(node);
