@@ -189,6 +189,7 @@ pub async fn make(
     cc.add_const_f32("COPY_WIDTH", COPY_WIDTH);
     cc.add_const_f32("COPY_BTN_SIZE", COPY_BTN_SIZE);
     cc.add_const_f32("CHANNEL_ITEM_HEIGHT", CHANNEL_ITEM_HEIGHT);
+    cc.add_const_f32("MENU_FADE", MENU_FADE);
 
     let atom = &mut PropertyAtomicGuard::none();
 
@@ -1274,7 +1275,7 @@ pub async fn make(
     let btns =
         edit_buttons::create_edit_buttons(app, content.clone(), &window_scale, i18n_fish).await;
 
-    let node = create_menu("contact_menu");
+    let node = create_vector_art("contact_menu_bg");
     let prop = node.get_property("rect").unwrap();
     prop.set_default_f32(0, 0.).unwrap();
     prop.set_default_f32(1, LABEL_LINESPACE + 8. * CHATEDIT_PAD + 4. * CHATEDIT_HEIGHT).unwrap();
@@ -1283,10 +1284,45 @@ pub async fn make(
         cc.compile("h - (LABEL_LINESPACE + 8. * CHATEDIT_PAD + 4. * CHATEDIT_HEIGHT)").unwrap();
     prop.set_default_expr(3, code).unwrap();
     node.set_property_u32(atom, Role::App, "z_index", 0).unwrap();
+
+    let mut shape = VectorShape::new();
+    shape.add_filled_box(
+        expr::const_f32(0.),
+        expr::const_f32(0.),
+        expr::load_var("w"),
+        cc.compile("h - MENU_FADE").unwrap(),
+        [0., 0., 0., 0.5],
+    );
+    shape.add_smooth_vertical_gradient(
+        expr::const_f32(0.),
+        cc.compile("h - MENU_FADE").unwrap(),
+        expr::load_var("w"),
+        expr::load_var("h"),
+        [0., 0., 0., 0.5],
+        [0., 0., 0., 0.],
+        8,
+        1.,
+    );
+
+    node.set_property_shape(atom, Role::App, "shape", shape).unwrap();
+    let node =
+        node.setup(|me| VectorArt::new(me, app.renderer.clone(), app.redraw_trigger.clone())).await;
+    content_area.link(node);
+
+    let node = create_menu("contact_menu");
+    let prop = node.get_property("rect").unwrap();
+    prop.set_default_f32(0, 0.).unwrap();
+    prop.set_default_f32(1, LABEL_LINESPACE + 8. * CHATEDIT_PAD + 4. * CHATEDIT_HEIGHT).unwrap();
+    prop.set_default_expr(2, expr::load_var("w")).unwrap();
+    let code =
+        cc.compile("h - (LABEL_LINESPACE + 8. * CHATEDIT_PAD + 4. * CHATEDIT_HEIGHT)").unwrap();
+    prop.set_default_expr(3, code).unwrap();
+    node.set_property_u32(atom, Role::App, "z_index", 1).unwrap();
     node.set_property_u32(atom, Role::App, "priority", 0).unwrap();
 
     let theme = app.sg_root.lookup_node("/theme").unwrap();
-    wire_color(&node, "bg_color", &theme, "menu.bg_color").unwrap();
+    let prop = node.get_property("bg_color").unwrap();
+    prop.set_default_f32_multi(&[0., 0., 0., 0.]).unwrap();
     wire_color(&node, "text_color", &theme, "text_color").unwrap();
     wire_color(&node, "role1_color", &theme, "menu.role1_color").unwrap();
     wire_color(&node, "role2_color", &theme, "menu.role2_color").unwrap();
