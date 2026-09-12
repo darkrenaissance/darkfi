@@ -497,6 +497,10 @@ async fn retrieve_blocks(
         }
         if count == peer_subs.len() {
             debug!(target: "darkfid::task::sync::retrieve_blocks", "All peer connections failed.");
+            // Check if sync completed
+            if !validator.blockchain.headers.is_empty_sync()? {
+                return Err(Error::NetworkOperationFailed)
+            }
             break
         }
 
