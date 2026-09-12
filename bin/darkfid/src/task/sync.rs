@@ -545,6 +545,22 @@ async fn retrieve_blocks(
                 continue
             };
 
+            // Verify response contains all requested blocks
+            if response.blocks.len() != headers_hashes.len() {
+                debug!(target: "darkfid::task::sync::retrieve_blocks", "Invalid blocks length of `SyncResponse` from peer: {peer:?}");
+                *failed = true;
+                continue
+            }
+
+            // Verify response sequence matches request
+            for (i, block) in response.blocks.iter().enumerate() {
+                if block.hash() != headers_hashes[i] {
+                    debug!(target: "darkfid::task::sync::retrieve_blocks", "Invalid header in `SyncResponse` from peer: {peer:?}");
+                    *failed = true;
+                    continue
+                }
+            }
+
             // Verify and store retrieved blocks
             debug!(target: "darkfid::task::sync::retrieve_blocks", "Processing received blocks");
             received_blocks += response.blocks.len();
@@ -556,9 +572,14 @@ async fn retrieve_blocks(
                     continue
                 };
             } else {
-                for block in &response.blocks {
+                for (i, block) in response.blocks.iter().enumerate() {
+                    // We manualy build the proposal struct here so we
+                    // don't rehash the block header.
                     match validator
-                        .append_proposal(&Proposal::new(block.clone()), timestamps_bound)
+                        .append_proposal(
+                            &Proposal { hash: headers_hashes[i], block: block.clone() },
+                            timestamps_bound,
+                        )
                         .await
                     {
                         Ok(()) | Err(Error::ProposalAlreadyExists) => continue,
