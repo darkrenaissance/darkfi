@@ -561,7 +561,7 @@ async fn retrieve_blocks(
                 if block.hash() != headers_hashes[i] {
                     debug!(target: "darkfid::task::sync::retrieve_blocks", "Invalid header in `SyncResponse` from peer: {peer:?}");
                     *failed = true;
-                    continue
+                    continue 'peers_loop
                 }
             }
 
