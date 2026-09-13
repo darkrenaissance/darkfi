@@ -328,11 +328,23 @@ impl MsgBuffer {
         self.order.iter().rev().filter_map(|slot| self.records.get(*slot))
     }
 
-    /// The oldest loaded timestamp: the loader's resume point. None
-    /// when nothing is loaded.
+    /// The composite key of the oldest loaded *stored* record.
+    /// Derived records are excluded: a day separator's key is its day's
+    /// local midnight, which sorts below every message of that day, so
+    /// using it as the loader's resume point would skip the whole
+    /// unloaded remainder of the day. None when nothing is loaded.
+    pub fn oldest_key(&self) -> Option<(Timestamp, MessageId)> {
+        let slot = *self.order.iter().find(|slot| {
+            !self.records.get(**slot).expect("dangling slot in order").msg_type.is_derived()
+        })?;
+        let rec = self.records.get(slot).expect("dangling slot in order");
+        Some((rec.ts, rec.id))
+    }
+
+    /// The oldest loaded stored-record timestamp. None when nothing is
+    /// loaded.
     pub fn oldest_ts(&self) -> Option<Timestamp> {
-        let first = self.order.first()?;
-        Some(self.records.get(*first).expect("dangling slot in order").ts)
+        self.oldest_key().map(|(ts, _)| ts)
     }
 
     /// Total px of loaded content.
@@ -719,7 +731,12 @@ mod tests {
         // public removal go through real message ids only.
         assert!(!buf.contains(&MessageId([0; 32])));
         assert!(!buf.remove(&MessageId([0; 32])));
-        assert_eq!(buf.oldest_ts(), Some(1000));
+        // Derived-only buffer: no stored record, so no resume point.
+        assert_eq!(buf.oldest_ts(), None);
+        // With a stored record loaded, the derived records' lower
+        // timestamps are skipped.
+        assert!(buf.insert(rec(3000, b'a')));
+        assert_eq!(buf.oldest_ts(), Some(3000));
     }
 
     #[test]

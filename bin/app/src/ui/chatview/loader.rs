@@ -242,11 +242,14 @@ impl Loader {
         let mut batch_height = 0.;
         let touched_viewport = covered < scroll + view_h;
 
-        // Iterate newest -> older, resuming below the oldest loaded
-        // composite key.
-        let iter = match buffer.oldest_ts() {
-            Some(oldest) => {
-                let key = codec::encode_key(oldest.saturating_sub(1), &MessageId([0xff; 32]));
+        // Iterate newest -> older, resuming strictly below the oldest
+        // loaded stored record's composite key. Derived separators are
+        // excluded (their midnight key would skip the day's unloaded
+        // remainder), and the exact key keeps same-ts records with
+        // smaller ids reachable.
+        let iter = match buffer.oldest_key() {
+            Some((ts, id)) => {
+                let key = codec::encode_key(ts, &id);
                 tree.range(..key).rev()
             }
             None => tree.iter().rev(),
@@ -481,6 +484,62 @@ mod tests {
             .map(|r| if r.msg_type.is_derived() { b'|' } else { r.id.0[0] })
             .collect();
         assert_eq!(kinds, vec![b'c', b'|', b'b', b'a', b'|']);
+    }
+
+    /// Backfill pumps must not skip the unloaded remainder of the
+    /// oldest loaded day: the day separator's midnight key is below the
+    /// day's messages, so a resume point taken from it would jump a
+    /// whole day back and strand the rest of the day unloadable.
+    #[test]
+    fn pump_backfills_rest_of_oldest_loaded_day() {
+        let buffer = Arc::new(AsyncMutex::new(MsgBuffer::new()));
+        let (redraw, _rx) = RedrawTrigger::new();
+        let loader = Loader::new(buffer.clone(), redraw);
+        loader.update_viewport(0., 500.);
+
+        use chrono::{Local, TimeZone};
+        let midnight = |day: i64| {
+            let date =
+                chrono::NaiveDate::from_ymd_opt(2026, 8, 29).unwrap() + chrono::Duration::days(day);
+            let dt = date.and_hms_opt(0, 0, 0).unwrap();
+            Local.from_local_datetime(&dt).unwrap().timestamp_millis() as u64
+        };
+        let m0 = midnight(0);
+        let m1 = midnight(1);
+
+        // Day 1 (newer) holds more than one batch; day 0 holds a few.
+        // Stored ids stay away from the separators' zero id (offset the
+        // day ts by an hour so id 0's composite key cannot collide).
+        let hour = 3_600_000u64;
+        let mut lines = vec![];
+        for i in 0..150u16 {
+            lines.push((m1 + hour + i as u64, i as u8));
+        }
+        for i in 150..165u16 {
+            lines.push((m0 + hour + i as u64, i as u8));
+        }
+        loader.bind("test".to_string(), fixture_db("backfill", &lines));
+
+        smol::block_on(loader.pump(Wakeup::ChannelSwitch.bit()));
+        {
+            let buffer = smol::block_on(buffer.lock());
+            // Batch cap: exactly the newest 100, all on day 1.
+            assert_eq!(buffer.len() - 1, 100, "first pump loads 100 + separator");
+            assert!(buffer.iter_display_order().all(|r| r.ts >= m1));
+        }
+
+        // The bug: this pump resumed below day 1's separator (midnight)
+        // and only found day 0, stranding day 1's older half.
+        smol::block_on(loader.pump(Wakeup::NearTop.bit()));
+        let buffer = smol::block_on(buffer.lock());
+        let ids: Vec<u8> = buffer
+            .iter_display_order()
+            .filter(|r| !r.msg_type.is_derived())
+            .map(|r| r.id.0[0])
+            .collect();
+        assert_eq!(ids.len(), 165, "everything eventually loads");
+        assert_eq!(buffer.oldest_ts(), Some(m0 + hour + 150), "reached the true oldest");
+        assert!(ids.contains(&50), "day 1's older half is present");
     }
 
     #[test]

@@ -66,7 +66,10 @@ use crate::{
     ExecutorPtr,
 };
 
-use super::{DrawUpdate, GestureAction, GestureSet, OnModify, RedrawTrigger, UIObject};
+use super::{
+    DrawUpdate, GestureAction, GestureSet, OnModify, PressedKey, PressedKeysSmoothRepeat,
+    RedrawTrigger, UIObject,
+};
 
 pub mod buffer;
 pub mod codec;
@@ -187,6 +190,8 @@ pub struct ChatView {
     /// Geometry the last draw pass saw, for reflow detection.
     last_width: SyncMutex<f32>,
     last_scale: SyncMutex<f32>,
+    /// Smooth repeat for held PageUp/PageDown scrolling.
+    key_repeat: SyncMutex<PressedKeysSmoothRepeat>,
 
     /// Weak self-reference so handlers can spawn detached tasks.
     me: Weak<Self>,
@@ -331,6 +336,7 @@ impl ChatView {
             window_scale: window_scale.clone(),
             last_width: SyncMutex::new(0.),
             last_scale: SyncMutex::new(window_scale.get()),
+            key_repeat: SyncMutex::new(PressedKeysSmoothRepeat::new(400, 50)),
 
             me: me.clone(),
         });
@@ -1424,28 +1430,31 @@ impl UIObject for ChatView {
     }
 
     async fn handle_key_down(&self, key: KeyCode, _mods: KeyMods, repeat: bool) -> bool {
-        if repeat {
-            return false
+        let dir = match key {
+            KeyCode::PageUp => 1.,
+            KeyCode::PageDown => -1.,
+            _ => return false,
+        };
+
+        // Held PageUp/PageDown scrolls smoothly: the initial press acts
+        // immediately and OS repeats are throttled to the repeat
+        // cadence; each tick coalesces into the in-flight page
+        // animation's target.
+        let actions = {
+            let mut repeater = self.key_repeat.lock();
+            repeater.key_down(PressedKey::Key(key), repeat)
+        };
+        if actions == 0 {
+            return true;
         }
 
         let rect = self.rect.get();
-        match key {
-            KeyCode::PageUp => {
-                let mut ctl = self.controller.lock();
-                ctl.page_tick(1., rect.h / 2.);
-                drop(ctl);
-                self.notify_motion();
-                true
-            }
-            KeyCode::PageDown => {
-                let mut ctl = self.controller.lock();
-                ctl.page_tick(-1., rect.h / 2.);
-                drop(ctl);
-                self.notify_motion();
-                true
-            }
-            _ => false,
+        for _ in 0..actions {
+            let mut ctl = self.controller.lock();
+            ctl.page_tick(dir, rect.h / 2.);
         }
+        self.notify_motion();
+        true
     }
 
     async fn handle_mouse_btn_down(&self, btn: MouseButton, mouse_pos: Point) -> bool {
