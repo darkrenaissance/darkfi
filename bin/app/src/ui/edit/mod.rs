@@ -64,7 +64,7 @@ use filter::{ALLOWED_KEYCODES, DISALLOWED_CHARS};
 mod behave;
 pub use behave::BaseEditType;
 use behave::{EditorBehavior, MultiLine, SingleLine};
-mod repeat;
+pub(crate) mod repeat;
 use repeat::{PressedKey, PressedKeysSmoothRepeat};
 
 /// The travel threshold on long hold select before activating select.

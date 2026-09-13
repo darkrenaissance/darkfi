@@ -1841,22 +1841,34 @@ pub async fn make(
 #[allow(dead_code)]
 pub(super) fn populate_tree(tree: &Tree) {
     use crate::ui::chatview::{codec, MessageId, MsgType};
-    use chrono::{NaiveDate, NaiveDateTime};
+    use chrono::{Local, NaiveDate, NaiveDateTime, TimeZone};
 
-    let chat_txt = include_str!("../../../data/chat.txt");
+    let chat_txt = include_str!("../../../data/chat2.txt");
+    let mut day_offset = 0i64;
+    let mut prev_secs = 0u32;
     for (idx, line) in chat_txt.lines().enumerate() {
-        let parts: Vec<&str> = line.splitn(3, ' ').collect();
-        assert_eq!(parts.len(), 3);
-        let time_parts: Vec<&str> = parts[0].splitn(2, ':').collect();
-        let (hour, min) = (time_parts[0], time_parts[1]);
+        // A few lines use a tab instead of a space after the nick.
+        let (time, rest) = line.split_once(' ').expect("malformed line");
+        let (nick, text) =
+            rest.split_once(' ').or_else(|| rest.split_once('\t')).expect("malformed line");
+        let time_parts: Vec<&str> = time.splitn(3, ':').collect();
+        assert_eq!(time_parts.len(), 3);
+        let (hour, min, sec) = (time_parts[0], time_parts[1], time_parts[2]);
         let hour = hour.parse::<u32>().unwrap();
         let min = min.parse::<u32>().unwrap();
-        let dt: NaiveDateTime =
-            NaiveDate::from_ymd_opt(2024, 8, 6).unwrap().and_hms_opt(hour, min, 0).unwrap();
-        let timest = dt.and_utc().timestamp_millis() as u64;
+        let sec = sec.parse::<u32>().unwrap();
+        let secs = hour * 3600 + min * 60 + sec;
+        if secs < prev_secs {
+            day_offset += 1;
+        }
+        prev_secs = secs;
+        let date =
+            NaiveDate::from_ymd_opt(2024, 8, 6).unwrap() + chrono::Duration::days(day_offset);
+        let dt: NaiveDateTime = date.and_hms_opt(hour, min, sec).unwrap();
+        let timest = Local.from_local_datetime(&dt).unwrap().timestamp_millis() as u64;
 
-        let nick = parts[1].to_string();
-        let text = parts[2].to_string();
+        let nick = nick.to_string();
+        let text = text.to_string();
 
         // Unique id per line: the minute timestamp alone can repeat.
         let mut id_bytes = [0u8; 32];
@@ -1869,5 +1881,9 @@ pub(super) fn populate_tree(tree: &Tree) {
         tree.insert(&key, &val).unwrap();
     }
     // O(n)
-    debug!(target: "app::schema", "populated db with {} lines", tree.len().unwrap());
+    debug!(
+        target: "app::schema",
+        "populated db with {} lines, day_offset={day_offset}",
+        tree.len().unwrap()
+    );
 }

@@ -54,7 +54,10 @@ pub use chatview::{ChatView, ChatViewPtr};
 pub mod tokentable;
 pub use tokentable::{TokenRow, TokenTable, TokenTablePtr};
 mod edit;
-pub use edit::{BaseEdit, BaseEditPtr, BaseEditType};
+pub use edit::{
+    repeat::{PressedKey, PressedKeysSmoothRepeat},
+    BaseEdit, BaseEditPtr, BaseEditType,
+};
 pub mod emoji_picker;
 pub use emoji_picker::{EmojiPicker, EmojiPickerPtr};
 pub mod gesture;
