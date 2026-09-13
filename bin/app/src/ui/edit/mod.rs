@@ -1644,6 +1644,11 @@ impl UIObject for BaseEdit {
             self_.editor.lock().on_text_prop_changed();
             self_.redraw.trigger();
         }
+        async fn scale_changed(self_: Arc<BaseEdit>, _batch: BatchGuardPtr) {
+            self_.editor.lock().refresh();
+            self_.scroll.store(0., Ordering::Release);
+            self_.redraw.trigger();
+        }
 
         on_modify.when_change_external(self.rect.prop(), rect_changed);
         on_modify.when_change_external(self.baseline.prop(), redraw);
@@ -1659,6 +1664,7 @@ impl UIObject for BaseEdit {
         //on_modify.when_change(scroll.prop(), redraw);
         //on_modify.when_change(cursor_pos.prop(), redraw);
         on_modify.when_change_external(self.font_size.prop(), redraw);
+        on_modify.when_change_external(self.window_scale.prop(), scale_changed);
         on_modify.when_change_external(self.text.prop(), reset);
         on_modify.when_change_external(self.text_color.prop(), redraw);
         on_modify.when_change_external(self.placeholder_text.prop(), redraw);

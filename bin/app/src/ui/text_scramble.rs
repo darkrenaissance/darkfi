@@ -354,6 +354,10 @@ impl UIObject for TextScramble {
             self_.draw_cache.clear();
             self_.redraw.trigger();
         });
+        on_modify.when_change_external(self.window_scale.prop(), |self_, _| async move {
+            self_.draw_cache.clear();
+            self_.redraw.trigger();
+        });
         on_modify.when_change_external(self.text_color.prop(), |self_, _| async move {
             self_.draw_cache.clear();
             self_.redraw.trigger();

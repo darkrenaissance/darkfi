@@ -29,8 +29,8 @@ use parking_lot::Mutex as SyncMutex;
 use crate::android;
 use crate::{
     db::AppDbPtr,
-    gfx::{EpochIndex, GraphicsEventPublisherPtr, Renderer},
-    prop::{PropertyAtomicGuard, Role},
+    gfx::{gfxtag, EpochIndex, GraphicsEventPublisherPtr, Renderer},
+    prop::{PropertyAtomicGuard, PropertyFloat32, Role},
     scene::{Pimpl, SceneNodePtr},
     setting::{create_setting, Setting},
     sfx, theme,
@@ -115,18 +115,56 @@ impl App {
 
         let window = create_window("window");
         #[cfg(target_os = "android")]
-        let window_scale = {
+        let base_scale = {
             let screen_density = miniquad::window::dpi_scale();
             i!("Android screen density: {screen_density}");
             screen_density / 3.5
         };
         #[cfg(not(target_os = "android"))]
-        let window_scale = 1.;
+        let base_scale = 1.;
+
+        let setting_node = self.sg_root.lookup_node("/setting").unwrap();
+        let win_scale_setting =
+            PropertyFloat32::wrap(&setting_node, Role::Internal, "win.scale", 0).unwrap();
+        let is_valid_scale = |scale: f32| scale > 0. && scale.is_finite();
+        let saved_scale = win_scale_setting.get();
+        let saved_scale = if is_valid_scale(saved_scale) {
+            saved_scale
+        } else {
+            warn!(target: "app", "Invalid persisted win.scale: {saved_scale}, falling back to 1.");
+            1.
+        };
+        let window_scale = base_scale * saved_scale;
 
         d!("Setting window scale to {window_scale}");
         let prop = window.get_property("scale").unwrap();
         let atom = &mut PropertyAtomicGuard::none();
         prop.set_f32(atom, Role::App, 0, window_scale).unwrap();
+
+        // Live scale: re-apply the setting whenever the user changes it.
+        {
+            let on_modify_sub = win_scale_setting.prop().subscribe_modify();
+            let redraw = self.redraw_trigger.clone();
+            let window_scale_prop = window.get_property("scale").unwrap();
+            let live_task = self.ex.spawn(async move {
+                while let Ok((role, _action, _guard)) = on_modify_sub.receive().await {
+                    if role == Role::Internal {
+                        continue
+                    }
+                    let raw = win_scale_setting.get();
+                    let scale = if is_valid_scale(raw) {
+                        raw
+                    } else {
+                        warn!(target: "app", "Invalid win.scale: {raw}, falling back to 1.");
+                        1.
+                    };
+                    let atom = &mut redraw.make_guard(gfxtag!("App::win_scale live apply"));
+                    window_scale_prop.set_f32(atom, Role::App, 0, base_scale * scale).unwrap();
+                    i!("Applied win.scale live: {scale}");
+                }
+            });
+            self.tasks.lock().unwrap().push(live_task);
+        }
 
         #[cfg(target_os = "android")]
         {
