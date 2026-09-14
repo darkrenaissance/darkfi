@@ -688,6 +688,30 @@ pub async fn make(
             overlay.set_property_bool(atom, Role::App, "is_visible", !is_visible).unwrap();
 
             if !is_visible {
+                // Sync with current settings
+                let setting_node = sg_root.lookup_node("/setting").unwrap();
+                let transport = PropertyEnum::wrap(&setting_node, Role::User, "net.transport", 0)
+                    .unwrap()
+                    .get();
+                overlay
+                    .lookup_node("/transport_sel_tcp")
+                    .unwrap()
+                    .set_property_bool(atom, Role::App, "is_visible", transport == "tcp")
+                    .unwrap();
+                overlay
+                    .lookup_node("/transport_sel_tor")
+                    .unwrap()
+                    .set_property_bool(atom, Role::App, "is_visible", transport == "tor")
+                    .unwrap();
+                let chat_is_enabled =
+                    setting_node.get_property("chat.is_enabled").unwrap().get_bool(0).unwrap();
+                let toggle_text = if chat_is_enabled { "on" } else { "off" };
+                overlay
+                    .lookup_node("/toggle_label")
+                    .unwrap()
+                    .set_property_str(atom, Role::App, "text", toggle_text)
+                    .unwrap();
+
                 // While the overlay is shown, keep the conn_info text in sync
                 // with the darkirc outbound peers
                 let sg_root2 = sg_root.clone();
