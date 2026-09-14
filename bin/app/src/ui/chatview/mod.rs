@@ -481,8 +481,9 @@ impl ChatView {
         let _ = node_ref.trigger("select_changed", data).await;
     }
 
-    /// Copy the selected messages' text to the clipboard in display
-    /// order, then unselect everything.
+    /// Copy the selected messages' text to the clipboard in reading
+    /// order (oldest first, as displayed top-to-bottom), then unselect
+    /// everything.
     async fn handle_copy_select(&self) {
         {
             let buffer = self.buffer.lock().await;
@@ -1629,15 +1630,16 @@ impl UIObject for ChatView {
     }
 }
 
-/// Copy text for the selected records in display order, joined by
-/// newlines; each record contributes the text its type defines.
+/// Copy text for the selected records in reading order (oldest first,
+/// top-to-bottom as displayed), joined by newlines; each record
+/// contributes the text its type defines.
 pub(crate) fn copy_selected(
     buffer: &MsgBuffer,
     selected: &HashSet<(Timestamp, MessageId)>,
     types: &msg::TypeNodes,
 ) -> String {
     let mut lines = vec![];
-    for rec in buffer.iter_display_order() {
+    for rec in buffer.iter_reading_order() {
         if selected.contains(&(rec.ts, rec.id)) {
             if let Some(text) = types.copy_text(rec) {
                 lines.push(text);
@@ -1686,11 +1688,11 @@ mod tests {
         ui::RedrawTrigger as TestRedrawTrigger,
     };
 
-    /// Selection copy text follows display order (newest first), each
-    /// record contributing its type's copy text, joined by newlines —
-    /// including derived date separators.
+    /// Selection copy text follows reading order (oldest first,
+    /// top-to-bottom as displayed), each record contributing its type's
+    /// copy text, joined by newlines — including derived date separators.
     #[test]
-    fn copy_selected_follows_display_order() {
+    fn copy_selected_follows_reading_order() {
         let chat = create_chatview("chatview");
         let chat = chat.setup_null();
         let atom = &mut PropertyAtomicGuard::none();
@@ -1770,11 +1772,11 @@ mod tests {
         selected.insert((ts(1, 9), ids[2]));
         selected.insert((sep.ts, sep.id));
 
-        // Display order (newest first): c, [sep], b, a — selected c,
-        // sep, a contribute in that order.
+        // Reading order (oldest first): a, b, [sep], c — selected a,
+        // sep, c contribute in that order.
         let text = copy_selected(&buffer, &selected, &types);
         let label = msg::datemsg::datestr(sep.ts);
-        assert_eq!(text, format!("alice newest\n{label}\nalice oldest"));
+        assert_eq!(text, format!("alice oldest\n{label}\nalice newest"));
 
         // Nothing selected: nothing copied.
         selected.clear();

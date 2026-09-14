@@ -328,6 +328,12 @@ impl MsgBuffer {
         self.order.iter().rev().filter_map(|slot| self.records.get(*slot))
     }
 
+    /// Loaded records oldest-first, the order the messages appear on
+    /// screen top-to-bottom (reading order).
+    pub fn iter_reading_order(&self) -> impl Iterator<Item = &MsgRecord> {
+        self.order.iter().filter_map(|slot| self.records.get(*slot))
+    }
+
     /// The composite key of the oldest loaded *stored* record.
     /// Derived records are excluded: a day separator's key is its day's
     /// local midnight, which sorts below every message of that day, so
