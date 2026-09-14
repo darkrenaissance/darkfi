@@ -1657,6 +1657,63 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish) {
         }
     }
 
+    // Sync with current settings
+    {
+        let sg_root2 = app.sg_root.clone();
+        let redraw2 = app.redraw_trigger.clone();
+        let settings_map2 = settings_map.clone();
+        let active_setting2 = active_setting.clone();
+        let is_visible = layer_node.get_property("is_visible").unwrap();
+        let is_visible_sub = is_visible.subscribe_modify();
+        let listen_visible = app.ex.spawn(async move {
+            while is_visible_sub.receive().await.is_ok() {
+                if !is_visible.get_bool(0).unwrap() {
+                    continue
+                }
+                let atom = &mut redraw2.make_guard(gfxtag!("settings resync"));
+                for (name, setting) in settings_map2.iter() {
+                    let path = format!("/window/content/settings_layer/settings/{name}");
+                    let Some(row) = sg_root2.lookup_node(&path) else { continue };
+                    if setting.is_bool() {
+                        let on = matches!(setting.get_value(), PropertyValue::Bool(true));
+                        row.lookup_node("/value_bg_bool_true")
+                            .unwrap()
+                            .set_property_bool(atom, Role::App, "is_visible", on)
+                            .unwrap();
+                        row.lookup_node("/value_bg_bool_false")
+                            .unwrap()
+                            .set_property_bool(atom, Role::App, "is_visible", !on)
+                            .unwrap();
+                        row.lookup_node("/bool_icon_bg_true")
+                            .unwrap()
+                            .set_property_bool(atom, Role::App, "is_visible", on)
+                            .unwrap();
+                        row.lookup_node("/bool_icon_bg_false")
+                            .unwrap()
+                            .set_property_bool(atom, Role::App, "is_visible", !on)
+                            .unwrap();
+                        let label = row.lookup_node("/value_label").unwrap();
+                        label
+                            .set_property_str(atom, Role::App, "text", setting.value_as_string())
+                            .unwrap();
+                        let prop = label.get_property("text_color").unwrap();
+                        let color = if on { [0., 0.94, 1., 1.] } else { [0.9, 0.4, 0.4, 1.] };
+                        for (i, c) in color.iter().enumerate() {
+                            prop.set_f32(atom, Role::App, i, *c).unwrap();
+                        }
+                    } else {
+                        row.lookup_node("/value_label")
+                            .unwrap()
+                            .set_property_str(atom, Role::App, "text", setting.value_as_string())
+                            .unwrap();
+                    }
+                    refresh_setting(setting.clone(), row);
+                }
+            }
+        });
+        app.tasks.lock().unwrap().push(listen_visible);
+    }
+
     let settings_node = app.sg_root.lookup_node("/window/content/settings_layer").unwrap();
     settings_node.set_property_bool(atom, Role::App, "is_visible", false).unwrap();
 
