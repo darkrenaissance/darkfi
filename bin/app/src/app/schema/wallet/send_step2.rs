@@ -317,7 +317,7 @@ pub async fn make(
     prop.set_f32(atom, Role::App, 2, 500.).unwrap();
     prop.set_f32(atom, Role::App, 3, 500.).unwrap();
     node.set_property_u32(atom, Role::App, "z_index", 2).unwrap();
-    let shape = shape::create_copy(COLOR_CYAN).scaled(PASTE_SCALE);
+    let shape = shape::create_paste(COLOR_CYAN).scaled(PASTE_SCALE);
     node.set_property_shape(atom, Role::App, "shape", shape).unwrap();
     let node =
         node.setup(|me| VectorArt::new(me, app.renderer.clone(), app.redraw_trigger.clone())).await;

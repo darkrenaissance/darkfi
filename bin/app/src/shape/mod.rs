@@ -41,6 +41,9 @@ pub use version_block::create_version_block;
 mod copy;
 pub use copy::create_copy;
 
+mod paste;
+pub use paste::create_paste;
+
 mod contacts_icon;
 pub use contacts_icon::create_contacts_icon;
 mod channels_icon;
