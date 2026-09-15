@@ -57,7 +57,7 @@ $ git clone git@darkfi-git-tor:darkrenaissance/darkfi
 $ cd darkfi
 ```
 
-It is highly recomended to remove older repo folders. You don't want to
+It is highly recommended to remove older repo folders. You don't want to
 accidentally `git push` to a clearnet remote and dox yourself.
 
 ## Git Config
