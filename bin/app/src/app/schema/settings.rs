@@ -448,10 +448,10 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish) {
         let path = "/window/content/settings_layer/search_label";
         let search_label_node = sg_root3.lookup_node(path.to_string()).unwrap();
 
-        if search_string.len() > 0 {
-            let _ = search_label_node.set_property_f32(atom, Role::App, "font_size", 0.);
+        if !search_string.is_empty() {
+            let _ = search_label_node.set_property_str(atom, Role::App, "text", "");
         } else {
-            let _ = search_label_node.set_property_f32(atom, Role::App, "font_size", 16.);
+            let _ = search_label_node.set_property_str(atom, Role::App, "text", "SEARCH...");
         }
 
         let path = "/window/content/settings_layer/settings";
@@ -997,11 +997,6 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish) {
             editbox_node.set_property_u32(atom, Role::App, "z_index", 1).unwrap();
             editbox_node.set_property_bool(atom, Role::App, "is_active", false).unwrap();
             editbox_node.set_property_bool(atom, Role::App, "is_focused", false).unwrap();
-            editbox_node
-                .get_property("font_size")
-                .unwrap()
-                .set_f32(atom, Role::App, 0, 0.)
-                .unwrap();
 
             editz_text = Some(PropertyStr::wrap(&editbox_node, Role::App, "text", 0).unwrap());
 
@@ -1360,7 +1355,6 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish) {
                         let node = old_node.lookup_node("/value_editbox").unwrap();
                         node.set_property_bool(atom, Role::App, "is_active", false).unwrap();
                         node.set_property_bool(atom, Role::App, "is_focused", false).unwrap();
-                        node.get_property("font_size").unwrap().set_default_f32(0, 0.).unwrap();
                         node.set_property_str(atom, Role::App, "text", "").unwrap();
                     }
 
@@ -1474,7 +1468,6 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish) {
                     let node = setting_root2.lookup_node("/value_editbox").unwrap();
                     node.set_property_bool(atom, Role::App, "is_active", true).unwrap();
                     node.set_property_bool(atom, Role::App, "is_focused", true).unwrap();
-                    node.get_property("font_size").unwrap().set_default_f32(0, 16.).unwrap();
                     if !was_active {
                         node.set_property_str(
                             atom,
@@ -1758,9 +1751,9 @@ async fn update_setting(
     let atom = &mut PropertyAtomicGuard::none();
 
     if let Some(node) = sn.lookup_node("/value_editbox") {
-        node.get_property("font_size").unwrap().set_default_f32(0, 0.).unwrap();
         node.set_property_bool(atom, Role::App, "is_active", false).unwrap();
         node.set_property_bool(atom, Role::App, "is_focused", false).unwrap();
+        node.set_property_str(atom, Role::App, "text", "").unwrap();
     }
 
     let Some(editz_text) = editz_text else { return };
