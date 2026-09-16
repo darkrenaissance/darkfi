@@ -160,7 +160,7 @@ impl DrkPlugin {
         let net_transport =
             PropertyEnum::wrap(&setting_node, Role::Internal, "net.transport", 0).unwrap();
 
-        let endpoint = Url::parse(DARKFID_ENDPOINT_TCP).unwrap();
+        let endpoint = Self::endpoint(&net_transport);
         i!("Using {endpoint} transport for darkfid connection");
 
         let drk = match Drk::new(
@@ -309,8 +309,8 @@ impl DrkPlugin {
 
     /// Endpoint for the darkfid daemon connection, derived from the
     /// `net.transport` setting
-    fn endpoint(&self) -> Url {
-        let endpoint = match self.net_transport.get().as_str() {
+    fn endpoint(net_transport: &PropertyEnum) -> Url {
+        let endpoint = match net_transport.get().as_str() {
             "tor" => DARKFID_ENDPOINT_TOR,
             "tcp" => DARKFID_ENDPOINT_TCP,
             unhandled => panic!("Unhandled net.transport value: {unhandled}"),
@@ -575,7 +575,7 @@ impl DrkPlugin {
         let start_height = height;
 
         // Create RPC client for block fetching
-        let endpoint = self.endpoint();
+        let endpoint = Self::endpoint(&self.net_transport);
         let rpc_client = match RpcClient::new(endpoint, self.ex.clone()).await {
             Ok(client) => client,
             Err(e) => return Err(DarkFiError::Custom(format!("Failed to create RPC client: {e}"))),
@@ -846,7 +846,8 @@ impl DrkPlugin {
         let publisher = Publisher::new();
         let subscription = publisher.clone().subscribe().await;
         let _publisher = publisher.clone();
-        let rpc_client = Arc::new(RpcClient::new(self.endpoint(), self.ex.clone()).await?);
+        let rpc_client =
+            Arc::new(RpcClient::new(Self::endpoint(&self.net_transport), self.ex.clone()).await?);
         let rpc_client_ = rpc_client.clone();
 
         rpc_task.clone().start(
@@ -1410,7 +1411,7 @@ impl DrkPlugin {
         let subscribe_task = self.ex.spawn(async move {
             loop {
                 let Some(self2) = me2.upgrade() else { break };
-                let endpoint = self2.endpoint();
+                let endpoint = Self::endpoint(&self2.net_transport);
                 i!("Attempting to connect to darkfid daemon at {}", endpoint);
                 let subscribe_rpc_task = StoppableTask::new();
                 let subscribe_rpc_task_ = subscribe_rpc_task.clone();
@@ -1465,7 +1466,7 @@ impl DrkPlugin {
                 }
 
                 // Endpoint changed while we were connected, no need to sleep
-                if self2.endpoint() != endpoint {
+                if Self::endpoint(&self2.net_transport) != endpoint {
                     continue
                 }
 
@@ -1484,7 +1485,7 @@ impl DrkPlugin {
             while let Ok(_) = net_transport_sub.receive().await {
                 let Some(self2) = me3.upgrade() else { break };
                 let transport = net_transport.get();
-                let endpoint = self2.endpoint();
+                let endpoint = Self::endpoint(&self2.net_transport);
                 i!("Transport changed to {transport}, restarting darkfid connection at {endpoint}");
 
                 // Cancel the scan/subscribe task
