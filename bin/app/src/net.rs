@@ -54,7 +54,8 @@ fn stop_ui_subtree(node: &SceneNodePtr) {
             Pimpl::EmojiPicker(_) |
             Pimpl::Shortcut(_) |
             Pimpl::Menu(_) |
-            Pimpl::TokenTable(_)
+            Pimpl::TokenTable(_) |
+            Pimpl::Slider(_)
     ) {
         get_ui_object3(node).stop();
     }

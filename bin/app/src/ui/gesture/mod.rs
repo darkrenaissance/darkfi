@@ -251,6 +251,13 @@ impl GestureSet {
         drag: Some(DragCfg { axes: Axes::Both, direction: Direction::Any, min_travel: Some(0.) }),
     };
 
+    /// Slider: tap to jump/step, horizontal scrub.
+    pub const SLIDER: GestureSet = GestureSet {
+        tap: Some(TapCfg { axes: Axes::Both }),
+        long_press: None,
+        drag: Some(DragCfg { axes: Axes::X, direction: Direction::Horizontal, min_travel: None }),
+    };
+
     /// Whether any recognizer is configured.
     pub fn is_empty(&self) -> bool {
         self.tap.is_none() && self.long_press.is_none() && self.drag.is_none()

@@ -29,7 +29,7 @@ use parking_lot::Mutex as SyncMutex;
 use crate::android;
 use crate::{
     db::AppDbPtr,
-    gfx::{gfxtag, EpochIndex, GraphicsEventPublisherPtr, Renderer},
+    gfx::{EpochIndex, GraphicsEventPublisherPtr, Renderer},
     prop::{PropertyAtomicGuard, PropertyFloat32, Role},
     scene::{Pimpl, SceneNodePtr},
     setting::{create_setting, Setting},
@@ -140,31 +140,6 @@ impl App {
         let prop = window.get_property("scale").unwrap();
         let atom = &mut PropertyAtomicGuard::none();
         prop.set_f32(atom, Role::App, 0, window_scale).unwrap();
-
-        // Live scale: re-apply the setting whenever the user changes it.
-        {
-            let on_modify_sub = win_scale_setting.prop().subscribe_modify();
-            let redraw = self.redraw_trigger.clone();
-            let window_scale_prop = window.get_property("scale").unwrap();
-            let live_task = self.ex.spawn(async move {
-                while let Ok((role, _action, _guard)) = on_modify_sub.receive().await {
-                    if role == Role::Internal {
-                        continue
-                    }
-                    let raw = win_scale_setting.get();
-                    let scale = if is_valid_scale(raw) {
-                        raw
-                    } else {
-                        warn!(target: "app", "Invalid win.scale: {raw}, falling back to 1.");
-                        1.
-                    };
-                    let atom = &mut redraw.make_guard(gfxtag!("App::win_scale live apply"));
-                    window_scale_prop.set_f32(atom, Role::App, 0, base_scale * scale).unwrap();
-                    i!("Applied win.scale live: {scale}");
-                }
-            });
-            self.tasks.lock().unwrap().push(live_task);
-        }
 
         #[cfg(target_os = "android")]
         {

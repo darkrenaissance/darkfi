@@ -124,6 +124,7 @@ pub enum SceneNodeType {
     PrivMsgNode = 26,
     DateMsgNode = 27,
     FileMsgNode = 28,
+    Slider = 29,
     PluginRoot = 100,
     Plugin = 101,
 }
@@ -619,6 +620,7 @@ pub enum Pimpl {
     PrivMsgNode(ui::chatview::msg::PrivMsgNodePtr),
     DateMsgNode(ui::chatview::msg::DateMsgNodePtr),
     FileMsgNode(ui::chatview::msg::FileMsgNodePtr),
+    Slider(ui::SliderPtr),
     #[cfg(feature = "enable-plugin-darkirc")]
     DarkIrc(plugin::DarkIrcPtr),
     #[cfg(feature = "enable-plugin-fud")]

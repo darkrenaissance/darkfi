@@ -19,20 +19,24 @@
 use crate::{
     app::{
         node::{
-            create_button, create_layer, create_singleline_edit, create_text, create_vector_art,
+            create_button, create_layer, create_singleline_edit, create_slider, create_text,
+            create_vector_art,
         },
         App,
     },
     expr::{self, Compiler},
     gfx::gfxtag,
     prop::{PropertyAtomicGuard, PropertyFloat32, PropertyStr, PropertyValue, Role},
-    scene::{SceneNodePtr, Slot},
+    scene::{SceneNode, SceneNodePtr, Slot},
     shape,
     theme::wire_color,
-    ui::{BaseEdit, BaseEditType, Button, Layer, ShapeVertex, Text, VectorArt, VectorShape},
+    ui::{
+        BaseEdit, BaseEditType, Button, Layer, ShapeVertex, Slider, Text, VectorArt, VectorShape,
+    },
     util::i18n::I18nBabelFish,
-    ExecutorPtr,
 };
+
+use darkfi_serial::deserialize;
 
 use std::{
     collections::BTreeMap,
@@ -44,6 +48,13 @@ mod android_ui_consts {
     pub const SETTING_LABEL_X: f32 = 40.;
     pub const SETTING_LABEL_LINESPACE: f32 = 140.;
     pub const SETTING_LABEL_BASELINE: f32 = 82.;
+    pub const SLIDER_PAD: f32 = 20.;
+    pub const RESET_BTN_W: f32 = 70.;
+    pub const RESET_GLYPH_X: f32 = 50.;
+    pub const SLIDER_H: f32 = 52.;
+    pub const SWITCH_X_OFFSET: f32 = 50.;
+    pub const CONFIRM_X_OFFSET: f32 = 100.;
+    pub const CONFIRM_BTN_W: f32 = 200.;
     pub const SETTING_LABEL_FONTSIZE: f32 = 24.;
     pub const SETTING_EDIT_FONTSIZE: f32 = 24.;
     pub const SETTING_TITLE_X: f32 = 150.;
@@ -80,6 +91,13 @@ mod ui_consts {
     pub const SETTING_LABEL_X: f32 = 20.;
     pub const SETTING_LABEL_LINESPACE: f32 = 60.;
     pub const SETTING_LABEL_BASELINE: f32 = 37.;
+    pub const SLIDER_PAD: f32 = 10.;
+    pub const RESET_BTN_W: f32 = 35.;
+    pub const RESET_GLYPH_X: f32 = 25.;
+    pub const SLIDER_H: f32 = 26.;
+    pub const SWITCH_X_OFFSET: f32 = 25.;
+    pub const CONFIRM_X_OFFSET: f32 = 50.;
+    pub const CONFIRM_BTN_W: f32 = 100.;
     pub const SETTING_LABEL_FONTSIZE: f32 = 14.;
     pub const SETTING_EDIT_FONTSIZE: f32 = 14.;
     pub const SETTING_TITLE_X: f32 = 100.;
@@ -134,6 +152,9 @@ impl Setting {
     fn is_default(&self) -> bool {
         self.get_value() == self.get_default()
     }
+    fn is_bool(&self) -> bool {
+        matches!(self.get_value(), PropertyValue::Bool(_))
+    }
     fn reset(&self) {
         let prop = self.node.get_property("value").unwrap();
         let atom = &mut PropertyAtomicGuard::none();
@@ -141,9 +162,23 @@ impl Setting {
     }
 }
 
+#[cfg(target_os = "android")]
+fn win_base_scale() -> f32 {
+    miniquad::window::dpi_scale() / 3.5
+}
+
+#[cfg(not(target_os = "android"))]
+fn win_base_scale() -> f32 {
+    1.
+}
+
 pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish) {
     let mut cc = Compiler::new();
     cc.add_const_f32("BORDER_RIGHT_SCALE", BORDER_RIGHT_SCALE);
+    cc.add_const_f32("SETTING_LABEL_X", SETTING_LABEL_X);
+    cc.add_const_f32("SLIDER_PAD", SLIDER_PAD);
+    cc.add_const_f32("RESET_BTN_W", RESET_BTN_W);
+    cc.add_const_f32("RESET_GLYPH_X", RESET_GLYPH_X);
     cc.add_const_f32("SEARCH_PADDING_X", SEARCH_PADDING_X);
     cc.add_const_f32("X_RATIO", 1. / 2.);
     let window_scale = PropertyFloat32::wrap(
@@ -895,7 +930,11 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish) {
         let prop = label_value_node.get_property("rect").unwrap();
         prop.set_default_f32(0, SETTING_LABEL_X).unwrap();
         prop.set_default_f32(1, 0.).unwrap();
-        prop.set_default_expr(2, cc.compile("w * X_RATIO").unwrap()).unwrap();
+        prop.set_default_expr(
+            2,
+            cc.compile("w * X_RATIO - BORDER_RIGHT_SCALE - RESET_BTN_W - SETTING_LABEL_X").unwrap(),
+        )
+        .unwrap();
         prop.set_default_f32(3, 100.).unwrap();
         label_value_node.set_property_u32(atom, Role::App, "z_index", 1).unwrap();
         label_value_node
@@ -1139,6 +1178,54 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish) {
             setting_layer_node.link(btn);
         }
 
+        if setting_name == "win.scale" {
+            let node = create_slider("value_slider");
+            node.set_property_bool(atom, Role::App, "is_active", true).unwrap();
+            node.set_property_f32(atom, Role::App, "min", 0.8).unwrap();
+            node.set_property_f32(atom, Role::App, "max", 1.2).unwrap();
+            node.set_property_f32(atom, Role::App, "step", 0.02).unwrap();
+            node.set_property_bool(atom, Role::App, "show_stepper", true).unwrap();
+
+            let saved = match setting_clone.get_value() {
+                PropertyValue::Float32(v) if (0.8..=1.2).contains(&v) => v,
+                _ => 1.,
+            };
+            node.set_property_f32(atom, Role::App, "value", saved).unwrap();
+
+            let prop = node.get_property("rect").unwrap();
+            prop.clone()
+                .set_expr(
+                    atom,
+                    Role::App,
+                    0,
+                    cc.compile("w * X_RATIO - BORDER_RIGHT_SCALE + SLIDER_PAD").unwrap(),
+                )
+                .unwrap();
+            prop.set_f32(atom, Role::App, 1, (SETTING_LABEL_LINESPACE - SLIDER_H) / 2.).unwrap();
+            prop.clone()
+                .set_expr(
+                    atom,
+                    Role::App,
+                    2,
+                    cc.compile("w - (w * X_RATIO - BORDER_RIGHT_SCALE + SLIDER_PAD) - SLIDER_PAD")
+                        .unwrap(),
+                )
+                .unwrap();
+            prop.set_f32(atom, Role::App, 3, SLIDER_H).unwrap();
+            node.set_property_u32(atom, Role::App, "z_index", 1).unwrap();
+
+            let mut thumb_shape = shape::create_thumb([1., 1., 1., 1.]);
+            thumb_shape.join(shape::create_circle([0., 0.94, 1., 1.]).scaled(0.65));
+            node.set_property_shape(atom, Role::App, "thumb_shape", thumb_shape).unwrap();
+
+            spawn_win_scale_listener(app, setting.clone(), &setting_layer_node, &node);
+
+            let node = node
+                .setup(|me| Slider::new(me, app.renderer.clone(), app.redraw_trigger.clone()))
+                .await;
+            setting_layer_node.link(node);
+        }
+
         // Is this setting the one that is currently active
         let cloned_active_setting = active_setting.clone();
         let is_active_setting = match active_setting.lock().unwrap().as_ref() {
@@ -1265,8 +1352,7 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish) {
                     })
                     .await;
                 setting_layer_node.link(node);
-            } else {
-                // Label showing the setting's current value
+            } else if setting_name != "win.scale" {
                 let value_node = create_text("value_label");
                 let prop = value_node.get_property("rect").unwrap();
                 prop.clone()
@@ -1313,9 +1399,9 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish) {
                 setting_layer_node.link(node);
             }
 
-            // A wide button useful to select the current setting
             let node = create_button("selector_btn");
-            node.set_property_bool(atom, Role::App, "is_active", true).unwrap();
+            node.set_property_bool(atom, Role::App, "is_active", setting_name != "win.scale")
+                .unwrap();
             let prop = node.get_property("rect").unwrap();
             prop.set_default_expr(0, cc.compile("w * X_RATIO").unwrap()).unwrap();
             prop.set_default_f32(1, 0.).unwrap();
@@ -1345,9 +1431,10 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish) {
 
                     // Show the selected setting value label
                     // of the selected setting, if there's one
-                    let node = old_node.lookup_node("/value_label").unwrap();
-                    let text = PropertyStr::wrap(&node, Role::App, "text", 0).unwrap();
-                    text.set(atom, &s.value_as_string());
+                    if let Some(node) = old_node.lookup_node("/value_label") {
+                        let text = PropertyStr::wrap(&node, Role::App, "text", 0).unwrap();
+                        text.set(atom, &s.value_as_string());
+                    }
 
                     // Hide the selected setting editbox
                     // of the selected setting, if there's one
@@ -1511,7 +1598,7 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish) {
             // Switch icon
             let node = create_vector_art("switch_btn_bg");
             let prop = node.get_property("rect").unwrap();
-            prop.set_default_expr(0, cc.compile("w - 50").unwrap()).unwrap();
+            prop.set_default_expr(0, cc.compile("w - SWITCH_X_OFFSET").unwrap()).unwrap();
             prop.set_default_f32(1, SETTING_LABEL_LINESPACE / 2.).unwrap();
             prop.set_default_f32(2, 0.).unwrap();
             prop.set_default_f32(3, 0.).unwrap();
@@ -1523,11 +1610,10 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish) {
                 .setup(|me| VectorArt::new(me, app.renderer.clone(), app.redraw_trigger.clone()))
                 .await;
             setting_layer_node.link(node);
-        } else {
-            // Confirm button
+        } else if setting_name != "win.scale" {
             let node = create_vector_art("confirm_btn_bg");
             let prop = node.get_property("rect").unwrap();
-            prop.set_default_expr(0, cc.compile("w - 50").unwrap()).unwrap();
+            prop.set_default_expr(0, cc.compile("w - CONFIRM_X_OFFSET").unwrap()).unwrap();
             prop.set_default_f32(1, SETTING_LABEL_LINESPACE / 2.).unwrap();
             prop.set_default_f32(2, 0.).unwrap();
             prop.set_default_f32(3, 0.).unwrap();
@@ -1544,9 +1630,9 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish) {
             let node = create_button("confirm_btn");
             node.set_property_bool(atom, Role::App, "is_active", true).unwrap();
             let prop = node.get_property("rect").unwrap();
-            prop.set_default_expr(0, cc.compile("w - 100").unwrap()).unwrap();
+            prop.set_default_expr(0, cc.compile("w - CONFIRM_BTN_W").unwrap()).unwrap();
             prop.set_default_f32(1, 0.).unwrap();
-            prop.set_default_f32(2, 100.).unwrap();
+            prop.set_default_f32(2, CONFIRM_BTN_W).unwrap();
             prop.set_default_f32(3, SETTING_LABEL_LINESPACE).unwrap();
             node.set_property_u32(atom, Role::App, "z_index", 3).unwrap();
 
@@ -1580,17 +1666,20 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish) {
             }
         }
 
-        // Reset icon
         let node = create_vector_art("reset_btn_bg");
         let prop = node.get_property("rect").unwrap();
-        prop.set_default_expr(0, cc.compile("w - 100").unwrap()).unwrap();
+        prop.set_default_expr(
+            0,
+            cc.compile("w * X_RATIO - BORDER_RIGHT_SCALE - RESET_GLYPH_X").unwrap(),
+        )
+        .unwrap();
         prop.set_default_f32(1, SETTING_LABEL_LINESPACE / 2.).unwrap();
         prop.set_default_f32(2, 0.).unwrap();
         prop.set_default_f32(3, 0.).unwrap();
         node.set_property_bool(atom, Role::App, "is_visible", !setting.is_default()).unwrap();
         node.set_property_u32(atom, Role::App, "z_index", 1).unwrap();
 
-        let shape = shape::create_reset([0., 0.94, 1., 1.]).scaled(15.);
+        let shape = shape::create_reset([0., 0.94, 1., 1.]).scaled(10.);
         node.set_property_shape(atom, Role::App, "shape", shape).unwrap();
         let node = node
             .setup(|me| VectorArt::new(me, app.renderer.clone(), app.redraw_trigger.clone()))
@@ -1600,9 +1689,13 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish) {
         let node = create_button("reset_btn");
         node.set_property_bool(atom, Role::App, "is_active", !setting.is_default()).unwrap();
         let prop = node.get_property("rect").unwrap();
-        prop.set_default_expr(0, cc.compile("w - 115").unwrap()).unwrap();
+        prop.set_default_expr(
+            0,
+            cc.compile("w * X_RATIO - BORDER_RIGHT_SCALE - RESET_BTN_W").unwrap(),
+        )
+        .unwrap();
         prop.set_default_f32(1, 0.).unwrap();
-        prop.set_default_f32(2, 50.).unwrap();
+        prop.set_default_f32(2, RESET_BTN_W).unwrap();
         prop.set_default_f32(3, SETTING_LABEL_LINESPACE).unwrap();
         node.set_property_u32(atom, Role::App, "z_index", 3).unwrap();
 
@@ -1617,6 +1710,7 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish) {
             node.register("click", slot).unwrap();
             let setting2 = setting.clone();
             let sg_root2 = setting_layer_node.clone();
+            let app_root2 = app.sg_root.clone();
             let active_setting2 = active_setting.clone();
             let editz_text2 = editz_text.clone();
             let listen_click = app.ex.spawn(async move {
@@ -1626,11 +1720,18 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish) {
 
                     let atom = &mut PropertyAtomicGuard::none();
 
+                    if setting2.is_bool() {
+                        refresh_bool_row(&setting2, &sg_root2, atom);
+                    } else if setting2.name == "win.scale" {
+                        reset_win_scale_row(&setting2, &sg_root2, &app_root2, atom);
+                    }
+
                     // Show the selected setting value label (set its text empty)
                     // of the selected setting, if there's one
-                    let node = sg_root2.lookup_node("/value_label").unwrap();
-                    let text = PropertyStr::wrap(&node, Role::App, "text", 0).unwrap();
-                    text.set(atom, setting2.value_as_string());
+                    if let Some(node) = sg_root2.lookup_node("/value_label") {
+                        let text = PropertyStr::wrap(&node, Role::App, "text", 0).unwrap();
+                        text.set(atom, setting2.value_as_string());
+                    }
 
                     let node = sg_root2.lookup_node("/value_editbox").unwrap();
                     node.set_property_str(atom, Role::App, "text", setting2.value_as_string())
@@ -1655,7 +1756,6 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish) {
         let sg_root2 = app.sg_root.clone();
         let redraw2 = app.redraw_trigger.clone();
         let settings_map2 = settings_map.clone();
-        let active_setting2 = active_setting.clone();
         let is_visible = layer_node.get_property("is_visible").unwrap();
         let is_visible_sub = is_visible.subscribe_modify();
         let listen_visible = app.ex.spawn(async move {
@@ -1668,35 +1768,9 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish) {
                     let path = format!("/window/content/settings_layer/settings/{name}");
                     let Some(row) = sg_root2.lookup_node(&path) else { continue };
                     if setting.is_bool() {
-                        let on = matches!(setting.get_value(), PropertyValue::Bool(true));
-                        row.lookup_node("/value_bg_bool_true")
-                            .unwrap()
-                            .set_property_bool(atom, Role::App, "is_visible", on)
-                            .unwrap();
-                        row.lookup_node("/value_bg_bool_false")
-                            .unwrap()
-                            .set_property_bool(atom, Role::App, "is_visible", !on)
-                            .unwrap();
-                        row.lookup_node("/bool_icon_bg_true")
-                            .unwrap()
-                            .set_property_bool(atom, Role::App, "is_visible", on)
-                            .unwrap();
-                        row.lookup_node("/bool_icon_bg_false")
-                            .unwrap()
-                            .set_property_bool(atom, Role::App, "is_visible", !on)
-                            .unwrap();
-                        let label = row.lookup_node("/value_label").unwrap();
+                        refresh_bool_row(setting, &row, atom);
+                    } else if let Some(label) = row.lookup_node("/value_label") {
                         label
-                            .set_property_str(atom, Role::App, "text", setting.value_as_string())
-                            .unwrap();
-                        let prop = label.get_property("text_color").unwrap();
-                        let color = if on { [0., 0.94, 1., 1.] } else { [0.9, 0.4, 0.4, 1.] };
-                        for (i, c) in color.iter().enumerate() {
-                            prop.set_f32(atom, Role::App, i, *c).unwrap();
-                        }
-                    } else {
-                        row.lookup_node("/value_label")
-                            .unwrap()
                             .set_property_str(atom, Role::App, "text", setting.value_as_string())
                             .unwrap();
                     }
@@ -1704,7 +1778,7 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish) {
                 }
             }
         });
-        app.tasks.lock().unwrap().push(listen_visible);
+        app.tasks.lock().push(listen_visible);
     }
 
     let settings_node = app.sg_root.lookup_node("/window/content/settings_layer").unwrap();
@@ -1717,9 +1791,93 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish) {
     node.set_property_str(atom, Role::App, "text", &counter_text).unwrap();
 }
 
+fn spawn_win_scale_listener(
+    app: &App,
+    setting: Arc<Setting>,
+    row_root: &SceneNodePtr,
+    slider: &SceneNode,
+) {
+    let (slot, recvr) = Slot::new("slider_changed");
+    slider.register("changed", slot).unwrap();
+    let sg_root = app.sg_root.clone();
+    let row_root = row_root.clone();
+    let redraw = app.redraw_trigger.clone();
+    let base_scale = win_base_scale();
+    let task = app.ex.spawn(async move {
+        while let Ok(data) = recvr.recv().await {
+            let Ok(val) = deserialize::<f32>(&data) else { continue };
+            let atom = &mut redraw.make_guard(gfxtag!("settings slider changed"));
+            if let Err(e) = setting
+                .node
+                .get_property("value")
+                .unwrap()
+                .set_f32(atom, Role::User, 0, val)
+            {
+                error!(target: "app::settings", "failed to set win.scale: {e}");
+                continue
+            }
+            let window = sg_root.lookup_node("/window").unwrap();
+            window
+                .get_property("scale")
+                .unwrap()
+                .set_f32(atom, Role::App, 0, base_scale * val)
+                .unwrap();
+            info!(target: "app::settings", "Applied win.scale live: {val}");
+            refresh_setting(setting.clone(), row_root.clone());
+        }
+    });
+    app.tasks.lock().push(task);
+}
+
+fn reset_win_scale_row(
+    setting: &Setting,
+    row_root: &SceneNodePtr,
+    app_root: &SceneNodePtr,
+    atom: &mut PropertyAtomicGuard,
+) {
+    let def = match setting.get_default() {
+        PropertyValue::Float32(v) => v.clamp(0.8, 1.2),
+        _ => 1.,
+    };
+    if let Some(slider) = row_root.lookup_node("/value_slider") {
+        slider.set_property_f32(atom, Role::App, "value", def).unwrap();
+    }
+    let window = app_root.lookup_node("/window").unwrap();
+    window
+        .get_property("scale")
+        .unwrap()
+        .set_f32(atom, Role::App, 0, win_base_scale() * def)
+        .unwrap();
+}
+fn refresh_bool_row(setting: &Setting, sn: &SceneNodePtr, atom: &mut PropertyAtomicGuard) {
+    let on = matches!(setting.get_value(), PropertyValue::Bool(true));
+    sn.lookup_node("/value_bg_bool_true")
+        .unwrap()
+        .set_property_bool(atom, Role::App, "is_visible", on)
+        .unwrap();
+    sn.lookup_node("/value_bg_bool_false")
+        .unwrap()
+        .set_property_bool(atom, Role::App, "is_visible", !on)
+        .unwrap();
+    sn.lookup_node("/bool_icon_bg_true")
+        .unwrap()
+        .set_property_bool(atom, Role::App, "is_visible", on)
+        .unwrap();
+    sn.lookup_node("/bool_icon_bg_false")
+        .unwrap()
+        .set_property_bool(atom, Role::App, "is_visible", !on)
+        .unwrap();
+    let label = sn.lookup_node("/value_label").unwrap();
+    label.set_property_str(atom, Role::App, "text", setting.value_as_string()).unwrap();
+    let prop = label.get_property("text_color").unwrap();
+    let color = if on { [0., 0.94, 1., 1.] } else { [0.9, 0.4, 0.4, 1.] };
+    for (i, c) in color.iter().enumerate() {
+        prop.set_f32(atom, Role::App, i, *c).unwrap();
+    }
+}
+
 fn refresh_setting(setting: Arc<Setting>, sn: SceneNodePtr) {
     let atom = &mut PropertyAtomicGuard::none();
-    let is_bool = matches!(setting.get_value(), PropertyValue::Bool(_));
 
     let node = sn.lookup_node("/key_label").unwrap();
     if setting.clone().is_default() {
@@ -1738,8 +1896,7 @@ fn refresh_setting(setting: Arc<Setting>, sn: SceneNodePtr) {
     let node = sn.lookup_node("/reset_btn_bg").unwrap();
     node.set_property_bool(atom, Role::App, "is_visible", !setting.clone().is_default()).unwrap();
     let node = sn.lookup_node("/reset_btn").unwrap();
-    node.set_property_bool(atom, Role::App, "is_active", !is_bool && !setting.clone().is_default())
-        .unwrap();
+    node.set_property_bool(atom, Role::App, "is_active", !setting.clone().is_default()).unwrap();
 }
 
 async fn update_setting(

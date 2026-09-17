@@ -197,6 +197,120 @@ pub fn create_button(name: &str) -> SceneNode {
     node
 }
 
+pub fn create_slider(name: &str) -> SceneNode {
+    let mut node = SceneNode::new(name, SceneNodeType::Slider);
+
+    let mut prop =
+        Property::new("is_active", PropertyType::Bool, PropertySubType::Null, PERM_RUNTIME);
+    prop.set_ui_text("Is Active", "An active Slider can be interacted with");
+    prop.set_defaults_bool(vec![false]).unwrap();
+    node.add_property(prop).unwrap();
+
+    let mut prop = Property::new(
+        "rect",
+        PropertyType::Float32,
+        PropertySubType::Pixel,
+        PropertyPermission::default(),
+    );
+    prop.set_array_len(4);
+    prop.allow_exprs();
+    node.add_property(prop).unwrap();
+
+    let mut prop =
+        Property::new("value", PropertyType::Float32, PropertySubType::Null, PERM_RUNTIME);
+    prop.set_ui_text("Value", "Current slider value");
+    prop.set_defaults_f32(vec![0.]).unwrap();
+    node.add_property(prop).unwrap();
+
+    let mut prop = Property::new("min", PropertyType::Float32, PropertySubType::Null, PERM_RUNTIME);
+    prop.set_ui_text("Minimum", "Minimum value");
+    prop.set_defaults_f32(vec![0.]).unwrap();
+    node.add_property(prop).unwrap();
+
+    let mut prop = Property::new("max", PropertyType::Float32, PropertySubType::Null, PERM_RUNTIME);
+    prop.set_ui_text("Maximum", "Maximum value");
+    prop.set_defaults_f32(vec![1.]).unwrap();
+    node.add_property(prop).unwrap();
+
+    let mut prop =
+        Property::new("step", PropertyType::Float32, PropertySubType::Null, PERM_RUNTIME);
+    prop.set_ui_text("Step", "Value snap step (0 = continuous)");
+    prop.set_defaults_f32(vec![0.]).unwrap();
+    node.add_property(prop).unwrap();
+
+    let mut prop =
+        Property::new("thickness", PropertyType::Float32, PropertySubType::Pixel, PERM_STYLE);
+    prop.set_ui_text("Thickness", "Track height in pixels");
+    prop.set_defaults_f32(vec![6.]).unwrap();
+    node.add_property(prop).unwrap();
+
+    let mut prop =
+        Property::new("thumb_radius", PropertyType::Float32, PropertySubType::Pixel, PERM_STYLE);
+    prop.set_ui_text("Thumb Radius", "Thumb circle radius in pixels");
+    prop.set_defaults_f32(vec![10.]).unwrap();
+    node.add_property(prop).unwrap();
+
+    let mut prop =
+        Property::new("track_color", PropertyType::Float32, PropertySubType::Color, PERM_STYLE);
+    prop.set_ui_text("Track Color", "Track background color (RGBA)");
+    prop.set_array_len(4);
+    prop.set_defaults_f32(vec![0.3, 0.3, 0.3, 1.]).unwrap();
+    prop.set_range_f32(0., 1.);
+    node.add_property(prop).unwrap();
+
+    let mut prop =
+        Property::new("fill_color", PropertyType::Float32, PropertySubType::Color, PERM_STYLE);
+    prop.set_ui_text("Fill Color", "Filled track color (RGBA)");
+    prop.set_array_len(4);
+    prop.set_defaults_f32(vec![0., 0.94, 1., 1.]).unwrap();
+    prop.set_range_f32(0., 1.);
+    node.add_property(prop).unwrap();
+
+    let mut prop =
+        Property::new("thumb_color", PropertyType::Float32, PropertySubType::Color, PERM_STYLE);
+    prop.set_ui_text("Thumb Color", "Thumb color (RGBA), used for the stepper glyphs");
+    prop.set_array_len(4);
+    prop.set_defaults_f32(vec![1., 1., 1., 1.]).unwrap();
+    prop.set_range_f32(0., 1.);
+    node.add_property(prop).unwrap();
+
+    let mut prop =
+        Property::new("thumb_shape", PropertyType::VectorShape, PropertySubType::Null, PERM_STYLE);
+    prop.set_ui_text("Thumb Shape", "Origin-centered shape drawn at the thumb");
+    node.add_property(prop).unwrap();
+
+    let mut prop =
+        Property::new("show_stepper", PropertyType::Bool, PropertySubType::Null, PERM_STYLE);
+    prop.set_ui_text("Show Stepper", "Draw -/+ buttons stealing width on both track sides");
+    prop.set_defaults_bool(vec![false]).unwrap();
+    node.add_property(prop).unwrap();
+
+    let prop = Property::new("z_index", PropertyType::Uint32, PropertySubType::Null, PERM_APP);
+    node.add_property(prop).unwrap();
+
+    let prop = Property::new("priority", PropertyType::Uint32, PropertySubType::Null, PERM_APP);
+    node.add_property(prop).unwrap();
+
+    let prop = Property::new("debug", PropertyType::Bool, PropertySubType::Null, PERM_APP);
+    node.add_property(prop).unwrap();
+
+    node.add_signal(
+        "changing",
+        "Value updated continuously during interaction",
+        vec![("value", "Current value", CallArgType::Float32)],
+    )
+    .unwrap();
+
+    node.add_signal(
+        "changed",
+        "Value committed on release",
+        vec![("value", "Final value", CallArgType::Float32)],
+    )
+    .unwrap();
+
+    node
+}
+
 pub fn create_shortcut(name: &str) -> SceneNode {
     let mut node = SceneNode::new(name, SceneNodeType::Shortcut);
 

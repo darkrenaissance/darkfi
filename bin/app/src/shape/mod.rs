@@ -104,3 +104,6 @@ pub use confirm::create_confirm;
 
 mod reset;
 pub use reset::create_reset;
+
+mod slider_thumb;
+pub use slider_thumb::create_thumb;
