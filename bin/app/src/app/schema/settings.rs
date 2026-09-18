@@ -26,7 +26,10 @@ use crate::{
     },
     expr::{self, Compiler},
     gfx::gfxtag,
-    prop::{PropertyAtomicGuard, PropertyFloat32, PropertyStr, PropertyValue, Role},
+    prop::{
+        PropertyAtomicGuard, PropertyFloat32, PropertyPtr, PropertyStr, PropertyType,
+        PropertyValue, Role,
+    },
     scene::{SceneNode, SceneNodePtr, Slot},
     shape,
     theme::wire_color,
@@ -47,7 +50,8 @@ use std::{
 mod android_ui_consts {
     pub const SETTING_LABEL_X: f32 = 40.;
     pub const SETTING_LABEL_LINESPACE: f32 = 140.;
-    pub const SETTING_LABEL_BASELINE: f32 = 82.;
+    pub const SEARCH_BAR_Y: f32 = 60.;
+    pub const SETTING_LABEL_Y: f32 = (SETTING_LABEL_LINESPACE - 1.2 * SETTING_LABEL_FONTSIZE) / 2.;
     pub const SLIDER_PAD: f32 = 20.;
     pub const RESET_BTN_W: f32 = 70.;
     pub const RESET_GLYPH_X: f32 = 50.;
@@ -59,7 +63,8 @@ mod android_ui_consts {
     pub const SETTING_EDIT_FONTSIZE: f32 = 24.;
     pub const SETTING_TITLE_X: f32 = 150.;
     pub const SETTING_TITLE_FONTSIZE: f32 = 40.;
-    pub const SETTING_TITLE_BASELINE: f32 = 82.;
+    pub const SETTING_TITLE_Y: f32 = (SETTING_LABEL_LINESPACE - 1.2 * SETTING_TITLE_FONTSIZE) / 2.;
+    pub const SETTING_EDIT_BASELINE: f32 = 82.;
     pub const SEARCH_PADDING_X: f32 = 120.;
     pub const BORDER_RIGHT_SCALE: f32 = 5.;
     pub const CURSOR_ASCENT: f32 = 50.;
@@ -90,7 +95,8 @@ mod ui_consts {
 mod ui_consts {
     pub const SETTING_LABEL_X: f32 = 20.;
     pub const SETTING_LABEL_LINESPACE: f32 = 60.;
-    pub const SETTING_LABEL_BASELINE: f32 = 37.;
+    pub const SEARCH_BAR_Y: f32 = 60.;
+    pub const SETTING_LABEL_Y: f32 = (SETTING_LABEL_LINESPACE - 1.2 * SETTING_LABEL_FONTSIZE) / 2.;
     pub const SLIDER_PAD: f32 = 10.;
     pub const RESET_BTN_W: f32 = 35.;
     pub const RESET_GLYPH_X: f32 = 25.;
@@ -102,7 +108,8 @@ mod ui_consts {
     pub const SETTING_EDIT_FONTSIZE: f32 = 14.;
     pub const SETTING_TITLE_X: f32 = 100.;
     pub const SETTING_TITLE_FONTSIZE: f32 = 20.;
-    pub const SETTING_TITLE_BASELINE: f32 = 37.;
+    pub const SETTING_TITLE_Y: f32 = (SETTING_LABEL_LINESPACE - 1.2 * SETTING_TITLE_FONTSIZE) / 2.;
+    pub const SETTING_EDIT_BASELINE: f32 = 37.;
     pub const SEARCH_PADDING_X: f32 = 80.;
     pub const BORDER_RIGHT_SCALE: f32 = 10.;
     pub const CURSOR_ASCENT: f32 = 24.;
@@ -121,12 +128,12 @@ use ui_consts::*;
 #[derive(Clone)]
 struct Setting {
     name: String,
-    node: SceneNodePtr,
+    prop: PropertyPtr,
 }
 
 impl Setting {
     fn value_as_string(&self) -> String {
-        match &self.node.get_property("value").unwrap().get_value(0).ok().unwrap() {
+        match &self.prop.get_value(0).ok().unwrap() {
             PropertyValue::Str(s) => s.clone(),
             // Enum values render as their item name (e.g. "scifi",
             // "tcp") instead of "unknown".
@@ -143,11 +150,14 @@ impl Setting {
             _ => "unknown".to_string(),
         }
     }
-    fn get_value(&self) -> PropertyValue {
-        self.node.get_property("value").unwrap().get_value(0).ok().unwrap()
+    fn get_value(&self) -> PropertyValue {        self.prop.get_value(0).ok().unwrap()
     }
     fn get_default(&self) -> PropertyValue {
-        self.node.get_property("default").unwrap().get_value(0).ok().unwrap()
+        let def = self.prop.defaults.lock().unwrap()[0].clone();
+        match def {
+            PropertyValue::Str(s) if self.prop.typ == PropertyType::Enum => PropertyValue::Enum(s),
+            v => v,
+        }
     }
     fn is_default(&self) -> bool {
         self.get_value() == self.get_default()
@@ -156,9 +166,8 @@ impl Setting {
         matches!(self.get_value(), PropertyValue::Bool(_))
     }
     fn reset(&self) {
-        let prop = self.node.get_property("value").unwrap();
         let atom = &mut PropertyAtomicGuard::none();
-        prop.set_value(atom, Role::App, 0, self.get_default()).unwrap();
+        self.prop.set_value(atom, Role::App, 0, self.get_default()).unwrap();
     }
 }
 
@@ -180,6 +189,10 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish) {
     cc.add_const_f32("RESET_BTN_W", RESET_BTN_W);
     cc.add_const_f32("RESET_GLYPH_X", RESET_GLYPH_X);
     cc.add_const_f32("SEARCH_PADDING_X", SEARCH_PADDING_X);
+    cc.add_const_f32("SEARCH_BAR_Y", SEARCH_BAR_Y);
+    cc.add_const_f32("SWITCH_X_OFFSET", SWITCH_X_OFFSET);
+    cc.add_const_f32("CONFIRM_X_OFFSET", CONFIRM_X_OFFSET);
+    cc.add_const_f32("CONFIRM_BTN_W", CONFIRM_BTN_W);
     cc.add_const_f32("X_RATIO", 1. / 2.);
     let window_scale = PropertyFloat32::wrap(
         &app.sg_root.lookup_node("/window").unwrap(),
@@ -272,23 +285,10 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish) {
     let goback = move || {
         let atom = &mut PropertyAtomicGuard::none();
 
-        // Disable visilibity of all relevant window nodes
-        // This is needed since for example all chats have a different node name.
-        let windows = sg_root.lookup_node("/window/content/chat").unwrap().get_children();
-        let target_substrings = vec!["_chat_layer", "menu_layer"];
-
-        for node in windows.iter() {
-            // Check if the node's name contains any of the target substrings
-            if target_substrings.iter().any(|&s| node.name.contains(s)) {
-                if let Err(e) = node.set_property_bool(atom, Role::App, "is_visible", false) {
-                    debug!("Failed to set property 'is_visible' on node: {:?}", e);
-                }
-            }
-        }
-
-        // Go back to the dev channel
-        let menu_node = sg_root.lookup_node("/window/content/chat/dev_chat_layer").unwrap();
-        menu_node.set_property_bool(atom, Role::App, "is_visible", true).unwrap();
+        let settings_node = sg_root.lookup_node("/window/content/settings_layer").unwrap();
+        settings_node.set_property_bool(atom, Role::App, "is_visible", false).unwrap();
+        let chat_node = sg_root.lookup_node("/window/content/chat").unwrap();
+        chat_node.set_property_bool(atom, Role::App, "is_visible", true).unwrap();
     };
 
     let (slot, recvr) = Slot::new("back_clicked");
@@ -309,11 +309,10 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish) {
     let node = create_text("settings_label_fontsize");
     let prop = node.get_property("rect").unwrap();
     prop.set_default_f32(0, SETTING_TITLE_X).unwrap();
-    prop.set_default_f32(1, 0.).unwrap();
     prop.set_default_f32(2, 1000.).unwrap();
     prop.set_default_f32(3, 200.).unwrap();
     node.set_property_u32(atom, Role::App, "z_index", 1).unwrap();
-    node.get_property("baseline").unwrap().set_default_f32(0, SETTING_TITLE_BASELINE).unwrap();
+    prop.set_default_f32(1, SETTING_TITLE_Y).unwrap();
     node.get_property("font_size").unwrap().set_default_f32(0, SETTING_TITLE_FONTSIZE).unwrap();
     node.set_property_str(atom, Role::App, "text", "SETTINGS").unwrap();
     // Class wiring: the settings title follows the shared text token.
@@ -368,9 +367,9 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish) {
     editbox_node.set_property_bool(atom, Role::App, "is_focused", true).unwrap();
     let prop = editbox_node.get_property("rect").unwrap();
     prop.set_default_f32(0, SEARCH_PADDING_X).unwrap();
-    prop.set_default_expr(1, cc.compile("60 + 20").unwrap()).unwrap();
+    prop.set_default_expr(1, cc.compile("SEARCH_BAR_Y").unwrap()).unwrap();
     prop.clone()
-        .set_expr(atom, Role::App, 2, cc.compile("w - SEARCH_PADDING_X*2").unwrap())
+        .set_expr(atom, Role::App, 2, cc.compile("parent_w - SEARCH_PADDING_X*2").unwrap())
         .unwrap();
     prop.set_default_f32(3, SETTING_LABEL_LINESPACE).unwrap();
     editbox_node
@@ -389,9 +388,6 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish) {
         .unwrap()
         .set_default_f32_multi(&[0.5, 0.5, 0.5, 1.])
         .unwrap();
-    let prop = editbox_node.get_property("selected").unwrap();
-    prop.set_null(atom, Role::App, 0).unwrap();
-    prop.set_null(atom, Role::App, 1).unwrap();
     editbox_node.set_property_u32(atom, Role::App, "z_index", 2).unwrap();
     editbox_node.set_property_bool(atom, Role::App, "is_active", true).unwrap();
     editbox_node.set_property_bool(atom, Role::App, "is_focused", true).unwrap();
@@ -419,11 +415,10 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish) {
     let node = create_text("search_label");
     let prop = node.get_property("rect").unwrap();
     prop.set_default_f32(0, SEARCH_PADDING_X).unwrap();
-    prop.set_default_expr(1, cc.compile("60 + 20").unwrap()).unwrap();
+    prop.set_default_expr(1, cc.compile("SEARCH_BAR_Y + 20").unwrap()).unwrap();
     prop.set_default_f32(2, 1000.).unwrap();
     prop.set_default_f32(3, 200.).unwrap();
     node.set_property_u32(atom, Role::App, "z_index", 1).unwrap();
-    node.get_property("baseline").unwrap().set_default_f32(0, 16.).unwrap();
     node.get_property("font_size").unwrap().set_default_f32(0, 16.).unwrap();
     node.set_property_str(atom, Role::App, "text", "SEARCH...").unwrap();
     node.get_property("text_color").unwrap().set_default_f32_multi(&[1., 1., 1., 0.45]).unwrap();
@@ -446,11 +441,10 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish) {
     let node = create_text("search_count");
     let prop = node.get_property("rect").unwrap();
     prop.set_default_expr(0, cc.compile("w - 50").unwrap()).unwrap();
-    prop.set_default_expr(1, cc.compile("60 + 20").unwrap()).unwrap();
+    prop.set_default_expr(1, cc.compile("SEARCH_BAR_Y + 20").unwrap()).unwrap();
     prop.set_default_f32(2, 1000.).unwrap();
     prop.set_default_f32(3, 200.).unwrap();
     node.set_property_u32(atom, Role::App, "z_index", 1).unwrap();
-    node.get_property("baseline").unwrap().set_default_f32(0, 16.).unwrap();
     node.get_property("font_size").unwrap().set_default_f32(0, 16.).unwrap();
     node.set_property_str(atom, Role::App, "text", "").unwrap();
     node.get_property("text_color")
@@ -511,7 +505,8 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish) {
         // Set the `rect` property for each found node
         for (i, node) in found_nodes.iter().enumerate() {
             let prop = node.get_property("rect").unwrap();
-            let y = i as f32 * 60. + 60. + 60.;
+            let y =
+                i as f32 * SETTING_LABEL_LINESPACE + 2. * SEARCH_BAR_Y;
             prop.set_default_f32(1, y).unwrap();
         }
 
@@ -551,7 +546,7 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish) {
     let node = create_vector_art("search_bg");
     let prop = node.get_property("rect").unwrap();
     prop.set_default_f32(0, 0.).unwrap();
-    prop.set_default_f32(1, 60.).unwrap();
+    prop.set_default_f32(1, SEARCH_BAR_Y).unwrap();
     prop.set_default_expr(2, cc.compile("w  * 100").unwrap()).unwrap();
     prop.set_default_f32(3, SETTING_LABEL_LINESPACE).unwrap();
     node.set_property_u32(atom, Role::App, "z_index", 0).unwrap();
@@ -591,7 +586,7 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish) {
     let node = create_vector_art("search_bg2");
     let prop = node.get_property("rect").unwrap();
     prop.set_default_f32(0, 0.).unwrap();
-    prop.set_default_f32(1, 60.).unwrap();
+    prop.set_default_f32(1, SEARCH_BAR_Y).unwrap();
     prop.set_default_expr(2, cc.compile("w  * 100").unwrap()).unwrap();
     prop.set_default_f32(3, SETTING_LABEL_LINESPACE / 3.5).unwrap();
     node.set_property_u32(atom, Role::App, "z_index", 0).unwrap();
@@ -634,9 +629,9 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish) {
 
     // Get the app settings
     let app_setting_root = app.sg_root.lookup_node("/setting").unwrap();
-    for setting in app_setting_root.get_children().iter() {
-        let name = ["app", &setting.name.clone()].join(".");
-        settings_map.insert(name.clone(), Arc::new(Setting { name, node: setting.clone() }));
+    for prop in app_setting_root.props.iter() {
+        let name = prop.name.clone();
+        settings_map.insert(name.clone(), Arc::new(Setting { name, prop: prop.clone() }));
     }
 
     // Get the settings from all plugins
@@ -647,10 +642,10 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish) {
             let plugin_children = plugin.get_children();
             let setting_root = plugin_children.iter().find(|node| node.name == "setting");
             if let Some(sroot) = setting_root {
-                for setting in sroot.get_children().iter() {
-                    let name = [plugin.name.clone(), setting.name.clone()].join(".");
+                for prop in sroot.props.iter() {
+                    let name = [plugin.name.clone(), prop.name.clone()].join(".");
                     settings_map
-                        .insert(name.clone(), Arc::new(Setting { name, node: setting.clone() }));
+                        .insert(name.clone(), Arc::new(Setting { name, prop: prop.clone() }));
                 }
             }
         }
@@ -666,7 +661,7 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish) {
     prop.set_default_f32(0, 0.).unwrap();
     prop.set_default_f32(1, 0.).unwrap();
     prop.set_default_expr(2, expr::load_var("w")).unwrap();
-    prop.set_default_f32(3, 0.).unwrap();
+    prop.set_default_expr(3, expr::load_var("h")).unwrap();
     settings_layer_node.set_property_bool(atom, Role::App, "is_visible", true).unwrap();
     settings_layer_node.set_property_u32(atom, Role::App, "z_index", 0).unwrap();
     let settings_layer_node = settings_layer_node
@@ -688,7 +683,7 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish) {
         let setting_layer_node = create_layer(&setting_name.to_string());
         let prop = setting_layer_node.get_property("rect").unwrap();
         prop.set_default_f32(0, 0.).unwrap();
-        prop.set_default_f32(1, setting_y + 60.).unwrap();
+        prop.set_default_f32(1, setting_y + SEARCH_BAR_Y).unwrap();
         prop.set_default_expr(2, expr::load_var("w")).unwrap();
         prop.set_default_f32(3, SETTING_LABEL_LINESPACE).unwrap();
         setting_layer_node.set_property_bool(atom, Role::App, "is_visible", true).unwrap();
@@ -937,9 +932,7 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish) {
         .unwrap();
         prop.set_default_f32(3, 100.).unwrap();
         label_value_node.set_property_u32(atom, Role::App, "z_index", 1).unwrap();
-        label_value_node
-            .set_property_f32(atom, Role::App, "baseline", SETTING_LABEL_BASELINE)
-            .unwrap();
+            prop.set_default_f32(1, SETTING_LABEL_Y).unwrap();
         label_value_node
             .set_property_f32(atom, Role::App, "font_size", SETTING_LABEL_FONTSIZE)
             .unwrap();
@@ -984,7 +977,7 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish) {
                     atom,
                     Role::App,
                     0,
-                    cc.compile("w * X_RATIO + BORDER_RIGHT_SCALE").unwrap(),
+                    cc.compile("parent_w * X_RATIO + BORDER_RIGHT_SCALE").unwrap(),
                 )
                 .unwrap();
             prop.set_default_f32(1, 0.).unwrap();
@@ -993,14 +986,14 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish) {
                     atom,
                     Role::App,
                     2,
-                    cc.compile("w * X_RATIO - BORDER_RIGHT_SCALE").unwrap(),
+                    cc.compile("parent_w * X_RATIO - BORDER_RIGHT_SCALE").unwrap(),
                 )
                 .unwrap();
             prop.set_default_f32(3, SETTING_LABEL_LINESPACE).unwrap();
             editbox_node
                 .get_property("baseline")
                 .unwrap()
-                .set_default_f32(0, SETTING_LABEL_BASELINE)
+                .set_default_f32(0, SETTING_EDIT_BASELINE)
                 .unwrap();
             editbox_node
                 .get_property("font_size")
@@ -1030,9 +1023,6 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish) {
                 .unwrap()
                 .set_default_f32_multi(&[0.5, 0.5, 0.5, 1.])
                 .unwrap();
-            let prop = editbox_node.get_property("selected").unwrap();
-            prop.set_null(atom, Role::App, 0).unwrap();
-            prop.set_null(atom, Role::App, 1).unwrap();
             editbox_node.set_property_u32(atom, Role::App, "z_index", 1).unwrap();
             editbox_node.set_property_bool(atom, Role::App, "is_active", false).unwrap();
             editbox_node.set_property_bool(atom, Role::App, "is_focused", false).unwrap();
@@ -1081,7 +1071,7 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish) {
             // value advances to the next item. Written as Role::User so
             // the Setting pimpl persists it; the theme engine's watcher
             // live-switches on `theme` changes.
-            let value_prop = setting_clone.node.get_property("value").unwrap();
+            let value_prop = setting_clone.prop.clone();
             let items = value_prop.enum_items.clone().unwrap_or_default();
 
             let node = create_text("enum_value_label");
@@ -1104,10 +1094,7 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish) {
                 )
                 .unwrap();
             prop.set_default_f32(3, SETTING_LABEL_LINESPACE).unwrap();
-            node.get_property("baseline")
-                .unwrap()
-                .set_default_f32(0, SETTING_LABEL_BASELINE)
-                .unwrap();
+                    prop.set_default_f32(1, SETTING_LABEL_Y).unwrap();
             node.get_property("font_size")
                 .unwrap()
                 .set_default_f32(0, SETTING_EDIT_FONTSIZE)
@@ -1161,6 +1148,8 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish) {
             let label = node.get_property("text").unwrap();
             let value_prop2 = value_prop.clone();
             let items2 = items.clone();
+            let setting2 = setting.clone();
+            let row_root2 = setting_layer_node.clone();
             let cycle_task = app.ex.spawn(async move {
                 while let Ok(_) = recvr.recv().await {
                     let current = label.get_str(0).unwrap_or_default();
@@ -1169,6 +1158,7 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish) {
                     let atom = &mut redraw.make_guard(gfxtag!("enum cycle"));
                     value_prop2.set_enum(atom, Role::User, 0, next.clone()).unwrap();
                     label.set_str(atom, Role::App, 0, next).unwrap();
+                    refresh_setting(setting2.clone(), row_root2.clone());
                 }
             });
             setting_layer_node.push_task(cycle_task);
@@ -1233,7 +1223,7 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish) {
             None => false,
         };
 
-        if !is_active_setting {
+        if !is_active_setting && !is_enum {
             if is_bool {
                 // Bool circle: FALSE
                 let node = create_vector_art("bool_icon_bg_false");
@@ -1316,9 +1306,7 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish) {
                     .unwrap();
                 prop.set_default_f32(3, 100.).unwrap();
                 value_node.set_property_u32(atom, Role::App, "z_index", 1).unwrap();
-                value_node
-                    .set_property_f32(atom, Role::App, "baseline", SETTING_LABEL_BASELINE)
-                    .unwrap();
+                            prop.set_default_f32(1, SETTING_LABEL_Y).unwrap();
                 value_node
                     .set_property_f32(atom, Role::App, "font_size", SETTING_LABEL_FONTSIZE)
                     .unwrap();
@@ -1369,9 +1357,7 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish) {
                     .unwrap();
                 prop.set_default_f32(3, 100.).unwrap();
                 value_node.set_property_u32(atom, Role::App, "z_index", 1).unwrap();
-                value_node
-                    .set_property_f32(atom, Role::App, "baseline", SETTING_LABEL_BASELINE)
-                    .unwrap();
+                            prop.set_default_f32(1, SETTING_LABEL_Y).unwrap();
                 value_node
                     .set_property_f32(atom, Role::App, "font_size", SETTING_LABEL_FONTSIZE)
                     .unwrap();
@@ -1400,8 +1386,13 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish) {
             }
 
             let node = create_button("selector_btn");
-            node.set_property_bool(atom, Role::App, "is_active", setting_name != "win.scale")
-                .unwrap();
+            node.set_property_bool(
+                atom,
+                Role::App,
+                "is_active",
+                setting_name != "win.scale" && !is_enum,
+            )
+            .unwrap();
             let prop = node.get_property("rect").unwrap();
             prop.set_default_expr(0, cc.compile("w * X_RATIO").unwrap()).unwrap();
             prop.set_default_f32(1, 0.).unwrap();
@@ -1439,10 +1430,11 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish) {
                     // Hide the selected setting editbox
                     // of the selected setting, if there's one
                     if !_was_active {
-                        let node = old_node.lookup_node("/value_editbox").unwrap();
-                        node.set_property_bool(atom, Role::App, "is_active", false).unwrap();
-                        node.set_property_bool(atom, Role::App, "is_focused", false).unwrap();
-                        node.set_property_str(atom, Role::App, "text", "").unwrap();
+                        if let Some(node) = old_node.lookup_node("/value_editbox") {
+                            node.set_property_bool(atom, Role::App, "is_active", false).unwrap();
+                            node.set_property_bool(atom, Role::App, "is_focused", false).unwrap();
+                            node.set_property_str(atom, Role::App, "text", "").unwrap();
+                        }
                     }
 
                     // Hide conftrm button
@@ -1496,10 +1488,7 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish) {
                         .unwrap();
 
                     if matches!(value, PropertyValue::Bool(false)) {
-                        setting_clone2
-                            .node
-                            .set_property_bool(atom, Role::User, "value", true)
-                            .unwrap();
+                        setting_clone2.prop.set_bool(atom, Role::User, 0, true).unwrap();
                         label_text.set(atom, "TRUE");
 
                         setting_root2
@@ -1520,10 +1509,7 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish) {
                         prop.set_f32(atom, Role::App, 2, 0.75).unwrap();
                         prop.set_f32(atom, Role::App, 3, 1.).unwrap();
                     } else {
-                        setting_clone2
-                            .node
-                            .set_property_bool(atom, Role::User, "value", false)
-                            .unwrap();
+                        setting_clone2.prop.set_bool(atom, Role::User, 0, false).unwrap();
                         label_text.set(atom, "FALSE");
 
                         setting_root2
@@ -1733,9 +1719,15 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish) {
                         text.set(atom, setting2.value_as_string());
                     }
 
-                    let node = sg_root2.lookup_node("/value_editbox").unwrap();
-                    node.set_property_str(atom, Role::App, "text", setting2.value_as_string())
-                        .unwrap();
+                    if let Some(node) = sg_root2.lookup_node("/enum_value_label") {
+                        let text = PropertyStr::wrap(&node, Role::App, "text", 0).unwrap();
+                        text.set(atom, setting2.value_as_string());
+                    }
+
+                    if let Some(node) = sg_root2.lookup_node("/value_editbox") {
+                        node.set_property_str(atom, Role::App, "text", setting2.value_as_string())
+                            .unwrap();
+                    }
 
                     update_setting(
                         setting2.clone(),
@@ -1769,6 +1761,10 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish) {
                     let Some(row) = sg_root2.lookup_node(&path) else { continue };
                     if setting.is_bool() {
                         refresh_bool_row(setting, &row, atom);
+                    } else if let Some(label) = row.lookup_node("/enum_value_label") {
+                            label
+                            .set_property_str(atom, Role::App, "text", setting.value_as_string())
+                            .unwrap();
                     } else if let Some(label) = row.lookup_node("/value_label") {
                         label
                             .set_property_str(atom, Role::App, "text", setting.value_as_string())
@@ -1807,12 +1803,7 @@ fn spawn_win_scale_listener(
         while let Ok(data) = recvr.recv().await {
             let Ok(val) = deserialize::<f32>(&data) else { continue };
             let atom = &mut redraw.make_guard(gfxtag!("settings slider changed"));
-            if let Err(e) = setting
-                .node
-                .get_property("value")
-                .unwrap()
-                .set_f32(atom, Role::User, 0, val)
-            {
+            if let Err(e) = setting.prop.set_f32(atom, Role::User, 0, val) {
                 error!(target: "app::settings", "failed to set win.scale: {e}");
                 continue
             }
@@ -1926,7 +1917,7 @@ async fn update_setting(
                 if let Some(node) = sn.lookup_node("/confirm_btn_bg") {
                     node.set_property_bool(atom, Role::App, "is_visible", false).unwrap();
                 }
-                setting.node.set_property_u32(atom, Role::User, "value", value).unwrap();
+                setting.prop.set_u32(atom, Role::User, 0, value).unwrap();
                 let mut active_setting_value = active_setting.lock().unwrap();
                 *active_setting_value = None;
             }
@@ -1941,7 +1932,7 @@ async fn update_setting(
                 if let Some(node) = sn.lookup_node("/confirm_btn_bg") {
                     node.set_property_bool(atom, Role::App, "is_visible", false).unwrap();
                 }
-                setting.node.set_property_f32(atom, Role::User, "value", value).unwrap();
+                setting.prop.set_f32(atom, Role::User, 0, value).unwrap();
                 let mut active_setting_value = active_setting.lock().unwrap();
                 *active_setting_value = None;
             }
@@ -1954,7 +1945,7 @@ async fn update_setting(
             if let Some(node) = sn.lookup_node("/confirm_btn_bg") {
                 node.set_property_bool(atom, Role::App, "is_visible", false).unwrap();
             }
-            setting.node.set_property_str(atom, Role::User, "value", value_str).unwrap();
+            setting.prop.set_str(atom, Role::User, 0, value_str).unwrap();
             let mut active_setting_value = active_setting.lock().unwrap();
             *active_setting_value = None;
         }

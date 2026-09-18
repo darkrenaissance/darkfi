@@ -114,10 +114,22 @@ impl Setting {
     pub async fn new(node: SceneNodeWeak, app_db: AppDbPtr, ex: ExecutorPtr) -> Pimpl {
         let node_ref = node.upgrade().unwrap();
 
-        // Load any persisted properties from the db.
-        for (name, idx, data) in app_db.settings_all().await.unwrap() {
-            let prop = node_ref.get_property(&name).unwrap();
-            Self::load_prop(&prop, idx, &data).unwrap();
+        // Load any persisted properties from the db in a fail-safe way
+        let rows = match app_db.settings_all().await {
+            Ok(rows) => rows,
+            Err(e) => {
+                error!(target: "app::setting", "Failed to read settings from db, using defaults: {e}");
+                vec![]
+            }
+        };
+        for (name, idx, data) in rows {
+            let Some(prop) = node_ref.get_property(&name) else {
+                warn!(target: "app::setting", "Skipping unknown persisted setting: {name}");
+                continue
+            };
+            if let Err(e) = Self::load_prop(&prop, idx, &data) {
+                warn!(target: "app::setting", "Skipping persisted setting {name}[{idx}]: {e}");
+            }
         }
 
         // Spawn tasks persisting our properties to the db when they change.
