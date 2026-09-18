@@ -68,6 +68,10 @@ pub const COLOR_BLACK: Color = [0., 0., 0., 1.];
 #[allow(dead_code)]
 pub const COLOR_GREY: Color = [0.5, 0.5, 0.5, 1.];
 #[allow(dead_code)]
+pub const COLOR_WALLET_SQUARE_FILL: Color = [0., 0.098, 0.098, 1.];
+#[allow(dead_code)]
+pub const COLOR_WALLET_SQUARE_BORDER: Color = [0., 0.231, 0.247, 1.];
+#[allow(dead_code)]
 pub const DONE_MENU_BTN_GRADIENT: [[f32; 4]; 4] =
     [[0., 0.1, 0.15, 1.], [0., 0.1, 0.15, 1.], [0., 0., 0., 1.], [0., 0., 0., 1.]];
 #[allow(dead_code)]
