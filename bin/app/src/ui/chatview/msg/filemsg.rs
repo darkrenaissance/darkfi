@@ -42,7 +42,7 @@ use url::Url;
 use crate::{
     gfx::{gfxtag, DrawInstruction, EpochTracker, Point, Rectangle, RenderApi, Renderer},
     mesh::{Color, MeshBuilder, COLOR_CYAN, COLOR_GREEN, COLOR_RED, COLOR_WHITE},
-    prop::{Property, PropertyColor, PropertySubType, PropertyType, Role},
+    prop::{Property, PropertyColor, PropertyPermission, PropertySubType, PropertyType, Role},
     scene::{CallArgType, Pimpl, SceneNode, SceneNodeType, SceneNodeWeak},
     text,
     ui::UIObject,
@@ -644,7 +644,12 @@ mod tests {
 
         let mut wscale = crate::scene::SceneNode::new("w", crate::scene::SceneNodeType::Object);
         wscale
-            .add_property(Property::new("scale", PropertyType::Float32, PropertySubType::Null))
+            .add_property(Property::new(
+                "scale",
+                PropertyType::Float32,
+                PropertySubType::Null,
+                PropertyPermission::default(),
+            ))
             .unwrap();
         let wscale = wscale.setup_null();
         wscale.set_property_f32(atom, Role::App, "scale", 1.).unwrap();

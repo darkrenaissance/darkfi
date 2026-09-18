@@ -49,11 +49,11 @@ pub async fn make(
 
     let netlayer_node = create_layer("netstatus_layer");
     let prop = netlayer_node.get_property("rect").unwrap();
-    prop.set_f32(atom, Role::App, 0, 0.).unwrap();
-    prop.set_f32(atom, Role::App, 1, 0.).unwrap();
+    prop.set_default_f32(0, 0.).unwrap();
+    prop.set_default_f32(1, 0.).unwrap();
     let code = cc.compile("w").unwrap();
-    prop.set_expr(atom, Role::App, 2, code).unwrap();
-    prop.set_f32(atom, Role::App, 3, 1000.).unwrap();
+    prop.set_default_expr(2, code).unwrap();
+    prop.set_default_f32(3, 1000.).unwrap();
     netlayer_node.set_property_bool(atom, Role::App, "is_visible", true).unwrap();
     netlayer_node.set_property_u32(atom, Role::App, "z_index", 3).unwrap();
     let netlayer_node = netlayer_node
@@ -64,19 +64,16 @@ pub async fn make(
     // Scan progress text
     let node = create_text("progress");
     let prop = node.get_property("rect").unwrap();
-    prop.set_f32(atom, Role::App, 0, 0.).unwrap();
-    prop.set_f32(atom, Role::App, 1, NETSTATUS_ICON_SIZE / 2. - PROGRESS_FONTSIZE / 2.).unwrap();
+    prop.set_default_f32(0, 0.).unwrap();
+    prop.set_default_f32(1, NETSTATUS_ICON_SIZE / 2. - PROGRESS_FONTSIZE / 2.).unwrap();
     let code = cc.compile("w - NETSTATUS_ICON_SIZE - PROGRESS_MARGIN").unwrap();
-    prop.set_expr(atom, Role::App, 2, code).unwrap();
-    prop.set_f32(atom, Role::App, 3, PROGRESS_FONTSIZE).unwrap();
+    prop.set_default_expr(2, code).unwrap();
+    prop.set_default_f32(3, PROGRESS_FONTSIZE).unwrap();
     node.set_property_u32(atom, Role::App, "z_index", 3).unwrap();
-    node.set_property_f32(atom, Role::App, "font_size", PROGRESS_FONTSIZE).unwrap();
+    node.get_property("font_size").unwrap().set_default_f32(0, PROGRESS_FONTSIZE).unwrap();
     node.set_property_enum(atom, Role::App, "text_align", "end").unwrap();
     let prop = node.get_property("text_color").unwrap();
-    prop.set_f32(atom, Role::App, 0, 1.).unwrap();
-    prop.set_f32(atom, Role::App, 1, 1.).unwrap();
-    prop.set_f32(atom, Role::App, 2, 1.).unwrap();
-    prop.set_f32(atom, Role::App, 3, 1.).unwrap();
+    prop.set_default_f32_multi(&[1., 1., 1., 1.]).unwrap();
     node.set_property_u32(atom, Role::App, "z_index", 3).unwrap();
     let node = node
         .setup(|me| {
@@ -94,13 +91,13 @@ pub async fn make(
     let node = create_vector_art("net0");
     let prop = node.get_property("rect").unwrap();
     let code = cc.compile("w - NETSTATUS_ICON_SIZE / 2").unwrap();
-    prop.set_expr(atom, Role::App, 0, code).unwrap();
-    prop.set_f32(atom, Role::App, 1, NETSTATUS_ICON_SIZE / 2.).unwrap();
-    prop.set_expr(atom, Role::App, 2, expr::load_var("w")).unwrap();
-    prop.set_expr(atom, Role::App, 3, expr::load_var("h")).unwrap();
+    prop.set_default_expr(0, code).unwrap();
+    prop.set_default_f32(1, NETSTATUS_ICON_SIZE / 2.).unwrap();
+    prop.set_default_expr(2, expr::load_var("w")).unwrap();
+    prop.set_default_expr(3, expr::load_var("h")).unwrap();
     node.set_property_bool(atom, Role::App, "is_visible", true).unwrap();
     node.set_property_u32(atom, Role::App, "z_index", 0).unwrap();
-    node.set_property_f32(atom, Role::App, "scale", NETLOGO_SCALE).unwrap();
+    node.get_property("scale").unwrap().set_default_f32(0, NETLOGO_SCALE).unwrap();
     let mut shape = shape::create_blockchain_netlogo1([1., 0.15, 0.30, 1.]);
     shape.join(shape::create_blockchain_netlogo2([0.27, 0.4, 0.4, 1.]));
     shape.join(shape::create_blockchain_netlogo3([0.27, 0.4, 0.4, 1.]));
@@ -113,13 +110,13 @@ pub async fn make(
     let node = create_vector_art("net1");
     let prop = node.get_property("rect").unwrap();
     let code = cc.compile("w - NETSTATUS_ICON_SIZE / 2").unwrap();
-    prop.set_expr(atom, Role::App, 0, code).unwrap();
-    prop.set_f32(atom, Role::App, 1, NETSTATUS_ICON_SIZE / 2.).unwrap();
-    prop.set_expr(atom, Role::App, 2, expr::load_var("w")).unwrap();
-    prop.set_expr(atom, Role::App, 3, expr::load_var("h")).unwrap();
+    prop.set_default_expr(0, code).unwrap();
+    prop.set_default_f32(1, NETSTATUS_ICON_SIZE / 2.).unwrap();
+    prop.set_default_expr(2, expr::load_var("w")).unwrap();
+    prop.set_default_expr(3, expr::load_var("h")).unwrap();
     node.set_property_bool(atom, Role::App, "is_visible", false).unwrap();
     node.set_property_u32(atom, Role::App, "z_index", 0).unwrap();
-    node.set_property_f32(atom, Role::App, "scale", NETLOGO_SCALE).unwrap();
+    node.get_property("scale").unwrap().set_default_f32(0, NETLOGO_SCALE).unwrap();
     let mut shape = shape::create_blockchain_netlogo1([0.73, 0.62, 1., 1.]);
     shape.join(shape::create_blockchain_netlogo2([0.73, 0.62, 1., 1.]));
     shape.join(shape::create_blockchain_netlogo3([0.27, 0.4, 0.4, 1.]));
@@ -132,13 +129,13 @@ pub async fn make(
     let node = create_vector_art("net2");
     let prop = node.get_property("rect").unwrap();
     let code = cc.compile("w - NETSTATUS_ICON_SIZE / 2").unwrap();
-    prop.set_expr(atom, Role::App, 0, code).unwrap();
-    prop.set_f32(atom, Role::App, 1, NETSTATUS_ICON_SIZE / 2.).unwrap();
-    prop.set_expr(atom, Role::App, 2, expr::load_var("w")).unwrap();
-    prop.set_expr(atom, Role::App, 3, expr::load_var("h")).unwrap();
+    prop.set_default_expr(0, code).unwrap();
+    prop.set_default_f32(1, NETSTATUS_ICON_SIZE / 2.).unwrap();
+    prop.set_default_expr(2, expr::load_var("w")).unwrap();
+    prop.set_default_expr(3, expr::load_var("h")).unwrap();
     node.set_property_bool(atom, Role::App, "is_visible", false).unwrap();
     node.set_property_u32(atom, Role::App, "z_index", 0).unwrap();
-    node.set_property_f32(atom, Role::App, "scale", NETLOGO_SCALE).unwrap();
+    node.get_property("scale").unwrap().set_default_f32(0, NETLOGO_SCALE).unwrap();
     let mut shape = shape::create_blockchain_netlogo1([0.49, 0.57, 1., 1.]);
     shape.join(shape::create_blockchain_netlogo2([0.49, 0.57, 1., 1.]));
     shape.join(shape::create_blockchain_netlogo3([0.49, 0.57, 1., 1.]));
@@ -151,13 +148,13 @@ pub async fn make(
     let node = create_vector_art("net3");
     let prop = node.get_property("rect").unwrap();
     let code = cc.compile("w - NETSTATUS_ICON_SIZE / 2").unwrap();
-    prop.set_expr(atom, Role::App, 0, code).unwrap();
-    prop.set_f32(atom, Role::App, 1, NETSTATUS_ICON_SIZE / 2.).unwrap();
-    prop.set_expr(atom, Role::App, 2, expr::load_var("w")).unwrap();
-    prop.set_expr(atom, Role::App, 3, expr::load_var("h")).unwrap();
+    prop.set_default_expr(0, code).unwrap();
+    prop.set_default_f32(1, NETSTATUS_ICON_SIZE / 2.).unwrap();
+    prop.set_default_expr(2, expr::load_var("w")).unwrap();
+    prop.set_default_expr(3, expr::load_var("h")).unwrap();
     node.set_property_bool(atom, Role::App, "is_visible", false).unwrap();
     node.set_property_u32(atom, Role::App, "z_index", 0).unwrap();
-    node.set_property_f32(atom, Role::App, "scale", NETLOGO_SCALE).unwrap();
+    node.get_property("scale").unwrap().set_default_f32(0, NETLOGO_SCALE).unwrap();
     let mut shape = shape::create_blockchain_netlogo1([0., 0.94, 1., 1.]);
     shape.join(shape::create_blockchain_netlogo2([0., 0.94, 1., 1.]));
     shape.join(shape::create_blockchain_netlogo3([0., 0.94, 1., 1.]));

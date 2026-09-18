@@ -1,0 +1,1001 @@
+16:26:58 ryu ty. cya
+16:27:05 epiphany cya all
+16:27:31 anom13 What was the problem with radicle?  Reliability or features?
+16:28:01 upgrayedd different way of handling things entirely
+16:28:04 frieren-elf64 we just wanted to push but it was so hard to get working
+16:29:03 upgrayedd its a local-first collab git, so everyone has and maintains their view, and then decide whats the mainline which adds an unneccessary extra step on normal git operations
+16:29:18 hero is this the new darkfi git https://git.dark.fi/darkrenaissance/darkfi/ 
+16:29:20 chadbot Title: darkrenaissance/darkfi: Anonymous. Uncensored. Sovereign. https://dark.fi - DarkFi
+16:29:29 frieren-elf64 yes
+16:29:33 frieren-elf64 hey hero
+16:29:35 upgrayedd XD
+16:29:40 hero hey yo
+16:29:45 upgrayedd not fully migrated yet, its the dev testing one
+16:29:56 hero okk 
+16:29:56 anom13 upgrayedd:  I could see how that workflow would be tough.  Thanks for the insight.
+16:30:12 upgrayedd yeah its also prone to mistakes in terms of keeping anonimity
+16:31:07 anom13 Yeah, the anonymity stuff is definitely a problem.  Even with Tor there is a fair amount of info in the p2p network from what I was able to tell.
+16:31:07 upgrayedd but overall its a good platform to host repos in decentralized manner for single devs or signle authority teams
+16:43:42 frieren-elf64 dasman: 1. install openspec using the command here https://openspec.dev/  2. unzip this in bin/app https://agorism.dev/uploads/openspec.zip   3.  run `openspec init` and choose opencode (or ur preferred cli)  4.  start opencode and type `/opsx-apply`
+16:43:42 chadbot Title: OpenSpec — A lightweight spec‑driven framework
+16:44:19 frieren-elf64 also review the files in openspec/changes/darkirc-reverse-dag-sync/
+16:44:51 frieren-elf64 i read it too but i dont have enough context for the impl recommendations
+16:51:34 dasman alrighty, tyty
+16:52:10 frieren-elf64 lmk how u get on, this is a kinda test for this workflow
+16:55:04 dasman https://i.programmerhumor.io/2022/10/programmerhumor-io-javascript-memes-frontend-memes-539f27d89106d2a.jpg
+16:59:45 frieren 😆
+17:15:26 frieren-elf64 shayan where is this one abt connectivity stuff?
+17:15:30 frieren-elf64 where is the branch?
+17:15:55 frieren-elf64 i actually noticed its connected but it seems to be evgr sync issues
+17:18:55 shayan fireren-elf64 I have some confusion abt branches and the changes I remade give me some time Ill find and tell.. 
+17:21:20 shayan I finish this as you said tho: 
+17:21:34 shayan bin/app: route lifecycle events through event publisher commit:  205823e959 
+17:23:15 shayan tested, working as expected: 
+17:23:17 shayan 3 ob conn - scren on/app on
+17:23:19 shayan 1 ob conn - screen off/app bg
+17:23:41 shayan leaved in background for 3 - 4 hour, when turn back was able to recieve and send messages.. 
+17:26:16 shayan with connectivity patch something is not adding up I migrate it from core lib to bin/app and fck't up somewhere.. will dig into it and after will tell
+17:31:03 frieren-elf64 did u try the instructions i gave u in random
+17:31:13 frieren-elf64 again 3rd time im saying this
+17:33:34 shayan haven't tried that yet. I got busy with your suggestion about moving the lifecycle handling into bin/app and routing it through /window, plus the connectivity confusion. I have it noted though — as soon as I fix this shit I created, that's next.
+17:56:53 shayan frieren-elf64: https://dpaste.com/64FJBRTCV.txt
+17:59:59 shayan fck don't bother to look that that link.. still didn't solve all the issues
+19:20:59 line may I ask where is the latest git I can pull
+19:21:34 shayan https://git.dark.fi/darkrenaissance/darkfi
+19:21:36 chadbot Title: darkrenaissance/darkfi: Anonymous. Uncensored. Sovereign. https://dark.fi - DarkFi
+19:21:44 line thats self hosted?
+19:22:05 line wtf is this nice
+19:23:04 shayan │17:29:45     upgrayedd │ not fully migrated yet, its the dev testing one    
+19:23:56 line thats cool
+19:24:05 line ty
+19:24:22 shayan np
+20:08:31 line I compiled the app on arch, I am comfused as it does show the wallet, if I reach chat, I dont seem to be able to reach back the wallet view. Would also be great to have a visual tutorial uppon first launch (I can try if you guys not already working on this)
+20:10:03 shayan I have same issue on android: I can see the wallet just on fresh start but if I leave that screen no way to turn back.. 
+20:33:23 line how do you propose PR on that dev gog repo shayan? Or you still use codeberg/github?
+20:42:11 shayan pushing on codeberg without creating new PR and sendind the commit id
+20:43:17 line i see
+20:48:57 frieren-elf64 we are waiting for urs work
+20:49:01 frieren-elf64 the buttons are fucked up
+20:51:00 line I mean
+20:51:09 line frieren-elf64 the back button seems to be there
+20:51:18 line its just transparent overlay and weird placement
+20:51:29 line there is even a flag for first launch for a future tutorial
+20:51:35 line and settings fully commented
+20:52:25 frieren-elf64 there is no future tutorial in there
+20:52:33 line no
+20:52:36 frieren-elf64 and the button is in the bottom right behind the menu
+20:52:41 frieren-elf64 the wallet button
+20:52:47 frieren-elf64 u can click it but its hard
+20:52:50 line but a first_time marker file already exists and an is_first_time flag flows through startup
+20:53:14 line that could be a great starting point of a tutorial lol
+20:53:30 frieren-elf64 i believe the app shud be intuitive enough to have no tutorial
+20:53:35 frieren-elf64 i hate tutorials in apps
+20:53:40 frieren-elf64 it shud be work and go
+20:53:46 frieren-elf64 no setup etc
+20:53:46 line I mean
+20:53:49 line Building blocks (overlay layers with z-index/priority, multi-step wizard pattern from the wallet send flow) are all there
+20:53:56 line So I am guessing someone tought it was a good idea
+20:54:00 frieren-elf64 where?
+20:54:02 frieren-elf64 no there isnt
+20:54:02 line and possibly already working on
+20:54:04 line one sec
+20:54:14 frieren-elf64 where there is def no wizard in the app
+20:54:25 frieren-elf64 the ui design is strongly anti wizard
+20:54:42 frieren-elf64 as much as possible try to make things stateless
+20:54:56 line there is no wizard in the app yet I KNOW
+20:56:46 line First launch: first_time marker (~/.cache/darkfi/app/first_time, created in schema/mod.rs:677-684) and is_first_time flag exist but nothing consumes them. No tutorial UI exists. Overlay + multi-step wizard patterns already exist in the codebase (chat select_layer z100/p100; wallet send_step1..4 layers).
+20:57:34 line Im just saying
+20:57:37 line Because I opened
+20:57:43 line Saw the token/wallet UI
+20:57:44 epiphany no wizard here, only magicians
+20:57:48 line hahaha
+20:57:58 line then sadly lost the wallet view forever
+20:58:06 line it is overwhelming for a newcommer
+20:58:50 anon 🤣
+20:59:08 epiphany wallet's step layers aren't a wizard at all, they are just named like that because they must be shown in the right order
+21:06:28 shayan gn
+22:18:38 frieren-elf64 line theres a button but urs is styling it
+22:18:59 frieren-elf64 urs, in the future do one thing -> we merge -> do another thing -> we merge and talk more
+22:19:37 frieren-elf64 its a lil silly to go quiet a week, do 5 features and then we have to untangle it all
+22:41:23 frieren-elf64 gnnn
+10:03:47 shayan gm
+10:03:48 anom13 gm
+10:03:48 ryu gm
+10:03:48 urs gm
+10:03:48 dubh gm
+10:04:39 frieren-elf64 gm
+12:02:11 frieren-elf64 grug here???
+12:02:16 grug Yep hi
+12:02:25 frieren-elf64 hey did u get my dm?
+12:02:45 grug Yes sec let me reply
+12:02:51 frieren-elf64 ok ty
+12:07:16 frieren-elf64 grug, upgrayedd so abt openspec
+12:08:21 frieren-elf64 basically lets say i want to make a new feature but its vague. i do `/opsx-explore desc of feature`, it will do an in depth deep search of codebase to figure everything out and create structured docs around that
+12:09:20 frieren-elf64 then u basically talk with ur ai tool like claude/opencode etc to refine the design further. once ur ready to go into impl phase and have made choices then u do `/opsx-propose`
+12:09:41 frieren-elf64 it then creates a subdir inside openspec/specs/<feature> with design.md proposal.md and tasks.md
+12:09:49 frieren-elf64 these are meant to be committed to the repo
+12:09:50 grug Is this in opencode or another tool?
+12:09:54 frieren-elf64 its any tool
+12:10:01 frieren-elf64 its a plugin for those tools
+12:10:06 grug aha
+12:10:20 frieren-elf64 then if for example i want grug or dasman to review the feature, they just git pull and review the spec
+12:10:33 frieren-elf64 then they can refine it further etc
+12:11:13 frieren-elf64 so for example with tasks.md u can specify its done in 4 phases like a migration with testing between each phase
+12:11:42 frieren-elf64 then it will do tasks from phase 1, pause until u say continue .etc
+12:11:51 frieren-elf64 it makes collab around dev plans much easier i think
+12:12:12 frieren-elf64 and also we can just propose half assed ideas that ppl can pickup and refine then ask us for feedback before impl
+12:12:30 frieren-elf64 its like a collaborative beefy plan mode for teams to work on
+12:13:08 frieren-elf64 lastly once its finished, u do /opsx-archive, it then turns the  spec for that feature into part of a living ongoing architecture doc 
+12:13:40 frieren-elf64 so that when ur ai tool is coding it doesnt make stupid mistakes but actually has memory of internals and context around proj structure .etc
+12:14:21 frieren-elf64 grug, if u wanna test, i gave this to dasman abt the evgr2 backsync topic yday
+12:14:22 frieren-elf64 1. install openspec using the command here https://openspec.dev/  2. unzip this in bin/app https://agorism.dev/uploads/openspec.zip   3.  run `openspec init` and choose opencode (or ur preferred cli)  4.  start opencode and type `/opsx-apply`
+12:14:23 chadbot Title: OpenSpec — A lightweight spec‑driven framework
+12:14:30 grug Yeah sounds good to me
+12:14:45 grug Lemme try
+12:15:12 frieren-elf64 theres also other tools like this https://github.com/gytis-ivaskevicius/peck but i just tried openspec so far
+12:15:13 chadbot Title: GitHub - gytis-ivaskevicius/peck · GitHub
+12:15:46 frieren-elf64 sry the features go in openspec/changes/ whereas the living arch is in openspec/arch/
+12:16:03 frieren-elf64 rn i use it in bin/app/ but maybe we will use it just in the proj root directly
+12:16:36 grug Yeah prob better to have it overall
+12:16:53 grug Give me a bit to set it up and check
+12:17:42 frieren-elf64 yep
+12:22:17 grug So this dir should be in bin/app/openspec/ ?
+12:23:07 frieren-elf64 yep
+12:23:13 frieren-elf64 w changes and specs inside
+12:24:49 grug ok now the llm asks me which change it should apply
+12:24:57 frieren-elf64 openspec list
+12:25:31 grug I'm trying in codex
+12:25:53 grug Yeah it's working
+12:26:14 frieren-elf64 theres also continue and ff commands
+12:27:21 frieren-elf64 https://openspec.dev/docs/the-workflow
+12:27:21 chadbot Title: Workflows — OpenSpec
+12:27:29 grug ok cool
+12:27:46 grug If we put this in root then we can also have a good task tracker in the repo itself
+12:28:08 grug It will also probably have a better context of the repository this way
+12:28:58 grug We can try peck too to see if it's less verbose
+12:29:18 frieren-elf64 yep exactly
+12:29:21 frieren-elf64 try this too
+12:29:23 frieren-elf64 openspec config profile
+12:29:28 frieren-elf64 sudo openspec update
+12:29:50 frieren-elf64 (go to workflows and add all the commands)
+12:30:24 grug aha sweet
+12:30:36 grug btw you can do it all without root if you change the npm prefix to something local
+12:30:57 frieren-elf64 ah yeah thats better
+12:31:37 grug https://github.com/gytis-ivaskevicius/peck#why-no-architecture-docs
+12:31:38 chadbot Title: GitHub - gytis-ivaskevicius/peck · GitHub
+12:31:43 grug I think this is pretty reasonable
+12:37:40 frieren-elf64 i actually like detailed plans tho, often it will give sth confused and u have to keep hammering and hammering
+12:37:59 grug Depends on prompt proficiency
+12:38:08 grug I'd like to try peck tho
+12:38:14 frieren-elf64 yeah try it
+12:38:18 frieren-elf64 no rush to adopt any one tool
+12:38:23 frieren-elf64 lets check back in a week or 2
+12:39:06 grug We'll likely need more than one anyway
+12:39:17 grug This is also just for impl stuff
+12:39:40 grug We need somehow to also do auditing and have it all tightened down
+12:41:20 upgrayedd use a metarepo...
+12:41:26 upgrayedd don
+12:41:36 upgrayedd ''t put bloat inside the repo
+12:44:49 upgrayedd "sudo openspec" hell to the nah lol
+12:45:03 dubh lol
+12:47:39 grug ah ok peck understands how to do auditing as well
+13:02:17 frieren-elf64 epiphany: git pull, i put the URL to the public darkfid instance, the wallet seems to connect but idk if its syncing since the status logo remains unchanged
+13:03:16 grug frieren-elf64: Should be tcp+tls not tcp
+13:03:47 grug Also it's the wrong domain
+13:05:11 epiphany frieren-elf64: also theres 4 states for the indicator: disconnected (the red one), syncing (<50%), syncing (>50%), synced
+13:05:41 frieren-elf64 ahhh ty grug
+13:06:24 grug :D
+13:07:06 upgrayedd did you even test before pushing? XD
+13:08:47 anon upgrayedd a luddite
+13:09:31 line upgrayedd what do you think about the points I mentionned
+13:09:37 line I built app on arch
+13:09:59 line wallet button weird and confusing
+13:10:13 line aaactually all buttons
+13:10:28 upgrayedd dunno haven't checked the gui out
+13:10:29 line and is_first_time could be used for a "tutorial"
+13:10:42 anon upgrayedd doesnt use soygui
+13:10:48 line XD
+13:11:02 line Me neither that is why I propose these
+13:11:13 frieren-elf64 well its weird
+13:11:30 line so I can bring friends
+13:11:50 line friends dummmy they want to create and join private chats easily
+13:12:49 frieren-elf64 its weird cos with the wrong url tcp://node.dark.fi i saw the DRK token
+13:13:02 frieren-elf64 but now i updated the url and it still works but it doesnt seem to sync
+13:13:19 frieren-elf64 const DARKFID_ENDPOINT: &str = "tcp+tls://node0.testnet.dark.fi:18340";
+13:13:49 frieren-elf64 or maybe thats just cos of enable-plugin-drk?
+13:14:18 frieren-elf64 epiphany, any idea?
+13:14:37 urs line: try builing my branch: https://codeberg.org/eliedinner561/darkfi/commits/branch/menu
+13:14:54 urs i worked on a lot of the buttons e.g the wallet button on main screen
+13:23:05 epiphany frieren-elf64: iirc it adds a DRK row at the top of the token table even if you have no DRK
+13:23:59 epiphany one sec i'm building with that endpoint
+13:24:14 frieren-elf64 ty
+13:27:25 line ty urs
+13:27:40 line I am excited just trying to figure out how will I bring friends lol
+13:35:22 epiphany frieren-elf64: port 18340 is inbound p2p, drk needs the rpc endpoint
+13:36:58 grug oh that wasn't told to me :D
+13:37:08 grug upgrayedd: Can we make node0/1 have public rpc?
+13:38:20 upgrayedd grug: what are you asking? XD
+13:39:21 grug To change it from localhost listen to tcp+tls public-facing
+13:41:50 frieren-elf64 urs in the future 1 branch per feature not 1 branch for 5 features
+13:42:04 frieren-elf64 1 branch -> ask for merge
+13:42:12 upgrayedd grug: yeah sure, just check if the management port is active
+13:42:53 grug ok
+13:48:18 urs frieren-elf64: alright
+13:48:59 frieren-elf64 lookup git worktrees
+13:49:09 frieren-elf64 u can have a bunch of branches in parallel
+13:53:38 grug frieren-elf64: tcp+tls://node{0,1}.testnet.dark.fi:18345
+13:53:51 frieren-elf64 testoing
+14:00:59 upgrayedd grug: you see the rpc spam right? XD
+14:04:21 frieren-elf64 const DARKFID_ENDPOINT: &str = "tcp+tls://node0.testnet.dark.fi:18345";
+14:04:24 frieren-elf64 doesnt werk :/
+14:05:08 grug The rpc is accessible so it's a problem with your stuff
+14:05:17 grug rlwrap openssl s_client -connect node0.testnet.dark.fi:18345
+14:05:22 grug {"jsonrpc":"2.0","method":"ping","params":[],"id":1}
+14:05:26 frieren-elf64 epiphant FIX IT!
+14:05:30 frieren-elf64 NAO
+14:05:43 epiphany NO
+14:05:48 frieren-elf64 do something NOW
+14:06:24 frieren-elf64 12:05:54 [INFO] plugin::drk: Attempting to connect to darkfid daemon at tcp+tls://node0.testnet.dark.fi:18345
+14:06:24 frieren-elf64 12:05:54 [ERROR] plugin::drk: Failed during drk scanning: WalletDbError::GenericError
+14:06:24 frieren-elf64 12:05:54 [INFO] plugin::drk: Retrying connection to darkfid in 20 seconds...
+14:06:34 grug upgrayedd: I dunno if the listener.next stuff is actually rpc or p2p
+14:06:54 grug But shouldn't matter in any case, it's just a failed conn log
+14:07:06 frieren-elf64 i tried that cmd grug
+14:07:08 frieren-elf64 i get errors
+14:07:14 grug impossibru
+14:07:16 frieren-elf64 Verification error: self-signed certificate
+14:07:38 upgrayedd grug: does https werk?
+14:07:42 grug Call the police then to provide you a cert
+14:07:46 upgrayedd XD
+14:07:54 epiphany lmao
+14:08:27 grug upgrayedd: It doesn't need https
+14:12:04 upgrayedd grug: yeah tested it with drk it werks
+14:12:10 upgrayedd its an app issue
+14:12:27 frieren-elf64 oh
+14:12:30 frieren-elf64 its the ipv6 addr
+14:12:33 frieren-elf64 its not working
+14:12:41 frieren-elf64 [2001:41d0:...:233]:18345 (IPv6) — connection refused
+14:12:47 upgrayedd lmao so its your net again XD
+14:12:50 frieren-elf64 the domain resolves to that
+14:12:57 grug ipv6 causing more trouble than it's useful
+14:13:25 frieren-elf64 hmmm ping works 
+14:13:27 frieren-elf64 ping 2001:41d0:1004:49a:abcd:ef01:2345:233
+14:13:52 grug It's only listening on the ipv4 socket because we didn't add multiple-listener support to the RPC thing
+14:14:13 grug tbh we should just remove AAAA records lol
+14:14:28 frieren-elf64 ohhhh
+14:14:41 frieren-elf64 just add the ipv6 listeners
+14:14:44 frieren-elf64 [::]
+14:14:56 frieren-elf64 oh nvm i re-read wat u said just now
+14:14:58 grug No RPC doesn't do an array
+14:15:00 frieren-elf64 ok
+14:15:02 grug It needs more cooding
+14:18:40 frieren-elf64 ok trying ipv4 rpc
+14:22:42 frieren-elf64 coooool workking
+14:22:58 epiphany it werks im syncing
+14:23:07 epiphany oh too late
+14:23:13 frieren-elf64 XD
+14:23:21 frieren-elf64 yru twerking
+14:27:24 frieren-elf64 https://agorism.dev/uploads/darkfi-app.apk
+14:27:41 frieren-elf64 try on ur phones guys
+14:28:00 frieren-elf64 12/10 best free virus
+14:28:09 upgrayedd fix the repo commit
+14:28:39 grug lmao
+14:28:48 frieren-elf64 shall i put domain or ip? cos domain doesnt work yet
+14:29:00 upgrayedd domain works...
+14:29:04 frieren-elf64 it doesnt
+14:29:19 upgrayedd it doesn't in your network
+14:29:23 epiphany im syncing with domain rn
+14:29:27 upgrayedd thats not representantive of rest of the world lol
+14:29:34 frieren-elf64 its not my network
+14:29:50 frieren-elf64 the domain has ipv6 record. darkfi json doesnt do ipv4 fallback, it just fails
+14:29:57 grug You're the only one using ipv6 here
+14:29:58 upgrayedd 3 people here on diff networks tell you that domain works
+14:30:13 frieren-elf64 yes cos they use ipv4
+14:30:20 upgrayedd like most of the world yes
+14:30:22 grug >not my network
+14:30:28 grug #notmynetwork
+14:30:42 frieren-elf64 half the world uses ipv6
+14:30:50 grug I'll just cd kode and fix it
+14:30:50 epiphany the wrong half
+14:30:56 grug lol
+14:31:00 frieren-elf64 ok ill put domain then
+14:31:00 upgrayedd ++
+14:31:35 upgrayedd better yet, fix up the configurable settings
+14:31:46 upgrayedd so everyone puts whatever and we don't have to deal with the hardcoded stuff anymore
+14:31:54 frieren-elf64 not in this release
+14:32:11 grug virus-free no config
+14:32:38 frieren-elf64 next release has settings, themes, plugins
+14:32:43 frieren-elf64 + dex + bridge
+14:33:13 frieren-elf64 and multi-token (rn is just drk)
+14:34:55 upgrayedd lol anything else? maybe a lazor?
+14:36:55 frieren-elf64 thats pretty basic in terms of phone wallets. maybe u shud try some out
+14:38:39 frieren-elf64 edge, exodus, metamask, phantom, solflare, uniswap, zashi, cake, unstoppable
+14:39:03 frieren-elf64 they all got some basic multi token wallet + swaps going on (zec zashi uses near intents)
+14:39:10 upgrayedd none of those tries to be a super app.... in any case I was being sarcastic lol
+14:39:35 frieren-elf64 okkkk
+14:40:02 frieren-elf64 i just think this core featureset is essential for user accrual
+14:52:53 grug Pushed the RPC "fix"
+14:52:59 grug Will restart darkfids as soon as they compile
+14:58:45 frieren-elf64 noooooice
+15:03:35 grug Should be ok now
+15:03:41 grug In your half of the world :p
+15:03:56 upgrayedd grug: you see the rpc is something hitting it constantly
+15:04:03 upgrayedd since you restarted it its still spamming
+15:04:05 upgrayedd so not p2p
+15:04:24 grug Why does it matter?
+15:04:51 grug It's a public node ofc it's gonna be spammed
+15:05:38 grug A lot more things are happening but just this one is loud so you're noticing :D
+15:05:44 upgrayedd don't say it does, its just a spammy log
+15:05:55 upgrayedd yeah I know just saying if something slipt through the cracks XD
+15:06:07 grug It didn't it's just the unhandled code path
+15:06:19 grug It's loud so it gets handled
+15:06:22 upgrayedd handle it XD
+15:06:58 grug I don't want to stop the node now since they're working on the app
+15:07:03 grug It literally doesn't matter
+15:07:19 anon its alive
+15:07:20 grug I'd have to run in debug and catch it
+15:40:06 grug frieren-elf64: This is what peck+opencode produced with gpt-5.6: https://termbin.com/yq775
+15:40:20 grug frieren-elf64: I asked it to check the p2p stack and lilith as an example task/project
+15:41:09 grug It made an initial plan and then asked some follow up questions
+15:41:14 grug Was pretty straightforward
+15:41:53 grug The text is a bit dense though
+15:42:48 frieren-elf64 u can choose
+15:43:44 grug However it does seem to understand the architecture really well
+15:44:16 frieren-elf64 main thing is i want to spec features for domain specific devs to impl
+15:44:27 frieren-elf64 i like openspec has the 3 docs: proposal, design and tasks
+15:45:08 frieren-elf64 this means we can avoid confusion where dev gets task, makes mistakes, we have to repeat. the spec ensures there will be minimal misunderstanding upfront
+15:45:24 grug ++ definitely
+15:45:33 frieren-elf64 then they can modify and restructure, ask for review .etc before executing
+15:45:47 grug I'll try openspec with the same task and compare
+15:46:19 grug Keep in mind probably a lot of this also depends on the model being used
+15:46:25 grug And how "smart" it is
+15:47:07 grug But I like it
+15:47:25 frieren-elf64 try openspec for impl a feature
+15:47:28 frieren-elf64 and try explore mode first
+15:47:49 frieren-elf64 for example "how can we ensure packets are within nym packet size"
+15:48:11 frieren-elf64 btw maybe we should use QUIC by default?
+15:48:31 grug We should test it a bit before migrating but yeah I'm for it
+15:49:46 frieren-elf64 cool i think it will speed up dev
+15:53:31 grug If we don't use it we'll fall behind
+15:53:39 grug Adapt or die lol
+15:54:20 frieren-elf64 yk how the auditing companies are spamming us
+15:54:24 frieren-elf64 rough time for them
+15:54:30 grug :D
+15:54:46 frieren-elf64 ik a big one just went rekt after pouring millions into a static analysis software for smart contracts
+15:55:05 frieren-elf64 and ik a dev shop just let go of 35 devs and closed down after 8+ yrs
+15:55:23 grug Yep
+15:55:33 grug Not surprised
+16:05:18 grug frieren-elf64: Would it be possible to make a release (nondebug) build of the apk?
+16:05:31 grug I tried myself but when I open it it immediately crashes
+16:05:41 grug Didn't use podman but build natively
+16:06:25 frieren-elf64 can u share logfile?
+16:06:29 frieren-elf64 it will have the crash bt
+16:06:49 frieren-elf64 /Android/data/darkfi.darkfi_app/files/darkfi-app.log
+16:07:10 grug lmc
+16:08:45 grug /system/bin/sh: cd: /Android/data/darkfi.darkfi_app/files: No such file or directory
+16:09:16 frieren-elf64 i just dont see why making a release will change anything
+16:09:20 grug I don't think the app actually even opens
+16:09:23 frieren-elf64 cd /sdcard/
+16:09:30 frieren-elf64 ls
+16:09:32 frieren-elf64 cd Android
+16:09:33 frieren-elf64 .etc
+16:09:34 grug It's also not there
+16:09:58 frieren-elf64 ru connected via adb?
+16:10:04 grug ofc
+16:10:09 grug debug builds are a lot slower
+16:10:16 frieren-elf64 make log-apk
+16:10:19 frieren-elf64 try this cmd
+16:10:31 grug So it might be better to build release and just add debug symbols if you're interested in those
+16:10:37 frieren-elf64 ah yes debug is a lot slower true but i meant for the crash
+16:12:58 frieren-elf64 cargo quad-apk build --no-default-features schema-app,enable-plugin-drk,enable-plugin-darkirc
+16:13:06 frieren-elf64 oops
+16:13:11 frieren-elf64 cargo quad-apk build --no-default-features schema-app,enable-plugin-drk,enable-plugin-darkirc --release
+16:13:14 grug Yeah I built it like that
+16:13:37 frieren-elf64 enable-filelog
+16:13:40 frieren-elf64 for the file logging
+16:13:44 grug Android says: java.lang.UnsatisfiedLinkError: dlopen failed: TLS symbol "(null)" in dlopened
+16:13:57 frieren-elf64 full bt?
+16:14:06 grug I used this: cargo quad-apk build --release --no-default-features --features=enable-filelog,enable-netdebug,enable-plugins
+16:15:02 frieren-elf64 needs
+16:15:05 frieren-elf64 schema-app too
+16:15:17 grug https://paste.centos.org/view/0832230f
+16:15:23 frieren-elf64 it needs a schema
+16:16:17 frieren-elf64 update quad-apk?
+16:16:31 frieren-elf64 https://github.com/not-fl3/cargo-quad-apk/
+16:16:47 grug I installed the latest one with `cargo install --git <that url>`
+16:16:50 grug Lemme try with schema
+16:17:26 frieren-elf64 oh hmmm
+16:18:21 grug Is there a chance that it created an x86 apk?
+16:18:38 upgrayedd XD
+16:19:45 frieren-elf64 no its cross platform
+16:19:47 frieren-elf64 all targets
+16:20:24 frieren-elf64 62efc1f13b48846790a137a75aef6dc082e0737d
+16:20:28 frieren-elf64 i wonder if related to this
+16:21:18 frieren-elf64 wtf is TLS symbol "(null)"
+16:22:12 grug Some thread-local-storage mismatch ig
+16:22:26 grug Doubt it's related to that commit
+16:22:43 grug I'll investigate more l8r
+16:23:05 upgrayedd that commit looks wrong tho
+16:23:36 upgrayedd why would merkle and util be guarded behind wasm32 arch?
+16:23:45 upgrayedd the sdk is not just for wasm
+16:24:08 frieren-elf64 hmm lemme check
+16:24:34 frieren-elf64 these are wasm fns
+16:24:53 frieren-elf64 they dont exist in native abi
+16:25:24 upgrayedd 1) What
+16:27:20 frieren-elf64 idgi
+16:27:30 frieren-elf64 sparse_merkle_insert_batch_()
+16:27:30 upgrayedd ah saw it its the merkle and util inside sdk/src/wasm
+16:27:36 frieren-elf64 okkkk
+16:27:43 frieren-elf64 yep
+16:28:04 frieren-elf64 linux doesnt resolve this so no dlopen crash but android does and gives dlopen crash
+16:30:56 grug Crazy
+16:32:59 frieren-elf64 grug https://agorism.dev/uploads/ANDROID_TLS.md
+16:35:21 anon I built it with schema and it works now
+16:35:23 anon lol
+16:35:47 anon Damn still no text selection 😆
+16:36:33 frieren-elf64 yes there is
+16:37:14 frieren-elf64 long hold
+16:38:12 frieren-elf64 copy is top right, remove sel is top left
+16:38:19 frieren-elf64 nothing is shown waiting on buttons from urs
+16:38:26 frieren-elf64 but u can click them
+16:38:38 grug ah yeah it's weird without the btns
+16:38:51 grug The longhold timeout is a bit too long imo
+16:39:02 frieren-elf64 yeah maybe its like 2s
+16:39:10 frieren-elf64 also URLs are clickable and copyable
+16:39:31 grug Yeah it's cool
+16:39:43 grug I can give you this kind of annoying feedback if you're interested
+16:39:45 grug :D
+16:39:48 frieren-elf64 yes
+16:40:04 frieren-elf64 more eyes makes bugs swallow
+16:40:12 grug kk, lemme use it for a bit then
+16:40:27 urs frieren-elf64: have you also seen my other commits with the buttons etc.?
+16:40:29 frieren-elf64 - steve jobs creator of linux
+16:40:41 frieren-elf64 urs menu branch?
+16:40:46 urs yes
+16:40:48 frieren-elf64 i looked at all the commits
+16:40:54 frieren-elf64 but theres too much random stuff mixed in
+16:41:19 urs wdym? the android commit?
+16:41:21 frieren-elf64 changes to core code must not be part of styling, should be separate branches
+16:41:38 frieren-elf64 idgi do i need to check again today?
+16:42:05 urs both the commits you mentioned before are not in the brach anymore - moved to experimental until i fully understand etc.
+16:42:10 frieren-elf64 ok
+16:42:12 frieren-elf64 checking
+16:42:52 urs apart from the buttons i also tried to act on my own, as you wanted me to and e.g made the version block look like in the designs more
+16:43:16 frieren-elf64 ok already looks much better
+16:43:24 urs the headers are also unified now, looking like in the design
+16:43:24 frieren-elf64 i will look more closely later and if its good merge
+16:43:38 frieren-elf64 super lemme compile and run
+16:44:19 urs i spent time studying the key generation part, as far as i can tell it looks good, but needs an extra eye to be sure
+16:45:55 frieren-elf64 cool ty
+16:48:46 urs its not much different from other things, just uses the random OsRng module to generate a random number based on some 'environmental parameters'
+16:49:36 urs also i used openspec recently to get a better understanding of the general infra. like from display touch to task execution
+16:49:50 urs it worked pretty well
+16:52:19 frieren-elf64 can u rebase master
+16:52:29 urs okay
+16:52:39 frieren-elf64 needs testing
+16:53:36 urs ++
+17:13:19 upgrayedd grug: latest commit broke the http rpc test, can you fix it? cargo test --release --all-features --workspace http_jsonrpc_reqrep -- --nocapture
+19:38:48 anon Yeah will do
+20:12:25 grug frieren-elf64: Where do you want me to write feedback for the app?
+20:12:40 grug I just have short notes, about a dozen
+20:13:06 frieren here?
+20:13:56 grug Sure, you can copy it down somewhere then 
+20:14:11 grug - IRC ACTION didn't seem to be rendered properly
+20:14:34 grug - Text selection has a too long timeout until it actually happens (also confusing but maybe gets better with the dedicated buttons)
+20:14:59 grug - It would be good to add swipe left/right screen gestures, e.g. swiping left can open the channel list
+20:15:30 grug - Backwards sync would be interesting to see in action, when scrolling up (there is an example in darkirc on how to do this)
+20:15:56 frieren i think it should just sync back even without scrolling up
+20:15:57 grug - When you scroll far back, it would be useful to have a button/gesture to scroll back down to newest messages immediately
+20:16:01 frieren theres too much network latency
+20:16:23 grug - Holding backspace in the input box doesn't delete
+20:16:31 grug - Missing completion for nicknames
+20:17:03 grug - Force Stop in android, when I opened the app again it reset the nickname to 'anon'. Not sure how persistent local state is handled
+20:17:22 grug - It would be good to have a setting that can stop p2p/net to save data
+20:18:03 frieren good feedback ty
+20:18:08 grug frieren: It can sync back but that can also abuse the data plan. There should be some realistic limit like 1-2 days. But then manually if you wanna go further you can show some progressbar or information that it's syncing further back
+20:18:27 frieren i think just 1-2 days default
+20:18:47 grug Yeah I think that's reasonable. And then if you wanna go further back it can trigger more sync
+20:20:58 grug It can look good if done properly
+20:21:29 grug Like you scroll back to top, and then one more scroll gesture can trigger it, and you can place some kind of wheel/bar that indicates that a sync is happening
+20:22:01 grug But it was a bit tedious to scroll back to newest from there so I thought something to jump back to present would be useful as well
+20:22:17 frieren-elf64 yeah lets see, will focus on fixing bugs in this release, maybe a couple of these items
+20:22:40 frieren-elf64 whats missing completion for nicknames? is that on desktop?
+20:22:51 grug Yeah no worries, just copy them down somewhere and we can add them as time goes
+20:23:00 frieren-elf64 yes agree abt the stop button for p2p too
+20:23:04 grug No, all feedback is for mobile
+20:23:16 frieren-elf64 how does that work? u mean text suggestion?
+20:23:29 grug Completion like if I start writing "fri.." maybe something can pop up
+20:23:39 grug (Not the dots)
+20:23:58 grug It doesn't even need to be a regex since you check from beginning of line
+20:24:14 frieren-elf64 ic maybe @fri or sth
+20:24:15 grug 2 or 3 chars would be enough to trigger it
+20:24:27 grug 1 char can be annoying since it would trigger too often
+20:24:50 grug And then whatever pops up would autocomplete a "frieren-elf64:"
+20:25:00 grug "frieren-elf64: " even
+20:25:38 grug @ could be good too maybe, if it pops up a small window with all the nicks
+20:25:57 grug It would have to be limited in height and scrollable tho
+20:30:00 grug upgrayedd: The test doesn't fail for me. What's the error you saw?
+21:53:12 frieren-elf64 ok gotcha ty
+21:53:16 frieren-elf64 gn all
+21:54:43 epiphany cya
+22:10:57 shayan cya
+22:11:06 shayan gn all too
+22:31:09 grug gn cya
+08:50:07 dasman for nick completion i would also suggest double tapping on a nick (as it appears on every msg line) automatically writes it down in msg text box
+08:50:07 dasman very useful for replys
+08:50:07 upgrayedd grug: Failed starting JSON-RPC server: URL parse error: http+tcp://127.0.0.1:{random_port}
+08:50:07 upgrayedd and then Error: Io(ConnectionRefused)
+08:50:07 upgrayedd grug: btw the warning was due to explorer since it was trying the rpc without tls
+08:50:07 upgrayedd set it for the correct transport and now everything is noice
+08:50:07 dasman frieren-elf64: tried opencode applied the spec built with deepseek (cuz why not :D), reviewed, built and tested everything verks perfectly 
+08:50:07 dasman i see you planned to use dag_sync_range() instead of catch_up_sync() as a future task which makes more sense to go page by page as opposed to sync all of newest dag as a whole
+08:50:08 shayan gm
+08:50:08 ryu gm
+08:50:08 anomie gm
+08:50:08 fc44arm64_8f16456cbNoTST interestingly on macbook air m4 all tests pass, build time about 78 minutes versus about 108 minutes on rk3588 with some tests skipped
+08:50:32 frieren-elf64 dasman i didnt plan anything D: i have no idea what any of it is saying
+08:51:38 frieren-elf64 nick double tap works cool
+09:18:25 dubh gm
+18:21:40 anon gm
+18:21:40 urs 'gm
+18:21:40 grug gm
+18:21:42 upgrayedd grug: passing now thanks
+18:21:42 dasman frieren-elf64: ah it's added as non-goal, to keep the reverse sync spec tight and focused 
+18:21:42 grug upgrayedd: gr8
+18:26:05 meruem urs, plz rebase master asap so i can merge
+18:26:11 meruem new changes should go on new branch
+18:26:16 meruem its exhausting i keep having to say this
+18:27:01 meruem the new branch is good tho and ready to merge i just need it rebased
+18:27:08 meruem feedback:
+18:27:10 meruem w / 2 + CONTENT_MARGIN * 3.0 - CHANNELS_ICON_SCALE * 1.6
+18:27:12 meruem dont like this formula, where did those magic consts 3.0 and 1.6 come from?
+18:27:14 meruem channels_icon_2? pick a better name
+18:42:36 grug meruem: Hey, I've been trying openspec today and I think I prefer it to peck actually
+18:42:52 grug meruem: I created custom agents however 
+18:43:04 grug meruem: But they can be refined if we decide to use this
+18:44:40 meruem so so cool custom agents
+18:44:53 meruem can u plz look at dasman work btw for backsync, just ack it
+18:45:11 grug I had claude opus help me design them
+18:45:46 meruem nice why do u use gpt, opus .etc instead of glm? do u find differences between them?
+18:45:55 grug Where is dasman's code?
+18:46:26 grug meruem: Yeah I use both gpt and opus back and forth and they get even better when you challenge them against each other lol
+18:46:28 meruem idk if it landed yet
+18:46:39 meruem oh sick
+18:46:42 grug You can tell gpt that opus made something and it gets very vigilant 
+18:46:55 grug So reviews better because it knows what the bad things with the other model are
+18:47:44 grug I've been following this https://github.com/Fission-AI/OpenSpec/blob/main/docs/workflows.md
+18:47:44 chadbot Title: OpenSpec/docs/workflows.md at main · Fission-AI/OpenSpec · GitHub
+18:51:23 grug meruem: Generally I've found gpt good at lowlevel and opus at ui/ux highlevel
+18:53:17 meruem so interesting!
+19:21:20 grug !topic openspec
+19:21:21 meetbot Added topic: openspec (by grug)
+19:23:09 dasman meruem: i haven't push my work, thought it's just review/test openspec 
+19:23:27 dasman i'll push later tonight, I'm having some guests rn 
+19:23:34 meruem yep ok ty
+21:57:27 lotus hi
+08:20:18 lotus I’m glad to be part of this community and to learn from everyone here. 
+08:20:18 lotus I also have a suggestion regarding the nickname autocomplete feature. I agree with Dasman’s suggestion, and I’d like to suggest another option as well: using the Tab key to autocomplete a nickname after typing the beginning of it!.
+08:20:18 shayan gn
+08:20:18 dasman meruem, grug: check latest commit, i can also share openspec dir externally so this step is checked from design
+08:20:18 dasman lotus: tab comletion for desktop, and double tap for android
+08:20:18 dasman tab and tap :D
+08:20:18 shayan gm
+08:20:30 frieren-elf64 gm
+08:20:51 frieren-elf64 ty dasman
+08:21:34 anon gm
+08:21:41 urs 'gm
+08:22:22 frieren-elf64 urs saw what i wrote yday?
+08:34:21 ryu gm
+08:34:49 frieren-elf64 https://zakura.com/engineering/key-agreement/
+08:34:50 chadbot Title: Faster Ironwood Key Agreement — Zakura
+08:34:50 frieren-elf64 exciting
+08:42:44 urs frieren-elf64: didn't see, will do now
+08:44:41 frieren-elf64 final tasks: 1. fix menu rendering 2. select timeouts 3. test backsync 4. see state filesize
+08:45:14 frieren-elf64 i wont do more than this unless its a bug. lets kick it out already
+08:46:09 urs gm
+09:05:00 dubh gm
+10:24:24 anomie gm
+10:54:29 frieren-elf64 urs wyd?
+11:02:53 urs i am moving the commits to a new branch and rebasing with master
+11:03:40 urs also you gave feedback on the magic numbers, so i will think how to position correctly without them
+11:04:16 urs on experiment branch i am trying to turn the search bar into the pub key display
+11:05:18 urs ah, and the channels_icon2, i am planning to rename them icon left and right and gray and green
+11:05:49 frieren great tysm, lets get the menu branch merged asap
+11:09:35 urs yes
+13:05:37 lotus dasman: ah perfect :
+13:06:36 anon GM DARKFRAUD SISTERS!! WEN MAINET
+13:06:38 anon REEEEEEEEEEEEEEEEEEEEEEEEEE
+13:28:40 frieren-elf64 can we get github mirror working again
+15:08:04 temp Test
+15:08:04 chadbot Test back
+15:55:10 gugu can someone send me some drk pls? 
+15:55:11 gugu fS5wCLrgnBMKempf5D5BK3GFGaMyP6AtBHrKJdXqN8Kx63HJJaXwBZB8
+16:22:36 frieren-elf64 sec spinning up my node
+16:35:43 frieren-elf64 syncing
+17:36:31 urs epiphany: i see this error compiling and it also effects the wallet https://bpa.st/HL26C
+17:36:31 chadbot Title: View paste HL26C
+17:52:29 epiphany urs: see those commits https://git.dark.fi/darkrenaissance/darkfi/commit/17da9178bf3b43825d3851be5576a50fac196553 https://git.dark.fi/darkrenaissance/darkfi/commit/12691bdca18ae35ab2dc5547444d9180cd6dd867
+17:52:31 chadbot Title: app/layer: migrate Layer to new trigger redraw paradigm. · 17da9178bf - DarkFi
+17:52:35 chadbot Title: app: migrate all remaining widgets to the new draw paradigm. remove RendererSync and batch IDs from gfx. · 12691bdca1 - DarkFi
+17:54:20 epiphany looks like wallet/main.rs was migrated
+17:55:39 epiphany so i guess it's a merging issue with your branch
+17:56:51 shayan my last build app size is behave wierdly.. the app size rising till 12gb and after dropping to 2gb and never settle.. 2 min ago was 6gb and now is 1.62.. any idea why thats happening? 
+18:00:38 upgrayedd its a debug build so logs are spammy af
+18:01:01 shayan aha.. thnx)
+18:01:02 upgrayedd everything is unoptimized so its expected
+18:03:54 frieren-elf64 logs are capped at 5mb tho
+18:04:07 frieren-elf64 weirdly had other ppl saying this
+18:04:27 frieren-elf64 maybe db related weirdness, would appreciate someone look into it
+18:04:30 frieren-elf64 bbiab
+20:55:16 shayan am still try to figure out how to make stable app with outbound reduce 3<>1 that's the fourth build for today)) 
+20:55:16 shayan this time feels it going to work tho.. 
+20:55:16 shayan last time it was behave when screen on/off but dropped all the peers when app bg.. and sometimes reclaim when fg, sometimes not.. hope this last attempt will solve that issue as well.. 
+20:55:16 upgrayedd frieren-elf64: most likely sled then, since its hella unoptimized when not on --release
+20:55:16 anon fS5wCLrgnBMKempf5D5BK3GFGaMyP6AtBHrKJdXqN8Kx63HJJaXwBZB8
+20:55:16 anon can only past half my wallet 
+20:55:16 anon or is the rest only seen on pc? (using android) 
+20:55:16 anon android app doesnt show CA fully
+20:55:16 grug frieren-elf64: We'll have a drop-in db replacement very soon
+20:55:16 urs epiphany: ty, okay will check again
+20:55:16 urs no, i already had the commit, so the errors seem independent of that
+20:55:16 urs should i just fix the missing ones also in /wallet? epiphany
+20:55:16 urs it's just one or two changes and the commits you mentioned show how to do it
+20:55:16 shayan does the upcoming drop in db affect the branch am currently working on? Shud I rebase/update against git.darkfi.fi master once that lands, or thats its irrelevant ? 
+20:55:16 epiphany urs: see your commit fcaaf76453d3f5bcd92dd82261917e98cbdf2a09
+20:55:16 urs hmm
+20:55:16 urs ic. ty
+20:55:16 epiphany np
+20:55:31 frieren-elf64 upgrayedd ohhhh ty i didnt know
+20:55:43 frieren-elf64 anon whats CA?
+20:56:09 frieren-elf64 shayan no dont worry
+21:02:03 shayan ok
+22:06:12 grug gn
+22:11:41 frieren-elf64 gn
+22:16:49 shayan cya
+22:34:25 anon /frieren-elf64 
+07:02:31 anon fS5wCLrgnBMKempf5D5BK3GF
+07:02:31 anon GaMyP6AtBHrKJdXqN8Kx63
+07:02:31 anon HJJaXwBZB8
+07:02:31 anon /frieren-elf64
+07:02:32 shayan gn
+07:03:05 shayan gm
+07:04:46 frieren-elf64 gm
+07:42:26 anomie gm
+07:54:13 urs gm
+09:00:05 ryu gm
+10:01:38 urs frieren-elf64: the work is now in menu/menu-buttons branch and i think things look good. one last thing i forgot, but it's quick, is to remove the search bar
+10:35:00 anon test
+10:35:00 chadbot test back
+10:35:10 bdass test
+10:35:10 chadbot test back
+11:14:47 frieren-elf64 ty
+11:14:52 frieren-elf64 urs great
+11:17:55 frieren-elf64 urs do u mean this branch? media/menu-buttons
+11:18:06 frieren-elf64 btw maybe delete some old branches
+11:18:12 frieren-elf64 altho nbd
+11:19:43 frieren-elf64 ty this looks much better
+11:27:55 urs yes, media/menu-buttons
+11:35:57 frieren-elf64 urs pushed ;)))
+11:36:20 frieren-elf64 i fixed the menu too
+11:36:39 frieren-elf64 grug fixed long press and bunch of stuff if u wanna test
+11:40:56 urs thx
+12:17:19 frieren-elf64 upgrayedd: i get this error for drk
+12:17:20 frieren-elf64 [scan_blocks] Generating scan cache failed: Database error: [get_money_secrets] Secret keys retrieval failed: WalletDbError::QueryPreparationFailed
+12:17:36 frieren-elf64 i havent used it in a while so did stuff change? guess i have to reset the db
+12:18:45 upgrayedd you still on rusqlite v?
+12:19:39 frieren-elf64 lemme update. been a while
+12:42:05 frieren-elf64 upgrayedd: send coins fXVHj32CiRAiA6751PoJJDrvT2YhCtdwijGn1B3wT257MZ4MEM2Hew3o
+12:44:34 upgrayedd pablo now
+13:07:44 anon ty
+13:16:34 frieren-elf64 yay
+13:30:28 frieren with backsync chat syncs near instantly
+13:31:01 frieren !list
+13:31:01 meetbot Topics:
+13:31:01 meetbot 1. openspec (by grug)
+13:31:07 frieren !topic wallet sync indicator
+13:31:07 meetbot Added topic: wallet sync indicator (by frieren)
+13:31:28 frieren !topic app next steps
+13:31:28 meetbot Added topic: app next steps (by frieren)
+13:39:05 frieren epiphany, when we create the wallet from scratch, we shouldnt scan from the start
+13:45:27 epiphany frieren: yep, adding a wallet restore height to drk was proposed some time ago for this
+13:45:38 frieren ah its a drk feature ok
+13:45:39 epiphany needs to be impl
+13:45:57 frieren rn im trying to sync a new wallet and its taking forever
+13:47:16 frieren eventually this can be fixed
+13:47:48 frieren https://zakura.com/engineering/key-agreement/
+13:47:49 chadbot Title: Faster Ironwood Key Agreement — Zakura
+14:14:08 frieren still syncing...
+14:15:34 frieren !list
+14:15:34 meetbot Topics:
+14:15:34 meetbot 1. openspec (by grug)
+14:15:35 meetbot 2. wallet sync indicator (by frieren)
+14:15:35 meetbot 3. app next steps (by frieren)
+14:15:38 frieren !deltopic 2
+14:15:38 meetbot Removed topic 2
+14:15:40 frieren !list
+14:15:40 meetbot Topics:
+14:15:40 meetbot 1. openspec (by grug)
+14:15:40 meetbot 2. app next steps (by frieren)
+14:19:02 epiphany maybe in the meantime we can just add a little text progress next to the sync indicator so you know stuff is happening
+14:19:44 epiphany i think the drk plugin already gets the data needed for this like how many blocks are remaining
+14:20:18 epiphany but yea we need drk to be able to start sync from wherever
+14:25:36 frieren yeah that indicator would be great, can u make it like 2% 5% etc?
+14:25:45 frieren just put it left of the icon
+14:26:09 epiphany yeah i guess
+14:26:30 epiphany can also make it like 123/1234 blocks
+14:26:48 frieren however u prefer tbh
+14:27:22 epiphany ok will do
+14:30:31 frieren tysm
+14:56:54 frieren 30 mns and still not synced, damn
+14:57:10 frieren this is gonna be a real issue
+15:10:15 frieren-elf64 RPC is a bottleneck
+15:11:13 frieren-elf64 sequential TLS roundtrips
+15:24:28 frieren-elf64 epiphany, is this change ok? https://agorism.dev/uploads/drk.diff
+15:26:59 shayan branch: android-reduce-outbound-on-screen-off
+15:27:01 shayan commit: b229f7f7b - bin/app: reduce outbound connections while screen is off
+15:27:03 shayan https://codeberg.org/shayan13g/darkfi-reports/src/branch/main/android-outbound-connection-reduction.md
+15:27:04 chadbot Title: Cookie monster!
+15:27:05 shayan ***
+15:27:07 shayan I know core lib is normally out of bounds, but couldnt figure out how to get the required peer-drop behaviour without touching it.. tried multiple builds and approaches, but none worked properly. 
+15:27:09 shayan I kept the change minimal, only added the cleanup in `OutboundSession::Slot::stop()` to drop connected peers.
+15:27:11 shayan ***
+15:27:13 shayan p.s. i stressed more right now than i did when i was crossing the minefield to get this sent out.. 
+15:31:18 epiphany frieren-elf64: looks ok
+15:31:54 frieren-elf64 shayan: check comment for P2p::reload() method. nothing needs changing in p2p
+15:32:45 frieren-elf64 upgrayedd: do we need to flush every block in drk? https://agorism.dev/uploads/rpc.diff
+15:32:49 frieren-elf64 can this work
+15:44:19 frieren-elf64 urs: https://dark.fi/book/dev/dev.html#cargo-fmt-pre-commit-hook
+15:44:20 chadbot Title: Development - The DarkFi Book
+15:44:26 frieren-elf64 i just run make fmt and fucked up my repo
+15:48:46 frieren-elf64 !list
+15:48:46 meetbot Topics:
+15:48:46 meetbot 1. openspec (by grug)
+15:48:46 meetbot 2. app next steps (by frieren)
+15:48:51 frieren-elf64 !topic github mirroring
+15:48:51 meetbot Added topic: github mirroring (by frieren-elf64)
+15:58:20 urs frieren-elf64: i am sorry, i thought i've done it
+15:58:23 urs won't happen again
+16:06:04 frieren-elf64 just add the hook
+16:10:03 urs will do
+16:10:28 frieren-elf64 epiphany signals can send data, u dont need to send a signal then also call get_balance, that is extra work
+16:14:29 frieren-elf64 i will amend this
+16:15:44 shayan fireren-elf64: bro, honestly don't get what you mean) i didnt touch p2p, just used P2p::reload() exactly like the comment says. only added that small `OutboundSession::Slot::stop()` so the connected peer actually gets dropped. do you mean that one? can you give bit more context - last time it took like 5 explanations, hopefully it will take less attemts this round lol)
+16:16:23 epiphany frieren-elf64: ok ty
+16:18:55 frieren-elf64 ahh ok shayan will look in a bit, currently deep in 3 ongoing major changes
+16:19:45 shayan ok tysm
+16:21:30 shayan https://codeberg.org/shayan13g/darkfi-reports/src/branch/main/android-outbound-connection-reduction.md - this is the report not the code
+16:21:31 chadbot Title: Cookie monster!
+16:21:47 line Hey I have a question. I see everyone on android mentionning the space it take and the battery drain. I understand the need of running our own nodes. its not expected in darkfi that you connect to someone else or public darkirc, darkfid or drk. It would leak privacy and wallets informations/keys right
+16:22:40 line But is this in the plan to let the app allow to connect to each binary considering some technical users might want to run each binary on a server and connect a GUI over them instead of bundling all of them on the device app running?
+16:29:22 frieren-elf64 line, wdym? dont use ui or use ui if u want, setup ur own darkfid local or connect to a remote either tcp or nym/tor .etc
+16:29:50 frieren-elf64 no keys are leaked
+16:30:04 frieren-elf64 !list
+16:30:05 meetbot Topics:
+16:30:05 meetbot 1. openspec (by grug)
+16:30:05 meetbot 2. app next steps (by frieren)
+16:30:05 meetbot 3. github mirroring (by frieren-elf64)
+16:34:46 line frieren-elf64 my point is if using app UI , you cannot set it to connect to a remote darkfid/darkirc that run on a 24/7 server with more bandwich or space or battery lets say
+16:35:04 frieren-elf64 in the future it will exist np
+16:35:12 line that is what I tough thank you
+16:39:07 frieren np
+16:43:47 frieren epiphany also in this update loop its looking up nodes repeatedly nonstop
+16:45:07 frieren oh wait nvm if its called periodically its fine (or only on an update)
+16:45:59 frieren ok this should only emit when balances actually change
+16:46:17 frieren i think rn it just blindly is called during scanning
+16:49:25 epiphany yea it's doing it blindly
+16:49:58 epiphany will need to add a pubsub or something to drk
+16:50:22 frieren ok checking now
+19:29:10 frieren-elf64 sry upgrayedd lmk wen abt got sth to ask
+19:41:43 frieren-elf64 epiphany: check last commit src/main.rs changed, i improved the look of ur code, we can unwrap all that stuff to flatten it and avoid excessive if let nesting
+19:46:39 frieren-elf64 or grug here?
+19:47:16 epiphany noice
+19:50:01 epiphany frieren-elf64: building the app is still building fud
+19:50:16 epiphany prob because enable-plugins is a default feature
+19:50:45 frieren-elf64 which target?
+19:50:51 frieren-elf64 it should have changed
+19:51:05 frieren-elf64 see Makefile _FEATURES
+19:51:26 shayan my app is 10gb lol)) 
+19:51:35 frieren-elf64 how? what is 10gb?
+19:51:38 frieren-elf64 android?
+19:53:36 epiphany make is running cargo build --release --features=schema-app,enable-filelog,enable-plugin-darkirc,enable-plugin-drk
+19:53:41 epiphany i think its missing --no-default-features
+19:53:50 epiphany target linux x64
+19:54:19 shayan frieren-elf64: yeah on android its always floating up and down 
+19:54:58 shayan max seen 17 - 19gb, notice it when phone says no space lefft.. after it dropping to 2gb and going back and forth 
+19:55:32 shayan can be that because I add `enable-netdebug` in release.. dunno now how its related tho 
+19:55:44 frieren-elf64 nah
+19:57:20 frieren-elf64 woah ic 6 gb user data
+19:58:08 shayan watch it its constantly changing every sec 
+20:00:16 grug frieren-elf64: I'm here
+20:01:14 frieren-elf64 hey grug so basically the roundtrip getblock during wallet scanning is so so slow, we need to do batches getblocks. i have made a branch called getblocks. if its good can we merge?
+20:01:28 frieren-elf64 or maybe just remove getblock and replace with getblocks?
+20:02:09 frieren-elf64 ohhh i just found sth:
+20:02:11 frieren-elf64 > The core issue: sled never returns disk space — there are zero Db::compress() calls in the codebase, and chat history + eventgraph are append-heavy, so the DBs only grow.
+20:04:11 frieren-elf64 huh this is fake news
+20:05:20 shayan mmm
+20:05:34 frieren-elf64 this fucking 6+ gb is insane, idk where it comes from. i checked the dbs and they look reasonable?
+20:07:29 frieren-elf64 ok its the drk cache
+20:07:33 frieren-elf64 its insane
+20:07:36 shayan https://imgsharehub.com/ge2rsccb
+20:07:36 chadbot Title: Image ge2rsccb | ImgShareHub
+20:08:08 grug The disk space is being reduced once fjall is in
+20:08:33 grug I agree with replacing with getblocks
+20:08:46 grug But we might need to increase the RPC reqrep size limit
+20:09:22 frieren-elf64 6gb is excessive tho
+20:09:32 frieren-elf64 it is storing the state inverse diff
+20:09:52 frieren-elf64 > per-block full inverse state diffs — used to roll back wallet state on reorgs (this is the bulk)
+20:10:40 grug Yeah, upgrayedd can explain this better
+20:10:56 frieren-elf64 we should just drop the inverse diffs beyond 100 blocks or so
+20:10:58 grug Basically if the wallet sees a reorg it needs a way to revert
+20:11:14 grug We can't just rescan from a specific height because we're maintaining Merkle trees
+20:11:33 grug So at the very least we need the tree diffs
+20:11:44 grug (Again upgrayedd knows all the tiny details)
+20:12:10 frieren-elf64 man this would be much easier with opensec ^^
+20:12:13 frieren-elf64 openspec
+20:12:19 grug :)
+20:12:25 frieren-elf64 i also need sync from height too
+20:12:58 grug There's 2 things, sync and scan
+20:13:09 grug sync always needs to be full in order to build the merkle tree(s)
+20:13:24 grug scan is probablly what you're talking about, wrt. finding coins to use
+20:13:25 frieren-elf64 oh ic
+20:13:30 frieren-elf64 yep the scan
+20:14:56 frieren-elf64 backsync works well. chat near instantly syncs
+20:15:21 grug Sweet
+20:15:40 frieren-elf64 also the string building in scan i think should be guarded with a macro to make it optional
+20:15:59 frieren-elf64 basically like if logger.is_some() { build the string }
+20:16:11 grug Add this as a mtg topic, we can discuss everything u need
+20:16:15 frieren-elf64 ok
+20:16:19 frieren-elf64 !list
+20:16:19 meetbot Topics:
+20:16:19 meetbot 1. openspec (by grug)
+20:16:19 meetbot 2. app next steps (by frieren)
+20:16:19 meetbot 3. github mirroring (by frieren-elf64)
+20:16:58 frieren-elf64 !topic getblocks scan
+20:16:59 meetbot Added topic: getblocks scan (by frieren-elf64)
+20:17:06 frieren-elf64 !topic scan from height
+20:17:06 meetbot Added topic: scan from height (by frieren-elf64)
+20:17:19 frieren-elf64 !topic guard string building in scan
+20:17:19 meetbot Added topic: guard string building in scan (by frieren-elf64)
+20:17:29 frieren-elf64 !topic drop old state inverse diffs from drk
+20:17:29 meetbot Added topic: drop old state inverse diffs from drk (by frieren-elf64)
+20:19:08 lotus !list
+20:19:08 meetbot Topics:
+20:19:09 meetbot 1. openspec (by grug)
+20:19:09 meetbot 2. app next steps (by frieren)
+20:19:09 meetbot 3. github mirroring (by frieren-elf64)
+20:19:09 meetbot 4. getblocks scan (by frieren-elf64)
+20:19:09 meetbot 5. scan from height (by frieren-elf64)
+20:19:09 meetbot 6. guard string building in scan (by frieren-elf64)
+20:19:09 meetbot 7. drop old state inverse diffs from drk (by frieren-elf64)
+20:20:49 frieren-elf64 !deltopic 3
+20:20:49 meetbot Removed topic 3
+20:20:52 frieren-elf64 !list
+20:20:52 meetbot Topics:
+20:20:52 meetbot 1. openspec (by grug)
+20:20:52 meetbot 2. app next steps (by frieren)
+20:20:52 meetbot 3. getblocks scan (by frieren-elf64)
+20:20:52 meetbot 4. scan from height (by frieren-elf64)
+20:20:52 meetbot 5. guard string building in scan (by frieren-elf64)
+20:20:52 meetbot 6. drop old state inverse diffs from drk (by frieren-elf64)
+20:40:01 frieren-elf64 grug, the dag_prune_task() doesnt work well on the phone, we need to use the actual clock instead
+20:43:12 grug You mean the system clock?
+20:43:16 frieren-elf64 https://agorism.dev/uploads/DAGBUG.md
+20:44:45 frieren-elf64 whats weird is it remains connected
+20:45:39 grug dasman had an idea for this iirc
+20:46:19 frieren-elf64 hmmm im looking too cos it should not be suspended
+20:46:55 dasman grug: you had an idea too lol, should I Impl mine? 
+20:47:45 grug I mean I was just talking about detecting time jumps, but I'm not sure if it's applicable here
+20:47:56 grug I think you had thought of something better
+20:48:03 dasman frieren-elf64: that happens cuz we check seconds to next rotation once, we should do a loop 
+20:48:15 dasman yes that's ^^ my idea 
+20:48:34 dasman that will effectively detect jumps as well
+20:48:39 grug Right
+20:49:00 frieren-elf64 ohhh my foreground service prevents the darkirc from being KILLED but it doesnt stop it being suspended
+20:49:57 frieren-elf64 ok its expected cos i just dont want app stopping when randomly closed or in the bg for like 1-2 mns, but yeah it can be suspended after like 15 mns phone is off
+20:50:26 frieren-elf64 i can acquire a wakelock to force phone to keep it awake but thats kinda messed up
+20:50:32 frieren-elf64 and flaky
+20:51:03 dasman yeah that's a no no, I'll impl my idea and see 
+20:51:26 grug No don't do that lol
+20:51:34 grug Then the phone will never idle 
+20:51:49 grug Which means 2 hrs of battery life before requiring charge lmao
+20:51:58 dasman XD
+20:52:29 frieren-elf64 yeah we already are rinsing the battery
+20:52:38 shayan app all the time using cpu doesn matter fg or bg
+20:52:39 grug It's probably more important that it quickly reconnects after waking up from suspend
+20:54:56 frieren-elf64 https://agorism.dev/uploads/CRITIQUE.md
+20:55:41 frieren-elf64 i think its saying nodes still get penalized for being too far ahead
+20:55:49 frieren-elf64 so they get banned()/blacklisted in p2p
+20:56:36 frieren-elf64 lol that fucking table is it being real
+20:56:52 frieren-elf64 | loop fix               | ≤1s + sled write        | 0–2    | ~0                               |
+20:57:17 frieren-elf64 strikes: ~0, errors: 0 - 2, latency: <= 1s
+20:59:08 frieren-elf64 idk wdyt? https://agorism.dev/uploads/RESOLV.md
+20:59:43 frieren-elf64 the reasoning here seems to make sense
+20:59:48 frieren-elf64 but idk evgr2 code
+21:01:34 grug I mean yeah but you should have that dag created
+21:02:02 grug The DAG missing is the main problem
+22:27:53 grug gn
+22:39:32 shayan battery issue getting wild.. %50
+22:39:46 shayan in three hours or something.. 
+22:47:31 shayan something wierd with dag_sync.. with only 1 peer it hits continue with no sleep so notify_connect fires nonstop.. an seeing connect events every few ms on android.. 
+22:47:51 shayan is that same issue you talk previously? 
+22:59:49 shayan looks like our outbound reduction to 1 clashes with the existing SYNC_MIN_PEERS = 2 logic - once OB drops to 1, dag_sync can never reach the min and starts hammering the loop/reconnect logic endlessly 
+23:00:45 shayan can be that the reason of high cpu and battery consumption.. 
+23:00:48 shayan ?
+23:02:01 frieren-elf64 gn
+23:02:09 shayan cya
+23:02:32 frieren-elf64 no idea, is it the ui, the p2p .etc? try compiling with p2p disabled for example
+23:02:49 frieren-elf64 like what is battery with just ui vs ui+p2p
+08:08:46 frieren-elf64 !list
+08:09:14 shayan i can add a wait to my patch si it doesnt go full maniac when there is onlu 1 peer.. but prooly that just temproary fix.. 
+08:09:14 shayan will lool into that.. just waited till you check my code to move on on the battery investigation issue 
+08:09:14 shayan *task 
+08:09:14 shayan ok my eyes not see anymore will take a break for today.. will look into it tomorrow.. 
+08:09:14 shayan gn *
+08:09:14 shayan worth to note this wanst an issue before i drop OB to 1 it was max %21 over night (7h)
+08:09:15 anon hi there pps
+08:09:15 anon hi🤫
+08:09:15 anon p
+08:09:15 anon hi
+08:09:15 dasman i can't seem to reproduce the suspend issue, since network disconnects first then suspend (so it becomes a reconnection issue _which is handled pretty well_ rather than messed up msleep())
+08:09:15 dasman so the code would be test in production :D
+08:09:15 shayan gm
+08:09:20 frieren-elf64 gmgm
+08:09:21 frieren-elf64 !list
+08:09:22 meetbot Topics:
+08:09:22 meetbot 1. openspec (by grug)
+08:09:22 meetbot 2. app next steps (by frieren)
+08:09:22 meetbot 3. getblocks scan (by frieren-elf64)
+08:09:22 meetbot 4. scan from height (by frieren-elf64)
+08:09:22 meetbot 5. guard string building in scan (by frieren-elf64)
+08:09:23 meetbot 6. drop old state inverse diffs from drk (by frieren-elf64)
+08:09:57 frieren-elf64 !topic out of band mailbox for darkfid
+08:09:57 meetbot Added topic: out of band mailbox for darkfid (by frieren-elf64)
+09:08:26 frieren-elf64 !deltopic 7
+09:08:26 meetbot Removed topic 7
+09:13:31 frieren-elf64 this doesnt rly get anything tbh, i dont think tachyon has solved this issue
+09:22:32 shayan	***
+09:22:34 shayan	const SYNC_MIN_PEERS: usize = 2;
+09:22:36 shayan	***
+09:22:38 shayan	if peers_count < SYNC_MIN_PEERS {
+09:22:40 shayan	    i!("Connected to {peers_count} peers. Waiting for more connections.");
+09:22:42 shayan	    continue
+09:22:44 shayan	}
+09:22:46 shayan	***
+09:22:48 shayan	may I add this to that one: 
+09:22:50 shayan	    let _ = channel_sub.receive().await;
+09:22:52 shayan	***
+09:22:54 shayan	so when peer count is 1 it stops spinning like crazy?
+09:28:26 shayan	or is there is something that i dont understand and that would create a regression.. 
+09:30:08 frieren-elf64	ohh what line is that?
+09:38:44 shayan	that line makes the `< SYNC_MIN_PEERS` path wait for the next P2P channel even instead of immediately looping again. With OB=1 / peers=1 that you requested to reduce to, dag_sync() keep spinning and fire notify_connect() nonstop, basically every ms. that could explain the battry going from ~21% to ~%50, plus the constant CPU usage.
+09:38:46 shayan	***
+09:38:48 shayan	not saying this is the cure just wanna try it.. I am only asking because this polling logic was introduced recently upstream and seems to conflict with the app's idle OB=1 policy we introduced..
+09:39:33 shayan	***
+09:42:10 shayan /bin/app/src/plugin/darkirc.rs
+09:46:15 urs gm
+09:47:49 shayan app is 14gb today lol
+09:50:06 frieren-elf64 yeah we know why now
+09:50:29 frieren-elf64 shayan what line number
+09:51:01 shayan 377-382
+09:51:33 shayan 50m runtime and already = 8.5% battery consumption lol)
+09:54:38 shayan ***
+09:54:40 shayan the idea is: 
+09:54:42 shayan Before: with 1 peer, connect events flooded every few ms.
+09:54:44 shayan ***
+09:54:46 shayan After: with 1 peer, it should settle and wait; no continuous notify_connect() storm. Then when a secondpeer connects, the sync loop should wake and continue.
+09:54:48 shayan ***
+09:54:50 shayan theoretically.. 
+09:55:15 frieren-elf64 why did u delete notify_start() and notify_stop()?
+09:57:42 frieren-elf64 for the src/net/session/outbound_session.rs change either need to ask dasman or grug abt that, share the diff w them
+09:58:46 frieren-elf64 it looks good otherwise, i would remove GraphicsEventScreen and just use a bool. also the field name "screen" is not good, if u notice the others all describe actions like "key_down" "resize" whereas screen is a noun.
+09:58:59 frieren-elf64 "screen_changed" for example
+10:02:15 shayan i didnt remove the methods, only calls from GOD.. I assumed that notify_start/stop just trigger the same /window signal that Window::start/stop now emit themselvs, so keeping both would fire them twice.. I left methods in place as you requested earlier.. 
+10:02:17 shayan if you want them back I can put them back..
+10:02:19 shayan ***
+10:02:21 shayan note it will change that right away, and ask to the grug or dasman about other issue when they come.. 
+10:02:23 shayan otherwise everything is ok? 
+10:07:53 frieren-elf64 yep gj yeah just wondering abt moving the signals to Window::stop() vs keeping them in App
+10:08:21 frieren-elf64 i need to know where stop() is actually called since ur smol::block_on() is blocking there
+10:14:05 shayan ***
+10:14:07 shayan found the call path: gfx::quit_requested_event() → God::stop_app() → App::stop() → Window::stop(), and Window::stop() currently does the smol::block_on(trigger("stop")).
+10:14:09 shayan ***

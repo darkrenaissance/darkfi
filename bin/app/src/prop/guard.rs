@@ -101,6 +101,13 @@ pub struct BatchGuard {
 }
 
 impl BatchGuard {
+    /// A guard with no end-of-batch callback and no parent: used to run
+    /// invalidation handlers outside a real property batch (dependency
+    /// resync, D5). Dropping it is a no-op.
+    pub fn detached() -> BatchGuardPtr {
+        Arc::new(BatchGuard { id: 0, end_batch: None, _parent: None })
+    }
+
     pub fn spawn(self: &Arc<Self>) -> PropertyAtomicGuard {
         PropertyAtomicGuard {
             batch_id: self.id,
@@ -113,8 +120,9 @@ impl BatchGuard {
 
 impl Drop for BatchGuard {
     fn drop(&mut self) {
-        let end_batch = self.end_batch.take().unwrap();
-        end_batch(self.id);
+        if let Some(end_batch) = self.end_batch.take() {
+            end_batch(self.id);
+        }
     }
 }
 

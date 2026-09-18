@@ -761,6 +761,21 @@ impl UIObject for Menu {
         let rect = self.rect.get();
         let rect_changed = rect != prev_rect;
 
+        // Draw-path re-evaluation of the expr-bound styling props:
+        // populates the expression caches before the first read (they are
+        // empty at startup, before any handler has fired) and self-heals
+        // stale caches from edge cases such as dependency rewiring. Not
+        // needed for switch atomicity — the batch guard owns that. Cache
+        // writes are `Role::Internal` echoes, which the
+        // when_change_external handlers skip.
+        self.text_color.eval(atom).expect("text_color");
+        self.bg_color.eval(atom).expect("bg_color");
+        self.sep_color.eval(atom).expect("sep_color");
+        self.role1_color.eval(atom).expect("role1_color");
+        self.role2_color.eval(atom).expect("role2_color");
+        self.font_size.eval(atom).expect("font_size");
+        self.sep_size.eval(atom).expect("sep_size");
+
         // The root shell is cheap: re-emit it every pass with the
         // current scroll so scroll pokes don't invalidate content.
         let scroll = self.scroll.load(Ordering::Relaxed);

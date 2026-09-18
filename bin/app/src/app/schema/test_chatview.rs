@@ -262,7 +262,7 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish) {
         DEV_CHANNEL.encode(&mut data).unwrap();
         let _ = chatview_node_for_bind.call_method("set_channel", data).await;
     });
-    app.tasks.lock().unwrap().push(bind_task);
+    app.tasks.lock().push(bind_task);
 
     // Scroll-to-bottom arrow: floats over the chatview, so it carries
     // priority above it for the gesture session's ordered targeting.

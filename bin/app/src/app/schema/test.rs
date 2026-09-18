@@ -398,7 +398,7 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish) {
         "chat".encode(&mut data).unwrap();
         let _ = node.call_method("set_channel", data).await;
     });
-    app.tasks.lock().unwrap().push(bind_task);
+    app.tasks.lock().push(bind_task);
 
     // Text edit
     let node = create_singleline_edit("editz");
@@ -495,6 +495,6 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish) {
         darkfi::system::sleep(1).await;
         node.call_method("focus", vec![]).await.unwrap();
     });
-    app.tasks.lock().unwrap().push(focus_task);
+    app.tasks.lock().push(focus_task);
     */
 }

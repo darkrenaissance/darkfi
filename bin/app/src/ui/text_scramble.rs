@@ -275,6 +275,17 @@ impl TextScramble {
         let rect = self.rect.get();
         let rect_changed = rect != prev_rect;
 
+        // Draw-path re-evaluation of the expr-bound styling props:
+        // populates the expression caches before the first read (they are
+        // empty at startup, before any handler has fired) and self-heals
+        // stale caches from edge cases such as dependency rewiring. Not
+        // needed for switch atomicity — the batch guard owns that. Cache
+        // writes are `Role::Internal` echoes, which the
+        // when_change_external handlers skip.
+        self.text_color.eval(atom).expect("text_color");
+        self.scramble_color.eval(atom).expect("scramble_color");
+        self.font_size.eval(atom).expect("font_size");
+
         // Layout depends on the width, so a rect change invalidates the
         // layout even if the text itself did not change. Compute under the
         // cache lock: the compute is synchronous, so concurrent invalidations

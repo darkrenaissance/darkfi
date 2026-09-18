@@ -23,7 +23,6 @@ use darkfi_serial::{Decodable, Encodable};
 use crate::{
     app::{
         node::{create_layer, create_text},
-        schema::COLOR_SCHEME,
         App,
     },
     expr,
@@ -34,7 +33,7 @@ use crate::{
     util::i18n::I18nBabelFish,
 };
 
-use super::{super::ColorScheme, data::*, util::*};
+use super::{data::*, util::*};
 
 pub async fn make(
     app: &App,
@@ -62,10 +61,10 @@ pub async fn make(
     // ============================================
     let send_step4_layer = create_layer("send_step4_layer");
     let prop = send_step4_layer.get_property("rect").unwrap();
-    prop.set_f32(atom, Role::App, 0, 0.).unwrap();
-    prop.set_f32(atom, Role::App, 1, 0.).unwrap();
-    prop.set_expr(atom, Role::App, 2, expr::load_var("w")).unwrap();
-    prop.set_expr(atom, Role::App, 3, expr::load_var("h")).unwrap();
+    prop.set_default_f32(0, 0.).unwrap();
+    prop.set_default_f32(1, 0.).unwrap();
+    prop.set_default_expr(2, expr::load_var("w")).unwrap();
+    prop.set_default_expr(3, expr::load_var("h")).unwrap();
     send_step4_layer.set_property_bool(atom, Role::App, "is_visible", false).unwrap();
     send_step4_layer.set_property_u32(atom, Role::App, "z_index", 2).unwrap();
     let send_step4_layer = send_step4_layer
@@ -88,24 +87,14 @@ pub async fn make(
     // Selected token display
     let node = create_text("send_selected_token_symbol4");
     let prop = node.get_property("rect").unwrap();
-    prop.set_f32(atom, Role::App, 0, PADDING_X).unwrap();
-    prop.set_f32(atom, Role::App, 1, y + PADDING_Y).unwrap();
-    prop.set_f32(atom, Role::App, 2, 1000.).unwrap();
-    prop.set_f32(atom, Role::App, 3, BASE_FONTSIZE).unwrap();
-    node.set_property_f32(atom, Role::App, "font_size", BASE_FONTSIZE).unwrap();
+    prop.set_default_f32(0, PADDING_X).unwrap();
+    prop.set_default_f32(1, y + PADDING_Y).unwrap();
+    prop.set_default_f32(2, 1000.).unwrap();
+    prop.set_default_f32(3, BASE_FONTSIZE).unwrap();
+    node.get_property("font_size").unwrap().set_default_f32(0, BASE_FONTSIZE).unwrap();
     node.set_property_str(atom, Role::App, "text", "Token").unwrap();
     let prop = node.get_property("text_color").unwrap();
-    if COLOR_SCHEME == ColorScheme::DarkMode {
-        prop.set_f32(atom, Role::App, 0, 1.).unwrap();
-        prop.set_f32(atom, Role::App, 1, 1.).unwrap();
-        prop.set_f32(atom, Role::App, 2, 1.).unwrap();
-        prop.set_f32(atom, Role::App, 3, 1.).unwrap();
-    } else {
-        prop.set_f32(atom, Role::App, 0, 0.).unwrap();
-        prop.set_f32(atom, Role::App, 1, 0.).unwrap();
-        prop.set_f32(atom, Role::App, 2, 0.).unwrap();
-        prop.set_f32(atom, Role::App, 3, 1.).unwrap();
-    }
+    prop.set_default_f32_multi(&[1., 1., 1., 1.]).unwrap();
     node.set_property_u32(atom, Role::App, "z_index", 2).unwrap();
     let node = node
         .setup(|me| {
@@ -122,24 +111,14 @@ pub async fn make(
 
     let node = create_text("send_selected_token_name4");
     let prop = node.get_property("rect").unwrap();
-    prop.set_f32(atom, Role::App, 0, PADDING_X + TOKEN_NAME_OFFSET).unwrap();
-    prop.set_f32(atom, Role::App, 1, y + PADDING_Y).unwrap();
-    prop.set_f32(atom, Role::App, 2, 1000.).unwrap();
-    prop.set_f32(atom, Role::App, 3, BASE_FONTSIZE).unwrap();
-    node.set_property_f32(atom, Role::App, "font_size", BASE_FONTSIZE).unwrap();
+    prop.set_default_f32(0, PADDING_X + TOKEN_NAME_OFFSET).unwrap();
+    prop.set_default_f32(1, y + PADDING_Y).unwrap();
+    prop.set_default_f32(2, 1000.).unwrap();
+    prop.set_default_f32(3, BASE_FONTSIZE).unwrap();
+    node.get_property("font_size").unwrap().set_default_f32(0, BASE_FONTSIZE).unwrap();
     node.set_property_str(atom, Role::App, "text", "").unwrap();
     let prop = node.get_property("text_color").unwrap();
-    if COLOR_SCHEME == ColorScheme::DarkMode {
-        prop.set_f32(atom, Role::App, 0, 1.).unwrap();
-        prop.set_f32(atom, Role::App, 1, 1.).unwrap();
-        prop.set_f32(atom, Role::App, 2, 1.).unwrap();
-        prop.set_f32(atom, Role::App, 3, 1.).unwrap();
-    } else {
-        prop.set_f32(atom, Role::App, 0, 0.).unwrap();
-        prop.set_f32(atom, Role::App, 1, 0.).unwrap();
-        prop.set_f32(atom, Role::App, 2, 0.).unwrap();
-        prop.set_f32(atom, Role::App, 3, 1.).unwrap();
-    }
+    prop.set_default_f32_multi(&[1., 1., 1., 1.]).unwrap();
     node.set_property_u32(atom, Role::App, "z_index", 2).unwrap();
     let node = node
         .setup(|me| {
@@ -169,24 +148,14 @@ pub async fn make(
     // Recipient label
     let node = create_text("send_recipient_label4");
     let prop = node.get_property("rect").unwrap();
-    prop.set_f32(atom, Role::App, 0, PADDING_X).unwrap();
-    prop.set_f32(atom, Role::App, 1, y + PADDING_Y).unwrap();
-    prop.set_f32(atom, Role::App, 2, 1000.).unwrap();
-    prop.set_f32(atom, Role::App, 3, BASE_FONTSIZE).unwrap();
-    node.set_property_f32(atom, Role::App, "font_size", BASE_FONTSIZE).unwrap();
+    prop.set_default_f32(0, PADDING_X).unwrap();
+    prop.set_default_f32(1, y + PADDING_Y).unwrap();
+    prop.set_default_f32(2, 1000.).unwrap();
+    prop.set_default_f32(3, BASE_FONTSIZE).unwrap();
+    node.get_property("font_size").unwrap().set_default_f32(0, BASE_FONTSIZE).unwrap();
     node.set_property_str(atom, Role::App, "text", "Recipient").unwrap();
     let prop = node.get_property("text_color").unwrap();
-    if COLOR_SCHEME == ColorScheme::DarkMode {
-        prop.set_f32(atom, Role::App, 0, 1.).unwrap();
-        prop.set_f32(atom, Role::App, 1, 1.).unwrap();
-        prop.set_f32(atom, Role::App, 2, 1.).unwrap();
-        prop.set_f32(atom, Role::App, 3, 1.).unwrap();
-    } else {
-        prop.set_f32(atom, Role::App, 0, 0.).unwrap();
-        prop.set_f32(atom, Role::App, 1, 0.).unwrap();
-        prop.set_f32(atom, Role::App, 2, 0.).unwrap();
-        prop.set_f32(atom, Role::App, 3, 1.).unwrap();
-    }
+    prop.set_default_f32_multi(&[1., 1., 1., 1.]).unwrap();
     node.set_property_u32(atom, Role::App, "z_index", 2).unwrap();
     let node = node
         .setup(|me| {
@@ -207,26 +176,20 @@ pub async fn make(
     let recipient_addr_node = create_text("send_recipient_value4");
     let addr_h_prop = recipient_addr_node.get_property("height").unwrap();
     let prop = recipient_addr_node.get_property("rect").unwrap();
-    prop.set_f32(atom, Role::App, 0, PADDING_X).unwrap();
-    prop.set_f32(atom, Role::App, 1, y + PADDING_Y).unwrap();
+    prop.set_default_f32(0, PADDING_X).unwrap();
+    prop.set_default_f32(1, y + PADDING_Y).unwrap();
     let code = cc.compile("w - PADDING_X * 2").unwrap();
-    prop.set_expr(atom, Role::App, 2, code).unwrap();
-    prop.set_f32(atom, Role::App, 3, TITLE_FONTSIZE).unwrap();
-    recipient_addr_node.set_property_f32(atom, Role::App, "font_size", TITLE_FONTSIZE).unwrap();
+    prop.set_default_expr(2, code).unwrap();
+    prop.set_default_f32(3, TITLE_FONTSIZE).unwrap();
+    recipient_addr_node
+        .get_property("font_size")
+        .unwrap()
+        .set_default_f32(0, TITLE_FONTSIZE)
+        .unwrap();
     recipient_addr_node.set_property_str(atom, Role::App, "text", "").unwrap();
     recipient_addr_node.set_property_enum(atom, Role::App, "overflow_wrap", "anywhere").unwrap();
     let prop = recipient_addr_node.get_property("text_color").unwrap();
-    if COLOR_SCHEME == ColorScheme::DarkMode {
-        prop.set_f32(atom, Role::App, 0, 1.).unwrap();
-        prop.set_f32(atom, Role::App, 1, 1.).unwrap();
-        prop.set_f32(atom, Role::App, 2, 1.).unwrap();
-        prop.set_f32(atom, Role::App, 3, 1.).unwrap();
-    } else {
-        prop.set_f32(atom, Role::App, 0, 0.).unwrap();
-        prop.set_f32(atom, Role::App, 1, 0.).unwrap();
-        prop.set_f32(atom, Role::App, 2, 0.).unwrap();
-        prop.set_f32(atom, Role::App, 3, 1.).unwrap();
-    }
+    prop.set_default_f32_multi(&[1., 1., 1., 1.]).unwrap();
     recipient_addr_node.set_property_u32(atom, Role::App, "z_index", 2).unwrap();
     let recipient_addr_node = recipient_addr_node
         .setup(|me| {
@@ -255,20 +218,20 @@ pub async fn make(
     .await;
     let prop = node.get_property("rect").unwrap();
     let code = cc.compile(&y2).unwrap();
-    prop.set_expr(atom, Role::App, 1, code).unwrap();
-    prop.add_depend(&addr_h_prop, 0, "addr_height");
+    prop.set_default_expr(1, code).unwrap();
+    prop.add_depend(Role::App, &addr_h_prop, 0, "addr_height");
 
     // Amount display - same layout as step3's amount input
     let amount_y = format!("({y2}) + (h - ({y2}) - BUTTON_HEIGHT - PADDING_X * 2 - PADDING_Y - BASE_FONTSIZE - AMOUNT_FONTSIZE - 1) / 2 - AMOUNT_FONTSIZE * 0.1");
     let amount_wrapper = create_layer("send_amount_wrapper4");
     amount_wrapper.set_property_bool(atom, Role::App, "is_visible", true).unwrap();
     let prop = amount_wrapper.get_property("rect").unwrap();
-    prop.set_f32(atom, Role::App, 0, 0.).unwrap();
+    prop.set_default_f32(0, 0.).unwrap();
     let code = cc.compile(&amount_y).unwrap();
-    prop.set_expr(atom, Role::App, 1, code).unwrap();
-    prop.set_expr(atom, Role::App, 2, expr::load_var("w")).unwrap();
-    prop.set_f32(atom, Role::App, 3, AMOUNT_FONTSIZE).unwrap();
-    prop.add_depend(&addr_h_prop, 0, "addr_height");
+    prop.set_default_expr(1, code).unwrap();
+    prop.set_default_expr(2, expr::load_var("w")).unwrap();
+    prop.set_default_f32(3, AMOUNT_FONTSIZE).unwrap();
+    prop.add_depend(Role::App, &addr_h_prop, 0, "addr_height");
     amount_wrapper.set_property_u32(atom, Role::App, "z_index", 2).unwrap();
     let amount_wrapper = amount_wrapper
         .setup(|me| Layer::new(me, app.renderer.clone(), app.redraw_trigger.clone()))
@@ -278,16 +241,17 @@ pub async fn make(
     // Amount text
     let amount_text_node = create_text("send_amount_text4");
     let prop = amount_text_node.get_property("rect").unwrap();
-    prop.set_f32(atom, Role::App, 0, 0.).unwrap();
-    prop.set_f32(atom, Role::App, 1, 0.).unwrap();
-    prop.set_f32(atom, Role::App, 2, 1000.).unwrap();
-    prop.set_f32(atom, Role::App, 3, AMOUNT_FONTSIZE).unwrap();
-    amount_text_node.set_property_f32(atom, Role::App, "font_size", AMOUNT_FONTSIZE).unwrap();
+    prop.set_default_f32(0, 0.).unwrap();
+    prop.set_default_f32(1, 0.).unwrap();
+    prop.set_default_f32(2, 1000.).unwrap();
+    prop.set_default_f32(3, AMOUNT_FONTSIZE).unwrap();
+    amount_text_node
+        .get_property("font_size")
+        .unwrap()
+        .set_default_f32(0, AMOUNT_FONTSIZE)
+        .unwrap();
     let prop = amount_text_node.get_property("text_color").unwrap();
-    prop.set_f32(atom, Role::App, 0, 1.).unwrap();
-    prop.set_f32(atom, Role::App, 1, 1.).unwrap();
-    prop.set_f32(atom, Role::App, 2, 1.).unwrap();
-    prop.set_f32(atom, Role::App, 3, 1.).unwrap();
+    prop.set_default_f32_multi(&[1., 1., 1., 1.]).unwrap();
     amount_text_node.set_property_u32(atom, Role::App, "z_index", 2).unwrap();
     amount_text_node.set_property_str(atom, Role::App, "text", "0").unwrap();
     let amount_text_node = amount_text_node
@@ -306,25 +270,19 @@ pub async fn make(
     // Token symbol text node (displayed next to amount)
     let token_symbol_node = create_text("send_amount_token_symbol4");
     let prop = token_symbol_node.get_property("rect").unwrap();
-    prop.set_f32(atom, Role::App, 0, 0.).unwrap();
-    prop.set_f32(atom, Role::App, 1, 0.).unwrap();
-    prop.set_f32(atom, Role::App, 2, 1000.).unwrap();
-    prop.set_f32(atom, Role::App, 3, AMOUNT_FONTSIZE).unwrap();
-    prop.add_depend(&addr_h_prop, 0, "addr_height");
-    token_symbol_node.set_property_f32(atom, Role::App, "font_size", AMOUNT_FONTSIZE).unwrap();
+    prop.set_default_f32(0, 0.).unwrap();
+    prop.set_default_f32(1, 0.).unwrap();
+    prop.set_default_f32(2, 1000.).unwrap();
+    prop.set_default_f32(3, AMOUNT_FONTSIZE).unwrap();
+    prop.add_depend(Role::App, &addr_h_prop, 0, "addr_height");
+    token_symbol_node
+        .get_property("font_size")
+        .unwrap()
+        .set_default_f32(0, AMOUNT_FONTSIZE)
+        .unwrap();
     token_symbol_node.set_property_str(atom, Role::App, "text", "").unwrap();
     let prop = token_symbol_node.get_property("text_color").unwrap();
-    if COLOR_SCHEME == ColorScheme::DarkMode {
-        prop.set_f32(atom, Role::App, 0, 1.).unwrap();
-        prop.set_f32(atom, Role::App, 1, 1.).unwrap();
-        prop.set_f32(atom, Role::App, 2, 1.).unwrap();
-        prop.set_f32(atom, Role::App, 3, 1.).unwrap();
-    } else {
-        prop.set_f32(atom, Role::App, 0, 0.).unwrap();
-        prop.set_f32(atom, Role::App, 1, 0.).unwrap();
-        prop.set_f32(atom, Role::App, 2, 0.).unwrap();
-        prop.set_f32(atom, Role::App, 3, 1.).unwrap();
-    }
+    prop.set_default_f32_multi(&[1., 1., 1., 1.]).unwrap();
     token_symbol_node.set_property_u32(atom, Role::App, "z_index", 2).unwrap();
     let token_symbol_node = token_symbol_node
         .setup(|me| {
@@ -342,19 +300,16 @@ pub async fn make(
     // Transaction fee label
     let tx_fee_label_node = create_text("send_fee_label");
     let prop = tx_fee_label_node.get_property("rect").unwrap();
-    prop.set_f32(atom, Role::App, 0, PADDING_X).unwrap();
+    prop.set_default_f32(0, PADDING_X).unwrap();
     let code =
         cc.compile("h - PADDING_X * 2 - BUTTON_HEIGHT - PADDING_Y - BASE_FONTSIZE - 1").unwrap();
-    prop.set_expr(atom, Role::App, 1, code).unwrap();
-    prop.set_f32(atom, Role::App, 2, 1000.).unwrap();
-    prop.set_f32(atom, Role::App, 3, BASE_FONTSIZE).unwrap();
-    tx_fee_label_node.set_property_f32(atom, Role::App, "font_size", BASE_FONTSIZE).unwrap();
+    prop.set_default_expr(1, code).unwrap();
+    prop.set_default_f32(2, 1000.).unwrap();
+    prop.set_default_f32(3, BASE_FONTSIZE).unwrap();
+    tx_fee_label_node.get_property("font_size").unwrap().set_default_f32(0, BASE_FONTSIZE).unwrap();
     tx_fee_label_node.set_property_str(atom, Role::App, "text", "Transaction fee").unwrap();
     let prop = tx_fee_label_node.get_property("text_color").unwrap();
-    prop.set_f32(atom, Role::App, 0, 0.).unwrap();
-    prop.set_f32(atom, Role::App, 1, 0.).unwrap();
-    prop.set_f32(atom, Role::App, 2, 0.).unwrap();
-    prop.set_f32(atom, Role::App, 3, 0.).unwrap();
+    prop.set_default_f32_multi(&[0., 0., 0., 0.]).unwrap();
     tx_fee_label_node.set_property_u32(atom, Role::App, "z_index", 2).unwrap();
     let tx_fee_label_node = tx_fee_label_node
         .setup(|me| {
@@ -372,22 +327,19 @@ pub async fn make(
     // Transaction fee value
     let tx_fee_value_node = create_text("send_fee_value");
     let prop = tx_fee_value_node.get_property("rect").unwrap();
-    prop.set_f32(atom, Role::App, 0, PADDING_X).unwrap();
+    prop.set_default_f32(0, PADDING_X).unwrap();
     let code =
         cc.compile("h - PADDING_X * 2 - BUTTON_HEIGHT - PADDING_Y - BASE_FONTSIZE - 1").unwrap();
-    prop.set_expr(atom, Role::App, 1, code).unwrap();
+    prop.set_default_expr(1, code).unwrap();
     let code = cc.compile("w - PADDING_X * 2").unwrap();
-    prop.set_expr(atom, Role::App, 2, code).unwrap();
-    prop.set_f32(atom, Role::App, 3, BASE_FONTSIZE).unwrap();
-    tx_fee_value_node.set_property_f32(atom, Role::App, "font_size", BASE_FONTSIZE).unwrap();
+    prop.set_default_expr(2, code).unwrap();
+    prop.set_default_f32(3, BASE_FONTSIZE).unwrap();
+    tx_fee_value_node.get_property("font_size").unwrap().set_default_f32(0, BASE_FONTSIZE).unwrap();
     tx_fee_value_node.set_property_str(atom, Role::App, "text", "0 DRK").unwrap();
     tx_fee_value_node.set_property_enum(atom, Role::App, "text_align", "end").unwrap();
     tx_fee_value_node.set_property_u32(atom, Role::App, "z_index", 2).unwrap();
     let prop = tx_fee_value_node.get_property("text_color").unwrap();
-    prop.set_f32(atom, Role::App, 0, 0.).unwrap();
-    prop.set_f32(atom, Role::App, 1, 0.).unwrap();
-    prop.set_f32(atom, Role::App, 2, 0.).unwrap();
-    prop.set_f32(atom, Role::App, 3, 0.).unwrap();
+    prop.set_default_f32_multi(&[0., 0., 0., 0.]).unwrap();
     let tx_fee_value_node = tx_fee_value_node
         .setup(|me| {
             Text::new(
@@ -481,7 +433,7 @@ pub async fn make(
             }
         }
     });
-    app.tasks.lock().unwrap().push(listen_click);
+    app.tasks.lock().push(listen_click);
 
     // Add listener for step4 visibility to update amount positions
     let step4_is_visible_clone = step4_is_visible.clone();
@@ -574,7 +526,7 @@ pub async fn make(
             }
         }
     });
-    app.tasks.lock().unwrap().push(listen_step4_visible);
+    app.tasks.lock().push(listen_step4_visible);
 
     send_step4_layer
 }

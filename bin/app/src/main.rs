@@ -52,6 +52,7 @@ mod setting;
 mod sfx;
 mod shape;
 mod text;
+mod theme;
 mod ui;
 mod util;
 
@@ -59,7 +60,7 @@ use crate::{
     app::{App, AppPtr},
     db::{AppDb, AppDbPtr},
     gfx::EpochIndex,
-    prop::{Property, PropertySubType, PropertyType},
+    prop::{Property, PropertyPermission, PropertySubType, PropertyType},
     scene::{CallArgType, SceneNode, SceneNodePtr, SceneNodeType},
     ui::RedrawTrigger,
     util::AsyncRuntime,
@@ -748,18 +749,33 @@ pub fn create_darkirc(name: &str) -> SceneNode {
     t!("create_darkirc({name})");
     let mut node = SceneNode::new(name, SceneNodeType::Plugin);
 
-    let mut prop = Property::new("nick", PropertyType::Str, PropertySubType::Null);
+    let mut prop = Property::new(
+        "nick",
+        PropertyType::Str,
+        PropertySubType::Null,
+        PropertyPermission::default(),
+    );
     prop.set_ui_text("Nick", "Nickname");
     prop.set_defaults_str(vec!["anon".to_string()]).unwrap();
     node.add_property(prop).unwrap();
 
-    let mut prop = Property::new("dm_public", PropertyType::Str, PropertySubType::Null);
+    let mut prop = Property::new(
+        "dm_public",
+        PropertyType::Str,
+        PropertySubType::Null,
+        PropertyPermission::default(),
+    );
     prop.set_ui_text("DM Public Key", "Your DM public key (share with contacts)");
     prop.allow_null_values();
     prop.set_defaults_null().unwrap();
     node.add_property(prop).unwrap();
 
-    let mut prop = Property::new("outbound_peers", PropertyType::Str, PropertySubType::Null);
+    let mut prop = Property::new(
+        "outbound_peers",
+        PropertyType::Str,
+        PropertySubType::Null,
+        PropertyPermission::default(),
+    );
     prop.set_ui_text("Outbound Peers", "Connected outbound peers");
     #[cfg(feature = "enable-plugin-darkirc")]
     prop.set_array_len(plugin::darkirc::P2P_OUTBOUND_ACTIVE);
@@ -806,7 +822,12 @@ pub fn create_fud(name: &str) -> SceneNode {
     t!("create_fud({name})");
     let mut node = SceneNode::new(name, SceneNodeType::Plugin);
 
-    let mut prop = Property::new("ready", PropertyType::Bool, PropertySubType::Null);
+    let mut prop = Property::new(
+        "ready",
+        PropertyType::Bool,
+        PropertySubType::Null,
+        PropertyPermission::default(),
+    );
     prop.set_defaults_bool(vec![false]).unwrap();
     node.add_property(prop).unwrap();
 

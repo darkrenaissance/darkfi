@@ -171,7 +171,7 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish) {
             chatedit_node.call_method("focus", vec![]).await.unwrap();
         }
     });
-    app.tasks.lock().unwrap().push(focus_task);
+    app.tasks.lock().push(focus_task);
 
     /*
     #[cfg(target_os = "android")]
@@ -190,7 +190,7 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish) {
                 }
             }
         });
-        app.tasks.lock().unwrap().push(event_task);
+        app.tasks.lock().push(event_task);
 
         let test_task = ex.spawn(async move {
             msleep(3000).await;
@@ -231,7 +231,7 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish) {
 
             info!(target: "test_edit", "=== DONE ===");
         });
-        app.tasks.lock().unwrap().push(test_task);
+        app.tasks.lock().push(test_task);
     }
     */
 }

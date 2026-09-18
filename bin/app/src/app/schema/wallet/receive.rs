@@ -19,7 +19,6 @@
 use crate::{
     app::{
         node::{create_button, create_layer, create_text, create_vector_art},
-        schema::COLOR_SCHEME,
         App,
     },
     expr,
@@ -31,7 +30,7 @@ use crate::{
     util::{clipboard, i18n::I18nBabelFish},
 };
 
-use super::{super::ColorScheme, data::*, util::*};
+use super::{data::*, util::*};
 
 pub async fn make(
     app: &App,
@@ -48,10 +47,10 @@ pub async fn make(
     // Receive layer
     let receive_layer = create_layer("receive_layer");
     let prop = receive_layer.get_property("rect").unwrap();
-    prop.set_f32(atom, Role::App, 0, 0.).unwrap();
-    prop.set_f32(atom, Role::App, 1, 0.).unwrap();
-    prop.set_expr(atom, Role::App, 2, expr::load_var("w")).unwrap();
-    prop.set_expr(atom, Role::App, 3, expr::load_var("h")).unwrap();
+    prop.set_default_f32(0, 0.).unwrap();
+    prop.set_default_f32(1, 0.).unwrap();
+    prop.set_default_expr(2, expr::load_var("w")).unwrap();
+    prop.set_default_expr(3, expr::load_var("h")).unwrap();
     receive_layer.set_property_bool(atom, Role::App, "is_visible", false).unwrap();
     receive_layer.set_property_u32(atom, Role::App, "z_index", 2).unwrap();
     let receive_layer = receive_layer
@@ -87,26 +86,16 @@ pub async fn make(
     let addr_h_prop = node.get_property("height").unwrap();
     let receive_address_text = PropertyStr::wrap(&node, Role::App, "text", 0).unwrap();
     let prop = node.get_property("rect").unwrap();
-    prop.set_f32(atom, Role::App, 0, PADDING_X).unwrap();
-    prop.set_f32(atom, Role::App, 1, y + PADDING_Y).unwrap();
+    prop.set_default_f32(0, PADDING_X).unwrap();
+    prop.set_default_f32(1, y + PADDING_Y).unwrap();
     let code = cc.compile("w - COPY_WIDTH").unwrap();
-    prop.set_expr(atom, Role::App, 2, code).unwrap();
-    prop.set_f32(atom, Role::App, 3, BASE_FONTSIZE * 2.).unwrap();
-    node.set_property_f32(atom, Role::App, "font_size", BUTTON_FONTSIZE).unwrap();
+    prop.set_default_expr(2, code).unwrap();
+    prop.set_default_f32(3, BASE_FONTSIZE * 2.).unwrap();
+    node.get_property("font_size").unwrap().set_default_f32(0, BUTTON_FONTSIZE).unwrap();
     node.set_property_str(atom, Role::App, "text", "").unwrap();
     node.set_property_enum(atom, Role::App, "overflow_wrap", "anywhere").unwrap();
     let prop = node.get_property("text_color").unwrap();
-    if COLOR_SCHEME == ColorScheme::DarkMode {
-        prop.set_f32(atom, Role::App, 0, 1.).unwrap();
-        prop.set_f32(atom, Role::App, 1, 1.).unwrap();
-        prop.set_f32(atom, Role::App, 2, 1.).unwrap();
-        prop.set_f32(atom, Role::App, 3, 1.).unwrap();
-    } else {
-        prop.set_f32(atom, Role::App, 0, 0.).unwrap();
-        prop.set_f32(atom, Role::App, 1, 0.).unwrap();
-        prop.set_f32(atom, Role::App, 2, 0.).unwrap();
-        prop.set_f32(atom, Role::App, 3, 1.).unwrap();
-    }
+    prop.set_default_f32_multi(&[1., 1., 1., 1.]).unwrap();
     node.set_property_u32(atom, Role::App, "z_index", 2).unwrap();
     let node = node
         .setup(|me| {
@@ -125,12 +114,12 @@ pub async fn make(
     let node = create_vector_art("receive_copy_btn_bg");
     let prop = node.get_property("rect").unwrap();
     let code = cc.compile("w - COPY_WIDTH / 2").unwrap();
-    prop.set_expr(atom, Role::App, 0, code).unwrap();
+    prop.set_default_expr(0, code).unwrap();
     let code = cc.compile(format!("{y} + (PADDING_Y * 2. + addr_height) / 2")).unwrap();
-    prop.set_expr(atom, Role::App, 1, code).unwrap();
-    prop.set_f32(atom, Role::App, 2, 500.).unwrap();
-    prop.set_f32(atom, Role::App, 3, 500.).unwrap();
-    prop.add_depend(&addr_h_prop, 0, "addr_height");
+    prop.set_default_expr(1, code).unwrap();
+    prop.set_default_f32(2, 500.).unwrap();
+    prop.set_default_f32(3, 500.).unwrap();
+    prop.add_depend(Role::App, &addr_h_prop, 0, "addr_height");
     node.set_property_u32(atom, Role::App, "z_index", 2).unwrap();
     let shape = shape::create_copy(COLOR_CYAN).scaled(COPY_SCALE);
     node.set_property_shape(atom, Role::App, "shape", shape).unwrap();
@@ -141,13 +130,13 @@ pub async fn make(
     let node = create_button("receive_copy_btn");
     node.set_property_bool(atom, Role::App, "is_active", true).unwrap();
     let prop = node.get_property("rect").unwrap();
-    prop.set_f32(atom, Role::App, 0, 0.).unwrap();
-    prop.set_f32(atom, Role::App, 1, y).unwrap();
+    prop.set_default_f32(0, 0.).unwrap();
+    prop.set_default_f32(1, y).unwrap();
     let code = cc.compile("w").unwrap();
-    prop.set_expr(atom, Role::App, 2, code).unwrap();
+    prop.set_default_expr(2, code).unwrap();
     let code = cc.compile("PADDING_Y * 2 + addr_height").unwrap();
-    prop.set_expr(atom, Role::App, 3, code).unwrap();
-    prop.add_depend(&addr_h_prop, 0, "addr_height");
+    prop.set_default_expr(3, code).unwrap();
+    prop.add_depend(Role::App, &addr_h_prop, 0, "addr_height");
     node.set_property_u32(atom, Role::App, "z_index", 3).unwrap();
 
     let (slot, recvr) = Slot::new("receive_copy_clicked");
@@ -168,7 +157,7 @@ pub async fn make(
             }
         }
     });
-    app.tasks.lock().unwrap().push(listen_click);
+    app.tasks.lock().push(listen_click);
 
     let node =
         node.setup(|me| Button::new(me, app.renderer.clone(), app.redraw_trigger.clone())).await;
@@ -192,7 +181,7 @@ pub async fn make(
     let tooltip_rect = tooltip.get_property("rect").unwrap();
     tooltip_rect.set_expr(atom, Role::App, 0, tooltip_x_expr).unwrap();
     tooltip_rect.set_expr(atom, Role::App, 1, tooltip_y_expr).unwrap();
-    tooltip_rect.add_depend(&addr_h_prop, 0, "addr_height");
+    tooltip_rect.add_depend(Role::App, &addr_h_prop, 0, "addr_height");
 
     let sep = create_separator_expr(
         app,
@@ -204,7 +193,7 @@ pub async fn make(
     )
     .await;
     let prop = sep.get_property("rect").unwrap();
-    prop.add_depend(&addr_h_prop, 0, "addr_height");
+    prop.add_depend(Role::App, &addr_h_prop, 0, "addr_height");
 
     receive_layer
 }

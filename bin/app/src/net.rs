@@ -26,7 +26,7 @@ use crate::{
     error::{Error, Result},
     expr::{decompile, Compiler, MachineGlobals, SExprCode, SExprMachine, SExprVal},
     gfx::{gfxtag, Renderer},
-    prop::{PropertyType, Role},
+    prop::{PropertyPermission, PropertyType, Role},
     scene::{Pimpl, SceneNodeId, SceneNodePtr, SceneNodeType, ScenePath, Slot},
     ui::{
         get_ui_object3, get_ui_object_ptr, Layer, RedrawTrigger, ShapeVertex, VectorArt,
@@ -296,7 +296,7 @@ impl ZeroMQAdapter {
                         // This mirrors the old get_value() semantics, where
                         // an unset index with a null default resolved to
                         // null.
-                        let default = &prop.defaults[i];
+                        let default = prop.defaults.lock().unwrap()[i].clone();
                         if default.is_null() {
                             2u8.encode(&mut reply).unwrap();
                         } else {
@@ -517,7 +517,7 @@ impl ZeroMQAdapter {
                 let prop_subtype = PropertySubType::decode(&mut cur).unwrap();
 
                 debug!(target: "req", "{:?}({}, {}, {:?}, {:?}, ...)", cmd, node_id, prop_name, prop_type, prop_subtype);
-                let mut prop = Property::new(prop_name, prop_type, prop_subtype);
+                let mut prop = Property::new(prop_name, prop_type, prop_subtype, PropertyPermission::default());
 
                 let prop_array_len = u32::decode(&mut cur).unwrap();
                 prop.set_array_len(prop_array_len as usize);

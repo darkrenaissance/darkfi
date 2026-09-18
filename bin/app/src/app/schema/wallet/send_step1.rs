@@ -23,7 +23,6 @@ use darkfi_serial::Decodable;
 use crate::{
     app::{
         node::{create_layer, create_tokentable},
-        schema::COLOR_SCHEME,
         App,
     },
     expr,
@@ -34,7 +33,7 @@ use crate::{
     util::i18n::I18nBabelFish,
 };
 
-use super::{super::ColorScheme, data::*, util::*};
+use super::{data::*, util::*};
 
 pub async fn make(
     app: &App,
@@ -62,10 +61,10 @@ pub async fn make(
     // ============================================
     let send_step1_layer = create_layer("send_step1_layer");
     let prop = send_step1_layer.get_property("rect").unwrap();
-    prop.set_f32(atom, Role::App, 0, 0.).unwrap();
-    prop.set_f32(atom, Role::App, 1, 0.).unwrap();
-    prop.set_expr(atom, Role::App, 2, expr::load_var("w")).unwrap();
-    prop.set_expr(atom, Role::App, 3, expr::load_var("h")).unwrap();
+    prop.set_default_f32(0, 0.).unwrap();
+    prop.set_default_f32(1, 0.).unwrap();
+    prop.set_default_expr(2, expr::load_var("w")).unwrap();
+    prop.set_default_expr(3, expr::load_var("h")).unwrap();
     send_step1_layer.set_property_bool(atom, Role::App, "is_visible", false).unwrap();
     send_step1_layer.set_property_u32(atom, Role::App, "z_index", 2).unwrap();
     let send_step1_layer = send_step1_layer
@@ -99,34 +98,21 @@ pub async fn make(
 
     let send_tokens_table = create_tokentable("tokens_table");
     let prop = send_tokens_table.get_property("rect").unwrap();
-    prop.set_f32(atom, Role::App, 0, 0.).unwrap();
-    prop.set_f32(atom, Role::App, 1, y).unwrap();
-    prop.set_expr(atom, Role::App, 2, expr::load_var("w")).unwrap();
-    prop.set_expr(atom, Role::App, 3, expr::load_var("h")).unwrap();
-    send_tokens_table.set_property_f32(atom, Role::App, "font_size", BASE_FONTSIZE).unwrap();
-    send_tokens_table.set_property_f32(atom, Role::App, "padding_x", PADDING_X).unwrap();
-    send_tokens_table.set_property_f32(atom, Role::App, "padding_y", PADDING_Y).unwrap();
+    prop.set_default_f32(0, 0.).unwrap();
+    prop.set_default_f32(1, y).unwrap();
+    prop.set_default_expr(2, expr::load_var("w")).unwrap();
+    prop.set_default_expr(3, expr::load_var("h")).unwrap();
+    send_tokens_table.get_property("font_size").unwrap().set_default_f32(0, BASE_FONTSIZE).unwrap();
+    send_tokens_table.get_property("padding_x").unwrap().set_default_f32(0, PADDING_X).unwrap();
+    send_tokens_table.get_property("padding_y").unwrap().set_default_f32(0, PADDING_Y).unwrap();
     send_tokens_table.set_property_u32(atom, Role::App, "z_index", 2).unwrap();
     send_tokens_table.set_property_u32(atom, Role::App, "priority", 0).unwrap();
 
     let prop = send_tokens_table.get_property("text_color").unwrap();
-    if COLOR_SCHEME == ColorScheme::DarkMode {
-        prop.set_f32(atom, Role::App, 0, 1.).unwrap();
-        prop.set_f32(atom, Role::App, 1, 1.).unwrap();
-        prop.set_f32(atom, Role::App, 2, 1.).unwrap();
-        prop.set_f32(atom, Role::App, 3, 1.).unwrap();
-    } else {
-        prop.set_f32(atom, Role::App, 0, 0.).unwrap();
-        prop.set_f32(atom, Role::App, 1, 0.).unwrap();
-        prop.set_f32(atom, Role::App, 2, 0.).unwrap();
-        prop.set_f32(atom, Role::App, 3, 1.).unwrap();
-    }
+    prop.set_default_f32_multi(&[1., 1., 1., 1.]).unwrap();
 
     let prop = send_tokens_table.get_property("separator_color").unwrap();
-    prop.set_f32(atom, Role::App, 0, 0.2).unwrap();
-    prop.set_f32(atom, Role::App, 1, 0.2745).unwrap();
-    prop.set_f32(atom, Role::App, 2, 0.2784).unwrap();
-    prop.set_f32(atom, Role::App, 3, 1.).unwrap();
+    prop.set_default_f32_multi(&[0.2, 0.2745, 0.2784, 1.]).unwrap();
 
     let send_tokens_table = send_tokens_table
         .setup(|me| TokenTable::new(me, app.renderer.clone(), app.redraw_trigger.clone()))
@@ -165,7 +151,7 @@ pub async fn make(
             }
         }
     });
-    app.tasks.lock().unwrap().push(listen_click);
+    app.tasks.lock().push(listen_click);
 
     send_step1_layer
 }

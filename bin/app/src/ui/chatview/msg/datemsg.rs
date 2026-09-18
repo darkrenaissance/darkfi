@@ -29,7 +29,10 @@ use std::{collections::HashMap, sync::Arc};
 use crate::{
     gfx::{DrawInstruction, Point, Renderer},
     mesh::Color,
-    prop::{Property, PropertyColor, PropertyFloat32, PropertySubType, PropertyType, Role},
+    prop::{
+        Property, PropertyColor, PropertyFloat32, PropertyPermission, PropertySubType,
+        PropertyType, Role,
+    },
     scene::{CallArgType, Pimpl, SceneNode, SceneNodeType, SceneNodeWeak},
     text,
     ui::UIObject,
@@ -285,7 +288,12 @@ mod tests {
 
         let mut wscale = crate::scene::SceneNode::new("w", crate::scene::SceneNodeType::Object);
         wscale
-            .add_property(Property::new("scale", PropertyType::Float32, PropertySubType::Null))
+            .add_property(Property::new(
+                "scale",
+                PropertyType::Float32,
+                PropertySubType::Null,
+                PropertyPermission::default(),
+            ))
             .unwrap();
         let wscale = wscale.setup_null();
         wscale.set_property_f32(atom, Role::App, "scale", 1.).unwrap();

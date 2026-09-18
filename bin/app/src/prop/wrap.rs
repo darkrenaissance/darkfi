@@ -27,6 +27,64 @@ use std::sync::Arc;
 
 use super::{PropertyAtomicGuard, PropertyPtr, PropertyType, Role};
 
+/// Shared bounded f32-array expression evaluator (the generalization of
+/// the old `PropertyRect::eval_with` pattern). Gathers globals from the
+/// property's dependency edges plus `extras`, evaluates every expr-bound
+/// index in `range` against them, and writes results into the cache
+/// (cache writes bypass `set_f32` range validation by design — they hold
+/// derived eval artifacts, not authored values). Indices holding plain
+/// values are left untouched.
+///
+/// Dead dependency edges (target property dropped, e.g. mid-teardown of
+/// a theme token node) are skipped rather than erroring: the unload
+/// contract removes edges before their targets die, and skipping keeps a
+/// racing draw pass from failing outright. An expression still
+/// referencing a skipped global fails at evaluation time instead.
+///
+/// Read-mask enforcement: dependency reads happen on behalf of `role`,
+/// so each dependency's read mask is checked here.
+pub fn eval_f32_multi(
+    prop: &PropertyPtr,
+    atom: &mut PropertyAtomicGuard,
+    role: Role,
+    range: &[usize],
+    extras: Vec<(String, f32)>,
+) -> Result<()> {
+    let mut globals = vec![];
+
+    for dep in prop.get_depends() {
+        let Some(dep_prop) = dep.prop.upgrade() else { continue };
+
+        if !dep_prop.can_read(role) {
+            return Err(Error::PropertyPermissionDenied)
+        }
+
+        let value = dep_prop.get_f32(dep.i)?;
+        globals.push((dep.local_name, SExprVal::Float32(value)));
+    }
+
+    for (name, val) in extras {
+        globals.push((name, SExprVal::Float32(val)));
+    }
+
+    let mut changes = vec![];
+    for &i in range {
+        if !prop.is_expr(i)? {
+            continue
+        }
+
+        let expr = prop.get_expr(i)?;
+
+        let mut machine = SExprMachine { globals: globals.clone(), stmts: &expr };
+
+        let v = machine.call()?.as_f32()?;
+        changes.push((i, v));
+    }
+
+    prop.set_cache_f32_multi(atom, role, changes).unwrap();
+    Ok(())
+}
+
 #[derive(Clone)]
 pub struct PropertyShape {
     prop: PropertyPtr,
@@ -37,6 +95,14 @@ pub struct PropertyShape {
 impl PropertyShape {
     pub fn wrap(node: &SceneNode3, role: Role, prop_name: &str, idx: usize) -> Result<Self> {
         let prop = node.get_property(prop_name).ok_or(Error::PropertyNotFound)?;
+
+        // Read-mask enforcement for the wrap layer: the handle acts with
+        // `role` for its whole lifetime and permissions are immutable,
+        // so validating here denies unreadable handles at construction
+        // instead of at first read.
+        if !prop.can_read(role) {
+            return Err(Error::PropertyPermissionDenied)
+        }
 
         // Test if it works
         let _ = prop.get_shape(idx)?;
@@ -69,6 +135,14 @@ pub struct PropertyBool {
 impl PropertyBool {
     pub fn wrap(node: &SceneNode3, role: Role, prop_name: &str, idx: usize) -> Result<Self> {
         let prop = node.get_property(prop_name).ok_or(Error::PropertyNotFound)?;
+
+        // Read-mask enforcement for the wrap layer: the handle acts with
+        // `role` for its whole lifetime and permissions are immutable,
+        // so validating here denies unreadable handles at construction
+        // instead of at first read.
+        if !prop.can_read(role) {
+            return Err(Error::PropertyPermissionDenied)
+        }
 
         // Test if it works
         let _ = prop.get_bool(idx)?;
@@ -110,6 +184,14 @@ impl PropertyUint32 {
     pub fn wrap(node: &SceneNode3, role: Role, prop_name: &str, idx: usize) -> Result<Self> {
         let prop = node.get_property(prop_name).ok_or(Error::PropertyNotFound)?;
 
+        // Read-mask enforcement for the wrap layer: the handle acts with
+        // `role` for its whole lifetime and permissions are immutable,
+        // so validating here denies unreadable handles at construction
+        // instead of at first read.
+        if !prop.can_read(role) {
+            return Err(Error::PropertyPermissionDenied)
+        }
+
         // Test if it works
         let _ = prop.get_u32(idx)?;
 
@@ -142,6 +224,14 @@ impl PropertyFloat32 {
     pub fn wrap(node: &SceneNode3, role: Role, prop_name: &str, idx: usize) -> Result<Self> {
         let prop = node.get_property(prop_name).ok_or(Error::PropertyNotFound)?;
 
+        // Read-mask enforcement for the wrap layer: the handle acts with
+        // `role` for its whole lifetime and permissions are immutable,
+        // so validating here denies unreadable handles at construction
+        // instead of at first read.
+        if !prop.can_read(role) {
+            return Err(Error::PropertyPermissionDenied)
+        }
+
         // Test if it works
         let _ = prop.get_f32(idx)?;
 
@@ -150,6 +240,13 @@ impl PropertyFloat32 {
 
     pub fn get(&self) -> f32 {
         self.prop.get_f32(self.idx).unwrap()
+    }
+
+    /// Re-evaluate this property's expression (if any) against its
+    /// dependency globals. Called from the owning widget's draw path so
+    /// every pass computes from current dependency values.
+    pub fn eval(&self, atom: &mut PropertyAtomicGuard) -> Result<()> {
+        eval_f32_multi(&self.prop(), atom, self.role, &[self.idx], vec![])
     }
 
     pub fn set(&self, atom: &mut PropertyAtomicGuard, val: f32) {
@@ -171,6 +268,14 @@ pub struct PropertyStr {
 impl PropertyStr {
     pub fn wrap(node: &SceneNode3, role: Role, prop_name: &str, idx: usize) -> Result<Self> {
         let prop = node.get_property(prop_name).ok_or(Error::PropertyNotFound)?;
+
+        // Read-mask enforcement for the wrap layer: the handle acts with
+        // `role` for its whole lifetime and permissions are immutable,
+        // so validating here denies unreadable handles at construction
+        // instead of at first read.
+        if !prop.can_read(role) {
+            return Err(Error::PropertyPermissionDenied)
+        }
 
         // Test if it works
         let _ = prop.get_str(idx)?;
@@ -202,6 +307,14 @@ impl PropertyColor {
     pub fn wrap(node: &SceneNode3, role: Role, prop_name: &str) -> Result<Self> {
         let prop = node.get_property(prop_name).ok_or(Error::PropertyNotFound)?;
 
+        // Read-mask enforcement for the wrap layer: the handle acts with
+        // `role` for its whole lifetime and permissions are immutable,
+        // so validating here denies unreadable handles at construction
+        // instead of at first read.
+        if !prop.can_read(role) {
+            return Err(Error::PropertyPermissionDenied)
+        }
+
         if !prop.is_bounded() || prop.get_len() != 4 {
             return Err(Error::PropertyWrongLen)
         }
@@ -219,6 +332,16 @@ impl PropertyColor {
             self.prop.get_f32(2).unwrap(),
             self.prop.get_f32(3).unwrap(),
         ]
+    }
+
+    /// Re-evaluate all four color components against the property's
+    /// dependency globals (no extras — colors have no parent-rect
+    /// globals). Called at the top of the owning widget's `draw()`,
+    /// alongside rect evaluation, so every draw pass reflects current
+    /// token values. Cache writes are stamped `Role::Internal`, so
+    /// `when_change_external` handlers skip them as eval echoes.
+    pub fn eval(&self, atom: &mut PropertyAtomicGuard) -> Result<()> {
+        eval_f32_multi(&self.prop(), atom, self.role, &[0, 1, 2, 3], vec![])
     }
 
     #[allow(dead_code)]
@@ -244,6 +367,14 @@ pub struct PropertyDimension {
 impl PropertyDimension {
     pub fn wrap(node: &SceneNode3, role: Role, prop_name: &str) -> Result<Self> {
         let prop = node.get_property(prop_name).ok_or(Error::PropertyNotFound)?;
+
+        // Read-mask enforcement for the wrap layer: the handle acts with
+        // `role` for its whole lifetime and permissions are immutable,
+        // so validating here denies unreadable handles at construction
+        // instead of at first read.
+        if !prop.can_read(role) {
+            return Err(Error::PropertyPermissionDenied)
+        }
 
         if !prop.is_bounded() || prop.get_len() != 2 {
             return Err(Error::PropertyWrongLen)
@@ -280,6 +411,14 @@ pub struct PropertyEnum {
 impl PropertyEnum {
     pub fn wrap(node: &SceneNode3, role: Role, prop_name: &str, idx: usize) -> Result<Self> {
         let prop = node.get_property(prop_name).ok_or(Error::PropertyNotFound)?;
+
+        // Read-mask enforcement for the wrap layer: the handle acts with
+        // `role` for its whole lifetime and permissions are immutable,
+        // so validating here denies unreadable handles at construction
+        // instead of at first read.
+        if !prop.can_read(role) {
+            return Err(Error::PropertyPermissionDenied)
+        }
 
         // Verify property type is Enum
         if prop.typ != PropertyType::Enum {
@@ -320,6 +459,14 @@ impl PropertyPoint {
     pub fn wrap(node: &SceneNode3, role: Role, prop_name: &str) -> Result<Self> {
         let prop = node.get_property(prop_name).ok_or(Error::PropertyNotFound)?;
 
+        // Read-mask enforcement for the wrap layer: the handle acts with
+        // `role` for its whole lifetime and permissions are immutable,
+        // so validating here denies unreadable handles at construction
+        // instead of at first read.
+        if !prop.can_read(role) {
+            return Err(Error::PropertyPermissionDenied)
+        }
+
         if !prop.is_bounded() || prop.get_len() != 2 {
             return Err(Error::PropertyWrongLen)
         }
@@ -356,6 +503,14 @@ impl PropertyRect {
     pub fn wrap(node: &SceneNode3, role: Role, prop_name: &str) -> Result<Self> {
         let prop = node.get_property(prop_name).ok_or(Error::PropertyNotFound)?;
 
+        // Read-mask enforcement for the wrap layer: the handle acts with
+        // `role` for its whole lifetime and permissions are immutable,
+        // so validating here denies unreadable handles at construction
+        // instead of at first read.
+        if !prop.can_read(role) {
+            return Err(Error::PropertyPermissionDenied)
+        }
+
         if !prop.is_bounded() || prop.get_len() != 4 {
             return Err(Error::PropertyWrongLen)
         }
@@ -374,43 +529,15 @@ impl PropertyRect {
         )
     }
 
+    /// Rect variant of [`eval_f32_multi`]: all four indices, with the
+    /// parent's width/height available as the `w`/`h` globals.
     pub fn eval_with(
         &self,
         atom: &mut PropertyAtomicGuard,
         range: Vec<usize>,
         extras: Vec<(String, f32)>,
     ) -> Result<()> {
-        let mut globals = vec![];
-
-        for dep in self.prop.get_depends() {
-            let Some(prop) = dep.prop.upgrade() else { return Err(Error::PropertyNotFound) };
-
-            let value = prop.get_f32(dep.i)?;
-
-            globals.push((dep.local_name, SExprVal::Float32(value)));
-        }
-
-        for (name, val) in extras {
-            globals.push((name, SExprVal::Float32(val)));
-        }
-
-        //debug!(target: "prop::wrap", "PropertyRect::eval() [globals = {globals:?}]");
-
-        let mut changes = vec![];
-        for i in range {
-            if !self.prop.is_expr(i)? {
-                continue
-            }
-
-            let expr = self.prop.get_expr(i).unwrap();
-
-            let mut machine = SExprMachine { globals: globals.clone(), stmts: &expr };
-
-            let v = machine.call()?.as_f32()?;
-            changes.push((i, v));
-        }
-        self.prop().set_cache_f32_multi(atom, self.role, changes).unwrap();
-        Ok(())
+        eval_f32_multi(&self.prop(), atom, self.role, &range, extras)
     }
 
     pub fn get(&self) -> Rectangle {

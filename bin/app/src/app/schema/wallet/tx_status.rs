@@ -24,21 +24,20 @@ use darkfi_serial::Decodable;
 use crate::{
     app::{
         node::{create_layer, create_text},
-        schema::COLOR_SCHEME,
         App,
     },
     expr,
     gfx::gfxtag,
     prop::{
-        Property, PropertyAtomicGuard, PropertyBool, PropertyFloat32, PropertySubType,
-        PropertyType, Role,
+        Property, PropertyAtomicGuard, PropertyBool, PropertyFloat32, PropertyPermission,
+        PropertySubType, PropertyType, Role,
     },
     scene::{SceneNodePtr, Slot},
     ui::{Layer, Text},
     util::i18n::I18nBabelFish,
 };
 
-use super::{super::ColorScheme, data::*, util::*};
+use super::{data::*, util::*};
 
 pub async fn make(
     app: &App,
@@ -92,15 +91,20 @@ pub async fn make(
         .unwrap();
 
     // Add tx_id property to store the transaction ID for status polling
-    let mut prop = Property::new("tx_id", PropertyType::Str, PropertySubType::Null);
+    let mut prop = Property::new(
+        "tx_id",
+        PropertyType::Str,
+        PropertySubType::Null,
+        PropertyPermission::default(),
+    );
     prop.set_defaults_str(vec!["".to_string()]).unwrap();
     tx_status_layer.add_property(prop).unwrap();
 
     let prop = tx_status_layer.get_property("rect").unwrap();
-    prop.set_f32(atom, Role::App, 0, 0.).unwrap();
-    prop.set_f32(atom, Role::App, 1, 0.).unwrap();
-    prop.set_expr(atom, Role::App, 2, expr::load_var("w")).unwrap();
-    prop.set_expr(atom, Role::App, 3, expr::load_var("h")).unwrap();
+    prop.set_default_f32(0, 0.).unwrap();
+    prop.set_default_f32(1, 0.).unwrap();
+    prop.set_default_expr(2, expr::load_var("w")).unwrap();
+    prop.set_default_expr(3, expr::load_var("h")).unwrap();
     tx_status_layer.set_property_bool(atom, Role::App, "is_visible", false).unwrap();
     tx_status_layer.set_property_u32(atom, Role::App, "z_index", 3).unwrap();
     let tx_status_layer = tx_status_layer
@@ -121,24 +125,14 @@ pub async fn make(
     // Status text
     let node = create_text("status");
     let prop = node.get_property("rect").unwrap();
-    prop.set_f32(atom, Role::App, 0, PADDING_X).unwrap();
-    prop.set_f32(atom, Role::App, 1, y + PADDING_Y).unwrap();
-    prop.set_f32(atom, Role::App, 2, 1000.).unwrap();
-    prop.set_f32(atom, Role::App, 3, BASE_FONTSIZE).unwrap();
-    node.set_property_f32(atom, Role::App, "font_size", BASE_FONTSIZE).unwrap();
+    prop.set_default_f32(0, PADDING_X).unwrap();
+    prop.set_default_f32(1, y + PADDING_Y).unwrap();
+    prop.set_default_f32(2, 1000.).unwrap();
+    prop.set_default_f32(3, BASE_FONTSIZE).unwrap();
+    node.get_property("font_size").unwrap().set_default_f32(0, BASE_FONTSIZE).unwrap();
     node.set_property_str(atom, Role::App, "text", "Broadcasting...").unwrap();
     let prop = node.get_property("text_color").unwrap();
-    if COLOR_SCHEME == ColorScheme::DarkMode {
-        prop.set_f32(atom, Role::App, 0, 1.).unwrap();
-        prop.set_f32(atom, Role::App, 1, 1.).unwrap();
-        prop.set_f32(atom, Role::App, 2, 1.).unwrap();
-        prop.set_f32(atom, Role::App, 3, 1.).unwrap();
-    } else {
-        prop.set_f32(atom, Role::App, 0, 0.).unwrap();
-        prop.set_f32(atom, Role::App, 1, 0.).unwrap();
-        prop.set_f32(atom, Role::App, 2, 0.).unwrap();
-        prop.set_f32(atom, Role::App, 3, 1.).unwrap();
-    }
+    prop.set_default_f32_multi(&[1., 1., 1., 1.]).unwrap();
     node.set_property_u32(atom, Role::App, "z_index", 2).unwrap();
     let node = node
         .setup(|me| {
@@ -169,26 +163,16 @@ pub async fn make(
     let node = create_text("tx_info");
     let info_h_prop = node.get_property("height").unwrap();
     let prop = node.get_property("rect").unwrap();
-    prop.set_f32(atom, Role::App, 0, PADDING_X).unwrap();
-    prop.set_f32(atom, Role::App, 1, y + PADDING_Y).unwrap();
+    prop.set_default_f32(0, PADDING_X).unwrap();
+    prop.set_default_f32(1, y + PADDING_Y).unwrap();
     let code = cc.compile("w - PADDING_X * 2").unwrap();
-    prop.set_expr(atom, Role::App, 2, code).unwrap();
-    prop.set_f32(atom, Role::App, 3, BASE_FONTSIZE).unwrap();
-    node.set_property_f32(atom, Role::App, "font_size", BASE_FONTSIZE).unwrap();
+    prop.set_default_expr(2, code).unwrap();
+    prop.set_default_f32(3, BASE_FONTSIZE).unwrap();
+    node.get_property("font_size").unwrap().set_default_f32(0, BASE_FONTSIZE).unwrap();
     node.set_property_str(atom, Role::App, "text", "Sending 0 DRK to recipient").unwrap();
     node.set_property_enum(atom, Role::App, "overflow_wrap", "anywhere").unwrap();
     let prop = node.get_property("text_color").unwrap();
-    if COLOR_SCHEME == ColorScheme::DarkMode {
-        prop.set_f32(atom, Role::App, 0, 1.).unwrap();
-        prop.set_f32(atom, Role::App, 1, 1.).unwrap();
-        prop.set_f32(atom, Role::App, 2, 1.).unwrap();
-        prop.set_f32(atom, Role::App, 3, 1.).unwrap();
-    } else {
-        prop.set_f32(atom, Role::App, 0, 0.).unwrap();
-        prop.set_f32(atom, Role::App, 1, 0.).unwrap();
-        prop.set_f32(atom, Role::App, 2, 0.).unwrap();
-        prop.set_f32(atom, Role::App, 3, 1.).unwrap();
-    }
+    prop.set_default_f32_multi(&[1., 1., 1., 1.]).unwrap();
     node.set_property_u32(atom, Role::App, "z_index", 2).unwrap();
     let node = node
         .setup(|me| {
@@ -214,21 +198,21 @@ pub async fn make(
     .await;
     let prop = sep.get_property("rect").unwrap();
     let code = cc.compile(format!("{y} + PADDING_Y * 2 + info_height + 1")).unwrap();
-    prop.set_expr(atom, Role::App, 1, code).unwrap();
-    prop.add_depend(&info_h_prop, 0, "info_height");
+    prop.set_default_expr(1, code).unwrap();
+    prop.add_depend(Role::App, &info_h_prop, 0, "info_height");
 
     // Hint text
     let hint_node = create_text("tx_status_hint");
     let prop = hint_node.get_property("rect").unwrap();
     let code = cc.compile("w / 2 - (HINT_FONTSIZE * 0.7 * 31) / 2").unwrap();
-    prop.set_expr(atom, Role::App, 0, code).unwrap();
+    prop.set_default_expr(0, code).unwrap();
     let code =
         cc.compile("h - PADDING_X * 2 - BUTTON_HEIGHT - PADDING_Y - HINT_FONTSIZE * 2").unwrap();
-    prop.set_expr(atom, Role::App, 1, code).unwrap();
+    prop.set_default_expr(1, code).unwrap();
     let code = cc.compile("HINT_FONTSIZE * 0.7 * 31").unwrap();
-    prop.set_expr(atom, Role::App, 2, code).unwrap();
-    prop.set_f32(atom, Role::App, 3, HINT_FONTSIZE / 2.).unwrap();
-    hint_node.set_property_f32(atom, Role::App, "font_size", HINT_FONTSIZE).unwrap();
+    prop.set_default_expr(2, code).unwrap();
+    prop.set_default_f32(3, HINT_FONTSIZE / 2.).unwrap();
+    hint_node.get_property("font_size").unwrap().set_default_f32(0, HINT_FONTSIZE).unwrap();
     hint_node.set_property_enum(atom, Role::App, "text_align", "center").unwrap();
     hint_node
         .set_property_str(
@@ -239,10 +223,7 @@ pub async fn make(
         )
         .unwrap();
     let prop = hint_node.get_property("text_color").unwrap();
-    prop.set_f32(atom, Role::App, 0, 1.).unwrap();
-    prop.set_f32(atom, Role::App, 1, 1.).unwrap();
-    prop.set_f32(atom, Role::App, 2, 1.).unwrap();
-    prop.set_f32(atom, Role::App, 3, 0.45).unwrap();
+    prop.set_default_f32_multi(&[1., 1., 1., 0.45]).unwrap();
     hint_node.set_property_u32(atom, Role::App, "z_index", 2).unwrap();
     let hint_node = hint_node
         .setup(|me| {
@@ -299,14 +280,14 @@ pub async fn make(
             // TODO: reset all send inputs
         }
     });
-    app.tasks.lock().unwrap().push(listen_click);
+    app.tasks.lock().push(listen_click);
 
     // Subscribe to method for receiving tx status updates from drk plugin
     let set_tx_status_sub = tx_status_layer.subscribe_method_call("set_tx_status").unwrap();
     let tx_status_layer_clone = tx_status_layer.clone();
     let sg_root = app.sg_root.clone();
     let redraw = app.redraw_trigger.clone();
-    app.tasks.lock().unwrap().push(app.ex.spawn(async move {
+    app.tasks.lock().push(app.ex.spawn(async move {
         while let Ok(mcall) = set_tx_status_sub.receive().await {
             let atom = &mut redraw.make_guard(gfxtag!("set_tx_status"));
 
@@ -349,7 +330,7 @@ pub async fn make(
     // Subscribe to method for receiving built transaction
     let set_built_tx_sub = tx_status_layer.subscribe_method_call("set_built_tx").unwrap();
     let send_tx_data2 = send_tx_data.clone();
-    app.tasks.lock().unwrap().push(app.ex.spawn(async move {
+    app.tasks.lock().push(app.ex.spawn(async move {
         while let Ok(mcall) = set_built_tx_sub.receive().await {
             let mut cur = std::io::Cursor::new(mcall.data);
             let tx = Transaction::decode(&mut cur).unwrap();

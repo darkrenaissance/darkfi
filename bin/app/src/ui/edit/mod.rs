@@ -1295,6 +1295,24 @@ impl BaseEdit {
         self.behave.eval_rect(atom);
     }
 
+    /// Draw-path re-evaluation of the expr-bound styling props:
+    /// populates the expression caches before the first read (they are
+    /// empty at startup, before any handler has fired) and self-heals
+    /// stale caches from edge cases such as dependency rewiring. Not
+    /// needed for switch atomicity — the batch guard owns that. Cache
+    /// writes are `Role::Internal` echoes, which the
+    /// when_change_external handlers skip.
+    fn eval_style(&self, atom: &mut PropertyAtomicGuard) {
+        self.text_color.eval(atom).expect("text_color");
+        self.text_hi_color.eval(atom).expect("text_hi_color");
+        self.placeholder_color.eval(atom).expect("placeholder_color");
+        self.cursor_color.eval(atom).expect("cursor_color");
+        self.hi_bg_color.eval(atom).expect("hi_bg_color");
+        self.action_fg_color.eval(atom).expect("action_fg_color");
+        self.action_bg_color.eval(atom).expect("action_bg_color");
+        self.font_size.eval(atom).expect("font_size");
+    }
+
     fn make_draw_calls(&self) -> DrawUpdate {
         let rect = self.rect.get();
 
@@ -1764,6 +1782,7 @@ impl UIObject for BaseEdit {
     ) -> Option<DrawUpdate> {
         *self.parent_rect.lock() = Some(parent_rect);
         self.eval_rect(atom);
+        self.eval_style(atom);
         // The fresh eval may have changed the content height, so re-clamp
         // the scroll to keep the cursor in view before computing draw instrs.
         self.behave.apply_cursor_scroll();
@@ -2089,7 +2108,7 @@ mod tests {
     use crate::{
         app::node::create_multiline_edit,
         gfx::Renderer,
-        prop::{Property, PropertySubType, PropertyType},
+        prop::{Property, PropertyPermission, PropertySubType, PropertyType},
         scene::{Pimpl, SceneNode, SceneNodeType},
         ui::RedrawTrigger,
     };
@@ -2129,7 +2148,12 @@ mod tests {
             }
 
             let mut scratch = SceneNode::new("scratch", SceneNodeType::Layer);
-            let mut prop = Property::new("scale", PropertyType::Float32, PropertySubType::Null);
+            let mut prop = Property::new(
+                "scale",
+                PropertyType::Float32,
+                PropertySubType::Null,
+                PropertyPermission::default(),
+            );
             prop.set_defaults_f32(vec![1.]).unwrap();
             scratch.add_property(prop).unwrap();
             let window_scale = PropertyFloat32::wrap(&scratch, Role::App, "scale", 0).unwrap();

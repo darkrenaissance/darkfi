@@ -88,7 +88,7 @@ pub async fn make(
     let set_built_tx_sub = tx_status_layer.subscribe_method_call("set_built_tx").unwrap();
     let redraw_for_built = app.redraw_trigger.clone();
     let sg_root_for_built = app.sg_root.clone();
-    app.tasks.lock().unwrap().push(app.ex.spawn(async move {
+    app.tasks.lock().push(app.ex.spawn(async move {
         while let Ok(mcall) = set_built_tx_sub.receive().await {
             let mut cur = std::io::Cursor::new(mcall.data);
             let tx = Transaction::decode(&mut cur).unwrap();
@@ -130,10 +130,10 @@ pub async fn make(
                 .lookup_node("/window/content/wallet/send_step4_layer/send_fee_label")
             {
                 let prop = tx_fee_label.get_property("text_color").unwrap();
-                prop.set_f32(atom, Role::App, 0, 1.).unwrap();
-                prop.set_f32(atom, Role::App, 1, 1.).unwrap();
-                prop.set_f32(atom, Role::App, 2, 1.).unwrap();
-                prop.set_f32(atom, Role::App, 3, 1.).unwrap();
+                prop.set_f32(atom, Role::App, 0, COLOR_CYAN[0]).unwrap();
+                prop.set_f32(atom, Role::App, 1, COLOR_CYAN[1]).unwrap();
+                prop.set_f32(atom, Role::App, 2, COLOR_CYAN[2]).unwrap();
+                prop.set_f32(atom, Role::App, 3, COLOR_CYAN[3]).unwrap();
             }
             if let Some(tx_fee_value) = sg_root_for_built
                 .lookup_node("/window/content/wallet/send_step4_layer/send_fee_value")
@@ -182,7 +182,7 @@ pub async fn make(
             }
         }
     });
-    app.tasks.lock().unwrap().push(listen_step2_visible);
+    app.tasks.lock().push(listen_step2_visible);
 
     send_step1_layer
 }

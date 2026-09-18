@@ -27,11 +27,11 @@ use crate::{
     db::AppDbPtr,
     error::{Error, Result},
     prop::{
-        Property, PropertyAtomicGuard, PropertyPtr, PropertySubType, PropertyType, PropertyValue,
-        Role,
+        Property, PropertyAtomicGuard, PropertyPermission, PropertyPtr, PropertySubType,
+        PropertyType, PropertyValue, Role,
     },
     scene::{CallArgType, Pimpl, SceneNode, SceneNodeType, SceneNodeWeak},
-    ExecutorPtr,
+    theme, ExecutorPtr,
 };
 
 /// Settings when modified are persisted otherwise they use their default
@@ -53,16 +53,43 @@ use crate::{
 pub fn create_setting(name: &str) -> SceneNode {
     let mut node = SceneNode::new(name, SceneNodeType::Setting);
 
-    let mut prop = Property::new("chat.is_enabled", PropertyType::Bool, PropertySubType::Flag);
+    let mut prop = Property::new(
+        "chat.is_enabled",
+        PropertyType::Bool,
+        PropertySubType::Flag,
+        PropertyPermission::default(),
+    );
     prop.set_defaults_bool(vec![true]).unwrap();
     node.add_property(prop).unwrap();
 
-    let mut prop = Property::new("net.transport", PropertyType::Enum, PropertySubType::Null);
+    let mut prop = Property::new(
+        "net.transport",
+        PropertyType::Enum,
+        PropertySubType::Null,
+        PropertyPermission::default(),
+    );
     prop.set_enum_items(vec!["tcp", "tor"]).unwrap();
     prop.set_defaults_str(vec!["tcp".to_string()]).unwrap();
     node.add_property(prop).unwrap();
 
-    let mut prop = Property::new("win.scale", PropertyType::Float32, PropertySubType::Null);
+    let mut prop = Property::new(
+        "theme",
+        PropertyType::Enum,
+        PropertySubType::Null,
+        PropertyPermission::default(),
+    );
+    prop.set_enum_items(theme::registry().iter().map(|t| t.name()).collect::<Vec<_>>()).unwrap();
+    // Default scifi: the shipped look. A proper Enum variant default
+    // (set_default_enum), unlike the Str-on-Enum latent mismatch above.
+    prop.set_default_enum(0, theme::DEFAULT_THEME).unwrap();
+    node.add_property(prop).unwrap();
+
+    let mut prop = Property::new(
+        "win.scale",
+        PropertyType::Float32,
+        PropertySubType::Null,
+        PropertyPermission::default(),
+    );
     prop.set_defaults_f32(vec![1.]).unwrap();
     prop.set_range_f32(0., f32::MAX);
     node.add_property(prop).unwrap();

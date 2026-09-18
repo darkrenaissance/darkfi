@@ -18,19 +18,21 @@
 
 use crate::{
     app::{
-        node::{create_button, create_editbox, create_layer, create_text, create_vector_art},
+        node::{
+            create_button, create_layer, create_singleline_edit, create_text, create_vector_art,
+        },
         App,
     },
     expr::{self, Compiler},
+    gfx::gfxtag,
     prop::{PropertyAtomicGuard, PropertyFloat32, PropertyStr, PropertyValue, Role},
     scene::{SceneNodePtr, Slot},
     shape,
-    ui::{Button, EditBox, Layer, ShapeVertex, Text, VectorArt, VectorShape},
+    theme::wire_color,
+    ui::{BaseEdit, BaseEditType, Button, Layer, ShapeVertex, Text, VectorArt, VectorShape},
     util::i18n::I18nBabelFish,
     ExecutorPtr,
 };
-
-use super::{ColorScheme, COLOR_SCHEME};
 
 use std::{
     collections::BTreeMap,
@@ -108,6 +110,9 @@ impl Setting {
     fn value_as_string(&self) -> String {
         match &self.node.get_property("value").unwrap().get_value(0).ok().unwrap() {
             PropertyValue::Str(s) => s.clone(),
+            // Enum values render as their item name (e.g. "scifi",
+            // "tcp") instead of "unknown".
+            PropertyValue::Enum(s) => s.clone(),
             PropertyValue::Uint32(i) => i.to_string(),
             PropertyValue::Bool(b) => {
                 if *b {
@@ -131,7 +136,8 @@ impl Setting {
     }
     fn reset(&self) {
         let prop = self.node.get_property("value").unwrap();
-        prop.set_raw_value(Role::App, 0, self.get_default()).unwrap();
+        let atom = &mut PropertyAtomicGuard::none();
+        prop.set_value(atom, Role::App, 0, self.get_default()).unwrap();
     }
 }
 
@@ -147,19 +153,20 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish) {
         0,
     )
     .unwrap();
-    let atom = &mut PropertyAtomicGuard::new();
+    let atom = &mut PropertyAtomicGuard::none();
 
     // Main view
     let layer_node = create_layer("settings_layer");
     let prop = layer_node.get_property("rect").unwrap();
-    prop.set_f32(atom, Role::App, 0, 0.).unwrap();
-    prop.set_f32(atom, Role::App, 1, 0.).unwrap();
-    prop.set_expr(atom, Role::App, 2, expr::load_var("w")).unwrap();
-    prop.set_expr(atom, Role::App, 3, expr::load_var("h")).unwrap();
+    prop.set_default_f32(0, 0.).unwrap();
+    prop.set_default_f32(1, 0.).unwrap();
+    prop.set_default_expr(2, expr::load_var("w")).unwrap();
+    prop.set_default_expr(3, expr::load_var("h")).unwrap();
     layer_node.set_property_bool(atom, Role::App, "is_visible", true).unwrap();
     layer_node.set_property_u32(atom, Role::App, "z_index", 1).unwrap();
-    let layer_node =
-        layer_node.setup(|me| Layer::new(me, app.renderer.clone(), app.ex.clone())).await;
+    let layer_node = layer_node
+        .setup(|me| Layer::new(me, app.renderer.clone(), app.redraw_trigger.clone()))
+        .await;
     window.link(layer_node.clone());
 
     let mut setting_y = 0.;
@@ -167,16 +174,13 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish) {
     // Create the toolbar bg
     let node = create_vector_art("toolbar_bg");
     let prop = node.get_property("rect").unwrap();
-    prop.set_f32(atom, Role::App, 0, 0.).unwrap();
-    prop.set_f32(atom, Role::App, 1, 0.).unwrap();
-    prop.set_expr(atom, Role::App, 2, expr::load_var("w")).unwrap();
-    prop.set_f32(atom, Role::App, 3, SETTING_LABEL_LINESPACE).unwrap();
+    prop.set_default_f32(0, 0.).unwrap();
+    prop.set_default_f32(1, 0.).unwrap();
+    prop.set_default_expr(2, expr::load_var("w")).unwrap();
+    prop.set_default_f32(3, SETTING_LABEL_LINESPACE).unwrap();
     node.set_property_u32(atom, Role::App, "z_index", 2).unwrap();
 
-    let (bg_color, sep_color) = match COLOR_SCHEME {
-        ColorScheme::DarkMode => ([0., 0.11, 0.11, 1.], [0.41, 0.6, 0.65, 1.]),
-        ColorScheme::PaperLight => ([1., 1., 1., 1.], [0., 0.6, 0.65, 1.]),
-    };
+    let (bg_color, sep_color) = ([0., 0.11, 0.11, 1.], [0.41, 0.6, 0.65, 1.]);
     let mut shape = VectorShape::new();
     shape.add_filled_box(
         expr::const_f32(0.),
@@ -209,10 +213,10 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish) {
     // Create the back button
     let node = create_vector_art("back_btn_bg");
     let prop = node.get_property("rect").unwrap();
-    prop.set_f32(atom, Role::App, 0, BACKARROW_X).unwrap();
-    prop.set_f32(atom, Role::App, 1, BACKARROW_Y).unwrap();
-    prop.set_f32(atom, Role::App, 2, 0.).unwrap();
-    prop.set_f32(atom, Role::App, 3, 0.).unwrap();
+    prop.set_default_f32(0, BACKARROW_X).unwrap();
+    prop.set_default_f32(1, BACKARROW_Y).unwrap();
+    prop.set_default_f32(2, 0.).unwrap();
+    prop.set_default_f32(3, 0.).unwrap();
     node.set_property_u32(atom, Role::App, "z_index", 3).unwrap();
 
     let shape = shape::create_back_arrow().scaled(BACKARROW_SCALE);
@@ -224,14 +228,14 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish) {
     let node = create_button("back_btn");
     node.set_property_bool(atom, Role::App, "is_active", true).unwrap();
     let prop = node.get_property("rect").unwrap();
-    prop.set_f32(atom, Role::App, 0, 0.).unwrap();
-    prop.set_f32(atom, Role::App, 1, 0.).unwrap();
-    prop.set_f32(atom, Role::App, 2, BACKARROW_BG_W).unwrap();
-    prop.set_f32(atom, Role::App, 3, SETTING_LABEL_LINESPACE).unwrap();
+    prop.set_default_f32(0, 0.).unwrap();
+    prop.set_default_f32(1, 0.).unwrap();
+    prop.set_default_f32(2, BACKARROW_BG_W).unwrap();
+    prop.set_default_f32(3, SETTING_LABEL_LINESPACE).unwrap();
 
     let sg_root = app.sg_root.clone();
     let goback = move || {
-        let atom = &mut PropertyAtomicGuard::new();
+        let atom = &mut PropertyAtomicGuard::none();
 
         // Disable visilibity of all relevant window nodes
         // This is needed since for example all chats have a different node name.
@@ -260,23 +264,26 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish) {
             goback2();
         }
     });
-    app.tasks.lock().unwrap().push(listen_click);
+    app.tasks.lock().push(listen_click);
 
-    let node = node.setup(|me| Button::new(me, app.renderer.clone(), app.redraw_trigger.clone())).await;
+    let node =
+        node.setup(|me| Button::new(me, app.renderer.clone(), app.redraw_trigger.clone())).await;
     layer_node.link(node.clone());
 
     // Label: "SETTINGS" title
     let node = create_text("settings_label_fontsize");
     let prop = node.get_property("rect").unwrap();
-    prop.set_f32(atom, Role::App, 0, SETTING_TITLE_X).unwrap();
-    prop.set_f32(atom, Role::App, 1, 0.).unwrap();
-    prop.set_f32(atom, Role::App, 2, 1000.).unwrap();
-    prop.set_f32(atom, Role::App, 3, 200.).unwrap();
+    prop.set_default_f32(0, SETTING_TITLE_X).unwrap();
+    prop.set_default_f32(1, 0.).unwrap();
+    prop.set_default_f32(2, 1000.).unwrap();
+    prop.set_default_f32(3, 200.).unwrap();
     node.set_property_u32(atom, Role::App, "z_index", 1).unwrap();
-    node.set_property_f32(atom, Role::App, "baseline", SETTING_TITLE_BASELINE).unwrap();
-    node.set_property_f32(atom, Role::App, "font_size", SETTING_TITLE_FONTSIZE).unwrap();
+    node.get_property("baseline").unwrap().set_default_f32(0, SETTING_TITLE_BASELINE).unwrap();
+    node.get_property("font_size").unwrap().set_default_f32(0, SETTING_TITLE_FONTSIZE).unwrap();
     node.set_property_str(atom, Role::App, "text", "SETTINGS").unwrap();
-    node.set_property_f32_vec(atom, Role::App, "text_color", vec![1., 1., 1., 1.]).unwrap();
+    // Class wiring: the settings title follows the shared text token.
+    let theme = app.sg_root.lookup_node("/theme").unwrap();
+    wire_color(&node, "text_color", &theme, "text_color").unwrap();
     node.set_property_u32(atom, Role::App, "z_index", 1).unwrap();
 
     let node = node
@@ -286,6 +293,7 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish) {
                 window_scale.clone(),
                 app.renderer.clone(),
                 i18n_fish.clone(),
+                app.redraw_trigger.clone(),
             )
         })
         .await;
@@ -294,12 +302,12 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish) {
     // Search Bar Background
     let node = create_vector_art("emoji_picker_bg");
     let prop = node.get_property("rect").unwrap();
-    prop.set_f32(atom, Role::App, 0, 0.).unwrap();
+    prop.set_default_f32(0, 0.).unwrap();
     let code = cc.compile("100").unwrap();
-    prop.set_expr(atom, Role::App, 1, code).unwrap();
-    prop.set_expr(atom, Role::App, 2, expr::load_var("w")).unwrap();
-    prop.set_expr(atom, Role::App, 3, expr::load_var("50")).unwrap();
-    //prop.add_depend(&emoji_dynamic_h_prop, 0, "dynamic_h");
+    prop.set_default_expr(1, code).unwrap();
+    prop.set_default_expr(2, expr::load_var("w")).unwrap();
+    prop.set_default_expr(3, expr::load_var("50")).unwrap();
+    //prop.add_depend(Role::App, &emoji_dynamic_h_prop, 0, "dynamic_h");
     node.set_property_u32(atom, Role::App, "z_index", 4).unwrap();
 
     let mut shape = VectorShape::new();
@@ -320,28 +328,31 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish) {
     layer_node.link(node);
 
     // Search Bar Input
-    let editbox_node = create_editbox("search_input");
+    let editbox_node = create_singleline_edit("search_input");
     editbox_node.set_property_bool(atom, Role::App, "is_active", true).unwrap();
     editbox_node.set_property_bool(atom, Role::App, "is_focused", true).unwrap();
     let prop = editbox_node.get_property("rect").unwrap();
-    prop.set_f32(atom, Role::App, 0, SEARCH_PADDING_X).unwrap();
-    prop.set_expr(atom, Role::App, 1, cc.compile("60 + 20").unwrap()).unwrap();
+    prop.set_default_f32(0, SEARCH_PADDING_X).unwrap();
+    prop.set_default_expr(1, cc.compile("60 + 20").unwrap()).unwrap();
     prop.clone()
         .set_expr(atom, Role::App, 2, cc.compile("w - SEARCH_PADDING_X*2").unwrap())
         .unwrap();
-    prop.set_f32(atom, Role::App, 3, SETTING_LABEL_LINESPACE).unwrap();
-    editbox_node.set_property_f32_vec(atom, Role::App, "text_color", vec![1., 1., 1., 1.]).unwrap();
+    prop.set_default_f32(3, SETTING_LABEL_LINESPACE).unwrap();
+    editbox_node
+        .get_property("text_color")
+        .unwrap()
+        .set_default_f32_multi(&[0.92, 0.92, 0.92, 1.])
+        .unwrap();
     let prop = editbox_node.get_property("cursor_color").unwrap();
-    prop.set_f32(atom, Role::App, 0, 0.5).unwrap();
-    prop.set_f32(atom, Role::App, 1, 0.5).unwrap();
-    prop.set_f32(atom, Role::App, 2, 0.5).unwrap();
-    prop.set_f32(atom, Role::App, 3, 1.).unwrap();
+    prop.set_default_f32_multi(&[0.5, 0.5, 0.5, 1.]).unwrap();
     editbox_node.set_property_f32(atom, Role::App, "cursor_ascent", CURSOR_ASCENT).unwrap();
     editbox_node.set_property_f32(atom, Role::App, "cursor_descent", CURSOR_DESCENT).unwrap();
     editbox_node.set_property_f32(atom, Role::App, "select_ascent", SELECT_ASCENT).unwrap();
     editbox_node.set_property_f32(atom, Role::App, "select_descent", SELECT_DESCENT).unwrap();
     editbox_node
-        .set_property_f32_vec(atom, Role::App, "hi_bg_color", vec![0.5, 0.5, 0.5, 1.])
+        .get_property("hi_bg_color")
+        .unwrap()
+        .set_default_f32_multi(&[0.5, 0.5, 0.5, 1.])
         .unwrap();
     let prop = editbox_node.get_property("selected").unwrap();
     prop.set_null(atom, Role::App, 0).unwrap();
@@ -349,18 +360,18 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish) {
     editbox_node.set_property_u32(atom, Role::App, "z_index", 2).unwrap();
     editbox_node.set_property_bool(atom, Role::App, "is_active", true).unwrap();
     editbox_node.set_property_bool(atom, Role::App, "is_focused", true).unwrap();
-    editbox_node.set_property_f32(atom, Role::App, "font_size", 16.).unwrap();
-    editbox_node.set_property_f32(atom, Role::App, "baseline", 16.).unwrap();
+    editbox_node.get_property("font_size").unwrap().set_f32(atom, Role::App, 0, 16.).unwrap();
+    editbox_node.get_property("baseline").unwrap().set_default_f32(0, 16.).unwrap();
 
     // Search icon
     let node = create_vector_art("search_icon");
     let prop = node.get_property("rect").unwrap();
-    prop.set_f32(atom, Role::App, 0, BACKARROW_X).unwrap();
+    prop.set_default_f32(0, BACKARROW_X).unwrap();
     prop.clone()
         .set_f32(atom, Role::App, 1, SETTING_LABEL_LINESPACE + SETTING_LABEL_LINESPACE / 2.)
         .unwrap();
-    prop.set_f32(atom, Role::App, 2, 0.).unwrap();
-    prop.set_f32(atom, Role::App, 3, 0.).unwrap();
+    prop.set_default_f32(2, 0.).unwrap();
+    prop.set_default_f32(3, 0.).unwrap();
     node.set_property_u32(atom, Role::App, "z_index", 3).unwrap();
 
     let shape = shape::create_logo([1., 1., 1., 1.]).scaled(500.);
@@ -372,15 +383,15 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish) {
     // Search placeholder
     let node = create_text("search_label");
     let prop = node.get_property("rect").unwrap();
-    prop.set_f32(atom, Role::App, 0, SEARCH_PADDING_X).unwrap();
-    prop.set_expr(atom, Role::App, 1, cc.compile("60 + 20").unwrap()).unwrap();
-    prop.set_f32(atom, Role::App, 2, 1000.).unwrap();
-    prop.set_f32(atom, Role::App, 3, 200.).unwrap();
+    prop.set_default_f32(0, SEARCH_PADDING_X).unwrap();
+    prop.set_default_expr(1, cc.compile("60 + 20").unwrap()).unwrap();
+    prop.set_default_f32(2, 1000.).unwrap();
+    prop.set_default_f32(3, 200.).unwrap();
     node.set_property_u32(atom, Role::App, "z_index", 1).unwrap();
-    node.set_property_f32(atom, Role::App, "baseline", 16.).unwrap();
-    node.set_property_f32(atom, Role::App, "font_size", 16.).unwrap();
+    node.get_property("baseline").unwrap().set_default_f32(0, 16.).unwrap();
+    node.get_property("font_size").unwrap().set_default_f32(0, 16.).unwrap();
     node.set_property_str(atom, Role::App, "text", "SEARCH...").unwrap();
-    node.set_property_f32_vec(atom, Role::App, "text_color", vec![1., 1., 1., 0.45]).unwrap();
+    node.get_property("text_color").unwrap().set_default_f32_multi(&[1., 1., 1., 0.45]).unwrap();
     node.set_property_u32(atom, Role::App, "z_index", 1).unwrap();
 
     let node = node
@@ -390,6 +401,7 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish) {
                 window_scale.clone(),
                 app.renderer.clone(),
                 i18n_fish.clone(),
+                app.redraw_trigger.clone(),
             )
         })
         .await;
@@ -398,15 +410,18 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish) {
     // Search settings counter
     let node = create_text("search_count");
     let prop = node.get_property("rect").unwrap();
-    prop.set_expr(atom, Role::App, 0, cc.compile("w - 50").unwrap()).unwrap();
-    prop.set_expr(atom, Role::App, 1, cc.compile("60 + 20").unwrap()).unwrap();
-    prop.set_f32(atom, Role::App, 2, 1000.).unwrap();
-    prop.set_f32(atom, Role::App, 3, 200.).unwrap();
+    prop.set_default_expr(0, cc.compile("w - 50").unwrap()).unwrap();
+    prop.set_default_expr(1, cc.compile("60 + 20").unwrap()).unwrap();
+    prop.set_default_f32(2, 1000.).unwrap();
+    prop.set_default_f32(3, 200.).unwrap();
     node.set_property_u32(atom, Role::App, "z_index", 1).unwrap();
-    node.set_property_f32(atom, Role::App, "baseline", 16.).unwrap();
-    node.set_property_f32(atom, Role::App, "font_size", 16.).unwrap();
+    node.get_property("baseline").unwrap().set_default_f32(0, 16.).unwrap();
+    node.get_property("font_size").unwrap().set_default_f32(0, 16.).unwrap();
     node.set_property_str(atom, Role::App, "text", "").unwrap();
-    node.set_property_f32_vec(atom, Role::App, "text_color", vec![0., 0.94, 1., 1.]).unwrap();
+    node.get_property("text_color")
+        .unwrap()
+        .set_default_f32_multi(&[0.75, 0.75, 0.75, 1.])
+        .unwrap();
     node.set_property_u32(atom, Role::App, "z_index", 1).unwrap();
 
     let node = node
@@ -416,6 +431,7 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish) {
                 window_scale.clone(),
                 app.renderer.clone(),
                 i18n_fish.clone(),
+                app.redraw_trigger.clone(),
             )
         })
         .await;
@@ -423,7 +439,7 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish) {
 
     let sg_root3 = app.sg_root.clone();
     let search = move || {
-        let atom = &mut PropertyAtomicGuard::new();
+        let atom = &mut PropertyAtomicGuard::none();
 
         let path = "/window/content/settings_layer/search_input";
         let node = sg_root3.lookup_node(path.to_string()).unwrap();
@@ -461,7 +477,7 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish) {
         for (i, node) in found_nodes.iter().enumerate() {
             let prop = node.get_property("rect").unwrap();
             let y = i as f32 * 60. + 60. + 60.;
-            prop.set_f32(atom, Role::App, 1, y).unwrap();
+            prop.set_default_f32(1, y).unwrap();
         }
 
         // Update the counter
@@ -480,15 +496,16 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish) {
             search2();
         }
     });
-    app.tasks.lock().unwrap().push(listen_search_text);
+    app.tasks.lock().push(listen_search_text);
 
     let node = editbox_node
         .setup(|me| {
-            EditBox::new(
+            BaseEdit::new(
                 me,
                 window_scale.clone(),
                 app.renderer.clone(),
-                app.text_shaper.clone(),
+                app.redraw_trigger.clone(),
+                BaseEditType::SingleLine,
                 app.ex.clone(),
             )
         })
@@ -498,10 +515,10 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish) {
     // Search background
     let node = create_vector_art("search_bg");
     let prop = node.get_property("rect").unwrap();
-    prop.set_f32(atom, Role::App, 0, 0.).unwrap();
-    prop.set_f32(atom, Role::App, 1, 60.).unwrap();
-    prop.set_expr(atom, Role::App, 2, cc.compile("w  * 100").unwrap()).unwrap();
-    prop.set_f32(atom, Role::App, 3, SETTING_LABEL_LINESPACE).unwrap();
+    prop.set_default_f32(0, 0.).unwrap();
+    prop.set_default_f32(1, 60.).unwrap();
+    prop.set_default_expr(2, cc.compile("w  * 100").unwrap()).unwrap();
+    prop.set_default_f32(3, SETTING_LABEL_LINESPACE).unwrap();
     node.set_property_u32(atom, Role::App, "z_index", 0).unwrap();
 
     let mut shape = VectorShape::new();
@@ -510,10 +527,7 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish) {
     let y1 = expr::const_f32(0.);
     let x2 = expr::load_var("w");
     let y2 = expr::const_f32(SETTING_LABEL_LINESPACE);
-    let (color1, color2) = match COLOR_SCHEME {
-        ColorScheme::DarkMode => ([0., 0.11, 0.11, 0.4], [0., 0.11, 0.11, 0.5]),
-        ColorScheme::PaperLight => ([1., 1., 1., 1.], [1., 1., 1., 1.]),
-    };
+    let (color1, color2) = ([0., 0.11, 0.11, 0.4], [0., 0.11, 0.11, 0.5]);
     let mut verts = vec![
         ShapeVertex::new(x1.clone(), y1.clone(), color1),
         ShapeVertex::new(x2.clone(), y1.clone(), color1),
@@ -529,8 +543,8 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish) {
         expr::const_f32(SETTING_LABEL_LINESPACE - 1.),
         expr::load_var("w"),
         expr::const_f32(SETTING_LABEL_LINESPACE),
-        [0.15, 0.2, 0.19, 1.],
-        //[0., 0.11, 0.11, 0.4],
+        [0.12, 0.12, 0.12, 1.],
+        //[0.07, 0.07, 0.07, 0.4],
     );
 
     node.set_property_shape(atom, Role::App, "shape", shape).unwrap();
@@ -541,10 +555,10 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish) {
 
     let node = create_vector_art("search_bg2");
     let prop = node.get_property("rect").unwrap();
-    prop.set_f32(atom, Role::App, 0, 0.).unwrap();
-    prop.set_f32(atom, Role::App, 1, 60.).unwrap();
-    prop.set_expr(atom, Role::App, 2, cc.compile("w  * 100").unwrap()).unwrap();
-    prop.set_f32(atom, Role::App, 3, SETTING_LABEL_LINESPACE / 3.5).unwrap();
+    prop.set_default_f32(0, 0.).unwrap();
+    prop.set_default_f32(1, 60.).unwrap();
+    prop.set_default_expr(2, cc.compile("w  * 100").unwrap()).unwrap();
+    prop.set_default_f32(3, SETTING_LABEL_LINESPACE / 3.5).unwrap();
     node.set_property_u32(atom, Role::App, "z_index", 0).unwrap();
 
     let mut shape = VectorShape::new();
@@ -554,10 +568,7 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish) {
     let x2 = expr::load_var("w");
     let y2 = expr::const_f32(SETTING_LABEL_LINESPACE);
 
-    let (color1, color2) = match COLOR_SCHEME {
-        ColorScheme::DarkMode => ([0., 0.94, 1., 0.4], [0., 0.3, 0.25, 0.0]),
-        ColorScheme::PaperLight => ([0., 0.94, 1., 0.4], [0., 0.3, 0.25, 0.0]),
-    };
+    let (color1, color2) = ([0., 0.94, 1., 0.4], [0., 0.3, 0.25, 0.0]);
 
     let mut verts = vec![
         ShapeVertex::new(x1.clone(), y1.clone(), color1),
@@ -617,14 +628,14 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish) {
     // Contain a setting
     let settings_layer_node = create_layer("settings");
     let prop = settings_layer_node.get_property("rect").unwrap();
-    prop.set_f32(atom, Role::App, 0, 0.).unwrap();
-    prop.set_f32(atom, Role::App, 1, 0.).unwrap();
-    prop.set_expr(atom, Role::App, 2, expr::load_var("w")).unwrap();
-    prop.set_f32(atom, Role::App, 3, 0.).unwrap();
+    prop.set_default_f32(0, 0.).unwrap();
+    prop.set_default_f32(1, 0.).unwrap();
+    prop.set_default_expr(2, expr::load_var("w")).unwrap();
+    prop.set_default_f32(3, 0.).unwrap();
     settings_layer_node.set_property_bool(atom, Role::App, "is_visible", true).unwrap();
     settings_layer_node.set_property_u32(atom, Role::App, "z_index", 0).unwrap();
     let settings_layer_node = settings_layer_node
-        .setup(|me| Layer::new(me, app.renderer.clone(), app.ex.clone()))
+        .setup(|me| Layer::new(me, app.renderer.clone(), app.redraw_trigger.clone()))
         .await;
     layer_node.link(settings_layer_node.clone());
 
@@ -633,6 +644,7 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish) {
         let setting_clone = setting.clone();
         let setting_name = setting_clone.name.clone();
         let is_bool = matches!(setting_clone.get_value(), PropertyValue::Bool(_));
+        let is_enum = matches!(setting_clone.get_value(), PropertyValue::Enum(_));
 
         setting_y += SETTING_LABEL_LINESPACE;
 
@@ -640,26 +652,26 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish) {
         // Contain a setting
         let setting_layer_node = create_layer(&setting_name.to_string());
         let prop = setting_layer_node.get_property("rect").unwrap();
-        prop.set_f32(atom, Role::App, 0, 0.).unwrap();
-        prop.set_f32(atom, Role::App, 1, setting_y + 60.).unwrap();
-        prop.set_expr(atom, Role::App, 2, expr::load_var("w")).unwrap();
-        prop.set_f32(atom, Role::App, 3, SETTING_LABEL_LINESPACE).unwrap();
+        prop.set_default_f32(0, 0.).unwrap();
+        prop.set_default_f32(1, setting_y + 60.).unwrap();
+        prop.set_default_expr(2, expr::load_var("w")).unwrap();
+        prop.set_default_f32(3, SETTING_LABEL_LINESPACE).unwrap();
         setting_layer_node.set_property_bool(atom, Role::App, "is_visible", true).unwrap();
         setting_layer_node.set_property_u32(atom, Role::App, "z_index", 0).unwrap();
         let setting_layer_node = setting_layer_node
-            .setup(|me| Layer::new(me, app.renderer.clone(), app.ex.clone()))
+            .setup(|me| Layer::new(me, app.renderer.clone(), app.redraw_trigger.clone()))
             .await;
         settings_layer_node.link(setting_layer_node.clone());
 
         // Background Label
         let node = create_vector_art("key_bg");
         let prop = node.get_property("rect").unwrap();
-        prop.set_f32(atom, Role::App, 0, 0.).unwrap();
-        prop.set_f32(atom, Role::App, 1, 0.).unwrap();
+        prop.set_default_f32(0, 0.).unwrap();
+        prop.set_default_f32(1, 0.).unwrap();
         prop.clone()
             .set_expr(atom, Role::App, 2, cc.compile("w  * X_RATIO - BORDER_RIGHT_SCALE").unwrap())
             .unwrap();
-        prop.set_f32(atom, Role::App, 3, SETTING_LABEL_LINESPACE).unwrap();
+        prop.set_default_f32(3, SETTING_LABEL_LINESPACE).unwrap();
         node.set_property_u32(atom, Role::App, "z_index", 0).unwrap();
 
         let mut shape = VectorShape::new();
@@ -668,11 +680,7 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish) {
         let y1 = expr::const_f32(0.);
         let x2 = expr::load_var("w");
         let y2 = expr::const_f32(SETTING_LABEL_LINESPACE);
-        let (color1, color2) = match COLOR_SCHEME {
-            //ColorScheme::DarkMode => ([0., 0.11, 0.11, 1.], [0., 0.11, 0.11, 1.]),
-            ColorScheme::DarkMode => ([0., 0.11, 0.11, 0.4], [0., 0.11, 0.11, 0.5]),
-            ColorScheme::PaperLight => ([1., 1., 1., 1.], [1., 1., 1., 1.]),
-        };
+        let (color1, color2) = ([0., 0.11, 0.11, 0.4], [0., 0.11, 0.11, 0.5]);
         let mut verts = vec![
             ShapeVertex::new(x1.clone(), y1.clone(), color1),
             ShapeVertex::new(x2.clone(), y1.clone(), color1),
@@ -709,7 +717,7 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish) {
                     cc.compile("w * X_RATIO - BORDER_RIGHT_SCALE").unwrap(),
                 )
                 .unwrap();
-            prop.set_f32(atom, Role::App, 1, 0.).unwrap();
+            prop.set_default_f32(1, 0.).unwrap();
             prop.clone()
                 .set_expr(
                     atom,
@@ -718,7 +726,7 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish) {
                     cc.compile("w * (1-X_RATIO) + BORDER_RIGHT_SCALE").unwrap(),
                 )
                 .unwrap();
-            prop.set_f32(atom, Role::App, 3, SETTING_LABEL_LINESPACE).unwrap();
+            prop.set_default_f32(3, SETTING_LABEL_LINESPACE).unwrap();
             node.set_property_u32(atom, Role::App, "z_index", 0).unwrap();
             node.set_property_bool(
                 atom,
@@ -735,11 +743,7 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish) {
             let x2 = expr::load_var("w");
             let y2 = expr::const_f32(SETTING_LABEL_LINESPACE);
 
-            let (color1, color2) = match COLOR_SCHEME {
-                //ColorScheme::DarkMode => ([0., 0.11, 0.11, 1.], [0., 0.11, 0.11, 1.]),
-                ColorScheme::DarkMode => ([0.0, 0.04, 0.04, 0.0], [0.7, 0.0, 0.0, 0.15]),
-                ColorScheme::PaperLight => ([0.0, 0.04, 0.04, 0.0], [0.7, 0.0, 0.0, 0.15]),
-            };
+            let (color1, color2) = ([0.0, 0.04, 0.04, 0.0], [0.7, 0.0, 0.0, 0.15]);
 
             let mut verts = vec![
                 ShapeVertex::new(x1.clone(), y1.clone(), color1),
@@ -776,7 +780,7 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish) {
                     cc.compile("w * X_RATIO - BORDER_RIGHT_SCALE").unwrap(),
                 )
                 .unwrap();
-            prop.set_f32(atom, Role::App, 1, 0.).unwrap();
+            prop.set_default_f32(1, 0.).unwrap();
             prop.clone()
                 .set_expr(
                     atom,
@@ -785,7 +789,7 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish) {
                     cc.compile("w * (1-X_RATIO) + BORDER_RIGHT_SCALE").unwrap(),
                 )
                 .unwrap();
-            prop.set_f32(atom, Role::App, 3, SETTING_LABEL_LINESPACE).unwrap();
+            prop.set_default_f32(3, SETTING_LABEL_LINESPACE).unwrap();
             node.set_property_u32(atom, Role::App, "z_index", 0).unwrap();
             node.set_property_bool(
                 atom,
@@ -802,11 +806,7 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish) {
             let x2 = expr::load_var("w");
             let y2 = expr::const_f32(SETTING_LABEL_LINESPACE);
 
-            let (color1, color2) = match COLOR_SCHEME {
-                //ColorScheme::DarkMode => ([0., 0.11, 0.11, 1.], [0., 0.11, 0.11, 1.]),
-                ColorScheme::DarkMode => ([0., 0.3, 0.25, 0.0], [0., 0.3, 0.25, 0.5]),
-                ColorScheme::PaperLight => ([0., 0.3, 0.25, 0.0], [0., 0.3, 0.25, 0.5]),
-            };
+            let (color1, color2) = ([0., 0.3, 0.25, 0.0], [0., 0.3, 0.25, 0.5]);
 
             let mut verts = vec![
                 ShapeVertex::new(x1.clone(), y1.clone(), color1),
@@ -843,7 +843,7 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish) {
                     cc.compile("w * X_RATIO - BORDER_RIGHT_SCALE").unwrap(),
                 )
                 .unwrap();
-            prop.set_f32(atom, Role::App, 1, 0.).unwrap();
+            prop.set_default_f32(1, 0.).unwrap();
             prop.clone()
                 .set_expr(
                     atom,
@@ -852,7 +852,7 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish) {
                     cc.compile("w * (1-X_RATIO) + BORDER_RIGHT_SCALE").unwrap(),
                 )
                 .unwrap();
-            prop.set_f32(atom, Role::App, 3, SETTING_LABEL_LINESPACE).unwrap();
+            prop.set_default_f32(3, SETTING_LABEL_LINESPACE).unwrap();
             node.set_property_u32(atom, Role::App, "z_index", 0).unwrap();
             node.set_property_bool(atom, Role::App, "is_visible", true).unwrap();
 
@@ -863,11 +863,7 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish) {
             let x2 = expr::load_var("w");
             let y2 = expr::const_f32(SETTING_LABEL_LINESPACE);
 
-            let (color1, color2) = match COLOR_SCHEME {
-                //ColorScheme::DarkMode => ([0., 0.11, 0.11, 1.], [0., 0.11, 0.11, 1.]),
-                ColorScheme::DarkMode => ([0., 0.02, 0.02, 0.5], [0., 0.04, 0.04, 0.7]),
-                ColorScheme::PaperLight => ([1., 1., 1., 1.], [1., 1., 1., 1.]),
-            };
+            let (color1, color2) = ([0., 0.02, 0.02, 0.5], [0., 0.04, 0.04, 0.7]);
 
             let mut verts = vec![
                 ShapeVertex::new(x1.clone(), y1.clone(), color1),
@@ -897,10 +893,10 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish) {
         // Label Key
         let label_value_node = create_text("key_label");
         let prop = label_value_node.get_property("rect").unwrap();
-        prop.set_f32(atom, Role::App, 0, SETTING_LABEL_X).unwrap();
-        prop.set_f32(atom, Role::App, 1, 0.).unwrap();
-        prop.set_expr(atom, Role::App, 2, cc.compile("w * X_RATIO").unwrap()).unwrap();
-        prop.set_f32(atom, Role::App, 3, 100.).unwrap();
+        prop.set_default_f32(0, SETTING_LABEL_X).unwrap();
+        prop.set_default_f32(1, 0.).unwrap();
+        prop.set_default_expr(2, cc.compile("w * X_RATIO").unwrap()).unwrap();
+        prop.set_default_f32(3, 100.).unwrap();
         label_value_node.set_property_u32(atom, Role::App, "z_index", 1).unwrap();
         label_value_node
             .set_property_f32(atom, Role::App, "baseline", SETTING_LABEL_BASELINE)
@@ -911,11 +907,15 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish) {
         label_value_node.set_property_str(atom, Role::App, "text", setting_name.clone()).unwrap();
         if setting.is_default() {
             label_value_node
-                .set_property_f32_vec(atom, Role::App, "text_color", vec![0.65, 0.87, 0.83, 1.])
+                .get_property("text_color")
+                .unwrap()
+                .set_default_f32_multi(&[0.62, 0.62, 0.62, 1.])
                 .unwrap();
         } else {
             label_value_node
-                .set_property_f32_vec(atom, Role::App, "text_color", vec![1., 1., 1., 1.])
+                .get_property("text_color")
+                .unwrap()
+                .set_default_f32_multi(&[0.92, 0.92, 0.92, 1.])
                 .unwrap();
         }
         label_value_node.set_property_u32(atom, Role::App, "z_index", 1).unwrap();
@@ -926,86 +926,223 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish) {
                     me,
                     window_scale.clone(),
                     app.renderer.clone(),
-                    app.text_shaper.clone(),
-                    app.ex.clone(),
+                    i18n_fish.clone(),
+                    app.redraw_trigger.clone(),
                 )
             })
             .await;
         setting_layer_node.link(label_value_node);
 
-        // Text edit
-        let editbox_node = create_editbox("value_editbox");
-        editbox_node.set_property_bool(atom, Role::App, "is_active", true).unwrap();
-        editbox_node.set_property_bool(atom, Role::App, "is_focused", true).unwrap();
-        let prop = editbox_node.get_property("rect").unwrap();
-        prop.clone()
-            .set_expr(atom, Role::App, 0, cc.compile("w * X_RATIO + BORDER_RIGHT_SCALE").unwrap())
-            .unwrap();
-        prop.set_f32(atom, Role::App, 1, 0.).unwrap();
-        prop.clone()
-            .set_expr(atom, Role::App, 2, cc.compile("w * X_RATIO - BORDER_RIGHT_SCALE").unwrap())
-            .unwrap();
-        prop.set_f32(atom, Role::App, 3, SETTING_LABEL_LINESPACE).unwrap();
-        editbox_node.set_property_f32(atom, Role::App, "baseline", SETTING_LABEL_BASELINE).unwrap();
-        editbox_node.set_property_f32(atom, Role::App, "font_size", SETTING_EDIT_FONTSIZE).unwrap();
-        editbox_node.set_property_f32(atom, Role::App, "cursor_ascent", CURSOR_ASCENT).unwrap();
-        editbox_node.set_property_f32(atom, Role::App, "cursor_descent", CURSOR_DESCENT).unwrap();
-        editbox_node.set_property_f32(atom, Role::App, "select_ascent", SELECT_ASCENT).unwrap();
-        editbox_node.set_property_f32(atom, Role::App, "select_descent", SELECT_DESCENT).unwrap();
-        editbox_node
-            .set_property_f32_vec(atom, Role::App, "text_color", vec![0.7, 0.7, 0.7, 1.])
-            .unwrap();
-        editbox_node
-            .set_property_f32_vec(atom, Role::App, "cursor_color", vec![0.5, 0.5, 0.5, 1.])
-            .unwrap();
-        editbox_node
-            .set_property_f32_vec(atom, Role::App, "hi_bg_color", vec![0.5, 0.5, 0.5, 1.])
-            .unwrap();
-        let prop = editbox_node.get_property("selected").unwrap();
-        prop.set_null(atom, Role::App, 0).unwrap();
-        prop.set_null(atom, Role::App, 1).unwrap();
-        editbox_node.set_property_u32(atom, Role::App, "z_index", 1).unwrap();
-        editbox_node.set_property_bool(atom, Role::App, "is_active", false).unwrap();
-        editbox_node.set_property_bool(atom, Role::App, "is_focused", false).unwrap();
-        editbox_node.set_property_f32(atom, Role::App, "font_size", 0.).unwrap();
+        let editz_text: Option<PropertyStr>;
+        if !is_enum {
+            // Text edit
+            let editbox_node = create_singleline_edit("value_editbox");
+            editbox_node.set_property_bool(atom, Role::App, "is_active", true).unwrap();
+            editbox_node.set_property_bool(atom, Role::App, "is_focused", true).unwrap();
+            let prop = editbox_node.get_property("rect").unwrap();
+            prop.clone()
+                .set_expr(
+                    atom,
+                    Role::App,
+                    0,
+                    cc.compile("w * X_RATIO + BORDER_RIGHT_SCALE").unwrap(),
+                )
+                .unwrap();
+            prop.set_default_f32(1, 0.).unwrap();
+            prop.clone()
+                .set_expr(
+                    atom,
+                    Role::App,
+                    2,
+                    cc.compile("w * X_RATIO - BORDER_RIGHT_SCALE").unwrap(),
+                )
+                .unwrap();
+            prop.set_default_f32(3, SETTING_LABEL_LINESPACE).unwrap();
+            editbox_node
+                .get_property("baseline")
+                .unwrap()
+                .set_default_f32(0, SETTING_LABEL_BASELINE)
+                .unwrap();
+            editbox_node
+                .get_property("font_size")
+                .unwrap()
+                .set_default_f32(0, SETTING_EDIT_FONTSIZE)
+                .unwrap();
+            editbox_node.set_property_f32(atom, Role::App, "cursor_ascent", CURSOR_ASCENT).unwrap();
+            editbox_node
+                .set_property_f32(atom, Role::App, "cursor_descent", CURSOR_DESCENT)
+                .unwrap();
+            editbox_node.set_property_f32(atom, Role::App, "select_ascent", SELECT_ASCENT).unwrap();
+            editbox_node
+                .set_property_f32(atom, Role::App, "select_descent", SELECT_DESCENT)
+                .unwrap();
+            editbox_node
+                .get_property("text_color")
+                .unwrap()
+                .set_default_f32_multi(&[0.7, 0.7, 0.7, 1.])
+                .unwrap();
+            editbox_node
+                .get_property("cursor_color")
+                .unwrap()
+                .set_default_f32_multi(&[0.5, 0.5, 0.5, 1.])
+                .unwrap();
+            editbox_node
+                .get_property("hi_bg_color")
+                .unwrap()
+                .set_default_f32_multi(&[0.5, 0.5, 0.5, 1.])
+                .unwrap();
+            let prop = editbox_node.get_property("selected").unwrap();
+            prop.set_null(atom, Role::App, 0).unwrap();
+            prop.set_null(atom, Role::App, 1).unwrap();
+            editbox_node.set_property_u32(atom, Role::App, "z_index", 1).unwrap();
+            editbox_node.set_property_bool(atom, Role::App, "is_active", false).unwrap();
+            editbox_node.set_property_bool(atom, Role::App, "is_focused", false).unwrap();
+            editbox_node
+                .get_property("font_size")
+                .unwrap()
+                .set_f32(atom, Role::App, 0, 0.)
+                .unwrap();
 
-        let editz_text = PropertyStr::wrap(&editbox_node, Role::App, "text", 0).unwrap();
+            editz_text = Some(PropertyStr::wrap(&editbox_node, Role::App, "text", 0).unwrap());
 
-        // Handle enter pressed in the editbox
-        {
-            let (slot, recvr) = Slot::new("setting_enter_pressed");
-            editbox_node.register("enter_pressed", slot).unwrap();
-            let setting2 = setting.clone();
-            let sg_root2 = setting_layer_node.clone();
-            let active_setting2 = active_setting.clone();
-            let editz_text2 = editz_text.clone();
-            let listen_enter = app.ex.spawn(async move {
-                while let Ok(_) = recvr.recv().await {
-                    update_setting(
-                        setting2.clone(),
-                        sg_root2.clone(),
-                        active_setting2.clone(),
-                        editz_text2.clone(),
+            // Handle enter pressed in the editbox
+            {
+                let (slot, recvr) = Slot::new("setting_enter_pressed");
+                editbox_node.register("enter_pressed", slot).unwrap();
+                let setting2 = setting.clone();
+                let sg_root2 = setting_layer_node.clone();
+                let active_setting2 = active_setting.clone();
+                let editz_text2 = editz_text.clone();
+                let listen_enter = app.ex.spawn(async move {
+                    while let Ok(_) = recvr.recv().await {
+                        update_setting(
+                            setting2.clone(),
+                            sg_root2.clone(),
+                            active_setting2.clone(),
+                            editz_text2.clone(),
+                        )
+                        .await;
+                        refresh_setting(setting2.clone(), sg_root2.clone());
+                    }
+                });
+                app.tasks.lock().push(listen_enter);
+            }
+
+            let node = editbox_node
+                .setup(|me| {
+                    BaseEdit::new(
+                        me,
+                        window_scale.clone(),
+                        app.renderer.clone(),
+                        app.redraw_trigger.clone(),
+                        BaseEditType::SingleLine,
+                        app.ex.clone(),
                     )
-                    .await;
-                    refresh_setting(setting2.clone(), sg_root2.clone());
+                })
+                .await;
+            setting_layer_node.link(node);
+        } else {
+            editz_text = None;
+            // Enum settings render as a cycle-on-tap row: tapping the
+            // value advances to the next item. Written as Role::User so
+            // the Setting pimpl persists it; the theme engine's watcher
+            // live-switches on `theme` changes.
+            let value_prop = setting_clone.node.get_property("value").unwrap();
+            let items = value_prop.enum_items.clone().unwrap_or_default();
+
+            let node = create_text("enum_value_label");
+            let prop = node.get_property("rect").unwrap();
+            prop.clone()
+                .set_expr(
+                    atom,
+                    Role::App,
+                    0,
+                    cc.compile("w * X_RATIO + BORDER_RIGHT_SCALE").unwrap(),
+                )
+                .unwrap();
+            prop.set_default_f32(1, 0.).unwrap();
+            prop.clone()
+                .set_expr(
+                    atom,
+                    Role::App,
+                    2,
+                    cc.compile("w * X_RATIO - BORDER_RIGHT_SCALE").unwrap(),
+                )
+                .unwrap();
+            prop.set_default_f32(3, SETTING_LABEL_LINESPACE).unwrap();
+            node.get_property("baseline")
+                .unwrap()
+                .set_default_f32(0, SETTING_LABEL_BASELINE)
+                .unwrap();
+            node.get_property("font_size")
+                .unwrap()
+                .set_default_f32(0, SETTING_EDIT_FONTSIZE)
+                .unwrap();
+            node.get_property("text_color")
+                .unwrap()
+                .set_default_f32_multi(&[0.92, 0.92, 0.92, 1.])
+                .unwrap();
+            node.set_property_str(atom, Role::App, "text", setting_clone.value_as_string())
+                .unwrap();
+            node.set_property_enum(atom, Role::App, "text_align", "start").unwrap();
+            node.set_property_u32(atom, Role::App, "z_index", 1).unwrap();
+            let node = node
+                .setup(|me| {
+                    Text::new(
+                        me,
+                        window_scale.clone(),
+                        app.renderer.clone(),
+                        i18n_fish.clone(),
+                        app.redraw_trigger.clone(),
+                    )
+                })
+                .await;
+            setting_layer_node.link(node.clone());
+
+            // Cycle button overlaying the value area
+            let btn = create_button("enum_cycle_btn");
+            let prop = btn.get_property("rect").unwrap();
+            prop.clone()
+                .set_expr(
+                    atom,
+                    Role::App,
+                    0,
+                    cc.compile("w * X_RATIO + BORDER_RIGHT_SCALE").unwrap(),
+                )
+                .unwrap();
+            prop.set_default_f32(1, 0.).unwrap();
+            prop.clone()
+                .set_expr(
+                    atom,
+                    Role::App,
+                    2,
+                    cc.compile("w * X_RATIO - BORDER_RIGHT_SCALE").unwrap(),
+                )
+                .unwrap();
+            prop.set_default_f32(3, SETTING_LABEL_LINESPACE).unwrap();
+            btn.set_property_bool(atom, Role::App, "is_active", true).unwrap();
+            let (slot, recvr) = Slot::new("enum_cycle");
+            btn.register("click", slot).unwrap();
+            let redraw = app.redraw_trigger.clone();
+            let label = node.get_property("text").unwrap();
+            let value_prop2 = value_prop.clone();
+            let items2 = items.clone();
+            let cycle_task = app.ex.spawn(async move {
+                while let Ok(_) = recvr.recv().await {
+                    let current = label.get_str(0).unwrap_or_default();
+                    let Some(pos) = items2.iter().position(|i| *i == current) else { continue };
+                    let next = items2[(pos + 1) % items2.len()].clone();
+                    let atom = &mut redraw.make_guard(gfxtag!("enum cycle"));
+                    value_prop2.set_enum(atom, Role::User, 0, next.clone()).unwrap();
+                    label.set_str(atom, Role::App, 0, next).unwrap();
                 }
             });
-            app.tasks.lock().unwrap().push(listen_enter);
+            setting_layer_node.push_task(cycle_task);
+            let btn = btn
+                .setup(|me| Button::new(me, app.renderer.clone(), app.redraw_trigger.clone()))
+                .await;
+            setting_layer_node.link(btn);
         }
-
-        let node = editbox_node
-            .setup(|me| {
-                EditBox::new(
-                    me,
-                    window_scale.clone(),
-                    app.renderer.clone(),
-                    app.text_shaper.clone(),
-                    app.ex.clone(),
-                )
-            })
-            .await;
-        setting_layer_node.link(node);
 
         // Is this setting the one that is currently active
         let cloned_active_setting = active_setting.clone();
@@ -1027,9 +1164,9 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish) {
                         cc.compile("w * X_RATIO + BORDER_RIGHT_SCALE + 6").unwrap(),
                     )
                     .unwrap();
-                prop.set_f32(atom, Role::App, 1, SETTING_LABEL_LINESPACE / 2.).unwrap();
-                prop.set_f32(atom, Role::App, 2, 0.).unwrap();
-                prop.set_f32(atom, Role::App, 3, 0.).unwrap();
+                prop.set_default_f32(1, SETTING_LABEL_LINESPACE / 2.).unwrap();
+                prop.set_default_f32(2, 0.).unwrap();
+                prop.set_default_f32(3, 0.).unwrap();
                 node.set_property_u32(atom, Role::App, "z_index", 1).unwrap();
                 node.set_property_bool(
                     atom,
@@ -1042,7 +1179,9 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish) {
                 let shape = shape::create_circle([0.9, 0.4, 0.4, 0.7]).scaled(5.);
                 node.set_property_shape(atom, Role::App, "shape", shape).unwrap();
                 let node = node
-                    .setup(|me| VectorArt::new(me, app.renderer.clone(), app.redraw_trigger.clone()))
+                    .setup(|me| {
+                        VectorArt::new(me, app.renderer.clone(), app.redraw_trigger.clone())
+                    })
                     .await;
                 setting_layer_node.link(node);
 
@@ -1057,9 +1196,9 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish) {
                         cc.compile("w * X_RATIO + BORDER_RIGHT_SCALE + 6").unwrap(),
                     )
                     .unwrap();
-                prop.set_f32(atom, Role::App, 1, SETTING_LABEL_LINESPACE / 2.).unwrap();
-                prop.set_f32(atom, Role::App, 2, 0.).unwrap();
-                prop.set_f32(atom, Role::App, 3, 0.).unwrap();
+                prop.set_default_f32(1, SETTING_LABEL_LINESPACE / 2.).unwrap();
+                prop.set_default_f32(2, 0.).unwrap();
+                prop.set_default_f32(3, 0.).unwrap();
                 node.set_property_u32(atom, Role::App, "z_index", 1).unwrap();
                 node.set_property_bool(
                     atom,
@@ -1072,7 +1211,9 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish) {
                 let shape = shape::create_circle([0., 0.94, 1., 1.]).scaled(5.);
                 node.set_property_shape(atom, Role::App, "shape", shape).unwrap();
                 let node = node
-                    .setup(|me| VectorArt::new(me, app.renderer.clone(), app.redraw_trigger.clone()))
+                    .setup(|me| {
+                        VectorArt::new(me, app.renderer.clone(), app.redraw_trigger.clone())
+                    })
                     .await;
                 setting_layer_node.link(node);
 
@@ -1087,11 +1228,11 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish) {
                         cc.compile("w * X_RATIO + BORDER_RIGHT_SCALE + 20 + 6").unwrap(),
                     )
                     .unwrap();
-                prop.set_f32(atom, Role::App, 1, 0.).unwrap();
+                prop.set_default_f32(1, 0.).unwrap();
                 prop.clone()
                     .set_expr(atom, Role::App, 2, cc.compile("w * X_RATIO").unwrap())
                     .unwrap();
-                prop.set_f32(atom, Role::App, 3, 100.).unwrap();
+                prop.set_default_f32(3, 100.).unwrap();
                 value_node.set_property_u32(atom, Role::App, "z_index", 1).unwrap();
                 value_node
                     .set_property_f32(atom, Role::App, "baseline", SETTING_LABEL_BASELINE)
@@ -1104,21 +1245,15 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish) {
                     .unwrap();
                 if matches!(setting_clone.get_value(), PropertyValue::Bool(false)) {
                     value_node
-                        .set_property_f32_vec(
-                            atom,
-                            Role::App,
-                            "text_color",
-                            vec![0.9, 0.4, 0.4, 1.],
-                        )
+                        .get_property("text_color")
+                        .unwrap()
+                        .set_default_f32_multi(&[0.9, 0.4, 0.4, 1.])
                         .unwrap();
                 } else {
                     value_node
-                        .set_property_f32_vec(
-                            atom,
-                            Role::App,
-                            "text_color",
-                            vec![0.0, 0.94, 1., 1.],
-                        )
+                        .get_property("text_color")
+                        .unwrap()
+                        .set_default_f32_multi(&[0.0, 0.94, 1., 1.])
                         .unwrap();
                 }
                 value_node.set_property_u32(atom, Role::App, "z_index", 2).unwrap();
@@ -1129,8 +1264,8 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish) {
                             me,
                             window_scale.clone(),
                             app.renderer.clone(),
-                            app.text_shaper.clone(),
-                            app.ex.clone(),
+                            i18n_fish.clone(),
+                            app.redraw_trigger.clone(),
                         )
                     })
                     .await;
@@ -1147,11 +1282,11 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish) {
                         cc.compile("w * X_RATIO + BORDER_RIGHT_SCALE").unwrap(),
                     )
                     .unwrap();
-                prop.set_f32(atom, Role::App, 1, 0.).unwrap();
+                prop.set_default_f32(1, 0.).unwrap();
                 prop.clone()
                     .set_expr(atom, Role::App, 2, cc.compile("w * X_RATIO").unwrap())
                     .unwrap();
-                prop.set_f32(atom, Role::App, 3, 100.).unwrap();
+                prop.set_default_f32(3, 100.).unwrap();
                 value_node.set_property_u32(atom, Role::App, "z_index", 1).unwrap();
                 value_node
                     .set_property_f32(atom, Role::App, "baseline", SETTING_LABEL_BASELINE)
@@ -1163,7 +1298,9 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish) {
                     .set_property_str(atom, Role::App, "text", setting_clone.value_as_string())
                     .unwrap();
                 value_node
-                    .set_property_f32_vec(atom, Role::App, "text_color", vec![1., 1., 1., 1.])
+                    .get_property("text_color")
+                    .unwrap()
+                    .set_default_f32_multi(&[0.92, 0.92, 0.92, 1.])
                     .unwrap();
                 value_node.set_property_u32(atom, Role::App, "z_index", 2).unwrap();
 
@@ -1173,8 +1310,8 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish) {
                             me,
                             window_scale.clone(),
                             app.renderer.clone(),
-                            app.text_shaper.clone(),
-                            app.ex.clone(),
+                            i18n_fish.clone(),
+                            app.redraw_trigger.clone(),
                         )
                     })
                     .await;
@@ -1185,18 +1322,18 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish) {
             let node = create_button("selector_btn");
             node.set_property_bool(atom, Role::App, "is_active", true).unwrap();
             let prop = node.get_property("rect").unwrap();
-            prop.set_expr(atom, Role::App, 0, cc.compile("w * X_RATIO").unwrap()).unwrap();
-            prop.set_f32(atom, Role::App, 1, 0.).unwrap();
+            prop.set_default_expr(0, cc.compile("w * X_RATIO").unwrap()).unwrap();
+            prop.set_default_f32(1, 0.).unwrap();
             prop.clone()
                 .set_expr(atom, Role::App, 2, cc.compile("w * (1-X_RATIO)").unwrap())
                 .unwrap();
-            prop.set_f32(atom, Role::App, 3, SETTING_LABEL_LINESPACE).unwrap();
+            prop.set_default_f32(3, SETTING_LABEL_LINESPACE).unwrap();
 
             let sg_root2 = app.sg_root.clone();
             let setting_clone2 = setting_clone.clone();
             let setting_root2 = setting_layer_node.clone();
             let select = move || {
-                let atom = &mut PropertyAtomicGuard::new();
+                let atom = &mut PropertyAtomicGuard::none();
                 let sg_root = sg_root2.clone();
                 let mut lock = cloned_active_setting.lock().unwrap();
 
@@ -1223,7 +1360,7 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish) {
                         let node = old_node.lookup_node("/value_editbox").unwrap();
                         node.set_property_bool(atom, Role::App, "is_active", false).unwrap();
                         node.set_property_bool(atom, Role::App, "is_focused", false).unwrap();
-                        node.set_property_f32(atom, Role::App, "font_size", 0.).unwrap();
+                        node.get_property("font_size").unwrap().set_default_f32(0, 0.).unwrap();
                         node.set_property_str(atom, Role::App, "text", "").unwrap();
                     }
 
@@ -1296,13 +1433,11 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish) {
                             .unwrap();
 
                         let node = setting_root2.lookup_node("/value_label").unwrap();
-                        node.set_property_f32_vec(
-                            atom,
-                            Role::App,
-                            "text_color",
-                            vec![0., 0.94, 1., 1.],
-                        )
-                        .unwrap();
+                        let prop = node.get_property("text_color").unwrap();
+                        prop.set_f32(atom, Role::App, 0, 0.75).unwrap();
+                        prop.set_f32(atom, Role::App, 1, 0.75).unwrap();
+                        prop.set_f32(atom, Role::App, 2, 0.75).unwrap();
+                        prop.set_f32(atom, Role::App, 3, 1.).unwrap();
                     } else {
                         setting_clone2
                             .node
@@ -1322,13 +1457,11 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish) {
                             .unwrap();
 
                         let node = setting_root2.lookup_node("/value_label").unwrap();
-                        node.set_property_f32_vec(
-                            atom,
-                            Role::App,
-                            "text_color",
-                            vec![0.9, 0.4, 0.4, 1.],
-                        )
-                        .unwrap();
+                        let prop = node.get_property("text_color").unwrap();
+                        prop.set_f32(atom, Role::App, 0, 0.9).unwrap();
+                        prop.set_f32(atom, Role::App, 1, 0.4).unwrap();
+                        prop.set_f32(atom, Role::App, 2, 0.4).unwrap();
+                        prop.set_f32(atom, Role::App, 3, 1.).unwrap();
                     }
                 } else {
                     // Hide the setting value label (set its text empty)
@@ -1341,7 +1474,7 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish) {
                     let node = setting_root2.lookup_node("/value_editbox").unwrap();
                     node.set_property_bool(atom, Role::App, "is_active", true).unwrap();
                     node.set_property_bool(atom, Role::App, "is_focused", true).unwrap();
-                    node.set_property_f32(atom, Role::App, "font_size", 16.).unwrap();
+                    node.get_property("font_size").unwrap().set_default_f32(0, 16.).unwrap();
                     if !was_active {
                         node.set_property_str(
                             atom,
@@ -1372,9 +1505,11 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish) {
                         select2();
                     }
                 });
-                app.tasks.lock().unwrap().push(listen_click);
+                app.tasks.lock().push(listen_click);
 
-                let node = node.setup(|me| Button::new(me, app.renderer.clone(), app.redraw_trigger.clone())).await;
+                let node = node
+                    .setup(|me| Button::new(me, app.renderer.clone(), app.redraw_trigger.clone()))
+                    .await;
                 setting_layer_node.link(node.clone());
             }
         }
@@ -1383,10 +1518,10 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish) {
             // Switch icon
             let node = create_vector_art("switch_btn_bg");
             let prop = node.get_property("rect").unwrap();
-            prop.set_expr(atom, Role::App, 0, cc.compile("w - 50").unwrap()).unwrap();
-            prop.set_f32(atom, Role::App, 1, SETTING_LABEL_LINESPACE / 2.).unwrap();
-            prop.set_f32(atom, Role::App, 2, 0.).unwrap();
-            prop.set_f32(atom, Role::App, 3, 0.).unwrap();
+            prop.set_default_expr(0, cc.compile("w - 50").unwrap()).unwrap();
+            prop.set_default_f32(1, SETTING_LABEL_LINESPACE / 2.).unwrap();
+            prop.set_default_f32(2, 0.).unwrap();
+            prop.set_default_f32(3, 0.).unwrap();
             node.set_property_u32(atom, Role::App, "z_index", 1).unwrap();
 
             let shape = shape::create_switch([0., 0.94, 1., 1.]).scaled(10.);
@@ -1399,10 +1534,10 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish) {
             // Confirm button
             let node = create_vector_art("confirm_btn_bg");
             let prop = node.get_property("rect").unwrap();
-            prop.set_expr(atom, Role::App, 0, cc.compile("w - 50").unwrap()).unwrap();
-            prop.set_f32(atom, Role::App, 1, SETTING_LABEL_LINESPACE / 2.).unwrap();
-            prop.set_f32(atom, Role::App, 2, 0.).unwrap();
-            prop.set_f32(atom, Role::App, 3, 0.).unwrap();
+            prop.set_default_expr(0, cc.compile("w - 50").unwrap()).unwrap();
+            prop.set_default_f32(1, SETTING_LABEL_LINESPACE / 2.).unwrap();
+            prop.set_default_f32(2, 0.).unwrap();
+            prop.set_default_f32(3, 0.).unwrap();
             node.set_property_u32(atom, Role::App, "z_index", 3).unwrap();
             node.set_property_bool(atom, Role::App, "is_visible", false).unwrap();
 
@@ -1416,13 +1551,15 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish) {
             let node = create_button("confirm_btn");
             node.set_property_bool(atom, Role::App, "is_active", true).unwrap();
             let prop = node.get_property("rect").unwrap();
-            prop.set_expr(atom, Role::App, 0, cc.compile("w - 100").unwrap()).unwrap();
-            prop.set_f32(atom, Role::App, 1, 0.).unwrap();
-            prop.set_f32(atom, Role::App, 2, 100.).unwrap();
-            prop.set_f32(atom, Role::App, 3, SETTING_LABEL_LINESPACE).unwrap();
+            prop.set_default_expr(0, cc.compile("w - 100").unwrap()).unwrap();
+            prop.set_default_f32(1, 0.).unwrap();
+            prop.set_default_f32(2, 100.).unwrap();
+            prop.set_default_f32(3, SETTING_LABEL_LINESPACE).unwrap();
             node.set_property_u32(atom, Role::App, "z_index", 3).unwrap();
 
-            let node = node.setup(|me| Button::new(me, app.renderer.clone(), app.redraw_trigger.clone())).await;
+            let node = node
+                .setup(|me| Button::new(me, app.renderer.clone(), app.redraw_trigger.clone()))
+                .await;
             setting_layer_node.link(node.clone());
 
             // Handle confirm button click
@@ -1446,17 +1583,17 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish) {
                         refresh_setting(setting2.clone(), sg_root2.clone());
                     }
                 });
-                app.tasks.lock().unwrap().push(listen_click);
+                app.tasks.lock().push(listen_click);
             }
         }
 
         // Reset icon
         let node = create_vector_art("reset_btn_bg");
         let prop = node.get_property("rect").unwrap();
-        prop.set_expr(atom, Role::App, 0, cc.compile("w - 100").unwrap()).unwrap();
-        prop.set_f32(atom, Role::App, 1, SETTING_LABEL_LINESPACE / 2.).unwrap();
-        prop.set_f32(atom, Role::App, 2, 0.).unwrap();
-        prop.set_f32(atom, Role::App, 3, 0.).unwrap();
+        prop.set_default_expr(0, cc.compile("w - 100").unwrap()).unwrap();
+        prop.set_default_f32(1, SETTING_LABEL_LINESPACE / 2.).unwrap();
+        prop.set_default_f32(2, 0.).unwrap();
+        prop.set_default_f32(3, 0.).unwrap();
         node.set_property_bool(atom, Role::App, "is_visible", !setting.is_default()).unwrap();
         node.set_property_u32(atom, Role::App, "z_index", 1).unwrap();
 
@@ -1470,13 +1607,15 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish) {
         let node = create_button("reset_btn");
         node.set_property_bool(atom, Role::App, "is_active", !setting.is_default()).unwrap();
         let prop = node.get_property("rect").unwrap();
-        prop.set_expr(atom, Role::App, 0, cc.compile("w - 115").unwrap()).unwrap();
-        prop.set_f32(atom, Role::App, 1, 0.).unwrap();
-        prop.set_f32(atom, Role::App, 2, 50.).unwrap();
-        prop.set_f32(atom, Role::App, 3, SETTING_LABEL_LINESPACE).unwrap();
+        prop.set_default_expr(0, cc.compile("w - 115").unwrap()).unwrap();
+        prop.set_default_f32(1, 0.).unwrap();
+        prop.set_default_f32(2, 50.).unwrap();
+        prop.set_default_f32(3, SETTING_LABEL_LINESPACE).unwrap();
         node.set_property_u32(atom, Role::App, "z_index", 3).unwrap();
 
-        let node = node.setup(|me| Button::new(me, app.renderer.clone(), app.redraw_trigger.clone())).await;
+        let node = node
+            .setup(|me| Button::new(me, app.renderer.clone(), app.redraw_trigger.clone()))
+            .await;
         setting_layer_node.link(node.clone());
 
         // Handle reset button click
@@ -1492,7 +1631,7 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish) {
                     info!("reset clicked");
                     setting2.reset();
 
-                    let atom = &mut PropertyAtomicGuard::new();
+                    let atom = &mut PropertyAtomicGuard::none();
 
                     // Show the selected setting value label (set its text empty)
                     // of the selected setting, if there's one
@@ -1514,7 +1653,7 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish) {
                     refresh_setting(setting2.clone(), sg_root2.clone());
                 }
             });
-            app.tasks.lock().unwrap().push(listen_click);
+            app.tasks.lock().push(listen_click);
         }
     }
 
@@ -1529,15 +1668,21 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish) {
 }
 
 fn refresh_setting(setting: Arc<Setting>, sn: SceneNodePtr) {
-    let atom = &mut PropertyAtomicGuard::new();
+    let atom = &mut PropertyAtomicGuard::none();
     let is_bool = matches!(setting.get_value(), PropertyValue::Bool(_));
 
     let node = sn.lookup_node("/key_label").unwrap();
     if setting.clone().is_default() {
-        node.set_property_f32_vec(atom, Role::App, "text_color", vec![0.65, 0.87, 0.83, 1.])
-            .unwrap();
+        let prop = node.get_property("text_color").unwrap();
+        prop.set_f32(atom, Role::App, 0, 0.65).unwrap();
+        prop.set_f32(atom, Role::App, 1, 0.87).unwrap();
+        prop.set_f32(atom, Role::App, 2, 0.83).unwrap();
+        prop.set_f32(atom, Role::App, 3, 1.).unwrap();
     } else {
-        node.set_property_f32_vec(atom, Role::App, "text_color", vec![1., 1., 1., 1.]).unwrap();
+        node.get_property("text_color")
+            .unwrap()
+            .set_default_f32_multi(&[0.92, 0.92, 0.92, 1.])
+            .unwrap();
     }
 
     let node = sn.lookup_node("/reset_btn_bg").unwrap();
@@ -1551,15 +1696,17 @@ async fn update_setting(
     setting: Arc<Setting>,
     sn: SceneNodePtr,
     active_setting: Arc<Mutex<Option<Arc<Setting>>>>,
-    editz_text: PropertyStr,
+    editz_text: Option<PropertyStr>,
 ) {
-    let atom = &mut PropertyAtomicGuard::new();
+    let atom = &mut PropertyAtomicGuard::none();
 
     if let Some(node) = sn.lookup_node("/value_editbox") {
-        node.set_property_f32(atom, Role::App, "font_size", 0.).unwrap();
+        node.get_property("font_size").unwrap().set_default_f32(0, 0.).unwrap();
         node.set_property_bool(atom, Role::App, "is_active", false).unwrap();
         node.set_property_bool(atom, Role::App, "is_focused", false).unwrap();
     }
+
+    let Some(editz_text) = editz_text else { return };
 
     match &setting.get_value() {
         PropertyValue::Uint32(_) => {

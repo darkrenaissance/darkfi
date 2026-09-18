@@ -43,8 +43,8 @@ use crate::{
     gfx::{gfxtag, DrawInstruction, EpochTracker, Point, Rectangle, Renderer},
     mesh::Color,
     prop::{
-        Property, PropertyColor, PropertyFloat32, PropertyPtr, PropertyStr, PropertySubType,
-        PropertyType, Role,
+        Property, PropertyAtomicGuard, PropertyColor, PropertyFloat32, PropertyPermission,
+        PropertyPtr, PropertyStr, PropertySubType, PropertyType, Role,
     },
     scene::{CallArgType, Pimpl, SceneNode, SceneNodePtr, SceneNodeType, SceneNodeWeak},
     text,
@@ -581,6 +581,14 @@ impl PrivMsgNode {
     /// the layout signature invalidates it. Collapsed long messages
     /// come back [`DrawOutcome::Clipped`] so the chatview emits
     /// them as sibling calls with their own view.
+    /// Draw-path re-evaluation of the expr-bound own styling props
+    /// (see ChatView::eval_style for rationale).
+    pub fn eval_style(&self, atom: &mut PropertyAtomicGuard) {
+        self.own.action_text_color.eval(atom).expect("action_text_color");
+        self.own.url_text_color.eval(atom).expect("url_text_color");
+        self.own.cap_max_height.eval(atom).expect("cap_max_height");
+    }
+
     pub fn draw(&self, rec: &MsgRecord, renderer: &Renderer) -> super::DrawOutcome {
         let key = (rec.ts, rec.id);
         let mut inner = self.inner.lock();
@@ -1007,7 +1015,12 @@ mod tests {
     /// A scale=1.0 property standing in for the window scale.
     fn scale_prop() -> PropertyFloat32 {
         let mut node = SceneNode::new("w", SceneNodeType::Object);
-        let prop = Property::new("scale", PropertyType::Float32, PropertySubType::Null);
+        let prop = Property::new(
+            "scale",
+            PropertyType::Float32,
+            PropertySubType::Null,
+            PropertyPermission::default(),
+        );
         node.add_property(prop).unwrap();
         let node = node.setup_null();
         let atom = &mut PropertyAtomicGuard::none();

@@ -37,7 +37,7 @@ use super::{
     super::{append_joined_channel, chat},
     edit_buttons,
     edit_switch::edit_switch,
-    ColorScheme, BTN_TEXT_Y, CHANNEL_ITEM_HEIGHT, COLOR_SCHEME, MENU_BTN_W_L,
+    BTN_TEXT_Y, CHANNEL_ITEM_HEIGHT, MENU_BTN_W_L,
 };
 use crate::{
     app::{
@@ -54,6 +54,7 @@ use crate::{
     prop::{PropertyAtomicGuard, PropertyBool, PropertyFloat32, Role},
     scene::{Pimpl, SceneNodePtr, Slot},
     shape,
+    theme::wire_color,
     ui::{
         emoji_picker::EmojiMeshesPtr, BaseEdit, BaseEditType, Button, Layer, Menu, ShapeVertex,
         Shortcut, Text, UIObject, VectorArt, VectorShape,
@@ -194,16 +195,13 @@ pub async fn make(
     // Header
     let node = create_vector_art("header_bg");
     let prop = node.get_property("rect").unwrap();
-    prop.set_f32(atom, Role::App, 0, 0.).unwrap();
-    prop.set_f32(atom, Role::App, 1, 0.).unwrap();
-    prop.set_expr(atom, Role::App, 2, expr::load_var("w")).unwrap();
-    prop.set_f32(atom, Role::App, 3, HEADER_HEIGHT).unwrap();
+    prop.set_default_f32(0, 0.).unwrap();
+    prop.set_default_f32(1, 0.).unwrap();
+    prop.set_default_expr(2, expr::load_var("w")).unwrap();
+    prop.set_default_f32(3, HEADER_HEIGHT).unwrap();
     node.set_property_u32(atom, Role::App, "z_index", 2).unwrap();
 
-    let (bg_color, sep_color) = match COLOR_SCHEME {
-        ColorScheme::DarkMode => ([0., 0., 0., 1.], [0.41, 0.6, 0.65, 1.]),
-        ColorScheme::PaperLight => ([1., 1., 1., 1.], [0., 0.6, 0.65, 1.]),
-    };
+    let (bg_color, sep_color) = ([0., 0., 0., 1.], [0.41, 0.6, 0.65, 1.]);
     let mut shape = VectorShape::new();
     shape.add_filled_box(
         expr::const_f32(0.),
@@ -233,8 +231,8 @@ pub async fn make(
         cc.compile("h + 0.5").unwrap(),
         sep_color,
     );
-    let color1 = [0., 0.17, 0.18, 0.5];
-    let color2 = [0., 0.88, 1., 0.];
+    let color1 = [0.2, 0.2, 0.2, 0.5];
+    let color2 = [0.5, 0.5, 0.5, 0.];
     shape.add_smooth_vertical_gradient(
         expr::const_f32(BACKARROW_BG_W + 1.),
         expr::const_f32(0.),
@@ -254,10 +252,10 @@ pub async fn make(
     // Create back arrow
     let node = create_vector_art("back_btn_bg");
     let prop = node.get_property("rect").unwrap();
-    prop.set_f32(atom, Role::App, 0, BACKARROW_X).unwrap();
-    prop.set_f32(atom, Role::App, 1, BACKARROW_Y).unwrap();
-    prop.set_f32(atom, Role::App, 2, BACKARROW_SCALE).unwrap();
-    prop.set_f32(atom, Role::App, 3, BACKARROW_SCALE).unwrap();
+    prop.set_default_f32(0, BACKARROW_X).unwrap();
+    prop.set_default_f32(1, BACKARROW_Y).unwrap();
+    prop.set_default_f32(2, BACKARROW_SCALE).unwrap();
+    prop.set_default_f32(3, BACKARROW_SCALE).unwrap();
     node.set_property_u32(atom, Role::App, "z_index", 3).unwrap();
 
     let shape = shape::create_back_arrow().scaled(BACKARROW_SCALE);
@@ -272,10 +270,10 @@ pub async fn make(
     node.set_property_u32(atom, Role::App, "z_index", 10).unwrap();
     node.set_property_u32(atom, Role::App, "priority", 10).unwrap();
     let prop = node.get_property("rect").unwrap();
-    prop.set_f32(atom, Role::App, 0, 0.).unwrap();
-    prop.set_f32(atom, Role::App, 1, 0.).unwrap();
-    prop.set_f32(atom, Role::App, 2, BACKARROW_BG_W).unwrap();
-    prop.set_f32(atom, Role::App, 3, HEADER_HEIGHT).unwrap();
+    prop.set_default_f32(0, 0.).unwrap();
+    prop.set_default_f32(1, 0.).unwrap();
+    prop.set_default_f32(2, BACKARROW_BG_W).unwrap();
+    prop.set_default_f32(3, HEADER_HEIGHT).unwrap();
 
     let sg_root = app.sg_root.clone();
     let contact_vis = contact_is_visible.clone();
@@ -336,9 +334,9 @@ pub async fn make(
 
     let content_area_node = create_layer("content_area");
     let prop = content_area_node.get_property("rect").unwrap();
-    prop.set_f32(atom, Role::App, 0, CONTENT_MARGIN).unwrap();
-    prop.set_f32(atom, Role::App, 1, HEADER_HEIGHT + CONTENT_MARGIN).unwrap();
-    prop.set_expr(atom, Role::App, 2, cc.compile("w - 2. * CONTENT_MARGIN").unwrap()).unwrap();
+    prop.set_default_f32(0, CONTENT_MARGIN).unwrap();
+    prop.set_default_f32(1, HEADER_HEIGHT + CONTENT_MARGIN).unwrap();
+    prop.set_default_expr(2, cc.compile("w - 2. * CONTENT_MARGIN").unwrap()).unwrap();
     prop.set_expr(
         atom,
         Role::App,
@@ -356,10 +354,10 @@ pub async fn make(
     // Contacts label bg
     let node = create_vector_art("contacts_label_bg");
     let prop = node.get_property("rect").unwrap();
-    prop.set_f32(atom, Role::App, 0, 0.).unwrap();
-    prop.set_f32(atom, Role::App, 1, 0.).unwrap();
-    prop.set_expr(atom, Role::App, 2, expr::load_var("w")).unwrap();
-    prop.set_f32(atom, Role::App, 3, LABEL_LINESPACE).unwrap();
+    prop.set_default_f32(0, 0.).unwrap();
+    prop.set_default_f32(1, 0.).unwrap();
+    prop.set_default_expr(2, expr::load_var("w")).unwrap();
+    prop.set_default_f32(3, LABEL_LINESPACE).unwrap();
     node.set_property_u32(atom, Role::App, "z_index", 0).unwrap();
 
     let mut shape = VectorShape::new();
@@ -368,10 +366,7 @@ pub async fn make(
     let y1 = expr::const_f32(0.);
     let x2 = expr::load_var("w");
     let y2 = cc.compile("LABEL_LINESPACE").unwrap();
-    let (color1, color2) = match COLOR_SCHEME {
-        ColorScheme::DarkMode => ([0., 0.11, 0.11, 0.], [0., 0., 0., 0.]),
-        ColorScheme::PaperLight => ([1., 1., 1., 0.], [1., 1., 1., 0.]),
-    };
+    let (color1, color2) = ([0., 0.11, 0.11, 0.], [0., 0., 0., 0.]);
     let mut verts = vec![
         ShapeVertex::new(x1.clone(), y1.clone(), color1),
         ShapeVertex::new(x2.clone(), y1.clone(), color1),
@@ -389,10 +384,10 @@ pub async fn make(
 
     let node = create_vector_art("active_tab_overlay");
     let prop = node.get_property("rect").unwrap();
-    prop.set_f32(atom, Role::App, 0, 0.).unwrap();
-    prop.set_f32(atom, Role::App, 1, 0.).unwrap();
-    prop.set_expr(atom, Role::App, 2, expr::load_var("w")).unwrap();
-    prop.set_f32(atom, Role::App, 3, LABEL_LINESPACE).unwrap();
+    prop.set_default_f32(0, 0.).unwrap();
+    prop.set_default_f32(1, 0.).unwrap();
+    prop.set_default_expr(2, expr::load_var("w")).unwrap();
+    prop.set_default_f32(3, LABEL_LINESPACE).unwrap();
     node.set_property_u32(atom, Role::App, "z_index", 0).unwrap();
 
     let mut shape = VectorShape::new();
@@ -428,10 +423,10 @@ pub async fn make(
 
     let node = create_vector_art("active_tab_bg");
     let prop = node.get_property("rect").unwrap();
-    prop.set_f32(atom, Role::App, 0, 0.).unwrap();
-    prop.set_f32(atom, Role::App, 1, 0.).unwrap();
-    prop.set_expr(atom, Role::App, 2, expr::load_var("w")).unwrap();
-    prop.set_f32(atom, Role::App, 3, LABEL_LINESPACE).unwrap();
+    prop.set_default_f32(0, 0.).unwrap();
+    prop.set_default_f32(1, 0.).unwrap();
+    prop.set_default_expr(2, expr::load_var("w")).unwrap();
+    prop.set_default_f32(3, LABEL_LINESPACE).unwrap();
     node.set_property_u32(atom, Role::App, "z_index", 0).unwrap();
 
     let mut shape = VectorShape::new();
@@ -450,10 +445,10 @@ pub async fn make(
 
     let node = create_vector_art("inactive_tab_overlay");
     let prop = node.get_property("rect").unwrap();
-    prop.set_f32(atom, Role::App, 0, 0.).unwrap();
-    prop.set_f32(atom, Role::App, 1, 0.).unwrap();
-    prop.set_expr(atom, Role::App, 2, expr::load_var("w")).unwrap();
-    prop.set_f32(atom, Role::App, 3, LABEL_LINESPACE).unwrap();
+    prop.set_default_f32(0, 0.).unwrap();
+    prop.set_default_f32(1, 0.).unwrap();
+    prop.set_default_expr(2, expr::load_var("w")).unwrap();
+    prop.set_default_f32(3, LABEL_LINESPACE).unwrap();
     node.set_property_u32(atom, Role::App, "z_index", 1).unwrap();
 
     let mut shape = VectorShape::new();
@@ -496,11 +491,11 @@ pub async fn make(
 
     let node = create_vector_art("input_area_bg");
     let prop = node.get_property("rect").unwrap();
-    prop.set_f32(atom, Role::App, 0, 0.).unwrap();
-    prop.set_f32(atom, Role::App, 1, LABEL_LINESPACE).unwrap();
-    prop.set_expr(atom, Role::App, 2, expr::load_var("w")).unwrap();
+    prop.set_default_f32(0, 0.).unwrap();
+    prop.set_default_f32(1, LABEL_LINESPACE).unwrap();
+    prop.set_default_expr(2, expr::load_var("w")).unwrap();
     let code = cc.compile("8. * CHATEDIT_PAD + 4. * CHATEDIT_HEIGHT").unwrap();
-    prop.set_expr(atom, Role::App, 3, code).unwrap();
+    prop.set_default_expr(3, code).unwrap();
     node.set_property_u32(atom, Role::App, "z_index", 0).unwrap();
     node.set_property_u32(atom, Role::App, "priority", 0).unwrap();
 
@@ -520,10 +515,10 @@ pub async fn make(
 
     let node = create_vector_art("fullscreen_label_bg");
     let prop = node.get_property("rect").unwrap();
-    prop.set_f32(atom, Role::App, 0, 0.).unwrap();
-    prop.set_f32(atom, Role::App, 1, 0.).unwrap();
-    prop.set_expr(atom, Role::App, 2, expr::load_var("w")).unwrap();
-    prop.set_expr(atom, Role::App, 3, expr::load_var("h")).unwrap();
+    prop.set_default_f32(0, 0.).unwrap();
+    prop.set_default_f32(1, 0.).unwrap();
+    prop.set_default_expr(2, expr::load_var("w")).unwrap();
+    prop.set_default_expr(3, expr::load_var("h")).unwrap();
     node.set_property_u32(atom, Role::App, "z_index", 0).unwrap();
 
     let mut shape = VectorShape::new();
@@ -591,11 +586,11 @@ pub async fn make(
     node.set_property_u32(atom, Role::App, "z_index", 1).unwrap();
     node.set_property_u32(atom, Role::App, "priority", 2).unwrap();
     let prop = node.get_property("rect").unwrap();
-    prop.set_f32(atom, Role::App, 0, 0.).unwrap();
-    prop.set_f32(atom, Role::App, 1, 0.).unwrap();
+    prop.set_default_f32(0, 0.).unwrap();
+    prop.set_default_f32(1, 0.).unwrap();
     let code = cc.compile("w / 2").unwrap();
-    prop.set_expr(atom, Role::App, 2, code).unwrap();
-    prop.set_f32(atom, Role::App, 3, LABEL_LINESPACE).unwrap();
+    prop.set_default_expr(2, code).unwrap();
+    prop.set_default_f32(3, LABEL_LINESPACE).unwrap();
 
     let (slot, recvr) = Slot::new("contactsbtn_clicked");
     node.register("click", slot).unwrap();
@@ -620,7 +615,7 @@ pub async fn make(
             debug!("contacts btn click - switching to contacts");
         }
     });
-    app.tasks.lock().unwrap().push(listen_click);
+    app.tasks.lock().push(listen_click);
 
     let node =
         node.setup(|me| Button::new(me, app.renderer.clone(), app.redraw_trigger.clone())).await;
@@ -628,10 +623,10 @@ pub async fn make(
 
     let node = create_vector_art("contacts_tab_icon");
     let prop = node.get_property("rect").unwrap();
-    prop.set_f32(atom, Role::App, 0, CONTACTS_TAB_ICON_X).unwrap();
-    prop.set_f32(atom, Role::App, 1, LABEL_LINESPACE / 2. + 4.).unwrap();
-    prop.set_f32(atom, Role::App, 2, CONTACTS_ICON_SCALE).unwrap();
-    prop.set_f32(atom, Role::App, 3, CONTACTS_ICON_SCALE).unwrap();
+    prop.set_default_f32(0, CONTACTS_TAB_ICON_X).unwrap();
+    prop.set_default_f32(1, LABEL_LINESPACE / 2. + 4.).unwrap();
+    prop.set_default_f32(2, CONTACTS_ICON_SCALE).unwrap();
+    prop.set_default_f32(3, CONTACTS_ICON_SCALE).unwrap();
     node.set_property_u32(atom, Role::App, "z_index", 2).unwrap();
     let shape = shape::create_contacts_icon(COLOR_MINT).scaled(CONTACTS_ICON_SCALE);
     node.set_property_shape(atom, Role::App, "shape", shape).unwrap();
@@ -643,26 +638,24 @@ pub async fn make(
     let prop = node.get_property("rect").unwrap();
     #[cfg(any(target_os = "android", feature = "emulate-android"))]
     {
-        prop.set_f32(atom, Role::App, 0, TAB_LABEL_X).unwrap();
-        prop.set_f32(atom, Role::App, 1, CONTENT_MARGIN * 1.4).unwrap();
-        prop.set_f32(atom, Role::App, 2, 200.).unwrap();
-        prop.set_f32(atom, Role::App, 3, 40.).unwrap();
+        prop.set_default_f32(0, TAB_LABEL_X).unwrap();
+        prop.set_default_f32(1, CONTENT_MARGIN * 1.4).unwrap();
+        prop.set_default_f32(2, 200.).unwrap();
+        prop.set_default_f32(3, 40.).unwrap();
     }
     #[cfg(not(any(target_os = "android", feature = "emulate-android")))]
     {
-        prop.set_f32(atom, Role::App, 0, TAB_LABEL_X).unwrap();
-        prop.set_f32(atom, Role::App, 1, CONTENT_MARGIN * 1.15).unwrap();
-        prop.set_f32(atom, Role::App, 2, 200.).unwrap();
-        prop.set_f32(atom, Role::App, 3, 40.).unwrap();
+        prop.set_default_f32(0, TAB_LABEL_X).unwrap();
+        prop.set_default_f32(1, CONTENT_MARGIN * 1.15).unwrap();
+        prop.set_default_f32(2, 200.).unwrap();
+        prop.set_default_f32(3, 40.).unwrap();
     }
     node.set_property_u32(atom, Role::App, "z_index", 2).unwrap();
-    node.set_property_f32(atom, Role::App, "font_size", LABEL_FONTSIZE).unwrap();
+    node.get_property("font_size").unwrap().set_default_f32(0, LABEL_FONTSIZE).unwrap();
     node.set_property_str(atom, Role::App, "text", "CONTACTS").unwrap();
     let prop = node.get_property("text_color").unwrap();
-    prop.set_f32(atom, Role::App, 0, COLOR_MINT[0]).unwrap();
-    prop.set_f32(atom, Role::App, 1, COLOR_MINT[1]).unwrap();
-    prop.set_f32(atom, Role::App, 2, COLOR_MINT[2]).unwrap();
-    prop.set_f32(atom, Role::App, 3, COLOR_MINT[3]).unwrap();
+    prop.set_default_f32_multi(&[COLOR_MINT[0], COLOR_MINT[1], COLOR_MINT[2], COLOR_MINT[3]])
+        .unwrap();
 
     let node = node
         .setup(|me| {
@@ -683,11 +676,11 @@ pub async fn make(
     node.set_property_u32(atom, Role::App, "priority", 2).unwrap();
     let prop = node.get_property("rect").unwrap();
     let code = cc.compile("w / 2").unwrap();
-    prop.set_expr(atom, Role::App, 0, code).unwrap();
-    prop.set_f32(atom, Role::App, 1, 0.).unwrap();
+    prop.set_default_expr(0, code).unwrap();
+    prop.set_default_f32(1, 0.).unwrap();
     let code = cc.compile("w").unwrap();
-    prop.set_expr(atom, Role::App, 2, code).unwrap();
-    prop.set_f32(atom, Role::App, 3, LABEL_LINESPACE).unwrap();
+    prop.set_default_expr(2, code).unwrap();
+    prop.set_default_f32(3, LABEL_LINESPACE).unwrap();
 
     let (slot, recvr) = Slot::new("channelsbtn_clicked");
     node.register("click", slot).unwrap();
@@ -712,7 +705,7 @@ pub async fn make(
             debug!("channels btn click - switching to channels");
         }
     });
-    app.tasks.lock().unwrap().push(listen_click);
+    app.tasks.lock().push(listen_click);
 
     let node =
         node.setup(|me| Button::new(me, app.renderer.clone(), app.redraw_trigger.clone())).await;
@@ -721,10 +714,10 @@ pub async fn make(
     let node = create_vector_art("channels_tab_icon");
     let prop = node.get_property("rect").unwrap();
     let code = cc.compile("w / 2 + CHANNELS_TAB_ICON_X").unwrap();
-    prop.set_expr(atom, Role::App, 0, code).unwrap();
-    prop.set_f32(atom, Role::App, 1, LABEL_LINESPACE / 2. + 3.).unwrap();
-    prop.set_f32(atom, Role::App, 2, CHANNELS_ICON_SCALE).unwrap();
-    prop.set_f32(atom, Role::App, 3, CHANNELS_ICON_SCALE).unwrap();
+    prop.set_default_expr(0, code).unwrap();
+    prop.set_default_f32(1, LABEL_LINESPACE / 2. + 3.).unwrap();
+    prop.set_default_f32(2, CHANNELS_ICON_SCALE).unwrap();
+    prop.set_default_f32(3, CHANNELS_ICON_SCALE).unwrap();
     node.set_property_u32(atom, Role::App, "z_index", 2).unwrap();
     let shape = shape::create_channels_icon(COLOR_INACTIVE).scaled(CHANNELS_ICON_SCALE);
     node.set_property_shape(atom, Role::App, "shape", shape).unwrap();
@@ -737,29 +730,32 @@ pub async fn make(
     #[cfg(any(target_os = "android", feature = "emulate-android"))]
     {
         let code = cc.compile("w / 2 + TAB_LABEL_X").unwrap();
-        prop.set_expr(atom, Role::App, 0, code).unwrap();
-        prop.set_f32(atom, Role::App, 1, CONTENT_MARGIN * 1.4).unwrap();
+        prop.set_default_expr(0, code).unwrap();
+        prop.set_default_f32(1, CONTENT_MARGIN * 1.4).unwrap();
         let code = cc.compile("w").unwrap();
-        prop.set_expr(atom, Role::App, 2, code).unwrap();
-        prop.set_f32(atom, Role::App, 3, 40.).unwrap();
+        prop.set_default_expr(2, code).unwrap();
+        prop.set_default_f32(3, 40.).unwrap();
     }
     #[cfg(not(any(target_os = "android", feature = "emulate-android")))]
     {
         let code = cc.compile("w / 2 + TAB_LABEL_X").unwrap();
-        prop.set_expr(atom, Role::App, 0, code).unwrap();
-        prop.set_f32(atom, Role::App, 1, CONTENT_MARGIN * 1.15).unwrap();
+        prop.set_default_expr(0, code).unwrap();
+        prop.set_default_f32(1, CONTENT_MARGIN * 1.15).unwrap();
         let code = cc.compile("w").unwrap();
-        prop.set_expr(atom, Role::App, 2, code).unwrap();
-        prop.set_f32(atom, Role::App, 3, 40.).unwrap();
+        prop.set_default_expr(2, code).unwrap();
+        prop.set_default_f32(3, 40.).unwrap();
     }
     node.set_property_u32(atom, Role::App, "z_index", 2).unwrap();
-    node.set_property_f32(atom, Role::App, "font_size", LABEL_FONTSIZE).unwrap();
+    node.get_property("font_size").unwrap().set_default_f32(0, LABEL_FONTSIZE).unwrap();
     node.set_property_str(atom, Role::App, "text", "CHANNELS").unwrap();
     let prop = node.get_property("text_color").unwrap();
-    prop.set_f32(atom, Role::App, 0, COLOR_INACTIVE[0]).unwrap();
-    prop.set_f32(atom, Role::App, 1, COLOR_INACTIVE[1]).unwrap();
-    prop.set_f32(atom, Role::App, 2, COLOR_INACTIVE[2]).unwrap();
-    prop.set_f32(atom, Role::App, 3, COLOR_INACTIVE[3]).unwrap();
+    prop.set_default_f32_multi(&[
+        COLOR_INACTIVE[0],
+        COLOR_INACTIVE[1],
+        COLOR_INACTIVE[2],
+        COLOR_INACTIVE[3],
+    ])
+    .unwrap();
     let node = node
         .setup(|me| {
             Text::new(
@@ -778,89 +774,52 @@ pub async fn make(
     node.set_property_bool(atom, Role::App, "is_focused", false).unwrap();
 
     let prop = node.get_property("rect").unwrap();
-    prop.set_f32(atom, Role::App, 0, CHATEDIT_PAD).unwrap();
-    prop.set_f32(atom, Role::App, 1, LABEL_LINESPACE + 7. * CHATEDIT_PAD + 3. * CHATEDIT_HEIGHT)
-        .unwrap();
+    prop.set_default_f32(0, CHATEDIT_PAD).unwrap();
+    prop.set_default_f32(1, LABEL_LINESPACE + 7. * CHATEDIT_PAD + 3. * CHATEDIT_HEIGHT).unwrap();
     let code = cc.compile("parent_w - 2 * CHATEDIT_PAD").unwrap();
-    prop.set_expr(atom, Role::App, 2, code).unwrap();
-    prop.set_f32(atom, Role::App, 3, CHATEDIT_HEIGHT).unwrap();
+    prop.set_default_expr(2, code).unwrap();
+    prop.set_default_f32(3, CHATEDIT_HEIGHT).unwrap();
 
     let prop = node.get_property("padding").unwrap();
-    prop.set_f32(atom, Role::App, 0, 0.).unwrap();
-    prop.set_f32(atom, Role::App, 1, 0.).unwrap();
-    prop.set_f32(atom, Role::App, 2, TEXTBAR_BASELINE / 2.).unwrap();
-    prop.set_f32(atom, Role::App, 3, 15.).unwrap();
-    node.set_property_f32(atom, Role::App, "baseline", TEXTBAR_BASELINE).unwrap();
-    node.set_property_f32(atom, Role::App, "font_size", FONTSIZE * 0.88).unwrap();
+    prop.set_default_f32(0, 0.).unwrap();
+    prop.set_default_f32(1, 0.).unwrap();
+    prop.set_default_f32(2, TEXTBAR_BASELINE / 2.).unwrap();
+    prop.set_default_f32(3, 15.).unwrap();
+    node.get_property("baseline").unwrap().set_default_f32(0, TEXTBAR_BASELINE).unwrap();
+    node.get_property("font_size").unwrap().set_default_f32(0, FONTSIZE * 0.88).unwrap();
 
     let prop = node.get_property("text_color").unwrap();
-    if COLOR_SCHEME == ColorScheme::PaperLight {
-        prop.set_f32(atom, Role::App, 0, 0.).unwrap();
-        prop.set_f32(atom, Role::App, 1, 0.).unwrap();
-        prop.set_f32(atom, Role::App, 2, 0.).unwrap();
-        prop.set_f32(atom, Role::App, 3, 1.).unwrap();
-    } else if COLOR_SCHEME == ColorScheme::DarkMode {
-        prop.set_f32(atom, Role::App, 0, 1.).unwrap();
-        prop.set_f32(atom, Role::App, 1, 1.).unwrap();
-        prop.set_f32(atom, Role::App, 2, 1.).unwrap();
-        prop.set_f32(atom, Role::App, 3, 1.).unwrap();
-    }
+    prop.set_default_f32_multi(&[1., 1., 1., 1.]).unwrap();
     let prop = node.get_property("text_hi_color").unwrap();
-    prop.set_f32(atom, Role::App, 0, 0.44).unwrap();
-    prop.set_f32(atom, Role::App, 1, 0.96).unwrap();
-    prop.set_f32(atom, Role::App, 2, 1.).unwrap();
-    prop.set_f32(atom, Role::App, 3, 1.).unwrap();
+    prop.set_default_f32_multi(&[0.44, 0.96, 1., 1.]).unwrap();
     let prop = node.get_property("text_cmd_color").unwrap();
-    prop.set_f32(atom, Role::App, 0, 0.64).unwrap();
-    prop.set_f32(atom, Role::App, 1, 1.).unwrap();
-    prop.set_f32(atom, Role::App, 2, 0.83).unwrap();
-    prop.set_f32(atom, Role::App, 3, 1.).unwrap();
+    prop.set_default_f32_multi(&[0.64, 1., 0.83, 1.]).unwrap();
     let prop = node.get_property("cursor_color").unwrap();
-    prop.set_f32(atom, Role::App, 0, 0.816).unwrap();
-    prop.set_f32(atom, Role::App, 1, 0.627).unwrap();
-    prop.set_f32(atom, Role::App, 2, 1.).unwrap();
-    prop.set_f32(atom, Role::App, 3, 1.).unwrap();
+    prop.set_default_f32_multi(&[0.816, 0.627, 1., 1.]).unwrap();
     node.set_property_f32(atom, Role::App, "cursor_ascent", CHATEDIT_CURSOR_ASCENT).unwrap();
     node.set_property_f32(atom, Role::App, "cursor_descent", CHATEDIT_CURSOR_DESCENT).unwrap();
     node.set_property_f32(atom, Role::App, "select_ascent", CHATEDIT_SELECT_ASCENT).unwrap();
     node.set_property_f32(atom, Role::App, "select_descent", CHATEDIT_SELECT_DESCENT).unwrap();
     node.set_property_f32(atom, Role::App, "handle_descent", CHATEDIT_HANDLE_DESCENT).unwrap();
-    node.set_property_f32(atom, Role::App, "action_padding", ACTION_PADDING).unwrap();
-    node.set_property_f32(atom, Role::App, "action_spacing", ACTION_SPACING).unwrap();
+    node.get_property("action_padding").unwrap().set_default_f32(0, ACTION_PADDING).unwrap();
+    node.get_property("action_spacing").unwrap().set_default_f32(0, ACTION_SPACING).unwrap();
     let prop = node.get_property("hi_bg_color").unwrap();
-    if COLOR_SCHEME == ColorScheme::PaperLight {
-        prop.set_f32(atom, Role::App, 0, 0.).unwrap();
-        prop.set_f32(atom, Role::App, 1, 0.).unwrap();
-        prop.set_f32(atom, Role::App, 2, 0.).unwrap();
-        prop.set_f32(atom, Role::App, 3, 0.8).unwrap();
-    } else if COLOR_SCHEME == ColorScheme::DarkMode {
-        prop.set_f32(atom, Role::App, 0, 0.027).unwrap();
-        prop.set_f32(atom, Role::App, 1, 0.039).unwrap();
-        prop.set_f32(atom, Role::App, 2, 0.039).unwrap();
-        prop.set_f32(atom, Role::App, 3, 0.6).unwrap();
-    }
+    prop.set_default_f32_multi(&[0.027, 0.039, 0.039, 0.6]).unwrap();
     let prop = node.get_property("cmd_bg_color").unwrap();
-    if COLOR_SCHEME == ColorScheme::PaperLight {
-        prop.set_f32(atom, Role::App, 0, 0.5).unwrap();
-        prop.set_f32(atom, Role::App, 1, 0.5).unwrap();
-        prop.set_f32(atom, Role::App, 2, 0.5).unwrap();
-        prop.set_f32(atom, Role::App, 3, 1.).unwrap();
-    } else if COLOR_SCHEME == ColorScheme::DarkMode {
-        prop.set_f32(atom, Role::App, 0, 0.).unwrap();
-        prop.set_f32(atom, Role::App, 1, 0.30).unwrap();
-        prop.set_f32(atom, Role::App, 2, 0.25).unwrap();
-        prop.set_f32(atom, Role::App, 3, 1.).unwrap();
-    }
+    prop.set_default_f32_multi(&[0., 0.30, 0.25, 1.]).unwrap();
     node.set_property_u32(atom, Role::App, "z_index", 6).unwrap();
     node.set_property_u32(atom, Role::App, "priority", 3).unwrap();
     //node.set_property_bool(atom, Role::App, "debug", true).unwrap();
 
     node.set_property_str(atom, Role::App, "placeholder_text", "search").unwrap();
     let prop = node.get_property("placeholder_color").unwrap();
-    prop.set_f32(atom, Role::App, 0, COLOR_MINT_OP[0]).unwrap();
-    prop.set_f32(atom, Role::App, 1, COLOR_MINT_OP[1]).unwrap();
-    prop.set_f32(atom, Role::App, 2, COLOR_MINT_OP[2]).unwrap();
-    prop.set_f32(atom, Role::App, 3, COLOR_MINT_OP[3]).unwrap();
+    prop.set_default_f32_multi(&[
+        COLOR_MINT_OP[0],
+        COLOR_MINT_OP[1],
+        COLOR_MINT_OP[2],
+        COLOR_MINT_OP[3],
+    ])
+    .unwrap();
 
     let node = node
         .setup(|me| {
@@ -879,12 +838,11 @@ pub async fn make(
 
     let node = create_vector_art("search_bg");
     let prop = node.get_property("rect").unwrap();
-    prop.set_f32(atom, Role::App, 0, CHATEDIT_PAD).unwrap();
-    prop.set_f32(atom, Role::App, 1, LABEL_LINESPACE + 7. * CHATEDIT_PAD + 3. * CHATEDIT_HEIGHT)
-        .unwrap();
+    prop.set_default_f32(0, CHATEDIT_PAD).unwrap();
+    prop.set_default_f32(1, LABEL_LINESPACE + 7. * CHATEDIT_PAD + 3. * CHATEDIT_HEIGHT).unwrap();
     let code = cc.compile("w - 2 * CHATEDIT_PAD").unwrap();
-    prop.set_expr(atom, Role::App, 2, code).unwrap();
-    prop.set_f32(atom, Role::App, 3, CHATEDIT_HEIGHT).unwrap();
+    prop.set_default_expr(2, code).unwrap();
+    prop.set_default_f32(3, CHATEDIT_HEIGHT).unwrap();
     node.set_property_u32(atom, Role::App, "z_index", 4).unwrap();
 
     let mut shape = VectorShape::new();
@@ -903,12 +861,11 @@ pub async fn make(
 
     let node = create_vector_art("search_outline");
     let prop = node.get_property("rect").unwrap();
-    prop.set_f32(atom, Role::App, 0, CHATEDIT_PAD).unwrap();
-    prop.set_f32(atom, Role::App, 1, LABEL_LINESPACE + 7. * CHATEDIT_PAD + 3. * CHATEDIT_HEIGHT)
-        .unwrap();
+    prop.set_default_f32(0, CHATEDIT_PAD).unwrap();
+    prop.set_default_f32(1, LABEL_LINESPACE + 7. * CHATEDIT_PAD + 3. * CHATEDIT_HEIGHT).unwrap();
     let code = cc.compile("w - 2 * CHATEDIT_PAD").unwrap();
-    prop.set_expr(atom, Role::App, 2, code).unwrap();
-    prop.set_f32(atom, Role::App, 3, CHATEDIT_HEIGHT).unwrap();
+    prop.set_default_expr(2, code).unwrap();
+    prop.set_default_f32(3, CHATEDIT_HEIGHT).unwrap();
     node.set_property_u32(atom, Role::App, "z_index", 7).unwrap();
     let mut shape = VectorShape::new();
     shape.add_outline(
@@ -930,89 +887,53 @@ pub async fn make(
     node.set_property_bool(atom, Role::App, "is_focused", false).unwrap();
 
     let prop = node.get_property("rect").unwrap();
-    prop.set_f32(atom, Role::App, 0, CHATEDIT_PAD).unwrap();
-    prop.set_f32(atom, Role::App, 1, LABEL_LINESPACE + CHATEDIT_PAD).unwrap();
+    prop.set_default_f32(0, CHATEDIT_PAD).unwrap();
+    prop.set_default_f32(1, LABEL_LINESPACE + CHATEDIT_PAD).unwrap();
     let code = cc.compile("parent_w - 2 * CHATEDIT_PAD").unwrap();
-    prop.set_expr(atom, Role::App, 2, code).unwrap();
-    prop.set_f32(atom, Role::App, 3, CHATEDIT_HEIGHT).unwrap();
+    prop.set_default_expr(2, code).unwrap();
+    prop.set_default_f32(3, CHATEDIT_HEIGHT).unwrap();
 
     let prop = node.get_property("padding").unwrap();
-    prop.set_f32(atom, Role::App, 0, 0.).unwrap();
-    prop.set_f32(atom, Role::App, 1, 0.).unwrap();
-    prop.set_f32(atom, Role::App, 2, TEXTBAR_BASELINE / 2.).unwrap();
-    prop.set_f32(atom, Role::App, 3, 15.).unwrap();
+    prop.set_default_f32(0, 0.).unwrap();
+    prop.set_default_f32(1, 0.).unwrap();
+    prop.set_default_f32(2, TEXTBAR_BASELINE / 2.).unwrap();
+    prop.set_default_f32(3, 15.).unwrap();
 
-    node.set_property_f32(atom, Role::App, "baseline", TEXTBAR_BASELINE).unwrap();
-    node.set_property_f32(atom, Role::App, "font_size", FONTSIZE * 0.88).unwrap();
+    node.get_property("baseline").unwrap().set_default_f32(0, TEXTBAR_BASELINE).unwrap();
+    node.get_property("font_size").unwrap().set_default_f32(0, FONTSIZE * 0.88).unwrap();
 
     let prop = node.get_property("text_color").unwrap();
-    if COLOR_SCHEME == ColorScheme::PaperLight {
-        prop.set_f32(atom, Role::App, 0, 0.).unwrap();
-        prop.set_f32(atom, Role::App, 1, 0.).unwrap();
-        prop.set_f32(atom, Role::App, 2, 0.).unwrap();
-        prop.set_f32(atom, Role::App, 3, 1.).unwrap();
-    } else if COLOR_SCHEME == ColorScheme::DarkMode {
-        prop.set_f32(atom, Role::App, 0, 1.).unwrap();
-        prop.set_f32(atom, Role::App, 1, 1.).unwrap();
-        prop.set_f32(atom, Role::App, 2, 1.).unwrap();
-        prop.set_f32(atom, Role::App, 3, 1.).unwrap();
-    }
+    prop.set_default_f32_multi(&[1., 1., 1., 1.]).unwrap();
     let prop = node.get_property("text_hi_color").unwrap();
-    prop.set_f32(atom, Role::App, 0, 0.44).unwrap();
-    prop.set_f32(atom, Role::App, 1, 0.96).unwrap();
-    prop.set_f32(atom, Role::App, 2, 1.).unwrap();
-    prop.set_f32(atom, Role::App, 3, 1.).unwrap();
+    prop.set_default_f32_multi(&[0.44, 0.96, 1., 1.]).unwrap();
     let prop = node.get_property("text_cmd_color").unwrap();
-    prop.set_f32(atom, Role::App, 0, 0.64).unwrap();
-    prop.set_f32(atom, Role::App, 1, 1.).unwrap();
-    prop.set_f32(atom, Role::App, 2, 0.83).unwrap();
-    prop.set_f32(atom, Role::App, 3, 1.).unwrap();
+    prop.set_default_f32_multi(&[0.64, 1., 0.83, 1.]).unwrap();
     let prop = node.get_property("cursor_color").unwrap();
-    prop.set_f32(atom, Role::App, 0, 0.816).unwrap();
-    prop.set_f32(atom, Role::App, 1, 0.627).unwrap();
-    prop.set_f32(atom, Role::App, 2, 1.).unwrap();
-    prop.set_f32(atom, Role::App, 3, 1.).unwrap();
+    prop.set_default_f32_multi(&[0.816, 0.627, 1., 1.]).unwrap();
     node.set_property_f32(atom, Role::App, "cursor_ascent", CHATEDIT_CURSOR_ASCENT).unwrap();
     node.set_property_f32(atom, Role::App, "cursor_descent", CHATEDIT_CURSOR_DESCENT).unwrap();
     node.set_property_f32(atom, Role::App, "select_ascent", CHATEDIT_SELECT_ASCENT).unwrap();
     node.set_property_f32(atom, Role::App, "select_descent", CHATEDIT_SELECT_DESCENT).unwrap();
     node.set_property_f32(atom, Role::App, "handle_descent", CHATEDIT_HANDLE_DESCENT).unwrap();
-    node.set_property_f32(atom, Role::App, "action_padding", ACTION_PADDING).unwrap();
-    node.set_property_f32(atom, Role::App, "action_spacing", ACTION_SPACING).unwrap();
+    node.get_property("action_padding").unwrap().set_default_f32(0, ACTION_PADDING).unwrap();
+    node.get_property("action_spacing").unwrap().set_default_f32(0, ACTION_SPACING).unwrap();
     let prop = node.get_property("hi_bg_color").unwrap();
-    if COLOR_SCHEME == ColorScheme::PaperLight {
-        prop.set_f32(atom, Role::App, 0, 0.).unwrap();
-        prop.set_f32(atom, Role::App, 1, 0.).unwrap();
-        prop.set_f32(atom, Role::App, 2, 0.).unwrap();
-        prop.set_f32(atom, Role::App, 3, 0.8).unwrap();
-    } else if COLOR_SCHEME == ColorScheme::DarkMode {
-        prop.set_f32(atom, Role::App, 0, 0.027).unwrap();
-        prop.set_f32(atom, Role::App, 1, 0.039).unwrap();
-        prop.set_f32(atom, Role::App, 2, 0.039).unwrap();
-        prop.set_f32(atom, Role::App, 3, 0.6).unwrap();
-    }
+    prop.set_default_f32_multi(&[0.027, 0.039, 0.039, 0.6]).unwrap();
     let prop = node.get_property("cmd_bg_color").unwrap();
-    if COLOR_SCHEME == ColorScheme::PaperLight {
-        prop.set_f32(atom, Role::App, 0, 0.5).unwrap();
-        prop.set_f32(atom, Role::App, 1, 0.5).unwrap();
-        prop.set_f32(atom, Role::App, 2, 0.5).unwrap();
-        prop.set_f32(atom, Role::App, 3, 1.).unwrap();
-    } else if COLOR_SCHEME == ColorScheme::DarkMode {
-        prop.set_f32(atom, Role::App, 0, 0.027).unwrap();
-        prop.set_f32(atom, Role::App, 1, 0.039).unwrap();
-        prop.set_f32(atom, Role::App, 2, 0.039).unwrap();
-        prop.set_f32(atom, Role::App, 3, 0.6).unwrap();
-    }
+    prop.set_default_f32_multi(&[0.027, 0.039, 0.039, 0.6]).unwrap();
     node.set_property_u32(atom, Role::App, "z_index", 5).unwrap();
     node.set_property_u32(atom, Role::App, "priority", 2).unwrap();
     //node.set_property_bool(atom, Role::App, "debug", true).unwrap();
 
     node.set_property_str(atom, Role::App, "placeholder_text", "NAME").unwrap();
     let prop = node.get_property("placeholder_color").unwrap();
-    prop.set_f32(atom, Role::App, 0, COLOR_MINT_OP[0]).unwrap();
-    prop.set_f32(atom, Role::App, 1, COLOR_MINT_OP[1]).unwrap();
-    prop.set_f32(atom, Role::App, 2, COLOR_MINT_OP[2]).unwrap();
-    prop.set_f32(atom, Role::App, 3, COLOR_MINT_OP[3]).unwrap();
+    prop.set_default_f32_multi(&[
+        COLOR_MINT_OP[0],
+        COLOR_MINT_OP[1],
+        COLOR_MINT_OP[2],
+        COLOR_MINT_OP[3],
+    ])
+    .unwrap();
 
     let node = node
         .setup(|me| {
@@ -1031,11 +952,11 @@ pub async fn make(
 
     let node = create_vector_art("nick_bg");
     let prop = node.get_property("rect").unwrap();
-    prop.set_f32(atom, Role::App, 0, CHATEDIT_PAD).unwrap();
-    prop.set_f32(atom, Role::App, 1, LABEL_LINESPACE + CHATEDIT_PAD).unwrap();
+    prop.set_default_f32(0, CHATEDIT_PAD).unwrap();
+    prop.set_default_f32(1, LABEL_LINESPACE + CHATEDIT_PAD).unwrap();
     let code = cc.compile("w - 2 * CHATEDIT_PAD").unwrap();
-    prop.set_expr(atom, Role::App, 2, code).unwrap();
-    prop.set_f32(atom, Role::App, 3, CHATEDIT_HEIGHT).unwrap();
+    prop.set_default_expr(2, code).unwrap();
+    prop.set_default_f32(3, CHATEDIT_HEIGHT).unwrap();
     node.set_property_u32(atom, Role::App, "z_index", 4).unwrap();
 
     let mut shape = VectorShape::new();
@@ -1054,11 +975,11 @@ pub async fn make(
 
     let node = create_vector_art("nick_outline");
     let prop = node.get_property("rect").unwrap();
-    prop.set_f32(atom, Role::App, 0, CHATEDIT_PAD).unwrap();
-    prop.set_f32(atom, Role::App, 1, LABEL_LINESPACE + CHATEDIT_PAD).unwrap();
+    prop.set_default_f32(0, CHATEDIT_PAD).unwrap();
+    prop.set_default_f32(1, LABEL_LINESPACE + CHATEDIT_PAD).unwrap();
     let code = cc.compile("w - 2 * CHATEDIT_PAD").unwrap();
-    prop.set_expr(atom, Role::App, 2, code).unwrap();
-    prop.set_f32(atom, Role::App, 3, CHATEDIT_HEIGHT).unwrap();
+    prop.set_default_expr(2, code).unwrap();
+    prop.set_default_f32(3, CHATEDIT_HEIGHT).unwrap();
     node.set_property_u32(atom, Role::App, "z_index", 7).unwrap();
     let mut shape = VectorShape::new();
     shape.add_outline(
@@ -1080,89 +1001,52 @@ pub async fn make(
     node.set_property_bool(atom, Role::App, "is_focused", false).unwrap();
 
     let prop = node.get_property("rect").unwrap();
-    prop.set_f32(atom, Role::App, 0, CHATEDIT_PAD).unwrap();
-    prop.set_f32(atom, Role::App, 1, LABEL_LINESPACE + 2. * CHATEDIT_PAD + CHATEDIT_HEIGHT)
-        .unwrap();
+    prop.set_default_f32(0, CHATEDIT_PAD).unwrap();
+    prop.set_default_f32(1, LABEL_LINESPACE + 2. * CHATEDIT_PAD + CHATEDIT_HEIGHT).unwrap();
     let code = cc.compile("parent_w - 2 * CHATEDIT_PAD").unwrap();
-    prop.set_expr(atom, Role::App, 2, code).unwrap();
-    prop.set_f32(atom, Role::App, 3, CHATEDIT_HEIGHT).unwrap();
+    prop.set_default_expr(2, code).unwrap();
+    prop.set_default_f32(3, CHATEDIT_HEIGHT).unwrap();
 
     let prop = node.get_property("padding").unwrap();
-    prop.set_f32(atom, Role::App, 0, 0.).unwrap();
-    prop.set_f32(atom, Role::App, 1, 0.).unwrap();
-    prop.set_f32(atom, Role::App, 2, TEXTBAR_BASELINE / 2.).unwrap();
-    prop.set_f32(atom, Role::App, 3, 15.).unwrap();
-    node.set_property_f32(atom, Role::App, "baseline", TEXTBAR_BASELINE).unwrap();
-    node.set_property_f32(atom, Role::App, "font_size", FONTSIZE * 0.88).unwrap();
+    prop.set_default_f32(0, 0.).unwrap();
+    prop.set_default_f32(1, 0.).unwrap();
+    prop.set_default_f32(2, TEXTBAR_BASELINE / 2.).unwrap();
+    prop.set_default_f32(3, 15.).unwrap();
+    node.get_property("baseline").unwrap().set_default_f32(0, TEXTBAR_BASELINE).unwrap();
+    node.get_property("font_size").unwrap().set_default_f32(0, FONTSIZE * 0.88).unwrap();
 
     let prop = node.get_property("text_color").unwrap();
-    if COLOR_SCHEME == ColorScheme::PaperLight {
-        prop.set_f32(atom, Role::App, 0, 0.).unwrap();
-        prop.set_f32(atom, Role::App, 1, 0.).unwrap();
-        prop.set_f32(atom, Role::App, 2, 0.).unwrap();
-        prop.set_f32(atom, Role::App, 3, 1.).unwrap();
-    } else if COLOR_SCHEME == ColorScheme::DarkMode {
-        prop.set_f32(atom, Role::App, 0, 1.).unwrap();
-        prop.set_f32(atom, Role::App, 1, 1.).unwrap();
-        prop.set_f32(atom, Role::App, 2, 1.).unwrap();
-        prop.set_f32(atom, Role::App, 3, 1.).unwrap();
-    }
+    prop.set_default_f32_multi(&[1., 1., 1., 1.]).unwrap();
     let prop = node.get_property("text_hi_color").unwrap();
-    prop.set_f32(atom, Role::App, 0, 0.44).unwrap();
-    prop.set_f32(atom, Role::App, 1, 0.96).unwrap();
-    prop.set_f32(atom, Role::App, 2, 1.).unwrap();
-    prop.set_f32(atom, Role::App, 3, 1.).unwrap();
+    prop.set_default_f32_multi(&[0.44, 0.96, 1., 1.]).unwrap();
     let prop = node.get_property("text_cmd_color").unwrap();
-    prop.set_f32(atom, Role::App, 0, 0.64).unwrap();
-    prop.set_f32(atom, Role::App, 1, 1.).unwrap();
-    prop.set_f32(atom, Role::App, 2, 0.83).unwrap();
-    prop.set_f32(atom, Role::App, 3, 1.).unwrap();
+    prop.set_default_f32_multi(&[0.64, 1., 0.83, 1.]).unwrap();
     let prop = node.get_property("cursor_color").unwrap();
-    prop.set_f32(atom, Role::App, 0, 0.816).unwrap();
-    prop.set_f32(atom, Role::App, 1, 0.627).unwrap();
-    prop.set_f32(atom, Role::App, 2, 1.).unwrap();
-    prop.set_f32(atom, Role::App, 3, 1.).unwrap();
+    prop.set_default_f32_multi(&[0.816, 0.627, 1., 1.]).unwrap();
     node.set_property_f32(atom, Role::App, "cursor_ascent", CHATEDIT_CURSOR_ASCENT).unwrap();
     node.set_property_f32(atom, Role::App, "cursor_descent", CHATEDIT_CURSOR_DESCENT).unwrap();
     node.set_property_f32(atom, Role::App, "select_ascent", CHATEDIT_SELECT_ASCENT).unwrap();
     node.set_property_f32(atom, Role::App, "select_descent", CHATEDIT_SELECT_DESCENT).unwrap();
     node.set_property_f32(atom, Role::App, "handle_descent", CHATEDIT_HANDLE_DESCENT).unwrap();
-    node.set_property_f32(atom, Role::App, "action_padding", ACTION_PADDING).unwrap();
-    node.set_property_f32(atom, Role::App, "action_spacing", ACTION_SPACING).unwrap();
+    node.get_property("action_padding").unwrap().set_default_f32(0, ACTION_PADDING).unwrap();
+    node.get_property("action_spacing").unwrap().set_default_f32(0, ACTION_SPACING).unwrap();
     let prop = node.get_property("hi_bg_color").unwrap();
-    if COLOR_SCHEME == ColorScheme::PaperLight {
-        prop.set_f32(atom, Role::App, 0, 0.).unwrap();
-        prop.set_f32(atom, Role::App, 1, 0.).unwrap();
-        prop.set_f32(atom, Role::App, 2, 0.).unwrap();
-        prop.set_f32(atom, Role::App, 3, 0.8).unwrap();
-    } else if COLOR_SCHEME == ColorScheme::DarkMode {
-        prop.set_f32(atom, Role::App, 0, 0.027).unwrap();
-        prop.set_f32(atom, Role::App, 1, 0.039).unwrap();
-        prop.set_f32(atom, Role::App, 2, 0.039).unwrap();
-        prop.set_f32(atom, Role::App, 3, 0.6).unwrap();
-    }
+    prop.set_default_f32_multi(&[0.027, 0.039, 0.039, 0.6]).unwrap();
     let prop = node.get_property("cmd_bg_color").unwrap();
-    if COLOR_SCHEME == ColorScheme::PaperLight {
-        prop.set_f32(atom, Role::App, 0, 0.5).unwrap();
-        prop.set_f32(atom, Role::App, 1, 0.5).unwrap();
-        prop.set_f32(atom, Role::App, 2, 0.5).unwrap();
-        prop.set_f32(atom, Role::App, 3, 1.).unwrap();
-    } else if COLOR_SCHEME == ColorScheme::DarkMode {
-        prop.set_f32(atom, Role::App, 0, 0.).unwrap();
-        prop.set_f32(atom, Role::App, 1, 0.30).unwrap();
-        prop.set_f32(atom, Role::App, 2, 0.25).unwrap();
-        prop.set_f32(atom, Role::App, 3, 1.).unwrap();
-    }
+    prop.set_default_f32_multi(&[0., 0.30, 0.25, 1.]).unwrap();
     node.set_property_u32(atom, Role::App, "z_index", 6).unwrap();
     node.set_property_u32(atom, Role::App, "priority", 3).unwrap();
     //node.set_property_bool(atom, Role::App, "debug", true).unwrap();
 
     node.set_property_str(atom, Role::App, "placeholder_text", "KEY").unwrap();
     let prop = node.get_property("placeholder_color").unwrap();
-    prop.set_f32(atom, Role::App, 0, COLOR_MINT_OP[0]).unwrap();
-    prop.set_f32(atom, Role::App, 1, COLOR_MINT_OP[1]).unwrap();
-    prop.set_f32(atom, Role::App, 2, COLOR_MINT_OP[2]).unwrap();
-    prop.set_f32(atom, Role::App, 3, COLOR_MINT_OP[3]).unwrap();
+    prop.set_default_f32_multi(&[
+        COLOR_MINT_OP[0],
+        COLOR_MINT_OP[1],
+        COLOR_MINT_OP[2],
+        COLOR_MINT_OP[3],
+    ])
+    .unwrap();
 
     let node = node
         .setup(|me| {
@@ -1181,12 +1065,11 @@ pub async fn make(
 
     let node = create_vector_art("secret_bg");
     let prop = node.get_property("rect").unwrap();
-    prop.set_f32(atom, Role::App, 0, CHATEDIT_PAD).unwrap();
-    prop.set_f32(atom, Role::App, 1, LABEL_LINESPACE + 2. * CHATEDIT_PAD + CHATEDIT_HEIGHT)
-        .unwrap();
+    prop.set_default_f32(0, CHATEDIT_PAD).unwrap();
+    prop.set_default_f32(1, LABEL_LINESPACE + 2. * CHATEDIT_PAD + CHATEDIT_HEIGHT).unwrap();
     let code = cc.compile("w - 2 * CHATEDIT_PAD").unwrap();
-    prop.set_expr(atom, Role::App, 2, code).unwrap();
-    prop.set_f32(atom, Role::App, 3, CHATEDIT_HEIGHT).unwrap();
+    prop.set_default_expr(2, code).unwrap();
+    prop.set_default_f32(3, CHATEDIT_HEIGHT).unwrap();
     node.set_property_u32(atom, Role::App, "z_index", 4).unwrap();
 
     let mut shape = VectorShape::new();
@@ -1205,12 +1088,11 @@ pub async fn make(
 
     let node = create_vector_art("secret_outline");
     let prop = node.get_property("rect").unwrap();
-    prop.set_f32(atom, Role::App, 0, CHATEDIT_PAD).unwrap();
-    prop.set_f32(atom, Role::App, 1, LABEL_LINESPACE + 2. * CHATEDIT_PAD + CHATEDIT_HEIGHT)
-        .unwrap();
+    prop.set_default_f32(0, CHATEDIT_PAD).unwrap();
+    prop.set_default_f32(1, LABEL_LINESPACE + 2. * CHATEDIT_PAD + CHATEDIT_HEIGHT).unwrap();
     let code = cc.compile("w - 2 * CHATEDIT_PAD").unwrap();
-    prop.set_expr(atom, Role::App, 2, code).unwrap();
-    prop.set_f32(atom, Role::App, 3, CHATEDIT_HEIGHT).unwrap();
+    prop.set_default_expr(2, code).unwrap();
+    prop.set_default_f32(3, CHATEDIT_HEIGHT).unwrap();
     node.set_property_u32(atom, Role::App, "z_index", 7).unwrap();
 
     let mut shape = VectorShape::new();
@@ -1230,7 +1112,7 @@ pub async fn make(
     let node = create_vector_art("receive_copy_btn_bg");
     let prop = node.get_property("rect").unwrap();
     let code = cc.compile("w - CHATEDIT_PAD - COPY_BTN_SIZE / 2.").unwrap();
-    prop.set_expr(atom, Role::App, 0, code).unwrap();
+    prop.set_default_expr(0, code).unwrap();
     prop.set_f32(
         atom,
         Role::App,
@@ -1238,8 +1120,8 @@ pub async fn make(
         LABEL_LINESPACE + 2. * CHATEDIT_PAD + CHATEDIT_HEIGHT + COPY_BTN_SIZE / 2.,
     )
     .unwrap();
-    prop.set_f32(atom, Role::App, 2, COPY_BTN_SIZE).unwrap();
-    prop.set_f32(atom, Role::App, 3, COPY_BTN_SIZE).unwrap();
+    prop.set_default_f32(2, COPY_BTN_SIZE).unwrap();
+    prop.set_default_f32(3, COPY_BTN_SIZE).unwrap();
     node.set_property_u32(atom, Role::App, "z_index", 8).unwrap();
 
     let shape = shape::create_paste(COLOR_CYAN).scaled(COPY_SCALE);
@@ -1253,11 +1135,10 @@ pub async fn make(
     node.set_property_bool(atom, Role::App, "is_active", true).unwrap();
     let prop = node.get_property("rect").unwrap();
     let code = cc.compile("w - CHATEDIT_PAD - COPY_BTN_SIZE").unwrap();
-    prop.set_expr(atom, Role::App, 0, code).unwrap();
-    prop.set_f32(atom, Role::App, 1, LABEL_LINESPACE + 2. * CHATEDIT_PAD + CHATEDIT_HEIGHT)
-        .unwrap();
-    prop.set_f32(atom, Role::App, 2, COPY_BTN_SIZE).unwrap();
-    prop.set_f32(atom, Role::App, 3, COPY_BTN_SIZE).unwrap();
+    prop.set_default_expr(0, code).unwrap();
+    prop.set_default_f32(1, LABEL_LINESPACE + 2. * CHATEDIT_PAD + CHATEDIT_HEIGHT).unwrap();
+    prop.set_default_f32(2, COPY_BTN_SIZE).unwrap();
+    prop.set_default_f32(3, COPY_BTN_SIZE).unwrap();
     node.set_property_u32(atom, Role::App, "z_index", 9).unwrap();
     node.set_property_u32(atom, Role::App, "priority", 5).unwrap();
 
@@ -1279,7 +1160,7 @@ pub async fn make(
             }
         }
     });
-    app.tasks.lock().unwrap().push(listen_click);
+    app.tasks.lock().push(listen_click);
 
     let node =
         node.setup(|me| Button::new(me, app.renderer.clone(), app.redraw_trigger.clone())).await;
@@ -1289,7 +1170,7 @@ pub async fn make(
     node.set_property_bool(atom, Role::App, "is_active", true).unwrap();
     let prop = node.get_property("rect").unwrap();
     let code = cc.compile("w - CHATEDIT_PAD - 150").unwrap();
-    prop.set_expr(atom, Role::App, 0, code).unwrap();
+    prop.set_default_expr(0, code).unwrap();
     prop.set_f32(
         atom,
         Role::App,
@@ -1297,8 +1178,8 @@ pub async fn make(
         LABEL_LINESPACE + 2. * CHATEDIT_PAD + CHATEDIT_HEIGHT + CHATEDIT_HEIGHT + 10.,
     )
     .unwrap();
-    prop.set_f32(atom, Role::App, 2, 150.).unwrap();
-    prop.set_f32(atom, Role::App, 3, 50.).unwrap();
+    prop.set_default_f32(2, 150.).unwrap();
+    prop.set_default_f32(3, 50.).unwrap();
 
     let node =
         node.setup(|me| Button::new(me, app.renderer.clone(), app.redraw_trigger.clone())).await;
@@ -1307,12 +1188,12 @@ pub async fn make(
     let node = create_layer("addcontact_btn_layer");
     let prop = node.get_property("rect").unwrap();
     let code = cc.compile("w - CHATEDIT_PAD - MENU_BTN_W_L - 45").unwrap();
-    prop.set_expr(atom, Role::App, 0, code).unwrap();
+    prop.set_default_expr(0, code).unwrap();
     let code = cc.compile("LABEL_LINESPACE + 3. * CHATEDIT_PAD + 2. * CHATEDIT_HEIGHT").unwrap();
-    prop.set_expr(atom, Role::App, 1, code).unwrap();
+    prop.set_default_expr(1, code).unwrap();
     let code = cc.compile("MENU_BTN_W_L + 45").unwrap();
-    prop.set_expr(atom, Role::App, 2, code).unwrap();
-    prop.set_f32(atom, Role::App, 3, CHATEDIT_HEIGHT * 0.95).unwrap();
+    prop.set_default_expr(2, code).unwrap();
+    prop.set_default_f32(3, CHATEDIT_HEIGHT * 0.95).unwrap();
     node.set_property_bool(atom, Role::App, "is_visible", true).unwrap();
     node.set_property_u32(atom, Role::App, "z_index", 2).unwrap();
     node.set_property_u32(atom, Role::App, "priority", 1).unwrap();
@@ -1322,10 +1203,10 @@ pub async fn make(
 
     let node = create_vector_art("btns_bg");
     let prop = node.get_property("rect").unwrap();
-    prop.set_f32(atom, Role::App, 0, 0.).unwrap();
-    prop.set_f32(atom, Role::App, 1, 0.).unwrap();
-    prop.set_expr(atom, Role::App, 2, expr::load_var("w")).unwrap();
-    prop.set_expr(atom, Role::App, 3, expr::load_var("h")).unwrap();
+    prop.set_default_f32(0, 0.).unwrap();
+    prop.set_default_f32(1, 0.).unwrap();
+    prop.set_default_expr(2, expr::load_var("w")).unwrap();
+    prop.set_default_expr(3, expr::load_var("h")).unwrap();
     node.set_property_u32(atom, Role::App, "z_index", 0).unwrap();
 
     let mut shape = VectorShape::new();
@@ -1346,11 +1227,11 @@ pub async fn make(
     let node = create_button("addcontact_btn");
     node.set_property_bool(atom, Role::App, "is_active", true).unwrap();
     let prop = node.get_property("rect").unwrap();
-    prop.set_f32(atom, Role::App, 0, 0.).unwrap();
-    prop.set_f32(atom, Role::App, 1, 0.).unwrap();
+    prop.set_default_f32(0, 0.).unwrap();
+    prop.set_default_f32(1, 0.).unwrap();
     let code = cc.compile("MENU_BTN_W_L + 45").unwrap();
-    prop.set_expr(atom, Role::App, 2, code).unwrap();
-    prop.set_f32(atom, Role::App, 3, CHATEDIT_HEIGHT).unwrap();
+    prop.set_default_expr(2, code).unwrap();
+    prop.set_default_f32(3, CHATEDIT_HEIGHT).unwrap();
 
     let (slot, addcontact_recvr) = Slot::new("add_contact_clicked_handler");
     node.register("click", slot).unwrap();
@@ -1361,22 +1242,20 @@ pub async fn make(
 
     let node = create_text("add_contact");
     let prop = node.get_property("rect").unwrap();
-    prop.set_f32(atom, Role::App, 0, 0.).unwrap();
-    prop.set_f32(atom, Role::App, 1, BTN_TEXT_Y).unwrap();
-    prop.set_f32(atom, Role::App, 2, MENU_BTN_W_L + 45.).unwrap();
-    prop.set_f32(atom, Role::App, 3, CHATEDIT_HEIGHT).unwrap();
+    prop.set_default_f32(0, 0.).unwrap();
+    prop.set_default_f32(1, BTN_TEXT_Y).unwrap();
+    prop.set_default_f32(2, MENU_BTN_W_L + 45.).unwrap();
+    prop.set_default_f32(3, CHATEDIT_HEIGHT).unwrap();
     node.set_property_u32(atom, Role::App, "z_index", 3).unwrap();
-    node.set_property_f32(atom, Role::App, "font_size", FONTSIZE * 0.95).unwrap();
+    node.get_property("font_size").unwrap().set_default_f32(0, FONTSIZE * 0.95).unwrap();
     node.set_property_str(atom, Role::App, "text", "add contact").unwrap();
     let prop = node.get_property("text_align").unwrap();
     prop.set_enum(atom, Role::App, 0, "center").unwrap();
     node.set_property_bool(atom, Role::App, "use_i18n", false).unwrap();
 
     let prop = node.get_property("text_color").unwrap();
-    prop.set_f32(atom, Role::App, 0, COLOR_CYAN[0]).unwrap();
-    prop.set_f32(atom, Role::App, 1, COLOR_CYAN[1]).unwrap();
-    prop.set_f32(atom, Role::App, 2, COLOR_CYAN[2]).unwrap();
-    prop.set_f32(atom, Role::App, 3, COLOR_CYAN[3]).unwrap();
+    prop.set_default_f32_multi(&[COLOR_CYAN[0], COLOR_CYAN[1], COLOR_CYAN[2], COLOR_CYAN[3]])
+        .unwrap();
 
     let node = node
         .setup(|me| {
@@ -1397,41 +1276,32 @@ pub async fn make(
 
     let node = create_menu("contact_menu");
     let prop = node.get_property("rect").unwrap();
-    prop.set_f32(atom, Role::App, 0, 0.).unwrap();
-    prop.set_f32(atom, Role::App, 1, LABEL_LINESPACE + 8. * CHATEDIT_PAD + 4. * CHATEDIT_HEIGHT)
-        .unwrap();
-    prop.set_expr(atom, Role::App, 2, expr::load_var("w")).unwrap();
+    prop.set_default_f32(0, 0.).unwrap();
+    prop.set_default_f32(1, LABEL_LINESPACE + 8. * CHATEDIT_PAD + 4. * CHATEDIT_HEIGHT).unwrap();
+    prop.set_default_expr(2, expr::load_var("w")).unwrap();
     let code =
         cc.compile("h - (LABEL_LINESPACE + 8. * CHATEDIT_PAD + 4. * CHATEDIT_HEIGHT)").unwrap();
-    prop.set_expr(atom, Role::App, 3, code).unwrap();
+    prop.set_default_expr(3, code).unwrap();
     node.set_property_u32(atom, Role::App, "z_index", 0).unwrap();
     node.set_property_u32(atom, Role::App, "priority", 0).unwrap();
 
-    let prop = node.get_property("bg_color").unwrap();
-    prop.set_f32(atom, Role::App, 0, 0.).unwrap();
-    prop.set_f32(atom, Role::App, 1, 0.).unwrap();
-    prop.set_f32(atom, Role::App, 2, 0.).unwrap();
-    prop.set_f32(atom, Role::App, 3, 0.5).unwrap();
+    let theme = app.sg_root.lookup_node("/theme").unwrap();
+    wire_color(&node, "bg_color", &theme, "menu.bg_color").unwrap();
+    wire_color(&node, "text_color", &theme, "text_color").unwrap();
+    wire_color(&node, "role1_color", &theme, "menu.role1_color").unwrap();
+    wire_color(&node, "role2_color", &theme, "menu.role2_color").unwrap();
+    node.get_property("font_size").unwrap().set_default_f32(0, FONTSIZE).unwrap();
+    node.get_property("sep_size").unwrap().set_default_f32(0, MENU_SEP_SIZE).unwrap();
 
-    node.set_property_f32(atom, Role::App, "font_size", FONTSIZE).unwrap();
-    node.set_property_f32(atom, Role::App, "sep_size", MENU_SEP_SIZE).unwrap();
-
-    let prop = node.get_property("text_color").unwrap();
-    prop.set_f32(atom, Role::App, 0, 1.).unwrap();
-    prop.set_f32(atom, Role::App, 1, 1.).unwrap();
-    prop.set_f32(atom, Role::App, 2, 1.).unwrap();
-    prop.set_f32(atom, Role::App, 3, 1.).unwrap();
-
+    // text_color follows the shared token via the wiring above; the
+    // separator keeps its exact shipped default (grey, translucent).
     let prop = node.get_property("sep_color").unwrap();
-    prop.set_f32(atom, Role::App, 0, 0.4).unwrap();
-    prop.set_f32(atom, Role::App, 1, 0.4).unwrap();
-    prop.set_f32(atom, Role::App, 2, 0.4).unwrap();
-    prop.set_f32(atom, Role::App, 3, 0.4).unwrap();
+    prop.set_default_f32_multi(&[0.4, 0.4, 0.4, 0.4]).unwrap();
 
     let prop = node.get_property("padding").unwrap();
-    prop.set_f32(atom, Role::App, 0, LABEL_X).unwrap();
-    prop.set_f32(atom, Role::App, 1, CHANNEL_ITEM_HEIGHT / 2.).unwrap();
-    node.set_property_f32(atom, Role::App, "handle_padding", MENU_HANDLE_PAD).unwrap();
+    prop.set_default_f32(0, LABEL_X).unwrap();
+    prop.set_default_f32(1, CHANNEL_ITEM_HEIGHT / 2.).unwrap();
+    node.get_property("handle_padding").unwrap().set_default_f32(0, MENU_HANDLE_PAD).unwrap();
     node.set_property_f32(atom, Role::App, "fade_zone", MENU_FADE).unwrap();
 
     let prop = node.get_property("items").unwrap();
@@ -1509,7 +1379,7 @@ pub async fn make(
             public_prop.set_str(atom, Role::App, 0, "").unwrap();
         }
     });
-    app.tasks.lock().unwrap().push(save_contact);
+    app.tasks.lock().push(save_contact);
 
     // Selecting a contact opens (creating if needed) its DM chat layer
     let (slot, recvr) = Slot::new("contact_selected");
@@ -1568,14 +1438,10 @@ pub async fn make(
             }
         }
     });
-    app.tasks.lock().unwrap().push(listen_select);
+    app.tasks.lock().push(listen_select);
 
     // Only one input field may be focused (caret visible)
-    edit_switch(
-        &mut app.tasks.lock().unwrap(),
-        &[search_node, nickedit_node, secedit_node],
-        app.ex.clone(),
-    );
+    edit_switch(&mut app.tasks.lock(), &[search_node, nickedit_node, secedit_node], app.ex.clone());
 
     content
 }

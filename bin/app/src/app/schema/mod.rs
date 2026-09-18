@@ -16,19 +16,15 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::{fs::File, io::Write, sync::atomic::Ordering};
+use std::{fs::File, io::Write};
 
 use darkfi::system::msleep;
 
-use indoc::indoc;
 use kvdb_overlay::Database as KvDb;
 
 use crate::{
     app::{
-        node::{
-            create_button, create_layer, create_shortcut, create_text, create_text_scramble,
-            create_vector_art, create_video,
-        },
+        node::{create_button, create_layer, create_shortcut, create_text, create_vector_art},
         App,
     },
     db::AppDbPtr,
@@ -37,10 +33,8 @@ use crate::{
     prop::{PropertyAtomicGuard, PropertyEnum, PropertyFloat32, PropertyStr, Role},
     scene::{SceneNodePtr, Slot},
     sfx, shape,
-    ui::{
-        emoji_picker, Button, Layer, Shortcut, Text, TextScramble, VectorArt, VectorShape, Video,
-    },
-    util::{clipboard, i18n::I18nBabelFish},
+    ui::{emoji_picker, Button, Layer, Shortcut, Text, VectorArt, VectorShape},
+    util::i18n::I18nBabelFish,
 };
 
 mod chat;
@@ -50,13 +44,17 @@ pub mod test;
 pub mod test_chatview;
 pub mod test_edit;
 pub mod test_scroll_layer;
+// The settings screen is currently dormant: it was unwired from the
+// schema before the theming change and awaits revival. The module stays
+// declared (and therefore compile-checked against current APIs) with
+// its enum cycle-on-tap row ready; see task 8.2 of the app-theme
+// change. Re-link `settings::make` into a schema entry point to revive.
+#[allow(dead_code)]
+mod settings;
 mod wallet;
 
 macro_rules! i { ($($arg:tt)*) => { info!(target: "app::schema", $($arg)*); } }
 macro_rules! e { ($($arg:tt)*) => { error!(target: "app::schema", $($arg)*); } }
-
-const COLOR_SCHEME: ColorScheme = ColorScheme::DarkMode;
-//const COLOR_SCHEME: ColorScheme = ColorScheme::PaperLight;
 
 #[cfg(any(target_os = "android", feature = "emulate-android"))]
 mod android_ui_consts {
@@ -193,12 +191,6 @@ pub use ui_consts::*;
 pub static DEFAULT_CHANNELS: &'static [&str] =
     &["dev", "media", "hackers", "memes", "philosophy", "markets", "math", "random"];
 
-#[derive(PartialEq)]
-enum ColorScheme {
-    DarkMode,
-    PaperLight,
-}
-
 /// Read the ordered list of joined channels/contacts (prefixed names like "#dev", "@alice").
 pub fn read_joined_channels() -> Vec<String> {
     let Ok(contents) = std::fs::read_to_string(get_joined_channels_filename()) else {
@@ -281,176 +273,27 @@ pub async fn make(
     // Root content layer
     let content = create_layer("content");
     let prop = content.get_property("rect").unwrap();
-    prop.set_expr(atom, Role::App, 0, expr::load_var("insets_left")).unwrap();
-    prop.set_expr(atom, Role::App, 1, expr::load_var("insets_top")).unwrap();
+    prop.set_default_expr(0, expr::load_var("insets_left")).unwrap();
+    prop.set_default_expr(1, expr::load_var("insets_top")).unwrap();
     let code = cc.compile("w - insets_left - insets_right").unwrap();
-    prop.set_expr(atom, Role::App, 2, code).unwrap();
+    prop.set_default_expr(2, code).unwrap();
     let code = cc.compile("h - insets_top - insets_bottom").unwrap();
-    prop.set_expr(atom, Role::App, 3, code).unwrap();
+    prop.set_default_expr(3, code).unwrap();
     let window_insets = window.get_property("insets").unwrap();
-    prop.add_depend(&window_insets, 0, "insets_left");
-    prop.add_depend(&window_insets, 1, "insets_top");
-    prop.add_depend(&window_insets, 2, "insets_right");
-    prop.add_depend(&window_insets, 3, "insets_bottom");
+    prop.add_depend(Role::App, &window_insets, 0, "insets_left");
+    prop.add_depend(Role::App, &window_insets, 1, "insets_top");
+    prop.add_depend(Role::App, &window_insets, 2, "insets_right");
+    prop.add_depend(Role::App, &window_insets, 3, "insets_bottom");
     content.set_property_bool(atom, Role::App, "is_visible", true).unwrap();
     content.set_property_u32(atom, Role::App, "z_index", 1).unwrap();
     let content =
         content.setup(|me| Layer::new(me, app.renderer.clone(), app.redraw_trigger.clone())).await;
     window.link(content.clone());
 
-    // Splash layer with the scramble message, shown on the first run of
-    // a new app version
-    if app.is_first_time.load(Ordering::Relaxed) {
-        cc.add_const_f32("SPLASH_FONTSIZE", SPLASH_FONTSIZE);
-        cc.add_const_f32("SPLASH_MARGIN", SPLASH_MARGIN);
-        let splash_layer = create_layer("splash_layer");
-        let prop = splash_layer.get_property("rect").unwrap();
-        prop.set_f32(atom, Role::App, 0, 0.).unwrap();
-        prop.set_f32(atom, Role::App, 1, 0.).unwrap();
-        prop.set_expr(atom, Role::App, 2, expr::load_var("w")).unwrap();
-        prop.set_expr(atom, Role::App, 3, expr::load_var("h")).unwrap();
-        splash_layer.set_property_bool(atom, Role::App, "is_visible", true).unwrap();
-        splash_layer.set_property_u32(atom, Role::App, "z_index", 2).unwrap();
-        let splash_layer = splash_layer
-            .setup(|me| Layer::new(me, app.renderer.clone(), app.redraw_trigger.clone()))
-            .await;
-        content.link(splash_layer.clone());
-
-        let node = create_text_scramble("splash_msg");
-        let prop = node.get_property("rect").unwrap();
-        prop.set_f32(atom, Role::App, 0, SPLASH_MARGIN).unwrap();
-        let code = cc.compile("h * 0.4").unwrap();
-        prop.set_expr(atom, Role::App, 1, code).unwrap();
-        let code = cc.compile("w - 2 * SPLASH_MARGIN").unwrap();
-        prop.set_expr(atom, Role::App, 2, code).unwrap();
-        prop.set_f32(atom, Role::App, 3, SPLASH_FONTSIZE * 1.2).unwrap();
-        node.set_property_u32(atom, Role::App, "z_index", 0).unwrap();
-        node.set_property_f32(atom, Role::App, "font_size", SPLASH_FONTSIZE).unwrap();
-        node.set_property_enum(atom, Role::App, "text_align", "center").unwrap();
-        let prop = node.get_property("text_color").unwrap();
-        prop.set_f32(atom, Role::App, 0, 1.).unwrap();
-        prop.set_f32(atom, Role::App, 1, 1.).unwrap();
-        prop.set_f32(atom, Role::App, 2, 1.).unwrap();
-        prop.set_f32(atom, Role::App, 3, 1.).unwrap();
-        let prop = node.get_property("scramble_color").unwrap();
-        prop.set_f32(atom, Role::App, 0, 0.5).unwrap();
-        prop.set_f32(atom, Role::App, 1, 0.5).unwrap();
-        prop.set_f32(atom, Role::App, 2, 0.5).unwrap();
-        prop.set_f32(atom, Role::App, 3, 1.).unwrap();
-        node.set_property_str(atom, Role::App, "text", "welcome back commander").unwrap();
-        node.set_property_f32(atom, Role::App, "solve_probability", 0.06).unwrap();
-        let node = node
-            .setup(|me| {
-                TextScramble::new(
-                    me,
-                    window_scale.clone(),
-                    app.renderer.clone(),
-                    i18n_fish.clone(),
-                    app.redraw_trigger.clone(),
-                )
-            })
-            .await;
-        splash_layer.link(node);
-
-        // Hide the splash layer after 3s
-        let redraw = app.redraw_trigger.clone();
-        let hide_task = app.ex.spawn(async move {
-            msleep(5000).await;
-            let atom = &mut redraw.make_guard(gfxtag!("splash_layer hide"));
-            splash_layer.set_property_bool(atom, Role::App, "is_visible", false).unwrap();
-        });
-        app.tasks.lock().unwrap().push(hide_task);
-    }
-
-    if COLOR_SCHEME == ColorScheme::DarkMode {
-        let node = create_video("king");
-        let prop = node.get_property("rect").unwrap();
-        prop.set_f32(atom, Role::App, 0, 0.).unwrap();
-        prop.set_f32(atom, Role::App, 1, 0.).unwrap();
-        prop.set_expr(atom, Role::App, 2, expr::load_var("w")).unwrap();
-        prop.set_expr(atom, Role::App, 3, expr::load_var("h")).unwrap();
-
-        cc.add_const_f32("R", VID_ASPECT_RATIO);
-
-        let prop = node.get_property("uv").unwrap();
-        #[rustfmt::skip]
-        let code = cc.compile(indoc! {"
-            r = w / h;
-            # r < R means screen narrower than image
-            if r < R {
-                0.5 - (r / (2 * R))
-            } else {
-                0
-            }
-        "}).unwrap();
-        prop.set_expr(atom, Role::App, 0, code).unwrap();
-        #[rustfmt::skip]
-        let code = cc.compile(indoc! {"
-            r = w / h;
-            if r < R {
-                0
-            } else {
-                0.5 - (R / (2 * r))
-            }
-        "}).unwrap();
-        prop.set_expr(atom, Role::App, 1, code).unwrap();
-        #[rustfmt::skip]
-        let code = cc.compile(indoc! {"
-            r = w / h;
-            if r < R {
-                r / R
-            } else {
-                1
-            }
-        "}).unwrap();
-        prop.set_expr(atom, Role::App, 2, code).unwrap();
-        #[rustfmt::skip]
-        let code = cc.compile(indoc! {"
-            r = w / h;
-            if r < R {
-                1
-            } else {
-                R / r
-            }
-        "}).unwrap();
-        prop.set_expr(atom, Role::App, 3, code).unwrap();
-
-        //node.set_property_str(atom, Role::App, "path", BG_PATH).unwrap();
-        node.set_property_str(atom, Role::App, "path", VID_PATH).unwrap();
-        node.set_property_u32(atom, Role::App, "z_index", 0).unwrap();
-        //let node = node.setup(|me| Image::new(me, app.renderer.clone())).await;
-        //layer_node.link(node);
-        let node = node
-            .setup(|me| {
-                Video::new(me, app.renderer.clone(), app.redraw_trigger.clone(), app.ex.clone())
-            })
-            .await;
-        content.link(node);
-    } else if COLOR_SCHEME == ColorScheme::PaperLight {
-        let node = create_vector_art("bg");
-        let prop = node.get_property("rect").unwrap();
-        prop.set_f32(atom, Role::App, 0, 0.).unwrap();
-        prop.set_f32(atom, Role::App, 1, 0.).unwrap();
-        prop.set_expr(atom, Role::App, 2, expr::load_var("w")).unwrap();
-        prop.set_expr(atom, Role::App, 3, expr::load_var("h")).unwrap();
-        node.set_property_u32(atom, Role::App, "z_index", 1).unwrap();
-
-        let c = 1.;
-        // Setup the pimpl
-        let mut shape = VectorShape::new();
-        shape.add_filled_box(
-            expr::const_f32(0.),
-            expr::const_f32(0.),
-            expr::load_var("w"),
-            expr::load_var("h"),
-            [c, c, c, 0.3],
-        );
-        node.set_property_shape(atom, Role::App, "shape", shape).unwrap();
-        let node = node
-            .setup(|me| VectorArt::new(me, app.renderer.clone(), app.redraw_trigger.clone()))
-            .await;
-        window.link(node);
-    }
+    // The first-run splash and the king video background are theme
+    // content, not baseline structure: the scifi theme owns both (see
+    // `theme::scifi`, design D12). The minimal baseline ships
+    // neither.
 
     let emoji_meshes = emoji_picker::EmojiMeshes::new(app.renderer.clone(), EMOJI_PICKER_ICON_SIZE);
 
@@ -470,10 +313,10 @@ pub async fn make(
     // Create chat container layer
     let chat_layer = create_layer("chat");
     let prop = chat_layer.get_property("rect").unwrap();
-    prop.set_f32(atom, Role::App, 0, 0.).unwrap();
-    prop.set_f32(atom, Role::App, 1, 0.).unwrap();
-    prop.set_expr(atom, Role::App, 2, expr::load_var("w")).unwrap();
-    prop.set_expr(atom, Role::App, 3, expr::load_var("h")).unwrap();
+    prop.set_default_f32(0, 0.).unwrap();
+    prop.set_default_f32(1, 0.).unwrap();
+    prop.set_default_expr(2, expr::load_var("w")).unwrap();
+    prop.set_default_expr(3, expr::load_var("h")).unwrap();
     chat_layer.set_property_bool(atom, Role::App, "is_visible", false).unwrap();
     chat_layer.set_property_u32(atom, Role::App, "z_index", 1).unwrap();
     let chat_layer = chat_layer
@@ -484,12 +327,12 @@ pub async fn make(
     let netlayer_node = create_layer("netstatus_layer");
     let prop = netlayer_node.get_property("rect").unwrap();
     let code = cc.compile("w - NETSTATUS_ICON_SIZE").unwrap();
-    prop.set_expr(atom, Role::App, 0, code).unwrap();
-    prop.set_f32(atom, Role::App, 1, 0.).unwrap();
-    //prop.set_f32(atom, Role::App, 2, NETSTATUS_ICON_SIZE).unwrap();
-    //prop.set_f32(atom, Role::App, 3, NETSTATUS_ICON_SIZE).unwrap();
-    prop.set_f32(atom, Role::App, 2, 1000.).unwrap();
-    prop.set_f32(atom, Role::App, 3, 1000.).unwrap();
+    prop.set_default_expr(0, code).unwrap();
+    prop.set_default_f32(1, 0.).unwrap();
+    //prop.set_default_f32(2, NETSTATUS_ICON_SIZE).unwrap();
+    //prop.set_default_f32(3, NETSTATUS_ICON_SIZE).unwrap();
+    prop.set_default_f32(2, 1000.).unwrap();
+    prop.set_default_f32(3, 1000.).unwrap();
     netlayer_node.set_property_bool(atom, Role::App, "is_visible", true).unwrap();
     netlayer_node.set_property_u32(atom, Role::App, "z_index", 2).unwrap();
     netlayer_node.set_property_u32(atom, Role::App, "priority", 1).unwrap();
@@ -500,13 +343,13 @@ pub async fn make(
 
     let node = create_vector_art("net0");
     let prop = node.get_property("rect").unwrap();
-    prop.set_f32(atom, Role::App, 0, NETSTATUS_ICON_SIZE / 2.).unwrap();
-    prop.set_f32(atom, Role::App, 1, NETSTATUS_ICON_SIZE / 2.).unwrap();
-    prop.set_expr(atom, Role::App, 2, expr::load_var("w")).unwrap();
-    prop.set_expr(atom, Role::App, 3, expr::load_var("h")).unwrap();
+    prop.set_default_f32(0, NETSTATUS_ICON_SIZE / 2.).unwrap();
+    prop.set_default_f32(1, NETSTATUS_ICON_SIZE / 2.).unwrap();
+    prop.set_default_expr(2, expr::load_var("w")).unwrap();
+    prop.set_default_expr(3, expr::load_var("h")).unwrap();
     node.set_property_bool(atom, Role::App, "is_visible", true).unwrap();
     node.set_property_u32(atom, Role::App, "z_index", 0).unwrap();
-    node.set_property_f32(atom, Role::App, "scale", NETLOGO_SCALE).unwrap();
+    node.get_property("scale").unwrap().set_default_f32(0, NETLOGO_SCALE).unwrap();
     let mut shape = shape::create_netlogo1([1., 0., 0.25, 1.]);
     shape.join(shape::create_netlogo2([0.27, 0.4, 0.4, 1.]));
     shape.join(shape::create_netlogo3([0.27, 0.4, 0.4, 1.]));
@@ -517,13 +360,13 @@ pub async fn make(
 
     let node = create_vector_art("net1");
     let prop = node.get_property("rect").unwrap();
-    prop.set_f32(atom, Role::App, 0, NETSTATUS_ICON_SIZE / 2.).unwrap();
-    prop.set_f32(atom, Role::App, 1, NETSTATUS_ICON_SIZE / 2.).unwrap();
-    prop.set_expr(atom, Role::App, 2, expr::load_var("w")).unwrap();
-    prop.set_expr(atom, Role::App, 3, expr::load_var("h")).unwrap();
+    prop.set_default_f32(0, NETSTATUS_ICON_SIZE / 2.).unwrap();
+    prop.set_default_f32(1, NETSTATUS_ICON_SIZE / 2.).unwrap();
+    prop.set_default_expr(2, expr::load_var("w")).unwrap();
+    prop.set_default_expr(3, expr::load_var("h")).unwrap();
     node.set_property_bool(atom, Role::App, "is_visible", false).unwrap();
     node.set_property_u32(atom, Role::App, "z_index", 0).unwrap();
-    node.set_property_f32(atom, Role::App, "scale", NETLOGO_SCALE).unwrap();
+    node.get_property("scale").unwrap().set_default_f32(0, NETLOGO_SCALE).unwrap();
     let mut shape = shape::create_netlogo1([0.49, 0.57, 1., 1.]);
     shape.join(shape::create_netlogo2([0.49, 0.57, 1., 1.]));
     shape.join(shape::create_netlogo3([0.27, 0.4, 0.4, 1.]));
@@ -534,13 +377,13 @@ pub async fn make(
 
     let node = create_vector_art("net2");
     let prop = node.get_property("rect").unwrap();
-    prop.set_f32(atom, Role::App, 0, NETSTATUS_ICON_SIZE / 2.).unwrap();
-    prop.set_f32(atom, Role::App, 1, NETSTATUS_ICON_SIZE / 2.).unwrap();
-    prop.set_expr(atom, Role::App, 2, expr::load_var("w")).unwrap();
-    prop.set_expr(atom, Role::App, 3, expr::load_var("h")).unwrap();
+    prop.set_default_f32(0, NETSTATUS_ICON_SIZE / 2.).unwrap();
+    prop.set_default_f32(1, NETSTATUS_ICON_SIZE / 2.).unwrap();
+    prop.set_default_expr(2, expr::load_var("w")).unwrap();
+    prop.set_default_expr(3, expr::load_var("h")).unwrap();
     node.set_property_bool(atom, Role::App, "is_visible", false).unwrap();
     node.set_property_u32(atom, Role::App, "z_index", 0).unwrap();
-    node.set_property_f32(atom, Role::App, "scale", NETLOGO_SCALE).unwrap();
+    node.get_property("scale").unwrap().set_default_f32(0, NETLOGO_SCALE).unwrap();
     let mut shape = shape::create_netlogo1([0., 0.94, 1., 1.]);
     shape.join(shape::create_netlogo2([0., 0.94, 1., 1.]));
     shape.join(shape::create_netlogo3([0., 0.94, 1., 1.]));
@@ -551,13 +394,13 @@ pub async fn make(
 
     let node = create_vector_art("net3");
     let prop = node.get_property("rect").unwrap();
-    prop.set_f32(atom, Role::App, 0, NETSTATUS_ICON_SIZE / 2.).unwrap();
-    prop.set_f32(atom, Role::App, 1, NETSTATUS_ICON_SIZE / 2.).unwrap();
-    prop.set_expr(atom, Role::App, 2, expr::load_var("w")).unwrap();
-    prop.set_expr(atom, Role::App, 3, expr::load_var("h")).unwrap();
+    prop.set_default_f32(0, NETSTATUS_ICON_SIZE / 2.).unwrap();
+    prop.set_default_f32(1, NETSTATUS_ICON_SIZE / 2.).unwrap();
+    prop.set_default_expr(2, expr::load_var("w")).unwrap();
+    prop.set_default_expr(3, expr::load_var("h")).unwrap();
     node.set_property_bool(atom, Role::App, "is_visible", false).unwrap();
     node.set_property_u32(atom, Role::App, "z_index", 0).unwrap();
-    node.set_property_f32(atom, Role::App, "scale", NETLOGO_SCALE).unwrap();
+    node.get_property("scale").unwrap().set_default_f32(0, NETLOGO_SCALE).unwrap();
     let mut shape = shape::create_netlogo1([0., 0.94, 1., 1.]);
     shape.join(shape::create_netlogo2([0., 0.94, 1., 1.]));
     shape.join(shape::create_netlogo3([0., 0.94, 1., 1.]));
@@ -570,10 +413,10 @@ pub async fn make(
     let klik_color = [0., 0.5, 1., 1.]; // Blue
     let node = create_vector_art("netstat_klik");
     let prop = node.get_property("rect").unwrap();
-    prop.set_f32(atom, Role::App, 0, 0.).unwrap();
-    prop.set_f32(atom, Role::App, 1, 0.).unwrap();
-    prop.set_f32(atom, Role::App, 2, NETSTATUS_ICON_SIZE).unwrap();
-    prop.set_f32(atom, Role::App, 3, NETSTATUS_ICON_SIZE).unwrap();
+    prop.set_default_f32(0, 0.).unwrap();
+    prop.set_default_f32(1, 0.).unwrap();
+    prop.set_default_f32(2, NETSTATUS_ICON_SIZE).unwrap();
+    prop.set_default_f32(3, NETSTATUS_ICON_SIZE).unwrap();
     node.set_property_bool(atom, Role::App, "is_visible", false).unwrap();
     // Above other icons
     node.set_property_u32(atom, Role::App, "z_index", 1).unwrap();
@@ -594,10 +437,10 @@ pub async fn make(
     let node = create_button("reconnect_btn");
     node.set_property_bool(atom, Role::App, "is_active", true).unwrap();
     let prop = node.get_property("rect").unwrap();
-    prop.set_f32(atom, Role::App, 0, 0.).unwrap();
-    prop.set_f32(atom, Role::App, 1, 0.).unwrap();
-    prop.set_f32(atom, Role::App, 2, NETSTATUS_ICON_SIZE).unwrap();
-    prop.set_f32(atom, Role::App, 3, NETSTATUS_ICON_SIZE).unwrap();
+    prop.set_default_f32(0, 0.).unwrap();
+    prop.set_default_f32(1, 0.).unwrap();
+    prop.set_default_f32(2, NETSTATUS_ICON_SIZE).unwrap();
+    prop.set_default_f32(3, NETSTATUS_ICON_SIZE).unwrap();
 
     let sg_root = app.sg_root.clone();
     let redraw = app.redraw_trigger.clone();
@@ -606,12 +449,13 @@ pub async fn make(
     let (slot, recvr) = Slot::new("reconnect_clicked");
     node.register("click", slot).unwrap();
     let reconnect_task = ex.spawn(async move {
-        let mut _fade_task = None;
         let mut _conn_info_task = None;
         while let Ok(_) = recvr.recv().await {
             i!("Reconnect button clicked");
 
-            // Toggle the overlay layer
+            // Toggle the overlay layer. The open fade is theme content:
+            // the active theme's watcher animates `alpha` (see
+            // theme::scifi); minimal opens without a fade.
             let overlay = sg_root.lookup_node("/window/content/chat/netstatus_overlay").unwrap();
             let is_visible = overlay.get_property_bool("is_visible").unwrap();
             if !is_visible {
@@ -621,9 +465,6 @@ pub async fn make(
             overlay.set_property_bool(atom, Role::App, "is_visible", !is_visible).unwrap();
 
             if !is_visible {
-                // Start from fully transparent so the fade begins hidden
-                overlay.set_property_f32(atom, Role::App, "alpha", 0.).unwrap();
-
                 // While the overlay is shown, keep the conn_info text in sync
                 // with the darkirc outbound peers
                 let sg_root2 = sg_root.clone();
@@ -656,28 +497,13 @@ pub async fn make(
                         let Ok(_) = outbound_peers_sub.receive().await else { break };
                     }
                 }));
-
-                // Fade the overlay alpha from 0 to 1 over 1s
-                let overlay = overlay.clone();
-                let redraw = redraw.clone();
-                _fade_task = Some(ex_fade.spawn(async move {
-                    let steps = 50;
-                    for i in 1..=steps {
-                        msleep(1000 / steps as u64).await;
-                        let atom = &mut redraw.make_guard(gfxtag!("netstatus overlay fade"));
-                        overlay
-                            .set_property_f32(atom, Role::App, "alpha", i as f32 / steps as f32)
-                            .unwrap();
-                    }
-                }));
             } else {
-                // Hiding cancels any in-flight fade and the conn_info listener
-                _fade_task = None;
+                // Hiding cancels the conn_info listener
                 _conn_info_task = None;
             }
         }
     });
-    app.tasks.lock().unwrap().push(reconnect_task);
+    app.tasks.lock().push(reconnect_task);
 
     let reconnect_btn =
         node.setup(|me| Button::new(me, app.renderer.clone(), app.redraw_trigger.clone())).await;
@@ -687,13 +513,13 @@ pub async fn make(
     // except the header strip, so the logo stays visible and clickable.
     let overlay_node = create_layer("netstatus_overlay");
     let prop = overlay_node.get_property("rect").unwrap();
-    prop.set_f32(atom, Role::App, 0, NETSTAT_OVERLAY_MARGIN).unwrap();
-    prop.set_f32(atom, Role::App, 1, NETSTATUS_ICON_SIZE + NETSTAT_OVERLAY_MARGIN).unwrap();
+    prop.set_default_f32(0, NETSTAT_OVERLAY_MARGIN).unwrap();
+    prop.set_default_f32(1, NETSTATUS_ICON_SIZE + NETSTAT_OVERLAY_MARGIN).unwrap();
     let code = cc.compile("w - 2 * NETSTAT_OVERLAY_MARGIN").unwrap();
-    prop.set_expr(atom, Role::App, 2, code).unwrap();
+    prop.set_default_expr(2, code).unwrap();
     //let code = cc.compile("h - NETSTATUS_ICON_SIZE - 2 * NETSTAT_OVERLAY_MARGIN").unwrap();
-    //prop.set_expr(atom, Role::App, 3, code).unwrap();
-    prop.set_f32(atom, Role::App, 3, NETSTAT_OVERLAY_HEIGHT).unwrap();
+    //prop.set_default_expr(3, code).unwrap();
+    prop.set_default_f32(3, NETSTAT_OVERLAY_HEIGHT).unwrap();
     overlay_node.set_property_bool(atom, Role::App, "is_visible", false).unwrap();
     overlay_node.set_property_u32(atom, Role::App, "z_index", 2).unwrap();
     overlay_node.set_property_u32(atom, Role::App, "priority", 2).unwrap();
@@ -731,10 +557,10 @@ pub async fn make(
     // Placeholder single-color background filling the whole overlay
     let node = create_vector_art("overlay_bg");
     let prop = node.get_property("rect").unwrap();
-    prop.set_f32(atom, Role::App, 0, 0.).unwrap();
-    prop.set_f32(atom, Role::App, 1, 0.).unwrap();
-    prop.set_expr(atom, Role::App, 2, expr::load_var("w")).unwrap();
-    prop.set_expr(atom, Role::App, 3, expr::load_var("h")).unwrap();
+    prop.set_default_f32(0, 0.).unwrap();
+    prop.set_default_f32(1, 0.).unwrap();
+    prop.set_default_expr(2, expr::load_var("w")).unwrap();
+    prop.set_default_expr(3, expr::load_var("h")).unwrap();
     node.set_property_bool(atom, Role::App, "is_visible", true).unwrap();
     node.set_property_u32(atom, Role::App, "z_index", 0).unwrap();
     let mut shape = VectorShape::new();
@@ -782,18 +608,18 @@ pub async fn make(
 
     let node = create_text("p2p_label");
     let prop = node.get_property("rect").unwrap();
-    prop.set_f32(atom, Role::App, 0, NETSTAT_OVERLAY_TEXT_X).unwrap();
-    prop.set_f32(atom, Role::App, 1, NETSTAT_OVERLAY_P2P_LABEL_Y).unwrap();
-    prop.set_f32(atom, Role::App, 2, NETSTAT_OVERLAY_TEXT_MAX).unwrap();
-    prop.set_f32(atom, Role::App, 3, NETSTAT_OVERLAY_TEXT_MAX).unwrap();
-    node.set_property_f32(atom, Role::App, "font_size", NETSTAT_OVERLAY_BTN_FONTSIZE).unwrap();
+    prop.set_default_f32(0, NETSTAT_OVERLAY_TEXT_X).unwrap();
+    prop.set_default_f32(1, NETSTAT_OVERLAY_P2P_LABEL_Y).unwrap();
+    prop.set_default_f32(2, NETSTAT_OVERLAY_TEXT_MAX).unwrap();
+    prop.set_default_f32(3, NETSTAT_OVERLAY_TEXT_MAX).unwrap();
+    node.get_property("font_size")
+        .unwrap()
+        .set_default_f32(0, NETSTAT_OVERLAY_BTN_FONTSIZE)
+        .unwrap();
     node.set_property_str(atom, Role::App, "text", "P2P").unwrap();
     node.set_property_enum(atom, Role::App, "text_align", "left").unwrap();
     let prop = node.get_property("text_color").unwrap();
-    prop.set_f32(atom, Role::App, 0, 0.47).unwrap();
-    prop.set_f32(atom, Role::App, 1, 1.).unwrap();
-    prop.set_f32(atom, Role::App, 2, 0.75).unwrap();
-    prop.set_f32(atom, Role::App, 3, 1.).unwrap();
+    prop.set_default_f32_multi(&[0.47, 1., 0.75, 1.]).unwrap();
     node.set_property_u32(atom, Role::App, "z_index", 2).unwrap();
     let node = node
         .setup(|me| {
@@ -811,18 +637,18 @@ pub async fn make(
     let node = create_text("toggle_label");
     let prop = node.get_property("rect").unwrap();
     let code = cc.compile("w - NETSTAT_OVERLAY_TOGGLE_NEG_X").unwrap();
-    prop.set_expr(atom, Role::App, 0, code).unwrap();
-    prop.set_f32(atom, Role::App, 1, NETSTAT_OVERLAY_TOGGLE_LABEL_Y).unwrap();
-    prop.set_f32(atom, Role::App, 2, NETSTAT_OVERLAY_TOGGLE_W).unwrap();
-    prop.set_f32(atom, Role::App, 3, NETSTAT_OVERLAY_TEXT_MAX).unwrap();
-    node.set_property_f32(atom, Role::App, "font_size", NETSTAT_OVERLAY_BTN_FONTSIZE).unwrap();
+    prop.set_default_expr(0, code).unwrap();
+    prop.set_default_f32(1, NETSTAT_OVERLAY_TOGGLE_LABEL_Y).unwrap();
+    prop.set_default_f32(2, NETSTAT_OVERLAY_TOGGLE_W).unwrap();
+    prop.set_default_f32(3, NETSTAT_OVERLAY_TEXT_MAX).unwrap();
+    node.get_property("font_size")
+        .unwrap()
+        .set_default_f32(0, NETSTAT_OVERLAY_BTN_FONTSIZE)
+        .unwrap();
     node.set_property_str(atom, Role::App, "text", "on").unwrap();
     node.set_property_enum(atom, Role::App, "text_align", "center").unwrap();
     let prop = node.get_property("text_color").unwrap();
-    prop.set_f32(atom, Role::App, 0, 0.08).unwrap();
-    prop.set_f32(atom, Role::App, 1, 0.68).unwrap();
-    prop.set_f32(atom, Role::App, 2, 0.72).unwrap();
-    prop.set_f32(atom, Role::App, 3, 1.).unwrap();
+    prop.set_default_f32_multi(&[0.08, 0.68, 0.72, 1.]).unwrap();
     node.set_property_u32(atom, Role::App, "z_index", 2).unwrap();
     let node = node
         .setup(|me| {
@@ -848,10 +674,10 @@ pub async fn make(
     node.set_property_bool(atom, Role::App, "is_active", true).unwrap();
     let prop = node.get_property("rect").unwrap();
     let code = cc.compile("w - NETSTAT_OVERLAY_TOGGLE_NEG_X").unwrap();
-    prop.set_expr(atom, Role::App, 0, code).unwrap();
-    prop.set_f32(atom, Role::App, 1, NETSTAT_OVERLAY_TOGGLE_Y).unwrap();
-    prop.set_f32(atom, Role::App, 2, NETSTAT_OVERLAY_TOGGLE_W).unwrap();
-    prop.set_f32(atom, Role::App, 3, NETSTAT_OVERLAY_TOGGLE_H).unwrap();
+    prop.set_default_expr(0, code).unwrap();
+    prop.set_default_f32(1, NETSTAT_OVERLAY_TOGGLE_Y).unwrap();
+    prop.set_default_f32(2, NETSTAT_OVERLAY_TOGGLE_W).unwrap();
+    prop.set_default_f32(3, NETSTAT_OVERLAY_TOGGLE_H).unwrap();
     let (slot, recvr) = Slot::new("toggle_p2p");
     node.register("click", slot).unwrap();
     let redraw = app.redraw_trigger.clone();
@@ -875,18 +701,18 @@ pub async fn make(
 
     let node = create_text("transport_label");
     let prop = node.get_property("rect").unwrap();
-    prop.set_f32(atom, Role::App, 0, NETSTAT_OVERLAY_TEXT_X).unwrap();
-    prop.set_f32(atom, Role::App, 1, NETSTAT_OVERLAY_TRANSPORT_LABEL_Y).unwrap();
-    prop.set_f32(atom, Role::App, 2, NETSTAT_OVERLAY_TEXT_MAX).unwrap();
-    prop.set_f32(atom, Role::App, 3, NETSTAT_OVERLAY_TEXT_MAX).unwrap();
-    node.set_property_f32(atom, Role::App, "font_size", NETSTAT_OVERLAY_BTN_FONTSIZE).unwrap();
+    prop.set_default_f32(0, NETSTAT_OVERLAY_TEXT_X).unwrap();
+    prop.set_default_f32(1, NETSTAT_OVERLAY_TRANSPORT_LABEL_Y).unwrap();
+    prop.set_default_f32(2, NETSTAT_OVERLAY_TEXT_MAX).unwrap();
+    prop.set_default_f32(3, NETSTAT_OVERLAY_TEXT_MAX).unwrap();
+    node.get_property("font_size")
+        .unwrap()
+        .set_default_f32(0, NETSTAT_OVERLAY_BTN_FONTSIZE)
+        .unwrap();
     node.set_property_str(atom, Role::App, "text", "Transport").unwrap();
     node.set_property_enum(atom, Role::App, "text_align", "left").unwrap();
     let prop = node.get_property("text_color").unwrap();
-    prop.set_f32(atom, Role::App, 0, 0.47).unwrap();
-    prop.set_f32(atom, Role::App, 1, 1.).unwrap();
-    prop.set_f32(atom, Role::App, 2, 0.75).unwrap();
-    prop.set_f32(atom, Role::App, 3, 1.).unwrap();
+    prop.set_default_f32_multi(&[0.47, 1., 0.75, 1.]).unwrap();
     node.set_property_u32(atom, Role::App, "z_index", 2).unwrap();
     let node = node
         .setup(|me| {
@@ -916,10 +742,10 @@ pub async fn make(
                 transport_opts.len() - idx
             ))
             .unwrap();
-        prop.set_expr(atom, Role::App, 0, code).unwrap();
-        prop.set_f32(atom, Role::App, 1, NETSTAT_OVERLAY_TRANSPORT_Y).unwrap();
-        prop.set_f32(atom, Role::App, 2, NETSTAT_OVERLAY_TOGGLE_W).unwrap();
-        prop.set_f32(atom, Role::App, 3, NETSTAT_OVERLAY_TOGGLE_H).unwrap();
+        prop.set_default_expr(0, code).unwrap();
+        prop.set_default_f32(1, NETSTAT_OVERLAY_TRANSPORT_Y).unwrap();
+        prop.set_default_f32(2, NETSTAT_OVERLAY_TOGGLE_W).unwrap();
+        prop.set_default_f32(3, NETSTAT_OVERLAY_TOGGLE_H).unwrap();
         node.set_property_bool(atom, Role::App, "is_visible", *opt == transport_selected).unwrap();
         node.set_property_u32(atom, Role::App, "z_index", 1).unwrap();
         let mut shape = VectorShape::new();
@@ -955,18 +781,20 @@ pub async fn make(
                 transport_opts.len() - idx
             ))
             .unwrap();
-        prop.set_expr(atom, Role::App, 0, code).unwrap();
-        prop.set_f32(atom, Role::App, 1, NETSTAT_OVERLAY_TRANSPORT_OPT_LABEL_Y).unwrap();
-        prop.set_f32(atom, Role::App, 2, NETSTAT_OVERLAY_TOGGLE_W).unwrap();
-        prop.set_f32(atom, Role::App, 3, NETSTAT_OVERLAY_TEXT_MAX).unwrap();
-        node.set_property_f32(atom, Role::App, "font_size", NETSTAT_OVERLAY_BTN_FONTSIZE).unwrap();
+        prop.set_default_expr(0, code).unwrap();
+        prop.set_default_f32(1, NETSTAT_OVERLAY_TRANSPORT_OPT_LABEL_Y).unwrap();
+        prop.set_default_f32(2, NETSTAT_OVERLAY_TOGGLE_W).unwrap();
+        prop.set_default_f32(3, NETSTAT_OVERLAY_TEXT_MAX).unwrap();
+        node.get_property("font_size")
+            .unwrap()
+            .set_default_f32(0, NETSTAT_OVERLAY_BTN_FONTSIZE)
+            .unwrap();
         node.set_property_str(atom, Role::App, "text", *opt).unwrap();
         node.set_property_enum(atom, Role::App, "text_align", "center").unwrap();
-        let prop = node.get_property("text_color").unwrap();
-        prop.set_f32(atom, Role::App, 0, 0.08).unwrap();
-        prop.set_f32(atom, Role::App, 1, 0.68).unwrap();
-        prop.set_f32(atom, Role::App, 2, 0.72).unwrap();
-        prop.set_f32(atom, Role::App, 3, 1.).unwrap();
+        node.get_property("text_color")
+            .unwrap()
+            .set_default_f32_multi(&[0.90, 0.90, 0.90, 1.])
+            .unwrap();
         node.set_property_u32(atom, Role::App, "z_index", 2).unwrap();
         let node = node
             .setup(|me| {
@@ -992,10 +820,10 @@ pub async fn make(
                 transport_opts.len() - idx
             ))
             .unwrap();
-        prop.set_expr(atom, Role::App, 0, code).unwrap();
-        prop.set_f32(atom, Role::App, 1, NETSTAT_OVERLAY_TRANSPORT_Y).unwrap();
-        prop.set_f32(atom, Role::App, 2, NETSTAT_OVERLAY_TOGGLE_W).unwrap();
-        prop.set_f32(atom, Role::App, 3, NETSTAT_OVERLAY_TOGGLE_H).unwrap();
+        prop.set_default_expr(0, code).unwrap();
+        prop.set_default_f32(1, NETSTAT_OVERLAY_TRANSPORT_Y).unwrap();
+        prop.set_default_f32(2, NETSTAT_OVERLAY_TOGGLE_W).unwrap();
+        prop.set_default_f32(3, NETSTAT_OVERLAY_TOGGLE_H).unwrap();
         let (slot, recvr) = Slot::new(&format!("transport_select_{opt}"));
         node.register("click", slot).unwrap();
         let redraw = app.redraw_trigger.clone();
@@ -1021,18 +849,18 @@ pub async fn make(
 
     let node = create_text("outbound_label");
     let prop = node.get_property("rect").unwrap();
-    prop.set_f32(atom, Role::App, 0, NETSTAT_OVERLAY_TEXT_X).unwrap();
-    prop.set_f32(atom, Role::App, 1, NETSTAT_OVERLAY_OUTBOUND_LABEL_Y).unwrap();
-    prop.set_f32(atom, Role::App, 2, NETSTAT_OVERLAY_TEXT_MAX).unwrap();
-    prop.set_f32(atom, Role::App, 3, NETSTAT_OVERLAY_TEXT_MAX).unwrap();
-    node.set_property_f32(atom, Role::App, "font_size", NETSTAT_OVERLAY_BTN_FONTSIZE).unwrap();
+    prop.set_default_f32(0, NETSTAT_OVERLAY_TEXT_X).unwrap();
+    prop.set_default_f32(1, NETSTAT_OVERLAY_OUTBOUND_LABEL_Y).unwrap();
+    prop.set_default_f32(2, NETSTAT_OVERLAY_TEXT_MAX).unwrap();
+    prop.set_default_f32(3, NETSTAT_OVERLAY_TEXT_MAX).unwrap();
+    node.get_property("font_size")
+        .unwrap()
+        .set_default_f32(0, NETSTAT_OVERLAY_BTN_FONTSIZE)
+        .unwrap();
     node.set_property_str(atom, Role::App, "text", "OUTBOUND").unwrap();
     node.set_property_enum(atom, Role::App, "text_align", "left").unwrap();
     let prop = node.get_property("text_color").unwrap();
-    prop.set_f32(atom, Role::App, 0, 0.47).unwrap();
-    prop.set_f32(atom, Role::App, 1, 1.).unwrap();
-    prop.set_f32(atom, Role::App, 2, 0.75).unwrap();
-    prop.set_f32(atom, Role::App, 3, 1.).unwrap();
+    prop.set_default_f32_multi(&[0.47, 1., 0.75, 1.]).unwrap();
     node.set_property_u32(atom, Role::App, "z_index", 2).unwrap();
     let node = node
         .setup(|me| {
@@ -1049,11 +877,14 @@ pub async fn make(
 
     let node = create_text("conn_info");
     let prop = node.get_property("rect").unwrap();
-    prop.set_f32(atom, Role::App, 0, NETSTAT_OVERLAY_TEXT_X).unwrap();
-    prop.set_f32(atom, Role::App, 1, NETSTAT_OVERLAY_CONN_INFO_Y).unwrap();
-    prop.set_f32(atom, Role::App, 2, NETSTAT_OVERLAY_TEXT_MAX).unwrap();
-    prop.set_f32(atom, Role::App, 3, NETSTAT_OVERLAY_TEXT_MAX).unwrap();
-    node.set_property_f32(atom, Role::App, "font_size", NETSTAT_OVERLAY_BTN_FONTSIZE).unwrap();
+    prop.set_default_f32(0, NETSTAT_OVERLAY_TEXT_X).unwrap();
+    prop.set_default_f32(1, NETSTAT_OVERLAY_CONN_INFO_Y).unwrap();
+    prop.set_default_f32(2, NETSTAT_OVERLAY_TEXT_MAX).unwrap();
+    prop.set_default_f32(3, NETSTAT_OVERLAY_TEXT_MAX).unwrap();
+    node.get_property("font_size")
+        .unwrap()
+        .set_default_f32(0, NETSTAT_OVERLAY_BTN_FONTSIZE)
+        .unwrap();
     #[cfg(not(feature = "enable-plugin-darkirc"))]
     node.set_property_str(
         atom,
@@ -1068,10 +899,7 @@ pub async fn make(
     .unwrap();
     node.set_property_enum(atom, Role::App, "text_align", "left").unwrap();
     let prop = node.get_property("text_color").unwrap();
-    prop.set_f32(atom, Role::App, 0, 1.).unwrap();
-    prop.set_f32(atom, Role::App, 1, 1.).unwrap();
-    prop.set_f32(atom, Role::App, 2, 1.).unwrap();
-    prop.set_f32(atom, Role::App, 3, 1.).unwrap();
+    prop.set_default_f32_multi(&[1., 1., 1., 1.]).unwrap();
     node.set_property_u32(atom, Role::App, "z_index", 2).unwrap();
     let node = node
         .setup(|me| {

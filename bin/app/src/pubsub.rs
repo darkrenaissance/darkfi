@@ -38,6 +38,10 @@ pub struct Subscription<T: Piped> {
     parent: Arc<Publisher<T>>,
 }
 
+// NOTE: deliberately no Clone. Subscription's Drop unsubscribes it from
+// the publisher; a clone sharing the id would unsubscribe the original
+// when dropped. Share via Arc<Subscription<_>> instead.
+
 impl<T: Piped> Subscription<T> {
     pub fn get_id(&self) -> SubscriptionId {
         self.id

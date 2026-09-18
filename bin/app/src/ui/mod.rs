@@ -23,7 +23,7 @@ use std::sync::{Arc, OnceLock, Weak};
 
 use crate::{
     gfx::{DrawCall, Point, Rectangle},
-    prop::{BatchGuardPtr, ModifyAction, PropertyAtomicGuard, PropertyPtr, Role},
+    prop::{BatchGuard, BatchGuardPtr, ModifyAction, PropertyAtomicGuard, PropertyPtr, Role},
     scene::{Pimpl, SceneNode as SceneNode3, SceneNodePtr, SceneNodeWeak},
     util::i18n::I18nBabelFish,
     ExecutorPtr,
@@ -245,7 +245,10 @@ impl<T: Send + Sync + 'static> OnModify<T> {
     ) where
         F: std::future::Future<Output = ()> + Send + 'static,
     {
-        self.when_change_impl(prop, false, f)
+        // Skip our own Internal writes on the property itself (eval
+        // and cache echoes), and the Ignored marker role.
+        const SKIP: &[(Option<usize>, Role)] = &[(Some(0), Role::Internal), (None, Role::Ignored)];
+        self.when_change_impl(prop, SKIP, f)
     }
 
     /// Like `when_change`, but also skips `Role::Internal` modifications of
@@ -260,52 +263,95 @@ impl<T: Send + Sync + 'static> OnModify<T> {
     ) where
         F: std::future::Future<Output = ()> + Send + 'static,
     {
-        self.when_change_impl(prop, true, f)
+        // Draw-pass widgets: skip all Internal echoes (own writes and
+        // eval echoes from dependencies), plus the Ignored marker role.
+        const SKIP: &[(Option<usize>, Role)] = &[(None, Role::Internal), (None, Role::Ignored)];
+        self.when_change_impl(prop, SKIP, f)
     }
 
+    /// Skip rules for the modify stream: `(Some(idx), role)` skips
+    /// that role on that poll entry (entry 0 = the watched property,
+    /// 1.. = its dependencies); `(None, role)` skips it on any entry.
     fn when_change_impl<F>(
         &mut self,
         prop: PropertyPtr,
-        skip_internal: bool,
+        skip: &'static [(Option<usize>, Role)],
         f: impl Fn(Arc<T>, BatchGuardPtr) -> F + Send + 'static,
     ) where
         F: std::future::Future<Output = ()> + Send + 'static,
     {
-        let mut on_modify_subs = vec![(Arc::downgrade(&prop), None, prop.subscribe_modify())];
-        for dep in prop.get_depends() {
-            let Some(dep_prop) = dep.prop.upgrade() else { continue };
-            on_modify_subs.push((dep.prop, Some(dep.i), dep_prop.subscribe_modify()));
-        }
+        // Entry 0 is the property itself; the rest follow its dependency
+        // edges. Owned by the poll task and rebuilt in place when a
+        // DependsChanged event arrives (live rewiring, design D5) — so
+        // the receive futures borrow from it directly and Subscriptions
+        // are never cloned (Drop unsubscribes them).
+        let on_modify_subs = {
+            let mut subs = vec![(Arc::downgrade(&prop), None, prop.subscribe_modify())];
+            for dep in prop.get_depends() {
+                let Some(dep_prop) = dep.prop.upgrade() else { continue };
+                subs.push((dep.prop, Some(dep.i), dep_prop.subscribe_modify()));
+            }
+            subs
+        };
 
         let me = self.me.clone();
         let task = self.ex.spawn(async move {
+            let mut on_modify_subs = on_modify_subs;
             loop {
                 let mut poll_queues = FuturesUnordered::new();
+                // The poll set (and its borrows into on_modify_subs) is
+                // dropped at the end of the iteration, before any
+                // reassignment in the DependsChanged branch below.
                 for (i, (prop_weak, prop_i, on_modify_sub)) in on_modify_subs.iter().enumerate() {
                     let recv = on_modify_sub.receive();
+                    let prop_weak = prop_weak.clone();
+                    let prop_i = *prop_i;
                     poll_queues.push(async move {
                         let (role, action, batch_guard) = recv.await.ok()?;
                         Some((i, prop_weak, prop_i, role, action, batch_guard))
                     });
                 }
 
-                let Some(Some((idx, prop_weak, prop_i, role, action, batch_guard))) = poll_queues.next().await else {
+                let Some(Some((idx, prop_weak, prop_i, role, action, batch_guard))) =
+                    poll_queues.next().await
+                else {
                     e!("Property {:?} on_modify pipe is broken", prop);
                     return
                 };
 
-                // Skip internal messages from ourselves or explicitly marked ignored.
-                // Draw-pass widgets also skip internal dependency echoes.
-                if (idx == 0 && role == Role::Internal) ||
-                    (skip_internal && role == Role::Internal) ||
-                    role == Role::Ignored
-                {
+                // Dependency rewiring (D5) arrives through the same
+                // stream. Checked before the skip list: rewiring is
+                // control-plane, not a value echo. Rebuild the
+                // subscription set from a fresh `get_depends()` snapshot
+                // and run the handler once — dropping the old receivers
+                // discards their queued messages, and this extra run
+                // closes any event missed during the swap (coalesced by
+                // the bounded(1) redraw channel).
+                if matches!(action, ModifyAction::DependsChanged) {
+                    drop(poll_queues);
+                    let mut fresh =
+                        vec![(Arc::downgrade(&prop), None, prop.subscribe_modify())];
+                    for dep in prop.get_depends() {
+                        let Some(dep_prop) = dep.prop.upgrade() else { continue };
+                        fresh.push((dep.prop, Some(dep.i), dep_prop.subscribe_modify()));
+                    }
+                    on_modify_subs = fresh;
+                    if let Some(self_) = me.upgrade() {
+                        f(self_, BatchGuard::detached()).await;
+                    }
+                    continue
+                }
+
+                // Skip filter per the caller's rules.
+                if skip.iter().any(|(sidx, srole)| {
+                    *srole == role && sidx.map_or(true, |si| si == idx)
+                }) {
                     continue
                 }
                 if let Some(prop_i) = prop_i {
                     match action {
-                        ModifyAction::Set(i) => if *prop_i != i { continue },
-                        ModifyAction::SetCache(idxs) => if !idxs.contains(prop_i) { continue }
+                        ModifyAction::Set(i) => if prop_i != i { continue },
+                        ModifyAction::SetCache(idxs) => if !idxs.contains(&prop_i) { continue },
                         _ => continue
                     }
                 }

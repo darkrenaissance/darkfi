@@ -95,15 +95,15 @@ pub async fn create_edit_buttons(
     // Make buttons for cancel and done
     let node = create_layer("editbtn_layer");
     let prop = node.get_property("rect").unwrap();
-    prop.set_f32(atom, Role::App, 0, LABEL_X).unwrap();
+    prop.set_default_f32(0, LABEL_X).unwrap();
     #[cfg(any(target_os = "android", feature = "emulate-android"))]
     let code = cc.compile("h - MENU_BTN_H - LABEL_X ").unwrap();
     #[cfg(not(any(target_os = "android", feature = "emulate-android")))]
     let code = cc.compile("h - MENU_BTN_H - LABEL_X - 10").unwrap();
-    prop.set_expr(atom, Role::App, 1, code).unwrap();
+    prop.set_default_expr(1, code).unwrap();
     let code = cc.compile("w - 2 * LABEL_X").unwrap();
-    prop.set_expr(atom, Role::App, 2, code).unwrap();
-    prop.set_f32(atom, Role::App, 3, MENU_BTN_H).unwrap();
+    prop.set_default_expr(2, code).unwrap();
+    prop.set_default_f32(3, MENU_BTN_H).unwrap();
     node.set_property_bool(atom, Role::App, "is_visible", false).unwrap();
     // The edit-mode bar floats above the version block (z_index 3)
     node.set_property_u32(atom, Role::App, "z_index", 4).unwrap();
@@ -117,10 +117,10 @@ pub async fn create_edit_buttons(
 
     let node = create_vector_art("btns_bg");
     let prop = node.get_property("rect").unwrap();
-    prop.set_f32(atom, Role::App, 0, 0.).unwrap();
-    prop.set_f32(atom, Role::App, 1, 0.).unwrap();
-    prop.set_expr(atom, Role::App, 2, expr::load_var("w")).unwrap();
-    prop.set_expr(atom, Role::App, 3, expr::load_var("h")).unwrap();
+    prop.set_default_f32(0, 0.).unwrap();
+    prop.set_default_f32(1, 0.).unwrap();
+    prop.set_default_expr(2, expr::load_var("w")).unwrap();
+    prop.set_default_expr(3, expr::load_var("h")).unwrap();
     node.set_property_u32(atom, Role::App, "z_index", 0).unwrap();
 
     let mut shape = VectorShape::new();
@@ -164,10 +164,10 @@ pub async fn create_edit_buttons(
     let node = create_button("cancel_btn");
     node.set_property_bool(atom, Role::App, "is_active", true).unwrap();
     let prop = node.get_property("rect").unwrap();
-    prop.set_f32(atom, Role::App, 0, 0.).unwrap();
-    prop.set_f32(atom, Role::App, 1, 0.).unwrap();
-    prop.set_f32(atom, Role::App, 2, MENU_BTN_W_L).unwrap();
-    prop.set_expr(atom, Role::App, 3, expr::load_var("h")).unwrap();
+    prop.set_default_f32(0, 0.).unwrap();
+    prop.set_default_f32(1, 0.).unwrap();
+    prop.set_default_f32(2, MENU_BTN_W_L).unwrap();
+    prop.set_default_expr(3, expr::load_var("h")).unwrap();
 
     let cancel_btn =
         node.setup(|me| Button::new(me, app.renderer.clone(), app.redraw_trigger.clone())).await;
@@ -176,22 +176,19 @@ pub async fn create_edit_buttons(
     // Text for cancel button
     let node = create_text("cancel_text");
     let prop = node.get_property("rect").unwrap();
-    prop.set_f32(atom, Role::App, 0, 0.).unwrap();
-    prop.set_f32(atom, Role::App, 1, BTN_TEXT_Y).unwrap();
-    prop.set_f32(atom, Role::App, 2, MENU_BTN_W_L).unwrap();
-    prop.set_f32(atom, Role::App, 3, MENU_BTN_H).unwrap();
+    prop.set_default_f32(0, 0.).unwrap();
+    prop.set_default_f32(1, BTN_TEXT_Y).unwrap();
+    prop.set_default_f32(2, MENU_BTN_W_L).unwrap();
+    prop.set_default_f32(3, MENU_BTN_H).unwrap();
     node.set_property_u32(atom, Role::App, "z_index", 3).unwrap();
-    node.set_property_f32(atom, Role::App, "font_size", BTN_TEXT_FONTSIZE).unwrap();
+    node.get_property("font_size").unwrap().set_default_f32(0, BTN_TEXT_FONTSIZE).unwrap();
     node.set_property_str(atom, Role::App, "text", "cancel").unwrap();
     let prop = node.get_property("text_align").unwrap();
     prop.set_enum(atom, Role::App, 0, "center").unwrap();
     node.set_property_bool(atom, Role::App, "use_i18n", false).unwrap();
 
     let prop = node.get_property("text_color").unwrap();
-    prop.set_f32(atom, Role::App, 0, COLOR_RED[0]).unwrap();
-    prop.set_f32(atom, Role::App, 1, COLOR_RED[1]).unwrap();
-    prop.set_f32(atom, Role::App, 2, COLOR_RED[2]).unwrap();
-    prop.set_f32(atom, Role::App, 3, COLOR_RED[3]).unwrap();
+    prop.set_default_f32_multi(&[COLOR_RED[0], COLOR_RED[1], COLOR_RED[2], COLOR_RED[3]]).unwrap();
 
     let node = node
         .setup(|me| {
@@ -211,10 +208,10 @@ pub async fn create_edit_buttons(
     node.set_property_bool(atom, Role::App, "is_active", true).unwrap();
     let prop = node.get_property("rect").unwrap();
     let code = cc.compile("w - MENU_BTN_W_R").unwrap();
-    prop.set_expr(atom, Role::App, 0, code).unwrap();
-    prop.set_f32(atom, Role::App, 1, 0.).unwrap();
-    prop.set_f32(atom, Role::App, 2, MENU_BTN_W_R).unwrap();
-    prop.set_expr(atom, Role::App, 3, expr::load_var("h")).unwrap();
+    prop.set_default_expr(0, code).unwrap();
+    prop.set_default_f32(1, 0.).unwrap();
+    prop.set_default_f32(2, MENU_BTN_W_R).unwrap();
+    prop.set_default_expr(3, expr::load_var("h")).unwrap();
 
     let done_btn =
         node.setup(|me| Button::new(me, app.renderer.clone(), app.redraw_trigger.clone())).await;
@@ -224,22 +221,20 @@ pub async fn create_edit_buttons(
     let node = create_text("done_text");
     let prop = node.get_property("rect").unwrap();
     let code = cc.compile("w - MENU_BTN_W_R").unwrap();
-    prop.set_expr(atom, Role::App, 0, code).unwrap();
-    prop.set_f32(atom, Role::App, 1, BTN_TEXT_Y).unwrap();
-    prop.set_f32(atom, Role::App, 2, MENU_BTN_W_R).unwrap();
-    prop.set_f32(atom, Role::App, 3, MENU_BTN_H).unwrap();
+    prop.set_default_expr(0, code).unwrap();
+    prop.set_default_f32(1, BTN_TEXT_Y).unwrap();
+    prop.set_default_f32(2, MENU_BTN_W_R).unwrap();
+    prop.set_default_f32(3, MENU_BTN_H).unwrap();
     node.set_property_u32(atom, Role::App, "z_index", 3).unwrap();
-    node.set_property_f32(atom, Role::App, "font_size", BTN_TEXT_FONTSIZE).unwrap();
+    node.get_property("font_size").unwrap().set_default_f32(0, BTN_TEXT_FONTSIZE).unwrap();
     node.set_property_str(atom, Role::App, "text", "done").unwrap();
     let prop = node.get_property("text_align").unwrap();
     prop.set_enum(atom, Role::App, 0, "center").unwrap();
     node.set_property_bool(atom, Role::App, "use_i18n", false).unwrap();
 
     let prop = node.get_property("text_color").unwrap();
-    prop.set_f32(atom, Role::App, 0, COLOR_CYAN[0]).unwrap();
-    prop.set_f32(atom, Role::App, 1, COLOR_CYAN[1]).unwrap();
-    prop.set_f32(atom, Role::App, 2, COLOR_CYAN[2]).unwrap();
-    prop.set_f32(atom, Role::App, 3, COLOR_CYAN[3]).unwrap();
+    prop.set_default_f32_multi(&[COLOR_CYAN[0], COLOR_CYAN[1], COLOR_CYAN[2], COLOR_CYAN[3]])
+        .unwrap();
 
     let node = node
         .setup(|me| {
@@ -280,7 +275,7 @@ impl EditButtons {
                 editlayer.set(atom, true);
             }
         });
-        app.tasks.lock().unwrap().push(task);
+        app.tasks.lock().push(task);
 
         // Cancel and done button click handlers
         self.connect_btn_handler(
@@ -326,6 +321,6 @@ impl EditButtons {
                 }
             }
         });
-        app.tasks.lock().unwrap().push(task);
+        app.tasks.lock().push(task);
     }
 }

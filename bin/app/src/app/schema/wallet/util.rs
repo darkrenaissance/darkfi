@@ -26,7 +26,6 @@ use smol::channel::unbounded;
 use crate::{
     app::{
         node::{create_button, create_layer, create_shortcut, create_text, create_vector_art},
-        schema::COLOR_SCHEME,
         App,
     },
     expr::{self, Compiler},
@@ -39,7 +38,7 @@ use crate::{
     util::i18n::I18nBabelFish,
 };
 
-use super::{super::ColorScheme, data::*};
+use super::data::*;
 
 pub async fn get_balance(sg_root: &SceneNodePtr, token_id: &TokenId) -> u64 {
     let Some(drk_node) = sg_root.lookup_node("/plugin/drk") else { return 0 };
@@ -134,7 +133,7 @@ pub async fn create_back_shortcut(app: &App, atom: &mut PropertyAtomicGuard, lay
             main_layer.set_property_bool(atom, Role::App, "is_visible", true).unwrap();
         }
     });
-    app.tasks.lock().unwrap().push(listen_back);
+    app.tasks.lock().push(listen_back);
 
     let node = node.setup(|me| Shortcut::new(me)).await;
     layer.link(node);
@@ -153,24 +152,14 @@ pub async fn create_title(
 ) -> SceneNodePtr {
     let node = create_text(name);
     let prop = node.get_property("rect").unwrap();
-    prop.set_f32(atom, Role::App, 0, PADDING_X).unwrap();
-    prop.set_f32(atom, Role::App, 1, *y + TITLE_PADDING).unwrap();
-    prop.set_f32(atom, Role::App, 2, 1000.).unwrap();
-    prop.set_f32(atom, Role::App, 3, TITLE_FONTSIZE).unwrap();
-    node.set_property_f32(atom, Role::App, "font_size", TITLE_FONTSIZE).unwrap();
+    prop.set_default_f32(0, PADDING_X).unwrap();
+    prop.set_default_f32(1, *y + TITLE_PADDING).unwrap();
+    prop.set_default_f32(2, 1000.).unwrap();
+    prop.set_default_f32(3, TITLE_FONTSIZE).unwrap();
+    node.get_property("font_size").unwrap().set_default_f32(0, TITLE_FONTSIZE).unwrap();
     node.set_property_str(atom, Role::App, "text", name).unwrap();
     let prop = node.get_property("text_color").unwrap();
-    if COLOR_SCHEME == ColorScheme::DarkMode {
-        prop.set_f32(atom, Role::App, 0, 1.).unwrap();
-        prop.set_f32(atom, Role::App, 1, 1.).unwrap();
-        prop.set_f32(atom, Role::App, 2, 1.).unwrap();
-        prop.set_f32(atom, Role::App, 3, 1.).unwrap();
-    } else {
-        prop.set_f32(atom, Role::App, 0, 0.).unwrap();
-        prop.set_f32(atom, Role::App, 1, 0.).unwrap();
-        prop.set_f32(atom, Role::App, 2, 0.).unwrap();
-        prop.set_f32(atom, Role::App, 3, 1.).unwrap();
-    }
+    prop.set_default_f32_multi(&[1., 1., 1., 1.]).unwrap();
     node.set_property_u32(atom, Role::App, "z_index", 2).unwrap();
     let node = node
         .setup(|me| {
@@ -213,24 +202,14 @@ pub async fn create_subtitle(
 ) -> SceneNodePtr {
     let node = create_text(name);
     let prop = node.get_property("rect").unwrap();
-    prop.set_f32(atom, Role::App, 0, PADDING_X).unwrap();
-    prop.set_f32(atom, Role::App, 1, *y + PADDING_Y).unwrap();
-    prop.set_f32(atom, Role::App, 2, 1000.).unwrap();
-    prop.set_f32(atom, Role::App, 3, TITLE_FONTSIZE).unwrap();
-    node.set_property_f32(atom, Role::App, "font_size", TITLE_FONTSIZE).unwrap();
+    prop.set_default_f32(0, PADDING_X).unwrap();
+    prop.set_default_f32(1, *y + PADDING_Y).unwrap();
+    prop.set_default_f32(2, 1000.).unwrap();
+    prop.set_default_f32(3, TITLE_FONTSIZE).unwrap();
+    node.get_property("font_size").unwrap().set_default_f32(0, TITLE_FONTSIZE).unwrap();
     node.set_property_str(atom, Role::App, "text", text).unwrap();
     let prop = node.get_property("text_color").unwrap();
-    if COLOR_SCHEME == ColorScheme::DarkMode {
-        prop.set_f32(atom, Role::App, 0, 1.).unwrap();
-        prop.set_f32(atom, Role::App, 1, 1.).unwrap();
-        prop.set_f32(atom, Role::App, 2, 1.).unwrap();
-        prop.set_f32(atom, Role::App, 3, 1.).unwrap();
-    } else {
-        prop.set_f32(atom, Role::App, 0, 0.).unwrap();
-        prop.set_f32(atom, Role::App, 1, 0.).unwrap();
-        prop.set_f32(atom, Role::App, 2, 0.).unwrap();
-        prop.set_f32(atom, Role::App, 3, 1.).unwrap();
-    }
+    prop.set_default_f32_multi(&[1., 1., 1., 1.]).unwrap();
     node.set_property_u32(atom, Role::App, "z_index", 2).unwrap();
     let node = node
         .setup(|me| {
@@ -269,10 +248,10 @@ pub async fn create_bg_mesh(
 ) {
     let node = create_vector_art(name);
     let prop = node.get_property("rect").unwrap();
-    prop.set_f32(atom, Role::App, 0, 0.).unwrap();
-    prop.set_f32(atom, Role::App, 1, 0.).unwrap();
-    prop.set_expr(atom, Role::App, 2, expr::load_var("w")).unwrap();
-    prop.set_expr(atom, Role::App, 3, expr::load_var("h")).unwrap();
+    prop.set_default_f32(0, 0.).unwrap();
+    prop.set_default_f32(1, 0.).unwrap();
+    prop.set_default_expr(2, expr::load_var("w")).unwrap();
+    prop.set_default_expr(3, expr::load_var("h")).unwrap();
     node.set_property_u32(atom, Role::App, "z_index", 0).unwrap();
     let mut shape = VectorShape::new();
     shape.add_gradient_box(
@@ -297,16 +276,13 @@ pub async fn create_header_bg(
 ) {
     let node = create_vector_art(name);
     let prop = node.get_property("rect").unwrap();
-    prop.set_f32(atom, Role::App, 0, 0.).unwrap();
-    prop.set_f32(atom, Role::App, 1, 0.).unwrap();
-    prop.set_expr(atom, Role::App, 2, expr::load_var("w")).unwrap();
-    prop.set_f32(atom, Role::App, 3, HEADER_HEIGHT).unwrap();
+    prop.set_default_f32(0, 0.).unwrap();
+    prop.set_default_f32(1, 0.).unwrap();
+    prop.set_default_expr(2, expr::load_var("w")).unwrap();
+    prop.set_default_f32(3, HEADER_HEIGHT).unwrap();
     node.set_property_u32(atom, Role::App, "z_index", 1).unwrap();
 
-    let (bg_color, sep_color) = match COLOR_SCHEME {
-        ColorScheme::DarkMode => ([0., 0., 0., 1.], [0.41, 0.6, 0.65, 1.]),
-        ColorScheme::PaperLight => ([1., 1., 1., 1.], [0., 0.6, 0.65, 1.]),
-    };
+    let (bg_color, sep_color) = ([0., 0., 0., 1.], [0.41, 0.6, 0.65, 1.]);
 
     let cc = Compiler::new();
     let mut shape = VectorShape::new();
@@ -324,8 +300,8 @@ pub async fn create_header_bg(
         cc.compile("h + 0.5").unwrap(),
         sep_color,
     );
-    let color1 = [0., 0.17, 0.18, 0.5];
-    let color2 = [0., 0.88, 1., 0.];
+    let color1 = [0.2, 0.2, 0.2, 0.5];
+    let color2 = [0.5, 0.5, 0.5, 0.];
     shape.add_smooth_vertical_gradient(
         expr::const_f32(0.),
         expr::const_f32(0.),
@@ -354,11 +330,11 @@ pub async fn create_separator_expr(
 ) -> SceneNodePtr {
     let sep_node = create_vector_art(name);
     let prop = sep_node.get_property("rect").unwrap();
-    prop.set_f32(atom, Role::App, 0, 0.).unwrap();
+    prop.set_default_f32(0, 0.).unwrap();
     let code = cc.compile(y_expr).unwrap();
-    prop.set_expr(atom, Role::App, 1, code).unwrap();
-    prop.set_expr(atom, Role::App, 2, expr::load_var("w")).unwrap();
-    prop.set_f32(atom, Role::App, 3, 1.).unwrap();
+    prop.set_default_expr(1, code).unwrap();
+    prop.set_default_expr(2, expr::load_var("w")).unwrap();
+    prop.set_default_f32(3, 1.).unwrap();
     sep_node.set_property_u32(atom, Role::App, "z_index", 2).unwrap();
     let mut shape = VectorShape::new();
     shape.add_filled_box(
@@ -388,10 +364,10 @@ pub async fn create_separator(
 ) -> SceneNodePtr {
     let sep_node = create_vector_art(name);
     let prop = sep_node.get_property("rect").unwrap();
-    prop.set_f32(atom, Role::App, 0, 0.).unwrap();
-    prop.set_f32(atom, Role::App, 1, *y).unwrap();
-    prop.set_expr(atom, Role::App, 2, expr::load_var("w")).unwrap();
-    prop.set_f32(atom, Role::App, 3, 1.).unwrap();
+    prop.set_default_f32(0, 0.).unwrap();
+    prop.set_default_f32(1, *y).unwrap();
+    prop.set_default_expr(2, expr::load_var("w")).unwrap();
+    prop.set_default_f32(3, 1.).unwrap();
     sep_node.set_property_u32(atom, Role::App, "z_index", 2).unwrap();
     let mut shape = VectorShape::new();
     shape.add_filled_box(
@@ -424,12 +400,12 @@ pub async fn create_bottom_button(
 ) -> SceneNodePtr {
     let node = create_vector_art(&format!("{}_bg", name));
     let prop = node.get_property("rect").unwrap();
-    prop.set_f32(atom, Role::App, 0, PADDING_X).unwrap();
+    prop.set_default_f32(0, PADDING_X).unwrap();
     let code = cc.compile("h - PADDING_X - BUTTON_HEIGHT").unwrap();
-    prop.set_expr(atom, Role::App, 1, code).unwrap();
+    prop.set_default_expr(1, code).unwrap();
     let code = cc.compile("w - PADDING_X * 2.").unwrap();
-    prop.set_expr(atom, Role::App, 2, code).unwrap();
-    prop.set_f32(atom, Role::App, 3, BUTTON_HEIGHT).unwrap();
+    prop.set_default_expr(2, code).unwrap();
+    prop.set_default_f32(3, BUTTON_HEIGHT).unwrap();
     node.set_property_u32(atom, Role::App, "z_index", 2).unwrap();
     node.set_property_bool(atom, Role::App, "is_visible", true).unwrap();
     let mut shape = VectorShape::new();
@@ -450,23 +426,21 @@ pub async fn create_bottom_button(
     if let Some(text) = label_text {
         let label_node = create_text(&format!("{}_label", name));
         let prop = label_node.get_property("rect").unwrap();
-        prop.set_f32(atom, Role::App, 0, PADDING_X).unwrap();
+        prop.set_default_f32(0, PADDING_X).unwrap();
         let code = cc
             .compile("h - PADDING_X - BUTTON_HEIGHT + BUTTON_HEIGHT / 2 - BUTTON_FONTSIZE / 1.8")
             .unwrap();
-        prop.set_expr(atom, Role::App, 1, code).unwrap();
+        prop.set_default_expr(1, code).unwrap();
         let code = cc.compile("w - PADDING_X * 2.").unwrap();
-        prop.set_expr(atom, Role::App, 2, code).unwrap();
-        prop.set_f32(atom, Role::App, 3, BUTTON_HEIGHT).unwrap();
-        label_node.set_property_f32(atom, Role::App, "font_size", BUTTON_FONTSIZE).unwrap();
+        prop.set_default_expr(2, code).unwrap();
+        prop.set_default_f32(3, BUTTON_HEIGHT).unwrap();
+        label_node.get_property("font_size").unwrap().set_default_f32(0, BUTTON_FONTSIZE).unwrap();
         label_node.set_property_str(atom, Role::App, "text", text).unwrap();
         label_node.set_property_enum(atom, Role::App, "text_align", "center").unwrap();
 
         let prop = label_node.get_property("text_color").unwrap();
-        prop.set_f32(atom, Role::App, 0, COLOR_CYAN[0]).unwrap();
-        prop.set_f32(atom, Role::App, 1, COLOR_CYAN[1]).unwrap();
-        prop.set_f32(atom, Role::App, 2, COLOR_CYAN[2]).unwrap();
-        prop.set_f32(atom, Role::App, 3, COLOR_CYAN[3]).unwrap();
+        prop.set_default_f32_multi(&[COLOR_CYAN[0], COLOR_CYAN[1], COLOR_CYAN[2], COLOR_CYAN[3]])
+            .unwrap();
         label_node.set_property_u32(atom, Role::App, "z_index", 3).unwrap();
         let label_node = label_node
             .setup(|me| {
@@ -486,12 +460,12 @@ pub async fn create_bottom_button(
     let node = create_button(name);
     node.set_property_bool(atom, Role::App, "is_active", true).unwrap();
     let prop = node.get_property("rect").unwrap();
-    prop.set_f32(atom, Role::App, 0, PADDING_X).unwrap();
+    prop.set_default_f32(0, PADDING_X).unwrap();
     let code = cc.compile("h - PADDING_X - BUTTON_HEIGHT").unwrap();
-    prop.set_expr(atom, Role::App, 1, code).unwrap();
+    prop.set_default_expr(1, code).unwrap();
     let code = cc.compile("w - PADDING_X * 2.").unwrap();
-    prop.set_expr(atom, Role::App, 2, code).unwrap();
-    prop.set_f32(atom, Role::App, 3, BUTTON_HEIGHT).unwrap();
+    prop.set_default_expr(2, code).unwrap();
+    prop.set_default_f32(3, BUTTON_HEIGHT).unwrap();
 
     let node =
         node.setup(|me| Button::new(me, app.renderer.clone(), app.redraw_trigger.clone())).await;
@@ -515,12 +489,12 @@ pub async fn create_bottom_button_with_states(
     // Button bg (teal outline - valid state)
     let bg_valid = create_vector_art(&format!("{}_bg", name));
     let prop = bg_valid.get_property("rect").unwrap();
-    prop.set_f32(atom, Role::App, 0, PADDING_X).unwrap();
+    prop.set_default_f32(0, PADDING_X).unwrap();
     let code = cc.compile("h - PADDING_X - BUTTON_HEIGHT").unwrap();
-    prop.set_expr(atom, Role::App, 1, code).unwrap();
+    prop.set_default_expr(1, code).unwrap();
     let code = cc.compile("w - PADDING_X * 2.").unwrap();
-    prop.set_expr(atom, Role::App, 2, code).unwrap();
-    prop.set_f32(atom, Role::App, 3, BUTTON_HEIGHT).unwrap();
+    prop.set_default_expr(2, code).unwrap();
+    prop.set_default_f32(3, BUTTON_HEIGHT).unwrap();
     bg_valid.set_property_u32(atom, Role::App, "z_index", 2).unwrap();
     bg_valid.set_property_bool(atom, Role::App, "is_visible", initial_valid).unwrap();
     let mut shape = VectorShape::new();
@@ -541,12 +515,12 @@ pub async fn create_bottom_button_with_states(
     // Button bg (grey outline - invalid state)
     let bg_invalid = create_vector_art(&format!("{}_bg_grey", name));
     let prop = bg_invalid.get_property("rect").unwrap();
-    prop.set_f32(atom, Role::App, 0, PADDING_X).unwrap();
+    prop.set_default_f32(0, PADDING_X).unwrap();
     let code = cc.compile("h - PADDING_X - BUTTON_HEIGHT").unwrap();
-    prop.set_expr(atom, Role::App, 1, code).unwrap();
+    prop.set_default_expr(1, code).unwrap();
     let code = cc.compile("w - PADDING_X * 2.").unwrap();
-    prop.set_expr(atom, Role::App, 2, code).unwrap();
-    prop.set_f32(atom, Role::App, 3, BUTTON_HEIGHT).unwrap();
+    prop.set_default_expr(2, code).unwrap();
+    prop.set_default_f32(3, BUTTON_HEIGHT).unwrap();
     bg_invalid.set_property_u32(atom, Role::App, "z_index", 2).unwrap();
     bg_invalid.set_property_bool(atom, Role::App, "is_visible", !initial_valid).unwrap();
     let mut shape = VectorShape::new();
@@ -567,29 +541,29 @@ pub async fn create_bottom_button_with_states(
     // Button label text
     let label_node = create_text(&format!("{}_label", name));
     let prop = label_node.get_property("rect").unwrap();
-    prop.set_f32(atom, Role::App, 0, PADDING_X).unwrap();
+    prop.set_default_f32(0, PADDING_X).unwrap();
     let code = cc
         .compile("h - PADDING_X - BUTTON_HEIGHT + BUTTON_HEIGHT / 2 - BUTTON_FONTSIZE / 1.8")
         .unwrap();
-    prop.set_expr(atom, Role::App, 1, code).unwrap();
+    prop.set_default_expr(1, code).unwrap();
     let code = cc.compile("w - PADDING_X * 2.").unwrap();
-    prop.set_expr(atom, Role::App, 2, code).unwrap();
-    prop.set_f32(atom, Role::App, 3, BUTTON_HEIGHT).unwrap();
-    label_node.set_property_f32(atom, Role::App, "font_size", BUTTON_FONTSIZE).unwrap();
+    prop.set_default_expr(2, code).unwrap();
+    prop.set_default_f32(3, BUTTON_HEIGHT).unwrap();
+    label_node.get_property("font_size").unwrap().set_default_f32(0, BUTTON_FONTSIZE).unwrap();
     label_node.set_property_str(atom, Role::App, "text", label_text).unwrap();
     label_node.set_property_enum(atom, Role::App, "text_align", "center").unwrap();
 
     let prop = label_node.get_property("text_color").unwrap();
     if initial_valid {
-        prop.set_f32(atom, Role::App, 0, COLOR_CYAN[0]).unwrap();
-        prop.set_f32(atom, Role::App, 1, COLOR_CYAN[1]).unwrap();
-        prop.set_f32(atom, Role::App, 2, COLOR_CYAN[2]).unwrap();
-        prop.set_f32(atom, Role::App, 3, COLOR_CYAN[3]).unwrap();
+        prop.set_default_f32(0, COLOR_CYAN[0]).unwrap();
+        prop.set_default_f32(1, COLOR_CYAN[1]).unwrap();
+        prop.set_default_f32(2, COLOR_CYAN[2]).unwrap();
+        prop.set_default_f32(3, COLOR_CYAN[3]).unwrap();
     } else {
-        prop.set_f32(atom, Role::App, 0, 0.5).unwrap();
-        prop.set_f32(atom, Role::App, 1, 0.5).unwrap();
-        prop.set_f32(atom, Role::App, 2, 0.5).unwrap();
-        prop.set_f32(atom, Role::App, 3, 1.).unwrap();
+        prop.set_default_f32(0, 0.5).unwrap();
+        prop.set_default_f32(1, 0.5).unwrap();
+        prop.set_default_f32(2, 0.5).unwrap();
+        prop.set_default_f32(3, 1.).unwrap();
     }
     label_node.set_property_u32(atom, Role::App, "z_index", 3).unwrap();
     let label_node = label_node
@@ -609,12 +583,12 @@ pub async fn create_bottom_button_with_states(
     let btn = create_button(name);
     btn.set_property_bool(atom, Role::App, "is_active", true).unwrap();
     let prop = btn.get_property("rect").unwrap();
-    prop.set_f32(atom, Role::App, 0, PADDING_X).unwrap();
+    prop.set_default_f32(0, PADDING_X).unwrap();
     let code = cc.compile("h - PADDING_X - BUTTON_HEIGHT").unwrap();
-    prop.set_expr(atom, Role::App, 1, code).unwrap();
+    prop.set_default_expr(1, code).unwrap();
     let code = cc.compile("w - PADDING_X * 2.").unwrap();
-    prop.set_expr(atom, Role::App, 2, code).unwrap();
-    prop.set_f32(atom, Role::App, 3, BUTTON_HEIGHT).unwrap();
+    prop.set_default_expr(2, code).unwrap();
+    prop.set_default_f32(3, BUTTON_HEIGHT).unwrap();
 
     let btn =
         btn.setup(|me| Button::new(me, app.renderer.clone(), app.redraw_trigger.clone())).await;
@@ -651,10 +625,10 @@ pub async fn create_tooltip(
     // Create tooltip layer
     let mut tooltip_layer = create_layer(name);
     let prop = tooltip_layer.get_property("rect").unwrap();
-    prop.set_f32(atom, Role::App, 0, 0.).unwrap();
-    prop.set_f32(atom, Role::App, 1, 0.).unwrap();
-    prop.set_f32(atom, Role::App, 2, width).unwrap();
-    prop.set_f32(atom, Role::App, 3, height).unwrap();
+    prop.set_default_f32(0, 0.).unwrap();
+    prop.set_default_f32(1, 0.).unwrap();
+    prop.set_default_f32(2, width).unwrap();
+    prop.set_default_f32(3, height).unwrap();
     tooltip_layer.set_property_bool(atom, Role::App, "is_visible", false).unwrap();
     tooltip_layer.set_property_u32(atom, Role::App, "z_index", 3).unwrap();
 
@@ -668,12 +642,12 @@ pub async fn create_tooltip(
     // Create box
     let node = create_vector_art("bg");
     let prop = node.get_property("rect").unwrap();
-    prop.set_f32(atom, Role::App, 0, 0.).unwrap();
-    prop.set_f32(atom, Role::App, 1, 0.).unwrap();
+    prop.set_default_f32(0, 0.).unwrap();
+    prop.set_default_f32(1, 0.).unwrap();
     let code = cc.compile("TOOLTIP_WIDTH").unwrap();
-    prop.set_expr(atom, Role::App, 2, code).unwrap();
+    prop.set_default_expr(2, code).unwrap();
     let code = cc.compile("TOOLTIP_HEIGHT").unwrap();
-    prop.set_expr(atom, Role::App, 3, code).unwrap();
+    prop.set_default_expr(3, code).unwrap();
 
     let mut shape = VectorShape::new();
     shape.add_outline(
@@ -693,17 +667,15 @@ pub async fn create_tooltip(
     let node = create_text("text");
     node.set_property_str(atom, Role::App, "text", text).unwrap();
     let prop = node.get_property("rect").unwrap();
-    prop.set_f32(atom, Role::App, 0, TOOLTIP_PADDING_X).unwrap();
-    prop.set_f32(atom, Role::App, 1, TOOLTIP_PADDING_Y).unwrap();
-    prop.set_f32(atom, Role::App, 2, text_width).unwrap();
-    prop.set_f32(atom, Role::App, 3, text_height).unwrap();
-    node.set_property_f32(atom, Role::App, "font_size", HINT_FONTSIZE).unwrap();
+    prop.set_default_f32(0, TOOLTIP_PADDING_X).unwrap();
+    prop.set_default_f32(1, TOOLTIP_PADDING_Y).unwrap();
+    prop.set_default_f32(2, text_width).unwrap();
+    prop.set_default_f32(3, text_height).unwrap();
+    node.get_property("font_size").unwrap().set_default_f32(0, HINT_FONTSIZE).unwrap();
 
     let prop = node.get_property("text_color").unwrap();
-    prop.set_f32(atom, Role::App, 0, text_color[0]).unwrap();
-    prop.set_f32(atom, Role::App, 1, text_color[1]).unwrap();
-    prop.set_f32(atom, Role::App, 2, text_color[2]).unwrap();
-    prop.set_f32(atom, Role::App, 3, text_color[3]).unwrap();
+    prop.set_default_f32_multi(&[text_color[0], text_color[1], text_color[2], text_color[3]])
+        .unwrap();
     node.set_property_u32(atom, Role::App, "z_index", 3).unwrap();
     let node = node
         .setup(|me| {
@@ -724,7 +696,7 @@ pub async fn create_tooltip(
     let redraw2 = app.redraw_trigger.clone();
     let (reset_sender, reset_receiver) = unbounded::<()>();
 
-    app.tasks.lock().unwrap().push(app.ex.spawn(async move {
+    app.tasks.lock().push(app.ex.spawn(async move {
         loop {
             // Wait for show() call
             let _ = show_method_sub.receive().await;
@@ -741,7 +713,7 @@ pub async fn create_tooltip(
     // Hide timer task
     let tooltip2 = tooltip_layer.clone();
     let redraw2 = app.redraw_trigger.clone();
-    app.tasks.lock().unwrap().push(app.ex.spawn(async move {
+    app.tasks.lock().push(app.ex.spawn(async move {
         loop {
             // Wait for show signal
             let _ = reset_receiver.recv().await;

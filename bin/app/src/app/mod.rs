@@ -20,8 +20,10 @@ use kvdb_overlay::Database as KvDb;
 use smol::Task;
 use std::sync::{
     atomic::{AtomicBool, Ordering},
-    Arc, Mutex as SyncMutex,
+    Arc,
 };
+
+use parking_lot::Mutex as SyncMutex;
 
 #[cfg(target_os = "android")]
 use crate::android;
@@ -31,7 +33,7 @@ use crate::{
     prop::{PropertyAtomicGuard, Role},
     scene::{Pimpl, SceneNodePtr},
     setting::{create_setting, Setting},
-    sfx,
+    sfx, theme,
     ui::{RedrawTrigger, Window},
     util::i18n::I18nBabelFish,
     ExecutorPtr,
@@ -69,6 +71,10 @@ pub struct App {
     /// True on the first run of a new app version, i.e. when no version
     /// or a different one is recorded in the app DB. Loaded in `setup()`.
     pub is_first_time: AtomicBool,
+    /// The installed theme's ctx (journal, tracked nodes); `None` when
+    /// the minimal baseline is active. The active theme name lives in
+    /// `/setting/theme`.
+    pub theme_ctx: SyncMutex<Option<theme::ThemeCtx>>,
 }
 
 impl App {
@@ -82,12 +88,13 @@ impl App {
             redraw_trigger,
             redraw_rx,
             is_first_time: AtomicBool::new(false),
+            theme_ctx: SyncMutex::new(None),
         })
     }
 
     /// Does not require miniquad to be init. Created the scene graph tree / schema and all
     /// the objects.
-    pub async fn setup(&self, kv_db: KvDb, app_db: AppDbPtr) {
+    pub async fn setup(self: &Arc<Self>, kv_db: KvDb, app_db: AppDbPtr) {
         t!("App::setup()");
 
         let app_version = env!("CARGO_PKG_VERSION");
@@ -145,8 +152,22 @@ impl App {
 
         self.sg_root.link(window.clone());
 
+        // The /theme token node must exist before schema::make: schema
+        // wiring helpers install default-exprs + dependency edges onto
+        // its shared tokens (design D6).
+        let theme_node = theme::create_theme_node();
+        i!("theme: /theme linked with {} shared tokens", theme_node.props.len());
+        self.sg_root.link(theme_node);
+
         #[cfg(feature = "schema-app")]
         schema::make(&self, window.clone(), &i18n_fish, kv_db, app_db).await;
+
+        // Apply the persisted theme (default scifi) before the first
+        // frame and watch /setting/theme for live switches. Pubsub
+        // queues buffer the token-set notifications until the widget
+        // tasks start in App::start.
+        #[cfg(feature = "schema-app")]
+        theme::apply_startup(&self).await;
 
         #[cfg(feature = "schema-test")]
         schema::test::make(&self, window.clone(), &i18n_fish).await;
@@ -205,13 +226,6 @@ impl App {
     /// Begins the draw of the tree, and then starts the UI procs.
     pub async fn start(self: Arc<Self>, event_pub: GraphicsEventPublisherPtr, epoch: EpochIndex) {
         d!("Starting app epoch={epoch}");
-        // On Android the foreground service keeps the process alive across
-        // UI restarts, so start() runs on every relaunch. swap() consumes
-        // the flag so the sound only plays on the first launch of a new
-        // app version.
-        if self.is_first_time.swap(false, Ordering::Relaxed) {
-            sfx::play_commup();
-        }
         let mut atom = PropertyAtomicGuard::none();
 
         let window_node = self.sg_root.lookup_node("/window").unwrap();

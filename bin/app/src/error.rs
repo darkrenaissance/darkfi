@@ -152,6 +152,12 @@ pub enum Error {
 
     #[error("Node not removable")]
     NodeNotRemovable = 51,
+
+    #[error("Property permission denied")]
+    PropertyPermissionDenied = 52,
+
+    #[error("Theme not found")]
+    ThemeNotFound = 53,
 }
 
 impl From<kvdb_overlay::Error> for Error {

@@ -57,8 +57,8 @@ use crate::{
     gfx::{gfxtag, DrawCall, DrawInstruction, Point, Rectangle, RenderApi, Renderer},
     mesh::{Color, MeshBuilder},
     prop::{
-        PropertyAtomicGuard, PropertyBool, PropertyColor, PropertyFloat32, PropertyRect,
-        PropertyStr, PropertyUint32, Role,
+        eval_f32_multi, PropertyAtomicGuard, PropertyBool, PropertyColor, PropertyFloat32,
+        PropertyPermission, PropertyRect, PropertyStr, PropertyUint32, Role,
     },
     scene::{MethodCallSub, Pimpl, SceneNodeWeak},
     text,
@@ -167,6 +167,7 @@ pub struct ChatView {
     hi_bg_color: PropertyColor,
     wheel_page_frac: PropertyFloat32,
     channel_prop: crate::prop::PropertyStr,
+    shared: std::sync::OnceLock<msg::SharedProps>,
 
     /// Selected messages by composite key; view-wide, type-agnostic.
     /// The composite (not the bare id) because derived records share
@@ -324,6 +325,7 @@ impl ChatView {
                 .expect("chatview wheel_page_frac"),
             channel_prop: crate::prop::PropertyStr::wrap(node_ref, Role::Internal, "channel", 0)
                 .expect("chatview channel"),
+            shared: std::sync::OnceLock::new(),
 
             selected: SyncMutex::new(HashSet::new()),
             select_active: AtomicBool::new(false),
@@ -344,6 +346,7 @@ impl ChatView {
         // The type nodes are children of this node; they need a weak
         // self, so they can only be created once `self_` exists.
         let shared = msg::SharedProps::wrap(&node.upgrade().unwrap(), window_scale);
+        let _ = self_.shared.set(shared.clone());
         let types = msg::TypeNodes::new(
             &node.upgrade().unwrap(),
             shared,
@@ -1149,6 +1152,28 @@ impl ChatView {
     }
 }
 
+impl ChatView {
+    /// Draw-path re-evaluation of the expr-bound shared styling props:
+    /// populates the expression caches before the first read (they are
+    /// empty at startup, before any handler has fired) and self-heals
+    /// stale caches from edge cases such as dependency rewiring. Not
+    /// needed for switch atomicity — the batch guard owns that. Cache
+    /// writes are `Role::Internal` echoes, which the
+    /// when_change_external handlers skip.
+    fn eval_style(&self, atom: &mut PropertyAtomicGuard) {
+        let s = self.shared.get().expect("shared props initialized");
+        s.font_size.eval(atom).expect("font_size");
+        s.timestamp_font_size.eval(atom).expect("timestamp_font_size");
+        s.timestamp_width.eval(atom).expect("timestamp_width");
+        s.line_height.eval(atom).expect("line_height");
+        s.message_spacing.eval(atom).expect("message_spacing");
+        s.baseline.eval(atom).expect("baseline");
+        s.timestamp_color.eval(atom).expect("timestamp_color");
+        s.text_color.eval(atom).expect("text_color");
+        s.hi_bg_color.eval(atom).expect("hi_bg_color");
+    }
+}
+
 #[async_trait]
 impl UIObject for ChatView {
     fn priority(&self) -> u32 {
@@ -1309,6 +1334,8 @@ impl UIObject for ChatView {
         let rect = self.rect.get();
         let rect_changed = rect != prev_rect;
 
+        self.eval_style(atom);
+        self.types().privmsg.eval_style(atom);
         let mut buffer = self.buffer.lock().await;
         let total = buffer.total_height();
         let scroll = {
@@ -1717,7 +1744,12 @@ mod tests {
 
         let mut wscale = TestSceneNode::new("w", TestSceneNodeType::Object);
         wscale
-            .add_property(Property::new("scale", PropertyType::Float32, PropertySubType::Null))
+            .add_property(Property::new(
+                "scale",
+                PropertyType::Float32,
+                PropertySubType::Null,
+                PropertyPermission::default(),
+            ))
             .unwrap();
         let wscale = wscale.setup_null();
         wscale.set_property_f32(atom, Role::App, "scale", 1.).unwrap();

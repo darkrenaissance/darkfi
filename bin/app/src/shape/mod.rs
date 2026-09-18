@@ -86,3 +86,18 @@ pub use down_arrow::create_down_arrow;
 
 //mod reset;
 //pub use reset::create_reset;
+
+mod circle;
+pub use circle::create_circle;
+
+mod logo;
+pub use logo::create_logo;
+
+mod switch;
+pub use switch::create_switch;
+
+mod confirm;
+pub use confirm::create_confirm;
+
+mod reset;
+pub use reset::create_reset;
