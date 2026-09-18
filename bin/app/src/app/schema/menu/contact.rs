@@ -99,11 +99,11 @@ mod android_ui_consts {
     pub const PUBKEY_LABEL_FONTSIZE: f32 = 30.;
     pub const PUBKEY_LABEL_LINEHEIGHT: f32 = 1.5;
     pub const CONTENT_OUTLINE_SIZE: f32 = 0.5;
-    pub const TAB_LABEL_X: f32 = 90.;
-    pub const CHANNELS_TAB_ICON_GAP: f32 = 12.;
-    pub const CONTACTS_TAB_ICON_GAP: f32 = 8.5;
-    pub const CHANNELS_TAB_ICON_X: f32 = TAB_LABEL_X - CHANNELS_ICON_SCALE - CHANNELS_TAB_ICON_GAP;
-    pub const CONTACTS_TAB_ICON_X: f32 = TAB_LABEL_X - CONTACTS_ICON_SCALE - CONTACTS_TAB_ICON_GAP;
+    pub const BACK_SEP_W: f32 = 1.;
+    pub const CHANNELS_TAB_ICON_X: f32 = CHATEDIT_PAD + 0.9 * CHANNELS_ICON_SCALE;
+    pub const CONTACTS_TAB_ICON_X: f32 = CHATEDIT_PAD + 0.9 * CONTACTS_ICON_SCALE;
+    pub const CHANNELS_TAB_LABEL_X: f32 = CHANNELS_TAB_ICON_X + CHANNELS_ICON_SCALE + 12.;
+    pub const CONTACTS_TAB_LABEL_X: f32 = CONTACTS_TAB_ICON_X + CONTACTS_ICON_SCALE + 8.5;
 }
 
 #[cfg(target_os = "android")]
@@ -153,11 +153,11 @@ mod ui_consts {
     pub const PUBKEY_LABEL_FONTSIZE: f32 = 10.;
     pub const PUBKEY_LABEL_LINEHEIGHT: f32 = 1.5;
     pub const CONTENT_OUTLINE_SIZE: f32 = 0.3;
-    pub const TAB_LABEL_X: f32 = 45.;
-    pub const CHANNELS_TAB_ICON_GAP: f32 = 6.;
-    pub const CONTACTS_TAB_ICON_GAP: f32 = 4.25;
-    pub const CHANNELS_TAB_ICON_X: f32 = TAB_LABEL_X - CHANNELS_ICON_SCALE - CHANNELS_TAB_ICON_GAP;
-    pub const CONTACTS_TAB_ICON_X: f32 = TAB_LABEL_X - CONTACTS_ICON_SCALE - CONTACTS_TAB_ICON_GAP;
+    pub const BACK_SEP_W: f32 = 0.5;
+    pub const CHANNELS_TAB_ICON_X: f32 = CHATEDIT_PAD + 0.9 * CHANNELS_ICON_SCALE;
+    pub const CONTACTS_TAB_ICON_X: f32 = CHATEDIT_PAD + 0.9 * CONTACTS_ICON_SCALE;
+    pub const CHANNELS_TAB_LABEL_X: f32 = CHANNELS_TAB_ICON_X + CHANNELS_ICON_SCALE + 6.;
+    pub const CONTACTS_TAB_LABEL_X: f32 = CONTACTS_TAB_ICON_X + CONTACTS_ICON_SCALE + 4.25;
 }
 
 async fn unfocus_editors(content: &SceneNodePtr) {
@@ -186,7 +186,7 @@ pub async fn make(
     cc.add_const_f32("CONTENT_MARGIN", CONTENT_MARGIN);
     cc.add_const_f32("CONTACTS_ICON_SCALE", CONTACTS_ICON_SCALE);
     cc.add_const_f32("CHANNELS_ICON_SCALE", CHANNELS_ICON_SCALE);
-    cc.add_const_f32("TAB_LABEL_X", TAB_LABEL_X);
+    cc.add_const_f32("CHANNELS_TAB_LABEL_X", CHANNELS_TAB_LABEL_X);
     cc.add_const_f32("CHANNELS_TAB_ICON_X", CHANNELS_TAB_ICON_X);
     cc.add_const_f32("CONTENT_OUTLINE_SIZE", CONTENT_OUTLINE_SIZE);
     cc.add_const_f32("MENU_BTN_W_L", MENU_BTN_W_L);
@@ -588,14 +588,14 @@ pub async fn make(
     let prop = node.get_property("rect").unwrap();
     #[cfg(any(target_os = "android", feature = "emulate-android"))]
     {
-        prop.set_default_f32(0, TAB_LABEL_X).unwrap();
+        prop.set_default_f32(0, CONTACTS_TAB_LABEL_X).unwrap();
         prop.set_default_f32(1, CONTENT_MARGIN * 1.4).unwrap();
         prop.set_default_f32(2, 200.).unwrap();
         prop.set_default_f32(3, 40.).unwrap();
     }
     #[cfg(not(any(target_os = "android", feature = "emulate-android")))]
     {
-        prop.set_default_f32(0, TAB_LABEL_X).unwrap();
+        prop.set_default_f32(0, CONTACTS_TAB_LABEL_X).unwrap();
         prop.set_default_f32(1, CONTENT_MARGIN * 1.15).unwrap();
         prop.set_default_f32(2, 200.).unwrap();
         prop.set_default_f32(3, 40.).unwrap();
@@ -679,7 +679,7 @@ pub async fn make(
     let prop = node.get_property("rect").unwrap();
     #[cfg(any(target_os = "android", feature = "emulate-android"))]
     {
-        let code = cc.compile("w / 2 + TAB_LABEL_X").unwrap();
+        let code = cc.compile("w / 2 + CHANNELS_TAB_LABEL_X").unwrap();
         prop.set_default_expr(0, code).unwrap();
         prop.set_default_f32(1, CONTENT_MARGIN * 1.4).unwrap();
         let code = cc.compile("w").unwrap();
@@ -688,7 +688,7 @@ pub async fn make(
     }
     #[cfg(not(any(target_os = "android", feature = "emulate-android")))]
     {
-        let code = cc.compile("w / 2 + TAB_LABEL_X").unwrap();
+        let code = cc.compile("w / 2 + CHANNELS_TAB_LABEL_X").unwrap();
         prop.set_default_expr(0, code).unwrap();
         prop.set_default_f32(1, CONTENT_MARGIN * 1.15).unwrap();
         let code = cc.compile("w").unwrap();
