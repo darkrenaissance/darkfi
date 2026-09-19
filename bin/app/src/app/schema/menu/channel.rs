@@ -66,7 +66,7 @@ use crate::{
 mod android_ui_consts {
     pub const LABEL_X: f32 = 40.;
     pub const LABEL_LINESPACE: f32 = 125.;
-    pub const LABEL_FONTSIZE: f32 = 44.;
+    pub const LABEL_FONTSIZE: f32 = 45.;
     pub const CONTACTS_ICON_SCALE: f32 = 29.;
     pub const CHANNELS_ICON_SCALE: f32 = 20.;
     pub const MENU_SEP_SIZE: f32 = 3.;
@@ -77,10 +77,12 @@ mod android_ui_consts {
     pub const VERBLOCK_Y: f32 = 80.;
     pub const CHATEDIT_PAD: f32 = 38.;
     pub const CHATEDIT_HEIGHT: f32 = 115.;
-    pub const TEXTBAR_BASELINE: f32 = FONTSIZE * 0.7;
-    pub const FONTSIZE: f32 = 38.;
-    pub const CHATEDIT_CURSOR_ASCENT: f32 = FONTSIZE * 0.7;
-    pub const CHATEDIT_CURSOR_DESCENT: f32 = FONTSIZE * 0.35;
+    pub const TEXTBAR_BASELINE: f32 = EDIT_FONTSIZE * 0.7;
+    pub const EDIT_FONTSIZE: f32 = 40.;
+    pub const LIST_FONTSIZE: f32 = 44.;
+    pub const BTN_FONTSIZE: f32 = 36.5;
+    pub const CHATEDIT_CURSOR_ASCENT: f32 = EDIT_FONTSIZE * 0.7;
+    pub const CHATEDIT_CURSOR_DESCENT: f32 = EDIT_FONTSIZE * 0.35;
     pub const CHATEDIT_SELECT_ASCENT: f32 = 50.;
     pub const CHATEDIT_SELECT_DESCENT: f32 = 20.;
     pub const CHATEDIT_HANDLE_DESCENT: f32 = 10.;
@@ -130,6 +132,9 @@ mod ui_consts {
     pub const CHATEDIT_HEIGHT: f32 = 50.;
     pub const TEXTBAR_BASELINE: f32 = FONTSIZE * 0.7;
     pub const FONTSIZE: f32 = 18.;
+    pub const EDIT_FONTSIZE: f32 = FONTSIZE * 0.95;
+    pub const LIST_FONTSIZE: f32 = FONTSIZE;
+    pub const BTN_FONTSIZE: f32 = FONTSIZE * 0.95;
     pub const CHATEDIT_CURSOR_ASCENT: f32 = FONTSIZE * 0.7;
     pub const CHATEDIT_CURSOR_DESCENT: f32 = FONTSIZE * 0.35;
     pub const CHATEDIT_SELECT_ASCENT: f32 = 30.;
@@ -714,7 +719,7 @@ pub async fn make(
     prop.set_default_f32(2, TEXTBAR_BASELINE / 2.).unwrap();
     prop.set_default_f32(3, 15.).unwrap();
     node.get_property("baseline").unwrap().set_default_f32(0, TEXTBAR_BASELINE).unwrap();
-    node.get_property("font_size").unwrap().set_default_f32(0, FONTSIZE * 0.88).unwrap();
+    node.get_property("font_size").unwrap().set_default_f32(0, EDIT_FONTSIZE).unwrap();
 
     let prop = node.get_property("text_color").unwrap();
     prop.set_default_f32_multi(&[1., 1., 1., 1.]).unwrap();
@@ -826,7 +831,7 @@ pub async fn make(
     prop.set_default_f32(2, TEXTBAR_BASELINE / 2.).unwrap();
     prop.set_default_f32(3, 15.).unwrap();
     node.get_property("baseline").unwrap().set_default_f32(0, TEXTBAR_BASELINE).unwrap();
-    node.get_property("font_size").unwrap().set_default_f32(0, FONTSIZE * 0.88).unwrap();
+    node.get_property("font_size").unwrap().set_default_f32(0, EDIT_FONTSIZE).unwrap();
 
     let prop = node.get_property("text_color").unwrap();
     prop.set_default_f32_multi(&[1., 1., 1., 1.]).unwrap();
@@ -1070,7 +1075,7 @@ pub async fn make(
     prop.set_default_f32(2, MENU_BTN_W_L + 45.).unwrap();
     prop.set_default_f32(3, CHATEDIT_HEIGHT).unwrap();
     node.set_property_u32(atom, Role::App, "z_index", 3).unwrap();
-    node.get_property("font_size").unwrap().set_default_f32(0, FONTSIZE * 0.95).unwrap();
+    node.get_property("font_size").unwrap().set_default_f32(0, BTN_FONTSIZE).unwrap();
     node.set_property_str(atom, Role::App, "text", "add channel").unwrap();
     let prop = node.get_property("text_align").unwrap();
     prop.set_enum(atom, Role::App, 0, "center").unwrap();
@@ -1185,7 +1190,7 @@ pub async fn make(
     prop.set_default_f32(2, MENU_BTN_W_L + 45.).unwrap();
     prop.set_default_f32(3, CHATEDIT_HEIGHT).unwrap();
     node.set_property_u32(atom, Role::App, "z_index", 3).unwrap();
-    node.get_property("font_size").unwrap().set_default_f32(0, FONTSIZE * 0.95).unwrap();
+    node.get_property("font_size").unwrap().set_default_f32(0, BTN_FONTSIZE).unwrap();
     node.set_property_str(atom, Role::App, "text", "generate key").unwrap();
     let prop = node.get_property("text_align").unwrap();
     prop.set_enum(atom, Role::App, 0, "center").unwrap();
@@ -1228,7 +1233,7 @@ pub async fn make(
     wire_color(&node, "text_color", &theme, "text_color").unwrap();
     wire_color(&node, "role1_color", &theme, "menu.role1_color").unwrap();
     wire_color(&node, "role2_color", &theme, "menu.role2_color").unwrap();
-    node.get_property("font_size").unwrap().set_default_f32(0, FONTSIZE).unwrap();
+    node.get_property("font_size").unwrap().set_default_f32(0, LIST_FONTSIZE).unwrap();
     node.get_property("sep_size").unwrap().set_default_f32(0, MENU_SEP_SIZE).unwrap();
 
     // text_color follows the shared token via the wiring above; the
