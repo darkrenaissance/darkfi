@@ -41,17 +41,11 @@ use crate::{
 mod chat;
 pub mod menu;
 use menu::channel::Channel;
+mod settings;
 pub mod test;
 pub mod test_chatview;
 pub mod test_edit;
 pub mod test_scroll_layer;
-// The settings screen is currently dormant: it was unwired from the
-// schema before the theming change and awaits revival. The module stays
-// declared (and therefore compile-checked against current APIs) with
-// its enum cycle-on-tap row ready; see task 8.2 of the app-theme
-// change. Re-link `settings::make` into a schema entry point to revive.
-#[allow(dead_code)]
-mod settings;
 mod wallet;
 
 macro_rules! i { ($($arg:tt)*) => { info!(target: "app::schema", $($arg)*); } }
@@ -63,7 +57,6 @@ mod android_ui_consts {
     pub const MAIN_MENU_PADDING: f32 = 20.;
     pub const SWITCH_THEME_BTN_H: f32 = 100.;
     pub const NETSTATUS_ICON_SIZE: f32 = 140.;
-    pub const SETTINGS_ICON_SIZE: f32 = 140.;
     pub const NETLOGO_SCALE: f32 = 50.;
     pub const EMOJI_PICKER_ICON_SIZE: f32 = 120.;
     pub const EMOJI_PICKER_ICON_MARGIN_X: f32 = 20.;
@@ -155,7 +148,6 @@ mod ui_consts {
     pub const MAIN_MENU_PADDING: f32 = 10.;
     pub const SWITCH_THEME_BTN_H: f32 = 50.;
     pub const NETSTATUS_ICON_SIZE: f32 = 60.;
-    pub const SETTINGS_ICON_SIZE: f32 = 60.;
     pub const NETLOGO_SCALE: f32 = 25.;
     pub const EMOJI_PICKER_ICON_SIZE: f32 = 40.;
     pub const EMOJI_PICKER_ICON_MARGIN_X: f32 = 8.;
@@ -265,7 +257,6 @@ pub async fn make(
     cc.add_const_f32("MAIN_MENU_PADDING", MAIN_MENU_PADDING);
     cc.add_const_f32("MAIN_MENU_HEADER_HEIGHT", MAIN_MENU_HEADER_HEIGHT);
     cc.add_const_f32("NETSTATUS_ICON_SIZE", NETSTATUS_ICON_SIZE);
-    cc.add_const_f32("SETTINGS_ICON_SIZE", SETTINGS_ICON_SIZE);
     cc.add_const_f32("NETSTAT_OVERLAY_MARGIN", NETSTAT_OVERLAY_MARGIN);
     cc.add_const_f32("NETSTAT_OVERLAY_BTN_W", NETSTAT_OVERLAY_BTN_W);
     cc.add_const_f32("NETSTAT_OVERLAY_BTN_H", NETSTAT_OVERLAY_BTN_H);
@@ -1180,8 +1171,11 @@ pub async fn make(
 
     wallet::make(app, content.clone(), i18n_fish).await;
 
-    // Setup wallet button after wallet layer is created
-    menu::setup_wallet_button(app, chat_layer, i18n_fish).await;
+    settings::make(app, content.clone(), i18n_fish).await;
+
+    // Setup the wallet and settings buttons after their target layers exist
+    menu::setup_wallet_button(app, chat_layer.clone(), i18n_fish).await;
+    menu::setup_settings_button(app, chat_layer).await;
 
     // @@@ Debug stuff @@@
     //let chatview_node = app.sg_root.lookup_node("/window/content/chat/dev_chat_layer").unwrap();

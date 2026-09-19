@@ -67,6 +67,7 @@ mod android_ui_consts {
     pub const BTN_TEXT_Y: f32 = 30.;
     pub const LABEL_LINESPACE: f32 = 60.;
     pub const MENU_ICON_SCALE: f32 = 220.;
+    pub const SETTINGS_ICON_SCALE: f32 = 55.;
 }
 
 #[cfg(target_os = "android")]
@@ -108,6 +109,7 @@ mod ui_consts {
     pub const BTN_TEXT_Y: f32 = 14.;
     pub const LABEL_LINESPACE: f32 = 140.;
     pub const MENU_ICON_SCALE: f32 = 100.;
+    pub const SETTINGS_ICON_SCALE: f32 = 28.;
 }
 
 pub mod channel;
@@ -576,7 +578,9 @@ pub async fn setup_wallet_button(app: &App, chat_layer: SceneNodePtr, i18n_fish:
     let prop = node.get_property("rect").unwrap();
     let code = cc.compile("w - MENU_BTN_W_R / 2 - CHANNEL_LABEL_X").unwrap();
     prop.set_default_expr(0, code).unwrap();
-    let code = cc.compile("h - MENU_BTN_H - MENU_BTN_W_R / 2 - CHANNEL_LABEL_X").unwrap();
+    let code = cc
+        .compile("h - CHANNEL_LABEL_X - 3 * MENU_BTN_W_R - 2 * CHANNEL_LABEL_X + MENU_BTN_W_R / 2")
+        .unwrap();
     prop.set_default_expr(1, code).unwrap();
     prop.set_default_f32(2, 1.).unwrap();
     prop.set_default_f32(3, 1.).unwrap();
@@ -597,7 +601,7 @@ pub async fn setup_wallet_button(app: &App, chat_layer: SceneNodePtr, i18n_fish:
     let prop = node.get_property("rect").unwrap();
     let code = cc.compile("w - MENU_BTN_W_R - CHANNEL_LABEL_X").unwrap();
     prop.set_default_expr(0, code).unwrap();
-    let code = cc.compile("h - MENU_BTN_H - MENU_BTN_W_R - CHANNEL_LABEL_X").unwrap();
+    let code = cc.compile("h - CHANNEL_LABEL_X - 3 * MENU_BTN_W_R - 2 * CHANNEL_LABEL_X").unwrap();
     prop.set_default_expr(1, code).unwrap();
     prop.set_default_f32(2, MENU_BTN_W_R).unwrap();
     prop.set_default_f32(3, MENU_BTN_W_R).unwrap();
@@ -619,6 +623,67 @@ pub async fn setup_wallet_button(app: &App, chat_layer: SceneNodePtr, i18n_fish:
             let atom = &mut redraw.make_guard(gfxtag!("wallet_click"));
             wallet_is_visible.set(atom, true);
             chat_is_visible.set(atom, false);
+        }
+    });
+    app.tasks.lock().push(listen_click);
+
+    let renderer = app.renderer.clone();
+    let redraw = app.redraw_trigger.clone();
+
+    let node = node.setup(|me| Button::new(me, renderer, redraw)).await;
+    menu_layer.link(node);
+}
+
+pub async fn setup_settings_button(app: &App, chat_layer: SceneNodePtr) {
+    let atom = &mut PropertyAtomicGuard::none();
+    let mut cc = expr::Compiler::new();
+    cc.add_const_f32("MENU_BTN_W_R", MENU_BTN_W_R);
+    cc.add_const_f32("CHANNEL_LABEL_X", CHANNEL_LABEL_X);
+    cc.add_const_f32("SETTINGS_ICON_SCALE", SETTINGS_ICON_SCALE);
+
+    let menu_layer = chat_layer.lookup_node("/menu_layer").unwrap();
+
+    // Settings icon
+    let node = create_vector_art("settings_icon");
+    let prop = node.get_property("rect").unwrap();
+    let code = cc.compile("w - MENU_BTN_W_R / 2 - CHANNEL_LABEL_X").unwrap();
+    prop.set_default_expr(0, code).unwrap();
+    let code = cc
+        .compile("h - CHANNEL_LABEL_X - 2 * MENU_BTN_W_R - CHANNEL_LABEL_X + MENU_BTN_W_R / 2")
+        .unwrap();
+    prop.set_default_expr(1, code).unwrap();
+    prop.set_default_f32(2, SETTINGS_ICON_SCALE).unwrap();
+    prop.set_default_f32(3, SETTINGS_ICON_SCALE).unwrap();
+    node.set_property_u32(atom, Role::App, "z_index", 3).unwrap();
+    let shape = shape::create_settings(COLOR_CYAN).scaled(SETTINGS_ICON_SCALE);
+    node.set_property_shape(atom, Role::App, "shape", shape).unwrap();
+    let node =
+        node.setup(|me| VectorArt::new(me, app.renderer.clone(), app.redraw_trigger.clone())).await;
+    menu_layer.link(node);
+
+    // Settings button
+    let node = create_button("settings_btn");
+    node.set_property_bool(atom, Role::App, "is_active", true).unwrap();
+    let prop = node.get_property("rect").unwrap();
+    let code = cc.compile("w - MENU_BTN_W_R - CHANNEL_LABEL_X").unwrap();
+    prop.set_default_expr(0, code).unwrap();
+    let code = cc.compile("h - CHANNEL_LABEL_X - 2 * MENU_BTN_W_R - CHANNEL_LABEL_X").unwrap();
+    prop.set_default_expr(1, code).unwrap();
+    prop.set_default_f32(2, MENU_BTN_W_R).unwrap();
+    prop.set_default_f32(3, MENU_BTN_W_R).unwrap();
+    //node.set_property_bool(atom, Role::App, "debug", true).unwrap();
+
+    let (slot, recvr) = Slot::new("settings_clicked");
+    node.register("click", slot).unwrap();
+    let sg_root = app.sg_root.clone();
+    let redraw = app.redraw_trigger.clone();
+    let listen_click = app.ex.spawn(async move {
+        while let Ok(_) = recvr.recv().await {
+            let atom = &mut redraw.make_guard(gfxtag!("settings_click"));
+            let settings_node = sg_root.lookup_node("/window/content/settings_layer").unwrap();
+            settings_node.set_property_bool(atom, Role::App, "is_visible", true).unwrap();
+            let chat_node = sg_root.lookup_node("/window/content/chat").unwrap();
+            chat_node.set_property_bool(atom, Role::App, "is_visible", false).unwrap();
         }
     });
     app.tasks.lock().push(listen_click);

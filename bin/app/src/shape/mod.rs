@@ -72,8 +72,8 @@ pub use down_bgtab::create_down_bgtab;
 mod down_arrow;
 pub use down_arrow::create_down_arrow;
 
-//mod settings;
-//pub use settings::{create_right_border, create_settings};
+mod settings;
+pub use settings::create_settings;
 
 //mod switch;
 //pub use switch::create_switch;
