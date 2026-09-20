@@ -1751,7 +1751,7 @@ pub(super) fn populate_tree(tree: &Tree) {
     use crate::ui::chatview::{codec, MessageId, MsgType};
     use chrono::{Local, NaiveDate, NaiveDateTime, TimeZone};
 
-    let chat_txt = include_str!("../../../data/chat2.txt");
+    let chat_txt = include_str!("../../../data/chat.txt");
     let mut day_offset = 0i64;
     let mut prev_secs = 0u32;
     for (idx, line) in chat_txt.lines().enumerate() {
