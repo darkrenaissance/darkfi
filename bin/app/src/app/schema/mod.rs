@@ -30,6 +30,7 @@ use crate::{
     db::AppDbPtr,
     expr::{self, Compiler},
     gfx::gfxtag,
+    mesh::COLOR_GREEN,
     prop::{PropertyAtomicGuard, PropertyEnum, PropertyFloat32, PropertyStr, Role},
     scene::{SceneNodePtr, Slot},
     sfx, shape,
@@ -58,6 +59,9 @@ macro_rules! e { ($($arg:tt)*) => { error!(target: "app::schema", $($arg)*); } }
 
 #[cfg(any(target_os = "android", feature = "emulate-android"))]
 mod android_ui_consts {
+    pub const MAIN_MENU_HEADER_HEIGHT: f32 = 140.;
+    pub const MAIN_MENU_PADDING: f32 = 20.;
+    pub const SWITCH_THEME_BTN_H: f32 = 100.;
     pub const NETSTATUS_ICON_SIZE: f32 = 140.;
     pub const SETTINGS_ICON_SIZE: f32 = 140.;
     pub const NETLOGO_SCALE: f32 = 50.;
@@ -147,6 +151,9 @@ mod ui_consts {
     not(feature = "emulate-android")
 ))]
 mod ui_consts {
+    pub const MAIN_MENU_HEADER_HEIGHT: f32 = 60.;
+    pub const MAIN_MENU_PADDING: f32 = 10.;
+    pub const SWITCH_THEME_BTN_H: f32 = 50.;
     pub const NETSTATUS_ICON_SIZE: f32 = 60.;
     pub const SETTINGS_ICON_SIZE: f32 = 60.;
     pub const NETLOGO_SCALE: f32 = 25.;
@@ -255,6 +262,8 @@ pub async fn make(
     app_db: AppDbPtr,
 ) {
     let mut cc = Compiler::new();
+    cc.add_const_f32("MAIN_MENU_PADDING", MAIN_MENU_PADDING);
+    cc.add_const_f32("MAIN_MENU_HEADER_HEIGHT", MAIN_MENU_HEADER_HEIGHT);
     cc.add_const_f32("NETSTATUS_ICON_SIZE", NETSTATUS_ICON_SIZE);
     cc.add_const_f32("SETTINGS_ICON_SIZE", SETTINGS_ICON_SIZE);
     cc.add_const_f32("NETSTAT_OVERLAY_MARGIN", NETSTAT_OVERLAY_MARGIN);
@@ -289,6 +298,102 @@ pub async fn make(
     let content =
         content.setup(|me| Layer::new(me, app.renderer.clone(), app.redraw_trigger.clone())).await;
     window.link(content.clone());
+
+    // Main menu overlay, toggled by the main_menu_btn shown on the main
+    // wallet and main chat screens. Sits above both sections.
+    let main_menu_layer = create_layer("main_menu_layer");
+    let prop = main_menu_layer.get_property("rect").unwrap();
+    prop.set_default_f32(0, 0.).unwrap();
+    prop.set_default_f32(1, MAIN_MENU_HEADER_HEIGHT).unwrap();
+    prop.set_default_expr(2, expr::load_var("w")).unwrap();
+    let code = cc.compile("h - MAIN_MENU_HEADER_HEIGHT").unwrap();
+    prop.set_default_expr(3, code).unwrap();
+    main_menu_layer.set_property_bool(atom, Role::App, "is_visible", false).unwrap();
+    main_menu_layer.set_property_u32(atom, Role::App, "z_index", 10).unwrap();
+    main_menu_layer.set_property_u32(atom, Role::App, "priority", 10).unwrap();
+    let main_menu_layer = main_menu_layer
+        .setup(|me| Layer::new(me, app.renderer.clone(), app.redraw_trigger.clone()))
+        .await;
+    content.link(main_menu_layer.clone());
+
+    // Menu box: starts below the title bar, fills half the screen width
+    // and the total screen height. Blue placeholder fill.
+    let node = create_vector_art("menu_box");
+    let prop = node.get_property("rect").unwrap();
+    prop.set_default_f32(0, 0.).unwrap();
+    prop.set_default_f32(1, 0.).unwrap();
+    prop.set_default_expr(2, expr::load_var("w")).unwrap();
+    prop.set_default_expr(3, expr::load_var("h")).unwrap();
+    node.set_property_bool(atom, Role::App, "is_visible", true).unwrap();
+    node.set_property_u32(atom, Role::App, "z_index", 0).unwrap();
+    let mut shape = VectorShape::new();
+    shape.add_filled_box(
+        expr::const_f32(0.),
+        expr::const_f32(0.),
+        expr::load_var("w"),
+        expr::load_var("h"),
+        [0.2, 0.2, 0.2, 0.6],
+    );
+    node.set_property_shape(atom, Role::App, "shape", shape).unwrap();
+    let node =
+        node.setup(|me| VectorArt::new(me, app.renderer.clone(), app.redraw_trigger.clone())).await;
+    main_menu_layer.link(node);
+
+    // Switch theme button (green bg). Toggles /setting/theme between
+    // the scifi and minimal themes; the engine-owned watcher applies
+    // the live switch.
+    let node = create_vector_art("switch_theme_btn_bg");
+    let prop = node.get_property("rect").unwrap();
+    prop.set_default_f32(0, MAIN_MENU_PADDING).unwrap();
+    prop.set_default_f32(1, MAIN_MENU_HEADER_HEIGHT + MAIN_MENU_PADDING).unwrap();
+    let code = cc.compile("w / 2 - 2 * MAIN_MENU_PADDING").unwrap();
+    prop.set_default_expr(2, code).unwrap();
+    prop.set_default_f32(3, SWITCH_THEME_BTN_H).unwrap();
+    node.set_property_bool(atom, Role::App, "is_visible", true).unwrap();
+    node.set_property_u32(atom, Role::App, "z_index", 1).unwrap();
+    let mut shape = VectorShape::new();
+    shape.add_filled_box(
+        expr::const_f32(0.),
+        expr::const_f32(0.),
+        expr::load_var("w"),
+        expr::load_var("h"),
+        COLOR_GREEN,
+    );
+    node.set_property_shape(atom, Role::App, "shape", shape).unwrap();
+    let node =
+        node.setup(|me| VectorArt::new(me, app.renderer.clone(), app.redraw_trigger.clone())).await;
+    main_menu_layer.link(node);
+
+    let node = create_button("switch_theme_btn");
+    node.set_property_bool(atom, Role::App, "is_active", true).unwrap();
+    node.set_property_u32(atom, Role::App, "z_index", 2).unwrap();
+    let prop = node.get_property("rect").unwrap();
+    prop.set_default_f32(0, MAIN_MENU_PADDING).unwrap();
+    prop.set_default_f32(1, MAIN_MENU_HEADER_HEIGHT + MAIN_MENU_PADDING).unwrap();
+    let code = cc.compile("w / 2 - 2 * MAIN_MENU_PADDING").unwrap();
+    prop.set_default_expr(2, code).unwrap();
+    prop.set_default_f32(3, SWITCH_THEME_BTN_H).unwrap();
+
+    let sg_root = app.sg_root.clone();
+    let redraw = app.redraw_trigger.clone();
+    let ex = app.ex.clone();
+    let (slot, recvr) = Slot::new("switch_theme_clicked");
+    node.register("click", slot).unwrap();
+    let listen_click = ex.spawn(async move {
+        while recvr.recv().await.is_ok() {
+            i!("clicked switch theme");
+            let setting_node = sg_root.lookup_node("/setting").unwrap();
+            let theme_prop = PropertyEnum::wrap(&setting_node, Role::User, "theme", 0).unwrap();
+            let next = if theme_prop.get() == "scifi" { "minimal" } else { "scifi" };
+            let atom = &mut redraw.make_guard(gfxtag!("switch theme"));
+            theme_prop.set(atom, next);
+        }
+    });
+    app.tasks.lock().push(listen_click);
+
+    let node =
+        node.setup(|me| Button::new(me, app.renderer.clone(), app.redraw_trigger.clone())).await;
+    main_menu_layer.link(node);
 
     // The first-run splash and the king video background are theme
     // content, not baseline structure: the scifi theme owns both (see
@@ -890,7 +995,7 @@ pub async fn make(
         atom,
         Role::App,
         "text",
-        indoc! {"
+        indoc::indoc! {"
             0  tcp+tls://dasman.xyz:9600
             1  tcp+tls://dasman.xyz:9600
             2  tcp+tls://dasman.xyz:9600

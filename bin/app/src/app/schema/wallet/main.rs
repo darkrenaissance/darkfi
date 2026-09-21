@@ -25,7 +25,7 @@ use crate::{
     },
     expr,
     gfx::{gfxtag, Point},
-    mesh::{COLOR_CYAN, COLOR_TEAL},
+    mesh::{COLOR_BLUE, COLOR_CYAN, COLOR_TEAL},
     prop::{PropertyAtomicGuard, PropertyBool, PropertyFloat32, Role},
     scene::{SceneNodePtr, Slot},
     shape,
@@ -221,7 +221,64 @@ pub async fn make(
     wallet_layer.link(node.clone());
     let back_btn_is_active = PropertyBool::wrap(&node, Role::App, "is_active", 0).unwrap();
 
-    // Show the back button whenever the main wallet screen is hidden
+    // Main menu button bg (blue box placeholder). Same spot the back
+    // button takes on the wallet subscreens.
+    let node = create_vector_art("main_menu_btn_bg");
+    let prop = node.get_property("rect").unwrap();
+    prop.set_default_f32(0, 0.).unwrap();
+    prop.set_default_f32(1, 0.).unwrap();
+    prop.set_default_f32(2, BACKARROW_BG_W).unwrap();
+    prop.set_default_f32(3, HEADER_HEIGHT).unwrap();
+    node.set_property_u32(atom, Role::App, "z_index", 3).unwrap();
+    node.set_property_bool(atom, Role::App, "is_visible", true).unwrap();
+    let mut shape = VectorShape::new();
+    shape.add_filled_box(
+        expr::const_f32(0.),
+        expr::const_f32(0.),
+        expr::load_var("w"),
+        expr::load_var("h"),
+        COLOR_BLUE,
+    );
+    node.set_property_shape(atom, Role::App, "shape", shape).unwrap();
+    let node =
+        node.setup(|me| VectorArt::new(me, app.renderer.clone(), app.redraw_trigger.clone())).await;
+    wallet_layer.link(node.clone());
+    let main_menu_bg_is_visible = PropertyBool::wrap(&node, Role::App, "is_visible", 0).unwrap();
+
+    // Main menu button, only active on the main wallet screen
+    let node = create_button("main_menu_btn");
+    node.set_property_bool(atom, Role::App, "is_active", true).unwrap();
+    node.set_property_u32(atom, Role::App, "z_index", 10).unwrap();
+    node.set_property_u32(atom, Role::App, "priority", 10).unwrap();
+    let prop = node.get_property("rect").unwrap();
+    prop.set_default_f32(0, 0.).unwrap();
+    prop.set_default_f32(1, 0.).unwrap();
+    prop.set_default_f32(2, BACKARROW_BG_W).unwrap();
+    prop.set_default_f32(3, HEADER_HEIGHT).unwrap();
+
+    let sg_root = app.sg_root.clone();
+    let redraw = app.redraw_trigger.clone();
+    let (slot, recvr) = Slot::new("main_menu_clicked");
+    node.register("click", slot).unwrap();
+    let listen_click = app.ex.spawn(async move {
+        while recvr.recv().await.is_ok() {
+            info!(target: "app::wallet", "clicked main menu");
+            let main_menu_layer = sg_root.lookup_node("/window/content/main_menu_layer").unwrap();
+            let main_menu_is_visible =
+                PropertyBool::wrap(&main_menu_layer, Role::App, "is_visible", 0).unwrap();
+            let atom = &mut redraw.make_guard(gfxtag!("main menu toggle"));
+            main_menu_is_visible.set(atom, !main_menu_is_visible.get());
+        }
+    });
+    app.tasks.lock().push(listen_click);
+
+    let node =
+        node.setup(|me| Button::new(me, app.renderer.clone(), app.redraw_trigger.clone())).await;
+    wallet_layer.link(node.clone());
+    let main_menu_btn_is_active = PropertyBool::wrap(&node, Role::App, "is_active", 0).unwrap();
+
+    // Show the back button whenever the main wallet screen is hidden,
+    // and the main menu button whenever it is shown
     let redraw = app.redraw_trigger.clone();
     let main_is_visible2 = main_is_visible.clone();
     let main_is_visible_sub = main_is_visible.prop().subscribe_modify();
@@ -231,6 +288,8 @@ pub async fn make(
             let visible = !main_is_visible2.get();
             back_bg_is_visible.set(atom, visible);
             back_btn_is_active.set(atom, visible);
+            main_menu_bg_is_visible.set(atom, !visible);
+            main_menu_btn_is_active.set(atom, !visible);
         }
     });
     app.tasks.lock().push(listen_main_visible);

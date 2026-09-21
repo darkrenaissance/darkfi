@@ -30,7 +30,7 @@ use crate::{
     db::AppDbPtr,
     expr,
     gfx::gfxtag,
-    mesh::COLOR_CYAN,
+    mesh::{COLOR_BLUE, COLOR_CYAN},
     prop::{PropertyAtomicGuard, PropertyBool, PropertyFloat32, Role},
     scene::{SceneNodePtr, Slot},
     sfx, shape,
@@ -45,10 +45,12 @@ use crate::{
 #[cfg(any(target_os = "android", feature = "emulate-android"))]
 mod android_ui_consts {
     pub const CHANNEL_LABEL_X: f32 = 40.;
-    pub const CHANNEL_LABEL_Y: f32 = 35.;
     pub const CHANNEL_HEADER_HEIGHT: f32 = 140.;
     pub const CHANNEL_ITEM_HEIGHT: f32 = 115.;
     pub const CHANNEL_LABEL_FONTSIZE: f32 = 46.;
+    pub const BACKARROW_BG_W: f32 = 140.;
+    pub const CHANNELS_TITLE_X: f32 = BACKARROW_BG_W + CHANNEL_LABEL_X;
+    pub const CHANNELS_TITLE_Y: f32 = 35.;
     pub const MENU_SEP_SIZE: f32 = 3.;
     pub const MENU_HANDLE_PAD: f32 = 200.;
     pub const MENU_FADE: f32 = 1200.;
@@ -83,10 +85,12 @@ mod ui_consts {
 ))]
 mod ui_consts {
     pub const CHANNEL_LABEL_X: f32 = 20.;
-    pub const CHANNEL_LABEL_Y: f32 = 14.;
     pub const CHANNEL_HEADER_HEIGHT: f32 = 60.;
     pub const CHANNEL_ITEM_HEIGHT: f32 = 40.;
     pub const CHANNEL_LABEL_FONTSIZE: f32 = 18.;
+    pub const BACKARROW_BG_W: f32 = 80.;
+    pub const CHANNELS_TITLE_X: f32 = BACKARROW_BG_W + CHANNEL_LABEL_X;
+    pub const CHANNELS_TITLE_Y: f32 = 14.;
     pub const MENU_SEP_SIZE: f32 = 1.;
     pub const MENU_HANDLE_PAD: f32 = 100.;
     pub const MENU_FADE: f32 = 600.;
@@ -264,8 +268,8 @@ pub async fn make(
     // Create some text
     let node = create_text("channels_label");
     let prop = node.get_property("rect").unwrap();
-    prop.set_default_f32(0, CHANNEL_LABEL_X).unwrap();
-    prop.set_default_f32(1, CHANNEL_LABEL_Y).unwrap();
+    prop.set_default_f32(0, CHANNELS_TITLE_X).unwrap();
+    prop.set_default_f32(1, CHANNELS_TITLE_Y).unwrap();
     prop.set_default_f32(2, 1000.).unwrap();
     prop.set_default_f32(3, 200.).unwrap();
     node.set_property_u32(atom, Role::App, "z_index", 1).unwrap();
@@ -289,6 +293,61 @@ pub async fn make(
             )
         })
         .await;
+    layer_node.link(node);
+
+    // Main menu button bg (blue box placeholder). Same spot the back
+    // button takes on the chat subscreens. It lives on the menu layer,
+    // so it is only shown on the main chat screen.
+    let node = create_vector_art("main_menu_btn_bg");
+    let prop = node.get_property("rect").unwrap();
+    prop.set_default_f32(0, 0.).unwrap();
+    prop.set_default_f32(1, 0.).unwrap();
+    prop.set_default_f32(2, BACKARROW_BG_W).unwrap();
+    prop.set_default_f32(3, CHANNEL_HEADER_HEIGHT).unwrap();
+    node.set_property_u32(atom, Role::App, "z_index", 3).unwrap();
+    node.set_property_bool(atom, Role::App, "is_visible", true).unwrap();
+    let mut shape = VectorShape::new();
+    shape.add_filled_box(
+        expr::const_f32(0.),
+        expr::const_f32(0.),
+        expr::load_var("w"),
+        expr::load_var("h"),
+        COLOR_BLUE,
+    );
+    node.set_property_shape(atom, Role::App, "shape", shape).unwrap();
+    let node =
+        node.setup(|me| VectorArt::new(me, app.renderer.clone(), app.redraw_trigger.clone())).await;
+    layer_node.link(node);
+
+    // Main menu button
+    let node = create_button("main_menu_btn");
+    node.set_property_bool(atom, Role::App, "is_active", true).unwrap();
+    node.set_property_u32(atom, Role::App, "z_index", 10).unwrap();
+    node.set_property_u32(atom, Role::App, "priority", 10).unwrap();
+    let prop = node.get_property("rect").unwrap();
+    prop.set_default_f32(0, 0.).unwrap();
+    prop.set_default_f32(1, 0.).unwrap();
+    prop.set_default_f32(2, BACKARROW_BG_W).unwrap();
+    prop.set_default_f32(3, CHANNEL_HEADER_HEIGHT).unwrap();
+
+    let sg_root = app.sg_root.clone();
+    let redraw = app.redraw_trigger.clone();
+    let (slot, recvr) = Slot::new("main_menu_clicked");
+    node.register("click", slot).unwrap();
+    let listen_click = app.ex.spawn(async move {
+        while recvr.recv().await.is_ok() {
+            info!(target: "app::menu", "clicked main menu");
+            let main_menu_layer = sg_root.lookup_node("/window/content/main_menu_layer").unwrap();
+            let main_menu_is_visible =
+                PropertyBool::wrap(&main_menu_layer, Role::App, "is_visible", 0).unwrap();
+            let atom = &mut redraw.make_guard(gfxtag!("main menu toggle"));
+            main_menu_is_visible.set(atom, !main_menu_is_visible.get());
+        }
+    });
+    app.tasks.lock().push(listen_click);
+
+    let node =
+        node.setup(|me| Button::new(me, app.renderer.clone(), app.redraw_trigger.clone())).await;
     layer_node.link(node);
 
     // Main button layer

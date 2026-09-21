@@ -141,7 +141,7 @@ mod ui_consts {
 mod ui_consts {
     // Chat UI
     pub const CHANNEL_LABEL_X: f32 = 100.;
-    pub const CHANNEL_LABEL_Y: f32 = 12.;
+    pub const CHANNEL_LABEL_Y: f32 = 18.;
     pub const BACKARROW_SCALE: f32 = 15.;
     pub const BACKARROW_X: f32 = 38.;
     pub const BACKARROW_Y: f32 = 30.;
