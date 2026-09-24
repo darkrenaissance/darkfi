@@ -25,7 +25,7 @@ use crate::{
     },
     expr,
     gfx::{gfxtag, Point},
-    mesh::{COLOR_BLUE, COLOR_CYAN, COLOR_TEAL},
+    mesh::{COLOR_CYAN, COLOR_TEAL},
     prop::{PropertyAtomicGuard, PropertyBool, PropertyFloat32, Role},
     scene::{SceneNodePtr, Slot},
     shape,
@@ -225,20 +225,13 @@ pub async fn make(
     // button takes on the wallet subscreens.
     let node = create_vector_art("main_menu_btn_bg");
     let prop = node.get_property("rect").unwrap();
-    prop.set_default_f32(0, 0.).unwrap();
-    prop.set_default_f32(1, 0.).unwrap();
+    prop.set_default_f32(0, BACKARROW_BG_W / 2.).unwrap();
+    prop.set_default_f32(1, HEADER_HEIGHT / 2.).unwrap();
     prop.set_default_f32(2, BACKARROW_BG_W).unwrap();
     prop.set_default_f32(3, HEADER_HEIGHT).unwrap();
     node.set_property_u32(atom, Role::App, "z_index", 3).unwrap();
     node.set_property_bool(atom, Role::App, "is_visible", true).unwrap();
-    let mut shape = VectorShape::new();
-    shape.add_filled_box(
-        expr::const_f32(0.),
-        expr::const_f32(0.),
-        expr::load_var("w"),
-        expr::load_var("h"),
-        COLOR_BLUE,
-    );
+    let shape = shape::create_darkfi_logo([1., 1., 1., 1.]).scaled(20.);
     node.set_property_shape(atom, Role::App, "shape", shape).unwrap();
     let node =
         node.setup(|me| VectorArt::new(me, app.renderer.clone(), app.redraw_trigger.clone())).await;

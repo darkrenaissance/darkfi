@@ -22,6 +22,9 @@ pub use back_arrow::create_back_arrow;
 mod close;
 pub use close::create_close_icon;
 
+mod darkfi_logo;
+pub use darkfi_logo::create_darkfi_logo;
+
 mod send_arrow;
 pub use send_arrow::create_send_arrow;
 

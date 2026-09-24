@@ -30,7 +30,7 @@ use crate::{
     db::AppDbPtr,
     expr::{self, Compiler},
     gfx::gfxtag,
-    mesh::COLOR_GREEN,
+    mesh::rgba,
     prop::{PropertyAtomicGuard, PropertyEnum, PropertyFloat32, PropertyStr, Role},
     scene::{SceneNodePtr, Slot},
     sfx, shape,
@@ -316,6 +316,23 @@ pub async fn make(
         .await;
     content.link(main_menu_layer.clone());
 
+    // Input capture: a button covering the entire layer at the lowest
+    // priority. Interactive menu widgets above it swallow input first;
+    // anything else lands here so it cannot fall through the overlay to
+    // the screens behind it.
+    let node = create_button("input_capture_btn");
+    node.set_property_bool(atom, Role::App, "is_active", true).unwrap();
+    node.set_property_u32(atom, Role::App, "z_index", 0).unwrap();
+    node.set_property_u32(atom, Role::App, "priority", 0).unwrap();
+    let prop = node.get_property("rect").unwrap();
+    prop.set_default_f32(0, 0.).unwrap();
+    prop.set_default_f32(1, 0.).unwrap();
+    prop.set_default_expr(2, expr::load_var("w")).unwrap();
+    prop.set_default_expr(3, expr::load_var("h")).unwrap();
+    let node =
+        node.setup(|me| Button::new(me, app.renderer.clone(), app.redraw_trigger.clone())).await;
+    main_menu_layer.link(node);
+
     // Menu box: starts below the title bar, fills half the screen width
     // and the total screen height. Blue placeholder fill.
     let node = create_vector_art("menu_box");
@@ -332,61 +349,162 @@ pub async fn make(
         expr::const_f32(0.),
         expr::load_var("w"),
         expr::load_var("h"),
-        [0.2, 0.2, 0.2, 0.6],
+        [0., 0., 0., 1.],
     );
     node.set_property_shape(atom, Role::App, "shape", shape).unwrap();
     let node =
         node.setup(|me| VectorArt::new(me, app.renderer.clone(), app.redraw_trigger.clone())).await;
     main_menu_layer.link(node);
+
+    let node = create_text("theme_txt_label");
+    let prop = node.get_property("rect").unwrap();
+    prop.set_default_f32(0, 0.).unwrap();
+    prop.set_default_f32(1, 0.).unwrap();
+    prop.set_default_f32(2, 1000.).unwrap();
+    prop.set_default_f32(3, 1000.).unwrap();
+    node.get_property("font_size").unwrap().set_default_f32(0, 40.).unwrap();
+    node.set_property_str(atom, Role::App, "text", "THEME").unwrap();
+    let prop = node.get_property("text_color").unwrap();
+    prop.set_default_f32_multi(&[1., 1., 1., 1.]).unwrap();
+    node.set_property_u32(atom, Role::App, "z_index", 3).unwrap();
+
+    let label_node = node
+        .setup(|me| {
+            Text::new(
+                me,
+                window_scale.clone(),
+                app.renderer.clone(),
+                i18n_fish.clone(),
+                app.redraw_trigger.clone(),
+            )
+        })
+        .await;
+    main_menu_layer.link(label_node.clone());
+
+    let node = create_text("curr_theme_label");
+    let prop = node.get_property("rect").unwrap();
+    let code = cc.compile("w / 2").unwrap();
+    prop.set_default_expr(0, code).unwrap();
+    prop.set_default_f32(1, 0.).unwrap();
+    prop.set_default_f32(2, 1000.).unwrap();
+    prop.set_default_f32(3, 1000.).unwrap();
+    node.get_property("font_size").unwrap().set_default_f32(0, 40.).unwrap();
+    node.set_property_str(atom, Role::App, "text", "THEME").unwrap();
+    let prop = node.get_property("text_color").unwrap();
+    prop.set_default_f32_multi(&[1., 1., 1., 1.]).unwrap();
+    node.set_property_u32(atom, Role::App, "z_index", 3).unwrap();
+
+    let node = node
+        .setup(|me| {
+            Text::new(
+                me,
+                window_scale.clone(),
+                app.renderer.clone(),
+                i18n_fish.clone(),
+                app.redraw_trigger.clone(),
+            )
+        })
+        .await;
+    let theme_label = PropertyStr::wrap(&node, Role::App, "text", 0).unwrap();
+    main_menu_layer.link(node);
+
+    // PADDING: 40
+    // BTN_H: 120
+    // BTN_GAP: 10
 
     // Switch theme button (green bg). Toggles /setting/theme between
     // the scifi and minimal themes; the engine-owned watcher applies
     // the live switch.
-    let node = create_vector_art("switch_theme_btn_bg");
+    let node = create_vector_art("theme_btn_bg");
     let prop = node.get_property("rect").unwrap();
-    prop.set_default_f32(0, MAIN_MENU_PADDING).unwrap();
-    prop.set_default_f32(1, MAIN_MENU_HEADER_HEIGHT + MAIN_MENU_PADDING).unwrap();
-    let code = cc.compile("w / 2 - 2 * MAIN_MENU_PADDING").unwrap();
-    prop.set_default_expr(2, code).unwrap();
-    prop.set_default_f32(3, SWITCH_THEME_BTN_H).unwrap();
+    let code = cc.compile("w - 40 - 120 - 10 - 120").unwrap();
+    prop.set_default_expr(0, code).unwrap();
+    prop.set_default_f32(1, 40.).unwrap();
+    prop.set_default_f32(2, 120.).unwrap();
+    prop.set_default_f32(3, 120.).unwrap();
     node.set_property_bool(atom, Role::App, "is_visible", true).unwrap();
     node.set_property_u32(atom, Role::App, "z_index", 1).unwrap();
     let mut shape = VectorShape::new();
-    shape.add_filled_box(
+    shape.add_outline(
         expr::const_f32(0.),
         expr::const_f32(0.),
-        expr::load_var("w"),
-        expr::load_var("h"),
-        COLOR_GREEN,
+        expr::const_f32(120.),
+        expr::const_f32(120.),
+        2.,
+        rgba!(0x14AEB8ff),
+    );
+    shape.add_outline(
+        expr::const_f32(120. + 10.),
+        expr::const_f32(0.),
+        expr::const_f32(2. * 120. + 10.),
+        expr::const_f32(120.),
+        2.,
+        rgba!(0x14AEB8ff),
     );
     node.set_property_shape(atom, Role::App, "shape", shape).unwrap();
     let node =
         node.setup(|me| VectorArt::new(me, app.renderer.clone(), app.redraw_trigger.clone())).await;
     main_menu_layer.link(node);
 
-    let node = create_button("switch_theme_btn");
+    let node = create_button("prev_theme_btn");
     node.set_property_bool(atom, Role::App, "is_active", true).unwrap();
     node.set_property_u32(atom, Role::App, "z_index", 2).unwrap();
+    node.set_property_u32(atom, Role::App, "priority", 1).unwrap();
     let prop = node.get_property("rect").unwrap();
-    prop.set_default_f32(0, MAIN_MENU_PADDING).unwrap();
-    prop.set_default_f32(1, MAIN_MENU_HEADER_HEIGHT + MAIN_MENU_PADDING).unwrap();
-    let code = cc.compile("w / 2 - 2 * MAIN_MENU_PADDING").unwrap();
-    prop.set_default_expr(2, code).unwrap();
-    prop.set_default_f32(3, SWITCH_THEME_BTN_H).unwrap();
+    let code = cc.compile("w - 40 - 120 - 10 - 120").unwrap();
+    prop.set_default_expr(0, code).unwrap();
+    prop.set_default_f32(1, 40.).unwrap();
+    prop.set_default_f32(2, 120.).unwrap();
+    prop.set_default_f32(3, 120.).unwrap();
 
     let sg_root = app.sg_root.clone();
     let redraw = app.redraw_trigger.clone();
     let ex = app.ex.clone();
-    let (slot, recvr) = Slot::new("switch_theme_clicked");
+    let (slot, recvr) = Slot::new("prev_theme_clicked");
+    node.register("click", slot).unwrap();
+    let theme_label2 = theme_label.clone();
+    let listen_click = ex.spawn(async move {
+        while recvr.recv().await.is_ok() {
+            i!("clicked prev theme");
+            let setting_node = sg_root.lookup_node("/setting").unwrap();
+            let theme_prop = PropertyEnum::wrap(&setting_node, Role::User, "theme", 0).unwrap();
+            let prev = if theme_prop.get() == "scifi" { "minimal" } else { "scifi" };
+            let atom = &mut redraw.make_guard(gfxtag!("prev theme"));
+            theme_prop.set(atom, prev);
+            theme_label2.set(atom, prev);
+        }
+    });
+    app.tasks.lock().push(listen_click);
+
+    let node =
+        node.setup(|me| Button::new(me, app.renderer.clone(), app.redraw_trigger.clone())).await;
+    main_menu_layer.link(node);
+
+    let node = create_button("next_theme_btn");
+    node.set_property_bool(atom, Role::App, "is_active", true).unwrap();
+    node.set_property_u32(atom, Role::App, "z_index", 2).unwrap();
+    node.set_property_u32(atom, Role::App, "priority", 1).unwrap();
+    let prop = node.get_property("rect").unwrap();
+    let code = cc.compile("w - 40 - 120").unwrap();
+    prop.set_default_expr(0, code).unwrap();
+    prop.set_default_f32(1, 40.).unwrap();
+    prop.set_default_f32(2, 120.).unwrap();
+    prop.set_default_f32(3, 120.).unwrap();
+
+    let sg_root = app.sg_root.clone();
+    let redraw = app.redraw_trigger.clone();
+    let ex = app.ex.clone();
+    let (slot, recvr) = Slot::new("next_theme_clicked");
     node.register("click", slot).unwrap();
     let listen_click = ex.spawn(async move {
         while recvr.recv().await.is_ok() {
-            i!("clicked switch theme");
+            i!("clicked next theme");
             let setting_node = sg_root.lookup_node("/setting").unwrap();
             let theme_prop = PropertyEnum::wrap(&setting_node, Role::User, "theme", 0).unwrap();
             let next = if theme_prop.get() == "scifi" { "minimal" } else { "scifi" };
-            let atom = &mut redraw.make_guard(gfxtag!("switch theme"));
+            let atom = &mut redraw.make_guard(gfxtag!("next theme"));
             theme_prop.set(atom, next);
+            theme_label.set(atom, next);
         }
     });
     app.tasks.lock().push(listen_click);

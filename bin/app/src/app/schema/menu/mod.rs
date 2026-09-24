@@ -30,7 +30,7 @@ use crate::{
     db::AppDbPtr,
     expr,
     gfx::gfxtag,
-    mesh::{COLOR_BLUE, COLOR_CYAN},
+    mesh::COLOR_CYAN,
     prop::{PropertyAtomicGuard, PropertyBool, PropertyFloat32, Role},
     scene::{SceneNodePtr, Slot},
     sfx, shape,
@@ -90,7 +90,7 @@ mod ui_consts {
     pub const CHANNEL_LABEL_FONTSIZE: f32 = 18.;
     pub const BACKARROW_BG_W: f32 = 80.;
     pub const CHANNELS_TITLE_X: f32 = BACKARROW_BG_W + CHANNEL_LABEL_X;
-    pub const CHANNELS_TITLE_Y: f32 = 14.;
+    pub const CHANNELS_TITLE_Y: f32 = 18.;
     pub const MENU_SEP_SIZE: f32 = 1.;
     pub const MENU_HANDLE_PAD: f32 = 100.;
     pub const MENU_FADE: f32 = 600.;
@@ -300,20 +300,13 @@ pub async fn make(
     // so it is only shown on the main chat screen.
     let node = create_vector_art("main_menu_btn_bg");
     let prop = node.get_property("rect").unwrap();
-    prop.set_default_f32(0, 0.).unwrap();
-    prop.set_default_f32(1, 0.).unwrap();
+    prop.set_default_f32(0, BACKARROW_BG_W / 2.).unwrap();
+    prop.set_default_f32(1, CHANNEL_HEADER_HEIGHT / 2.).unwrap();
     prop.set_default_f32(2, BACKARROW_BG_W).unwrap();
     prop.set_default_f32(3, CHANNEL_HEADER_HEIGHT).unwrap();
     node.set_property_u32(atom, Role::App, "z_index", 3).unwrap();
     node.set_property_bool(atom, Role::App, "is_visible", true).unwrap();
-    let mut shape = VectorShape::new();
-    shape.add_filled_box(
-        expr::const_f32(0.),
-        expr::const_f32(0.),
-        expr::load_var("w"),
-        expr::load_var("h"),
-        COLOR_BLUE,
-    );
+    let shape = shape::create_darkfi_logo([1., 1., 1., 1.]).scaled(20.);
     node.set_property_shape(atom, Role::App, "shape", shape).unwrap();
     let node =
         node.setup(|me| VectorArt::new(me, app.renderer.clone(), app.redraw_trigger.clone())).await;

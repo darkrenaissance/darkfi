@@ -141,7 +141,7 @@ mod ui_consts {
 mod ui_consts {
     // Chat UI
     pub const CHANNEL_LABEL_X: f32 = 100.;
-    pub const CHANNEL_LABEL_Y: f32 = 18.;
+    pub const CHANNEL_LABEL_Y: f32 = 14.;
     pub const BACKARROW_SCALE: f32 = 15.;
     pub const BACKARROW_X: f32 = 38.;
     pub const BACKARROW_Y: f32 = 30.;
@@ -448,7 +448,7 @@ pub async fn make(
     prop.set_default_expr(2, expr::load_var("w")).unwrap();
     prop.set_default_f32(3, CHATEDIT_HEIGHT).unwrap();
     node.get_property("font_size").unwrap().set_default_f32(0, FONTSIZE).unwrap();
-    node.set_property_str(atom, Role::App, "text", "").unwrap();
+    //node.set_property_str(atom, Role::App, "text", "").unwrap();
     let prop = node.get_property("text_color").unwrap();
     prop.set_default_f32_multi(&[1., 1., 1., 1.]).unwrap();
     node.set_property_u32(atom, Role::App, "z_index", 3).unwrap();
