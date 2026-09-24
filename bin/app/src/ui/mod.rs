@@ -94,6 +94,8 @@ mod text_scramble;
 pub use text_scramble::{TextScramble, TextScramblePtr};
 mod slider;
 pub use slider::{Slider, SliderPtr};
+mod dropdown;
+pub use dropdown::{Dropdown, DropdownPtr};
 mod win;
 pub use win::{Window, WindowPtr};
 
@@ -414,6 +416,7 @@ pub fn get_ui_object_ptr(node: &SceneNode3) -> Arc<dyn UIObject + Send> {
         Pimpl::DateMsgNode(obj) => obj.clone(),
         Pimpl::FileMsgNode(obj) => obj.clone(),
         Pimpl::Slider(obj) => obj.clone(),
+        Pimpl::Dropdown(obj) => obj.clone(),
         _ => panic!("unhandled type for get_ui_object: {node:?}"),
     }
 }
@@ -437,6 +440,7 @@ pub fn get_ui_object3<'a>(node: &'a SceneNode3) -> &'a dyn UIObject {
         Pimpl::DateMsgNode(obj) => obj.as_ref(),
         Pimpl::FileMsgNode(obj) => obj.as_ref(),
         Pimpl::Slider(obj) => obj.as_ref(),
+        Pimpl::Dropdown(obj) => obj.as_ref(),
         _ => panic!("unhandled type for get_ui_object: {node:?}"),
     }
 }

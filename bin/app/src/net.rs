@@ -55,7 +55,8 @@ fn stop_ui_subtree(node: &SceneNodePtr) {
             Pimpl::Shortcut(_) |
             Pimpl::Menu(_) |
             Pimpl::TokenTable(_) |
-            Pimpl::Slider(_)
+            Pimpl::Slider(_) |
+            Pimpl::Dropdown(_)
     ) {
         get_ui_object3(node).stop();
     }

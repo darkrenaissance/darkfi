@@ -311,6 +311,119 @@ pub fn create_slider(name: &str) -> SceneNode {
     node
 }
 
+pub fn create_dropdown(name: &str) -> SceneNode {
+    let mut node = SceneNode::new(name, SceneNodeType::Dropdown);
+
+    let mut prop =
+        Property::new("is_active", PropertyType::Bool, PropertySubType::Null, PERM_RUNTIME);
+    prop.set_ui_text("Is Active", "An active Dropdown can be interacted with");
+    prop.set_defaults_bool(vec![false]).unwrap();
+    node.add_property(prop).unwrap();
+
+    let mut prop = Property::new(
+        "rect",
+        PropertyType::Float32,
+        PropertySubType::Pixel,
+        PropertyPermission::default(),
+    );
+    prop.set_array_len(4);
+    prop.allow_exprs();
+    node.add_property(prop).unwrap();
+
+    let mut prop = Property::new("items", PropertyType::Str, PropertySubType::Null, PERM_APP);
+    prop.set_ui_text("Items", "Selectable items");
+    prop.set_unbounded();
+    node.add_property(prop).unwrap();
+
+    let mut prop =
+        Property::new("selected", PropertyType::Uint32, PropertySubType::Null, PERM_RUNTIME);
+    prop.set_ui_text("Selected", "Index of the selected item");
+    prop.set_defaults_u32(vec![0]).unwrap();
+    node.add_property(prop).unwrap();
+
+    let mut prop =
+        Property::new("item_height", PropertyType::Float32, PropertySubType::Pixel, PERM_STYLE);
+    prop.set_ui_text("Item Height", "Height of one list row in pixels");
+    prop.set_defaults_f32(vec![40.]).unwrap();
+    node.add_property(prop).unwrap();
+
+    let mut prop =
+        Property::new("list_width", PropertyType::Float32, PropertySubType::Pixel, PERM_STYLE);
+    prop.set_ui_text("List Width", "Open list width in pixels (0 = match the box width)");
+    prop.set_defaults_f32(vec![0.]).unwrap();
+    node.add_property(prop).unwrap();
+
+    let mut prop =
+        Property::new("box_color", PropertyType::Float32, PropertySubType::Color, PERM_STYLE);
+    prop.set_ui_text("Box Color", "Closed box and list background color (RGBA)");
+    prop.set_array_len(4);
+    prop.set_defaults_f32(vec![0., 0.12, 0.08, 1.]).unwrap();
+    prop.set_range_f32(0., 1.);
+    node.add_property(prop).unwrap();
+
+    let mut prop =
+        Property::new("outline_color", PropertyType::Float32, PropertySubType::Color, PERM_STYLE);
+    prop.set_ui_text("Outline Color", "Box and list outline color (RGBA)");
+    prop.set_array_len(4);
+    prop.set_defaults_f32(vec![0.08, 0.68, 0.72, 1.]).unwrap();
+    prop.set_range_f32(0., 1.);
+    node.add_property(prop).unwrap();
+
+    let mut prop =
+        Property::new("selected_color", PropertyType::Float32, PropertySubType::Color, PERM_STYLE);
+    prop.set_ui_text("Selected Color", "Selected item highlight color (RGBA)");
+    prop.set_array_len(4);
+    prop.set_defaults_f32(vec![0.08, 0.68, 0.72, 0.25]).unwrap();
+    prop.set_range_f32(0., 1.);
+    node.add_property(prop).unwrap();
+
+    let mut prop =
+        Property::new("hover_color", PropertyType::Float32, PropertySubType::Color, PERM_STYLE);
+    prop.set_ui_text("Hover Color", "Hovered item highlight color (RGBA)");
+    prop.set_array_len(4);
+    prop.set_defaults_f32(vec![0., 0.22, 0.16, 1.]).unwrap();
+    prop.set_range_f32(0., 1.);
+    node.add_property(prop).unwrap();
+
+    let mut prop =
+        Property::new("text_color", PropertyType::Float32, PropertySubType::Color, PERM_STYLE);
+    prop.set_ui_text("Text Color", "Item label color (RGBA)");
+    prop.set_array_len(4);
+    prop.set_defaults_f32(vec![0.90, 0.90, 0.90, 1.]).unwrap();
+    prop.set_range_f32(0., 1.);
+    node.add_property(prop).unwrap();
+
+    let mut prop =
+        Property::new("font_size", PropertyType::Float32, PropertySubType::Pixel, PERM_STYLE);
+    prop.set_ui_text("Font Size", "Item label font size in pixels");
+    prop.set_defaults_f32(vec![14.]).unwrap();
+    node.add_property(prop).unwrap();
+
+    let prop = Property::new("z_index", PropertyType::Uint32, PropertySubType::Null, PERM_APP);
+    node.add_property(prop).unwrap();
+
+    let prop = Property::new("priority", PropertyType::Uint32, PropertySubType::Null, PERM_APP);
+    node.add_property(prop).unwrap();
+
+    let prop = Property::new("debug", PropertyType::Bool, PropertySubType::Null, PERM_APP);
+    node.add_property(prop).unwrap();
+
+    node.add_signal("opened", "The list was opened", vec![]).unwrap();
+    node.add_signal("closed", "The list was closed", vec![]).unwrap();
+
+    node.add_signal(
+        "selection_changed",
+        "An item was selected",
+        vec![
+            ("index", "Selected item index", CallArgType::Uint32),
+            ("item", "Selected item", CallArgType::Str),
+        ],
+    )
+    .unwrap();
+
+    node
+}
+
 pub fn create_shortcut(name: &str) -> SceneNode {
     let mut node = SceneNode::new(name, SceneNodeType::Shortcut);
 

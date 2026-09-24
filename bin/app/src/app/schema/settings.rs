@@ -19,8 +19,8 @@
 use crate::{
     app::{
         node::{
-            create_button, create_layer, create_singleline_edit, create_slider, create_text,
-            create_vector_art,
+            create_button, create_dropdown, create_layer, create_singleline_edit, create_slider,
+            create_text, create_vector_art,
         },
         App,
     },
@@ -34,12 +34,13 @@ use crate::{
     shape,
     theme::wire_color,
     ui::{
-        BaseEdit, BaseEditType, Button, Layer, ShapeVertex, Slider, Text, VectorArt, VectorShape,
+        BaseEdit, BaseEditType, Button, Dropdown, Layer, ShapeVertex, Slider, Text, VectorArt,
+        VectorShape,
     },
     util::i18n::I18nBabelFish,
 };
 
-use darkfi_serial::deserialize;
+use darkfi_serial::{deserialize, Decodable};
 
 use std::{
     collections::BTreeMap,
@@ -135,8 +136,6 @@ impl Setting {
     fn value_as_string(&self) -> String {
         match &self.prop.get_value(0).ok().unwrap() {
             PropertyValue::Str(s) => s.clone(),
-            // Enum values render as their item name (e.g. "scifi",
-            // "tcp") instead of "unknown".
             PropertyValue::Enum(s) => s.clone(),
             PropertyValue::Uint32(i) => i.to_string(),
             PropertyValue::Bool(b) => {
@@ -150,7 +149,8 @@ impl Setting {
             _ => "unknown".to_string(),
         }
     }
-    fn get_value(&self) -> PropertyValue {        self.prop.get_value(0).ok().unwrap()
+    fn get_value(&self) -> PropertyValue {
+        self.prop.get_value(0).ok().unwrap()
     }
     fn get_default(&self) -> PropertyValue {
         let def = self.prop.defaults.lock().unwrap()[0].clone();
@@ -505,8 +505,7 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish) {
         // Set the `rect` property for each found node
         for (i, node) in found_nodes.iter().enumerate() {
             let prop = node.get_property("rect").unwrap();
-            let y =
-                i as f32 * SETTING_LABEL_LINESPACE + 2. * SEARCH_BAR_Y;
+            let y = i as f32 * SETTING_LABEL_LINESPACE + 2. * SEARCH_BAR_Y;
             prop.set_default_f32(1, y).unwrap();
         }
 
@@ -670,7 +669,7 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish) {
     layer_node.link(settings_layer_node.clone());
 
     // Iterate over the map and process each setting
-    for setting in settings_map.values() {
+    for (row_idx, setting) in settings_map.values().enumerate() {
         let setting_clone = setting.clone();
         let setting_name = setting_clone.name.clone();
         let is_bool = matches!(setting_clone.get_value(), PropertyValue::Bool(_));
@@ -688,6 +687,9 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish) {
         prop.set_default_f32(3, SETTING_LABEL_LINESPACE).unwrap();
         setting_layer_node.set_property_bool(atom, Role::App, "is_visible", true).unwrap();
         setting_layer_node.set_property_u32(atom, Role::App, "z_index", 0).unwrap();
+        setting_layer_node
+            .set_property_u32(atom, Role::App, "priority", (settings_map.len() - row_idx) as u32)
+            .unwrap();
         let setting_layer_node = setting_layer_node
             .setup(|me| Layer::new(me, app.renderer.clone(), app.redraw_trigger.clone()))
             .await;
@@ -932,7 +934,7 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish) {
         .unwrap();
         prop.set_default_f32(3, 100.).unwrap();
         label_value_node.set_property_u32(atom, Role::App, "z_index", 1).unwrap();
-            prop.set_default_f32(1, SETTING_LABEL_Y).unwrap();
+        prop.set_default_f32(1, SETTING_LABEL_Y).unwrap();
         label_value_node
             .set_property_f32(atom, Role::App, "font_size", SETTING_LABEL_FONTSIZE)
             .unwrap();
@@ -1067,21 +1069,36 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish) {
             setting_layer_node.link(node);
         } else {
             editz_text = None;
-            // Enum settings render as a cycle-on-tap row: tapping the
-            // value advances to the next item. Written as Role::User so
-            // the Setting pimpl persists it; the theme engine's watcher
-            // live-switches on `theme` changes.
             let value_prop = setting_clone.prop.clone();
             let items = value_prop.enum_items.clone().unwrap_or_default();
+            let current = match setting_clone.get_value() {
+                PropertyValue::Enum(cur) => cur,
+                _ => String::new(),
+            };
+            let selected = items.iter().position(|item| *item == current).unwrap_or(0);
 
-            let node = create_text("enum_value_label");
+            let node = create_dropdown("value_dropdown");
+            node.set_property_bool(atom, Role::App, "is_active", true).unwrap();
+            {
+                let prop = node.get_property("items").unwrap();
+                prop.set_str_vec(
+                    atom,
+                    Role::App,
+                    items.iter().map(|s| s.as_str()).collect::<Vec<_>>(),
+                )
+                .unwrap();
+            }
+            node.set_property_u32(atom, Role::App, "selected", selected as u32).unwrap();
+            node.set_property_f32(atom, Role::App, "item_height", SETTING_LABEL_LINESPACE).unwrap();
+            node.set_property_f32(atom, Role::App, "list_width", 0.).unwrap();
+            node.set_property_f32(atom, Role::App, "font_size", SETTING_EDIT_FONTSIZE).unwrap();
             let prop = node.get_property("rect").unwrap();
             prop.clone()
                 .set_expr(
                     atom,
                     Role::App,
                     0,
-                    cc.compile("w * X_RATIO + BORDER_RIGHT_SCALE").unwrap(),
+                    cc.compile("w * X_RATIO - BORDER_RIGHT_SCALE").unwrap(),
                 )
                 .unwrap();
             prop.set_default_f32(1, 0.).unwrap();
@@ -1090,82 +1107,45 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish) {
                     atom,
                     Role::App,
                     2,
-                    cc.compile("w * X_RATIO - BORDER_RIGHT_SCALE").unwrap(),
+                    cc.compile("w * (1-X_RATIO) + BORDER_RIGHT_SCALE").unwrap(),
                 )
                 .unwrap();
             prop.set_default_f32(3, SETTING_LABEL_LINESPACE).unwrap();
-                    prop.set_default_f32(1, SETTING_LABEL_Y).unwrap();
-            node.get_property("font_size")
-                .unwrap()
-                .set_default_f32(0, SETTING_EDIT_FONTSIZE)
-                .unwrap();
-            node.get_property("text_color")
-                .unwrap()
-                .set_default_f32_multi(&[0.92, 0.92, 0.92, 1.])
-                .unwrap();
-            node.set_property_str(atom, Role::App, "text", setting_clone.value_as_string())
-                .unwrap();
-            node.set_property_enum(atom, Role::App, "text_align", "start").unwrap();
             node.set_property_u32(atom, Role::App, "z_index", 1).unwrap();
             let node = node
                 .setup(|me| {
-                    Text::new(
+                    Dropdown::new(
                         me,
-                        window_scale.clone(),
                         app.renderer.clone(),
-                        i18n_fish.clone(),
                         app.redraw_trigger.clone(),
+                        window_scale.clone(),
                     )
                 })
                 .await;
             setting_layer_node.link(node.clone());
 
-            // Cycle button overlaying the value area
-            let btn = create_button("enum_cycle_btn");
-            let prop = btn.get_property("rect").unwrap();
-            prop.clone()
-                .set_expr(
-                    atom,
-                    Role::App,
-                    0,
-                    cc.compile("w * X_RATIO + BORDER_RIGHT_SCALE").unwrap(),
-                )
-                .unwrap();
-            prop.set_default_f32(1, 0.).unwrap();
-            prop.clone()
-                .set_expr(
-                    atom,
-                    Role::App,
-                    2,
-                    cc.compile("w * X_RATIO - BORDER_RIGHT_SCALE").unwrap(),
-                )
-                .unwrap();
-            prop.set_default_f32(3, SETTING_LABEL_LINESPACE).unwrap();
-            btn.set_property_bool(atom, Role::App, "is_active", true).unwrap();
-            let (slot, recvr) = Slot::new("enum_cycle");
-            btn.register("click", slot).unwrap();
+            let (slot, selection_recvr) = Slot::new("dropdown_selection");
+            node.register("selection_changed", slot).unwrap();
             let redraw = app.redraw_trigger.clone();
-            let label = node.get_property("text").unwrap();
             let value_prop2 = value_prop.clone();
-            let items2 = items.clone();
             let setting2 = setting.clone();
             let row_root2 = setting_layer_node.clone();
-            let cycle_task = app.ex.spawn(async move {
-                while let Ok(_) = recvr.recv().await {
-                    let current = label.get_str(0).unwrap_or_default();
-                    let Some(pos) = items2.iter().position(|i| *i == current) else { continue };
-                    let next = items2[(pos + 1) % items2.len()].clone();
-                    let atom = &mut redraw.make_guard(gfxtag!("enum cycle"));
-                    value_prop2.set_enum(atom, Role::User, 0, next.clone()).unwrap();
-                    label.set_str(atom, Role::App, 0, next).unwrap();
+            let select_task = app.ex.spawn(async move {
+                while let Ok(data) = selection_recvr.recv().await {
+                    let Some((idx, item)) = decode_selection_payload(&data) else {
+                        error!(target: "app::settings", "dropdown: bad selection payload");
+                        continue
+                    };
+                    let _ = idx;
+                    let atom = &mut redraw.make_guard(gfxtag!("dropdown selection"));
+                    if let Err(err) = value_prop2.set_enum(atom, Role::User, 0, item) {
+                        error!(target: "app::settings", "dropdown: failed to set enum: {err}");
+                        continue
+                    }
                     refresh_setting(setting2.clone(), row_root2.clone());
                 }
             });
-            setting_layer_node.push_task(cycle_task);
-            let btn = btn
-                .setup(|me| Button::new(me, app.renderer.clone(), app.redraw_trigger.clone()))
-                .await;
-            setting_layer_node.link(btn);
+            setting_layer_node.push_task(select_task);
         }
 
         if setting_name == "win.scale" {
@@ -1306,7 +1286,7 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish) {
                     .unwrap();
                 prop.set_default_f32(3, 100.).unwrap();
                 value_node.set_property_u32(atom, Role::App, "z_index", 1).unwrap();
-                            prop.set_default_f32(1, SETTING_LABEL_Y).unwrap();
+                prop.set_default_f32(1, SETTING_LABEL_Y).unwrap();
                 value_node
                     .set_property_f32(atom, Role::App, "font_size", SETTING_LABEL_FONTSIZE)
                     .unwrap();
@@ -1357,7 +1337,7 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish) {
                     .unwrap();
                 prop.set_default_f32(3, 100.).unwrap();
                 value_node.set_property_u32(atom, Role::App, "z_index", 1).unwrap();
-                            prop.set_default_f32(1, SETTING_LABEL_Y).unwrap();
+                prop.set_default_f32(1, SETTING_LABEL_Y).unwrap();
                 value_node
                     .set_property_f32(atom, Role::App, "font_size", SETTING_LABEL_FONTSIZE)
                     .unwrap();
@@ -1719,9 +1699,8 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish) {
                         text.set(atom, setting2.value_as_string());
                     }
 
-                    if let Some(node) = sg_root2.lookup_node("/enum_value_label") {
-                        let text = PropertyStr::wrap(&node, Role::App, "text", 0).unwrap();
-                        text.set(atom, setting2.value_as_string());
+                    if let Some(node) = sg_root2.lookup_node("/value_dropdown") {
+                        sync_dropdown(&node, &setting2, atom);
                     }
 
                     if let Some(node) = sg_root2.lookup_node("/value_editbox") {
@@ -1761,10 +1740,8 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish) {
                     let Some(row) = sg_root2.lookup_node(&path) else { continue };
                     if setting.is_bool() {
                         refresh_bool_row(setting, &row, atom);
-                    } else if let Some(label) = row.lookup_node("/enum_value_label") {
-                            label
-                            .set_property_str(atom, Role::App, "text", setting.value_as_string())
-                            .unwrap();
+                    } else if let Some(dropdown) = row.lookup_node("/value_dropdown") {
+                        sync_dropdown(&dropdown, setting, atom);
                     } else if let Some(label) = row.lookup_node("/value_label") {
                         label
                             .set_property_str(atom, Role::App, "text", setting.value_as_string())
@@ -1818,6 +1795,26 @@ fn spawn_win_scale_listener(
         }
     });
     app.tasks.lock().push(task);
+}
+
+fn sync_dropdown(dropdown: &SceneNodePtr, setting: &Setting, atom: &mut PropertyAtomicGuard) {
+    let items = setting.prop.enum_items.clone().unwrap_or_default();
+    let current = match setting.get_value() {
+        PropertyValue::Enum(cur) => cur,
+        _ => return,
+    };
+    let selected = items.iter().position(|item| *item == current).unwrap_or(0) as u32;
+
+    let prop = dropdown.get_property("items").unwrap();
+    prop.set_str_vec(atom, Role::App, items).unwrap();
+    dropdown.set_property_u32(atom, Role::App, "selected", selected).unwrap();
+}
+
+fn decode_selection_payload(data: &[u8]) -> Option<(u32, String)> {
+    let mut cur = std::io::Cursor::new(data);
+    let idx = u32::decode(&mut cur).ok()?;
+    let item = String::decode(&mut cur).ok()?;
+    Some((idx, item))
 }
 
 fn reset_win_scale_row(

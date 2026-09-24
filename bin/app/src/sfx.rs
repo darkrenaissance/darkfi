@@ -44,6 +44,7 @@ macro_rules! e { ($($arg:tt)*) => { error!(target: "app::sfx", $($arg)*); } }
 static CLICK_OGA: &[u8] = include_bytes!("../data/sfx/click.oga");
 static COMMUP_OGA: &[u8] = include_bytes!("../data/sfx/commup.oga");
 static CLOAK_OGA: &[u8] = include_bytes!("../data/sfx/cloak.oga");
+static TICK_OGA: &[u8] = include_bytes!("../data/sfx/tick.oga");
 
 /// Idle window after the last sound before the stream is paused.
 /// Pausing flushes buffered audio, so it must exceed the duration of
@@ -62,6 +63,8 @@ struct Sfx {
     commup: rodio::buffer::SamplesBuffer,
     /// Used for showing p2p overlay
     cloak: rodio::buffer::SamplesBuffer,
+    /// Dropdown item hover blip
+    tick: rodio::buffer::SamplesBuffer,
     /// Signals playback activity to the idle reaper thread
     #[cfg(any(target_os = "android", feature = "emulate-android"))]
     activity: mpsc::Sender<()>,
@@ -84,6 +87,7 @@ fn init() -> Result<Sfx, Box<dyn std::error::Error>> {
     let click = rodio::Decoder::try_from(Cursor::new(CLICK_OGA))?.record();
     let commup = rodio::Decoder::try_from(Cursor::new(COMMUP_OGA))?.record();
     let cloak = rodio::Decoder::try_from(Cursor::new(CLOAK_OGA))?.record();
+    let tick = rodio::Decoder::try_from(Cursor::new(TICK_OGA))?.record();
 
     // Leaving the sound mixer on in Android will just hold a wakelock
     // and drain battery. It is playing a silent sound so we must pause
@@ -97,6 +101,7 @@ fn init() -> Result<Sfx, Box<dyn std::error::Error>> {
         click,
         commup,
         cloak,
+        tick,
         #[cfg(any(target_os = "android", feature = "emulate-android"))]
         activity,
     })
@@ -190,5 +195,11 @@ pub fn play_commup() {
 pub fn play_cloak() {
     if let Some(sfx) = &*SFX {
         sfx.play(&sfx.cloak);
+    }
+}
+
+pub fn play_tick() {
+    if let Some(sfx) = &*SFX {
+        sfx.play(&sfx.tick);
     }
 }

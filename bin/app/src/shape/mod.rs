@@ -72,6 +72,9 @@ pub use down_bgtab::create_down_bgtab;
 mod down_arrow;
 pub use down_arrow::create_down_arrow;
 
+mod dropdown_arrow;
+pub use dropdown_arrow::create_dropdown_arrow;
+
 mod settings;
 pub use settings::create_settings;
 
