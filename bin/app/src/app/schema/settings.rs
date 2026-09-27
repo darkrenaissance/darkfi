@@ -51,7 +51,7 @@ use std::{
 mod android_ui_consts {
     pub const SETTING_LABEL_X: f32 = 40.;
     pub const SETTING_LABEL_LINESPACE: f32 = 140.;
-    pub const SEARCH_BAR_Y: f32 = 60.;
+    pub const SEARCH_BAR_Y: f32 = SETTING_LABEL_LINESPACE;
     pub const SETTING_LABEL_Y: f32 = (SETTING_LABEL_LINESPACE - 1.2 * SETTING_LABEL_FONTSIZE) / 2.;
     pub const SLIDER_PAD: f32 = 20.;
     pub const RESET_BTN_W: f32 = 70.;
@@ -96,7 +96,7 @@ mod ui_consts {
 mod ui_consts {
     pub const SETTING_LABEL_X: f32 = 20.;
     pub const SETTING_LABEL_LINESPACE: f32 = 60.;
-    pub const SEARCH_BAR_Y: f32 = 60.;
+    pub const SEARCH_BAR_Y: f32 = SETTING_LABEL_LINESPACE;
     pub const SETTING_LABEL_Y: f32 = (SETTING_LABEL_LINESPACE - 1.2 * SETTING_LABEL_FONTSIZE) / 2.;
     pub const SLIDER_PAD: f32 = 10.;
     pub const RESET_BTN_W: f32 = 35.;
@@ -171,16 +171,6 @@ impl Setting {
     }
 }
 
-#[cfg(target_os = "android")]
-fn win_base_scale() -> f32 {
-    miniquad::window::dpi_scale() / 3.5
-}
-
-#[cfg(not(target_os = "android"))]
-fn win_base_scale() -> f32 {
-    1.
-}
-
 pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish) {
     let mut cc = Compiler::new();
     cc.add_const_f32("BORDER_RIGHT_SCALE", BORDER_RIGHT_SCALE);
@@ -195,9 +185,9 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish) {
     cc.add_const_f32("CONFIRM_BTN_W", CONFIRM_BTN_W);
     cc.add_const_f32("X_RATIO", 1. / 2.);
     let window_scale = PropertyFloat32::wrap(
-        &app.sg_root.lookup_node("/window").unwrap(),
+        &app.sg_root.lookup_node("/setting").unwrap(),
         Role::Internal,
-        "scale",
+        "win.scale",
         0,
     )
     .unwrap();
@@ -1676,7 +1666,6 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish) {
             node.register("click", slot).unwrap();
             let setting2 = setting.clone();
             let sg_root2 = setting_layer_node.clone();
-            let app_root2 = app.sg_root.clone();
             let active_setting2 = active_setting.clone();
             let editz_text2 = editz_text.clone();
             let listen_click = app.ex.spawn(async move {
@@ -1689,7 +1678,7 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish) {
                     if setting2.is_bool() {
                         refresh_bool_row(&setting2, &sg_root2, atom);
                     } else if setting2.name == "win.scale" {
-                        reset_win_scale_row(&setting2, &sg_root2, &app_root2, atom);
+                        reset_win_scale_row(&setting2, &sg_root2, atom);
                     }
 
                     // Show the selected setting value label (set its text empty)
@@ -1772,10 +1761,8 @@ fn spawn_win_scale_listener(
 ) {
     let (slot, recvr) = Slot::new("slider_changed");
     slider.register("changed", slot).unwrap();
-    let sg_root = app.sg_root.clone();
     let row_root = row_root.clone();
     let redraw = app.redraw_trigger.clone();
-    let base_scale = win_base_scale();
     let task = app.ex.spawn(async move {
         while let Ok(data) = recvr.recv().await {
             let Ok(val) = deserialize::<f32>(&data) else { continue };
@@ -1784,12 +1771,6 @@ fn spawn_win_scale_listener(
                 error!(target: "app::settings", "failed to set win.scale: {e}");
                 continue
             }
-            let window = sg_root.lookup_node("/window").unwrap();
-            window
-                .get_property("scale")
-                .unwrap()
-                .set_f32(atom, Role::App, 0, base_scale * val)
-                .unwrap();
             info!(target: "app::settings", "Applied win.scale live: {val}");
             refresh_setting(setting.clone(), row_root.clone());
         }
@@ -1817,12 +1798,7 @@ fn decode_selection_payload(data: &[u8]) -> Option<(u32, String)> {
     Some((idx, item))
 }
 
-fn reset_win_scale_row(
-    setting: &Setting,
-    row_root: &SceneNodePtr,
-    app_root: &SceneNodePtr,
-    atom: &mut PropertyAtomicGuard,
-) {
+fn reset_win_scale_row(setting: &Setting, row_root: &SceneNodePtr, atom: &mut PropertyAtomicGuard) {
     let def = match setting.get_default() {
         PropertyValue::Float32(v) => v.clamp(0.8, 1.2),
         _ => 1.,
@@ -1830,12 +1806,6 @@ fn reset_win_scale_row(
     if let Some(slider) = row_root.lookup_node("/value_slider") {
         slider.set_property_f32(atom, Role::App, "value", def).unwrap();
     }
-    let window = app_root.lookup_node("/window").unwrap();
-    window
-        .get_property("scale")
-        .unwrap()
-        .set_f32(atom, Role::App, 0, win_base_scale() * def)
-        .unwrap();
 }
 fn refresh_bool_row(setting: &Setting, sn: &SceneNodePtr, atom: &mut PropertyAtomicGuard) {
     let on = matches!(setting.get_value(), PropertyValue::Bool(true));

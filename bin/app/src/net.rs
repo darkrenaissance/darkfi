@@ -301,6 +301,16 @@ impl ZeroMQAdapter {
                         let default = prop.defaults.lock().unwrap()[i].clone();
                         if default.is_null() {
                             2u8.encode(&mut reply).unwrap();
+                        } else if default.is_expr() {
+                            // An unset index resolving through a default
+                            // expr reports the decompiled expr source under
+                            // the EXPR status. Encoding the SExprCode bytes
+                            // as the payload would desync the client, which
+                            // expects a payload matching the property type
+                            // on the UNSET path.
+                            3u8.encode(&mut reply).unwrap();
+                            let expr = default.as_sexpr().unwrap();
+                            decompile(&expr).encode(&mut reply).unwrap();
                         } else {
                             1u8.encode(&mut reply).unwrap();
                             // Shapes are not serialized on the get path;

@@ -242,9 +242,13 @@ pub async fn make(
     emoji_meshes: emoji_picker::EmojiMeshesPtr,
     redraw: RedrawTrigger,
 ) -> SceneNodePtr {
-    let window_scale =
-        PropertyFloat32::wrap(&sg_root.lookup_node("/window").unwrap(), Role::Internal, "scale", 0)
-            .unwrap();
+    let window_scale = PropertyFloat32::wrap(
+        &sg_root.lookup_node("/setting").unwrap(),
+        Role::Internal,
+        "win.scale",
+        0,
+    )
+    .unwrap();
     let atom = &mut PropertyAtomicGuard::none();
 
     let mut cc = Compiler::new();

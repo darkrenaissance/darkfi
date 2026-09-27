@@ -61,6 +61,8 @@ mod android_ui_consts {
 
     pub const PROGRESS_FONTSIZE: f32 = 36.;
     pub const PROGRESS_MARGIN: f32 = 10.;
+
+    pub const DARKFI_LOGO_SCALE: f32 = 40.;
 }
 
 #[cfg(target_os = "android")]
@@ -117,6 +119,8 @@ mod ui_consts {
 
     pub const PROGRESS_FONTSIZE: f32 = 14.;
     pub const PROGRESS_MARGIN: f32 = 5.;
+
+    pub const DARKFI_LOGO_SCALE: f32 = 20.;
 }
 
 pub use ui_consts::*;

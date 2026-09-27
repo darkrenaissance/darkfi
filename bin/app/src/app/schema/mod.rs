@@ -266,9 +266,13 @@ pub async fn make(
 
     let atom = &mut PropertyAtomicGuard::none();
 
-    let window_scale =
-        PropertyFloat32::wrap(&app.sg_root.lookup_node("/window").unwrap(), Role::App, "scale", 0)
-            .unwrap();
+    let window_scale = PropertyFloat32::wrap(
+        &app.sg_root.lookup_node("/setting").unwrap(),
+        Role::App,
+        "win.scale",
+        0,
+    )
+    .unwrap();
 
     // Root content layer
     let content = create_layer("content");

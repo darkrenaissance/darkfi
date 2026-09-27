@@ -231,7 +231,7 @@ pub async fn make(
     prop.set_default_f32(3, HEADER_HEIGHT).unwrap();
     node.set_property_u32(atom, Role::App, "z_index", 3).unwrap();
     node.set_property_bool(atom, Role::App, "is_visible", true).unwrap();
-    let shape = shape::create_darkfi_logo([1., 1., 1., 1.]).scaled(20.);
+    let shape = shape::create_darkfi_logo([1., 1., 1., 1.]).scaled(DARKFI_LOGO_SCALE);
     node.set_property_shape(atom, Role::App, "shape", shape).unwrap();
     let node =
         node.setup(|me| VectorArt::new(me, app.renderer.clone(), app.redraw_trigger.clone())).await;

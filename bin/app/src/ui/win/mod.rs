@@ -79,6 +79,7 @@ pub struct Window {
 impl Window {
     pub async fn new(
         node: SceneNodeWeak,
+        scale: PropertyFloat32,
         renderer: Renderer,
         i18n_fish: I18nBabelFish,
         ex: ExecutorPtr,
@@ -88,7 +89,6 @@ impl Window {
         let node_ref = &node.upgrade().unwrap();
         let locale = PropertyStr::wrap(node_ref, Role::Internal, "locale", 0).unwrap();
         let screen_size = PropertyDimension::wrap(node_ref, Role::Internal, "screen_size").unwrap();
-        let scale = PropertyFloat32::wrap(node_ref, Role::Internal, "scale", 0).unwrap();
 
         let gesture_session = GestureSession::new(node.clone(), ex);
 

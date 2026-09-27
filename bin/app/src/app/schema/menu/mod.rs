@@ -68,6 +68,8 @@ mod android_ui_consts {
     pub const LABEL_LINESPACE: f32 = 60.;
     pub const MENU_ICON_SCALE: f32 = 220.;
     pub const SETTINGS_ICON_SCALE: f32 = 55.;
+
+    pub const DARKFI_LOGO_SCALE: f32 = 40.;
 }
 
 #[cfg(target_os = "android")]
@@ -110,6 +112,8 @@ mod ui_consts {
     pub const LABEL_LINESPACE: f32 = 140.;
     pub const MENU_ICON_SCALE: f32 = 100.;
     pub const SETTINGS_ICON_SCALE: f32 = 28.;
+
+    pub const DARKFI_LOGO_SCALE: f32 = 20.;
 }
 
 pub mod channel;
@@ -126,9 +130,9 @@ pub async fn make(
     emoji_meshes: EmojiMeshesPtr,
 ) {
     let window_scale = PropertyFloat32::wrap(
-        &app.sg_root.lookup_node("/window").unwrap(),
+        &app.sg_root.lookup_node("/setting").unwrap(),
         Role::Internal,
-        "scale",
+        "win.scale",
         0,
     )
     .unwrap();
@@ -308,7 +312,7 @@ pub async fn make(
     prop.set_default_f32(3, CHANNEL_HEADER_HEIGHT).unwrap();
     node.set_property_u32(atom, Role::App, "z_index", 3).unwrap();
     node.set_property_bool(atom, Role::App, "is_visible", true).unwrap();
-    let shape = shape::create_darkfi_logo([1., 1., 1., 1.]).scaled(20.);
+    let shape = shape::create_darkfi_logo([1., 1., 1., 1.]).scaled(DARKFI_LOGO_SCALE);
     node.set_property_shape(atom, Role::App, "shape", shape).unwrap();
     let node =
         node.setup(|me| VectorArt::new(me, app.renderer.clone(), app.redraw_trigger.clone())).await;
@@ -560,14 +564,6 @@ pub async fn setup_wallet_button(app: &App, chat_layer: SceneNodePtr, i18n_fish:
     cc.add_const_f32("MENU_BTN_W_R", MENU_BTN_W_R);
     cc.add_const_f32("MENU_BTN_H", MENU_BTN_H);
     cc.add_const_f32("CHANNEL_LABEL_X", CHANNEL_LABEL_X);
-
-    let _window_scale = PropertyFloat32::wrap(
-        &app.sg_root.lookup_node("/window").unwrap(),
-        Role::Internal,
-        "scale",
-        0,
-    )
-    .unwrap();
 
     let chat_is_visible = PropertyBool::wrap(&chat_layer, Role::App, "is_visible", 0).unwrap();
     let menu_layer = chat_layer.lookup_node("/menu_layer").unwrap();

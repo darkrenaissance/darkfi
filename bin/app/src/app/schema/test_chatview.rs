@@ -122,9 +122,13 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish) {
     }
     drop(dev_tree);
 
-    let window_scale =
-        PropertyFloat32::wrap(&app.sg_root.lookup_node("/window").unwrap(), Role::App, "scale", 0)
-            .unwrap();
+    let window_scale = PropertyFloat32::wrap(
+        &app.sg_root.lookup_node("/setting").unwrap(),
+        Role::App,
+        "win.scale",
+        0,
+    )
+    .unwrap();
     let chatview_node = node
         .setup(|me| {
             ChatView::new(

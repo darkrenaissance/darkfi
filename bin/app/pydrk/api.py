@@ -547,6 +547,8 @@ class Api:
                     return (PropertyStatus.EXPR, Expr(serial.decode_str(cur)))
                 case PropertyStatus.UNSET | PropertyStatus.OK:
                     return (prop_status, Api.read_prop_val(cur, prop_type))
+                case _:
+                    raise Exception(f"unknown property status returned: {prop_status} (desynced stream?)")
 
         return serial.decode_arr(cur, prop_read_fn)
 

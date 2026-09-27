@@ -114,46 +114,26 @@ impl App {
         let i18n_fish = self.setup_locale();
 
         let window = create_window("window");
-        #[cfg(target_os = "android")]
-        let base_scale = {
-            let screen_density = miniquad::window::dpi_scale();
-            i!("Android screen density: {screen_density}");
-            screen_density / 3.5
-        };
-        #[cfg(not(target_os = "android"))]
-        let base_scale = 1.;
-
-        let setting_node = self.sg_root.lookup_node("/setting").unwrap();
-        let win_scale_setting =
-            PropertyFloat32::wrap(&setting_node, Role::Internal, "win.scale", 0).unwrap();
-        let is_valid_scale = |scale: f32| scale > 0. && scale.is_finite();
-        let saved_scale = win_scale_setting.get();
-        let saved_scale = if is_valid_scale(saved_scale) {
-            saved_scale
-        } else {
-            warn!(target: "app", "Invalid persisted win.scale: {saved_scale}, falling back to 1.");
-            1.
-        };
-        let window_scale = base_scale * saved_scale;
-
-        d!("Setting window scale to {window_scale}");
-        let prop = window.get_property("scale").unwrap();
-        let atom = &mut PropertyAtomicGuard::none();
-        prop.set_f32(atom, Role::App, 0, window_scale).unwrap();
 
         #[cfg(target_os = "android")]
         {
             let insets = android::insets::get_insets();
             d!("Setting window insets to {insets:?}");
             let prop = window.get_property("insets").unwrap();
+            let atom = &mut PropertyAtomicGuard::none();
             for i in 0..4 {
                 prop.set_f32(atom, Role::App, i, insets[i]).unwrap();
             }
         }
+
+        let setting_node = self.sg_root.lookup_node("/setting").unwrap();
+        let window_scale =
+            PropertyFloat32::wrap(&setting_node, Role::Internal, "win.scale", 0).unwrap();
         let window = window
             .setup(|me| {
                 Window::new(
                     me,
+                    window_scale.clone(),
                     self.renderer.clone(),
                     i18n_fish.clone(),
                     self.ex.clone(),
