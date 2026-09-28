@@ -6,8 +6,8 @@ Gives senders of event-graph broadcast messages evidence about whether
 peers accepted them, and defines the sender-side rebroadcast/recreate
 policy that prevents messages written while offline from being silently
 lost to DAG rotation. Covers the reply wire format, delivery-state
-exposure to applications, darkirc's outbound tracking and recreate flow,
-and client-side dedup/display of delivery state.
+exposure to applications, and darkirc's outbound tracking, rebroadcast,
+and recreate flow as the reference implementation.
 
 ## ADDED Requirements
 
@@ -18,9 +18,13 @@ A node that receives an `EventPut` SHALL send the sender an
 
 - `Has { inserted: true }` when the event was newly accepted into the
   node's DAG
-- `Has { inserted: false }` when the node already has the event
+- `Has { inserted: false }` when the node already has the event,
+  **including when the event is only found in a retained older rotation
+  slot** — the receiver SHALL check its retained slots before nacking
+  `TooOld`, so a peer still holding a rotated-away message answers
+  `Has` rather than `TooOld`
 - `Nack { reason: TooOld }` when the event predates the node's current
-  rotation window
+  rotation window and is not present in any retained slot
 - `Nack { reason: NotSynced }` when the node is still performing its
   initial DAG sync and skipped the event
 - `Nack { reason: Invalid }` when the event fails structural or
@@ -47,7 +51,16 @@ distinguish originator from relay.
 
 - **WHEN** a peer receives an `EventPut` whose event timestamp precedes
   its current genesis
-- **THEN** it replies `Nack { reason: TooOld }`
+- **THEN** it replies `Nack { reason: TooOld }` only if the event is not
+  present in any of its retained rotation slots
+
+#### Scenario: Event held in a retained older rotation slot
+
+- **WHEN** a peer receives an `EventPut` for an event it holds in a
+  retained older rotation slot (for example after the sender
+  disconnected and the DAG rotated)
+- **THEN** it replies `Has { inserted: false }` rather than
+  `Nack { reason: TooOld }`
 
 #### Scenario: Receiving node still syncing
 
@@ -109,11 +122,11 @@ or make retry decisions; that policy belongs to applications.
 ### Requirement: darkirc persists outbound records before broadcast
 
 When darkirc publishes a chat message event, it SHALL first persist an
-outbound record containing the event id, the message's `uid`, the
-plaintext message fields needed to rebuild it, a state, and an attempt
-counter. Records SHALL survive restart. Records SHALL be closed
-(removable) once a positive outcome is observed or the attempt cap is
-reached.
+outbound record containing the event id, the plaintext message fields
+needed to rebuild it, a state, an attempt counter, and a link to any
+superseding replacement event. Records SHALL survive restart. Records
+SHALL be closed (removable) once a positive outcome is observed or the
+attempt cap is reached.
 
 #### Scenario: Restart does not lose pending sends
 
@@ -140,20 +153,42 @@ record as delivered.
 #### Scenario: Prior propagation is detected, not recreated
 
 - **WHEN** a rebroadcast reaches peers that already hold the event via
-  earlier propagation
+  earlier propagation or in a retained older rotation slot
 - **THEN** their `Has { inserted: false }` replies close the record and
   no recreation happens
 
-### Requirement: Recreate on unrecoverable or rejected delivery
+### Requirement: Ancestry reference counts as delivery evidence
+
+The delivery monitor SHALL treat a foreign event whose DAG ancestry
+includes one of its tracked outbound events as positive delivery
+evidence, closing the outbound record as delivered. This is a local
+computation over already-received events and adds no wire traffic.
+
+#### Scenario: Foreign child closes the record
+
+- **WHEN** a new event arrives whose ancestry (walked through parent
+  references) contains a pending outbound event
+- **THEN** the outbound record is closed as delivered without waiting
+  for any explicit status reply
+
+### Requirement: Recreate only on explicit evidence
 
 darkirc SHALL create a replacement event from the stored plaintext —
-fresh timestamp and DAG parents, fresh encryption nonce, same `uid` —
-when any of:
+fresh timestamp and DAG parents, fresh encryption nonce — only when
+either:
 
-- a `Nack { reason: TooOld }` arrives (the rotation window has passed)
-- every observed reply across the retry rounds is a nack
-- zero replies are observed after the maximum number of rebroadcast
-  rounds
+- the rotation window for the original event is closed (known locally
+  from the rotation schedule, or indicated by `TooOld` nacks) and no
+  peer has answered `Has` for it, or
+- every observed reply is a nack and at least one carries reason
+  `Invalid`
+
+The following observations SHALL NOT trigger recreation while the
+rotation window is open: silence, `Nack { NotSynced }`, and
+`Nack { Busy }` mean retry later. Silence SHALL NOT trigger recreation
+even after the window closes when no status reply of any kind has ever
+been received from status-capable peers. A replacement links back via
+the supersession chain so the sender can correlate attempts locally.
 
 Recreation SHALL consume a fresh rate-limit slot when rate limiting is
 enabled; if the epoch budget is exhausted the attempt SHALL be parked
@@ -163,10 +198,37 @@ SHALL be closed as failed and the failure surfaced to the client.
 
 #### Scenario: Rotation makes the original undeliverable
 
-- **WHEN** a pending record's event predates the current rotation window
-  and any peer nacks `TooOld`
-- **THEN** a replacement event with the same `uid` and fresh
-  parents/timestamp is published
+- **WHEN** a pending record's rotation window has closed and no peer
+  answers `Has` after a rebroadcast round
+- **THEN** a replacement event with fresh parents/timestamp is published
+  and linked via the supersession chain
+
+#### Scenario: Holder answers before recreation
+
+- **WHEN** the rotation window has closed but a rebroadcast round
+  returns `Has { inserted: false }` from any peer holding the event in a
+  retained slot
+- **THEN** the record is closed as delivered and no replacement is
+  created
+
+#### Scenario: Silence never recreates on its own
+
+- **WHEN** no status replies of any kind are observed (for example all
+  peers run versions without status support)
+- **THEN** the monitor keeps rebroadcasting at a bounded rate and does
+  not create replacements
+
+#### Scenario: Transient nacks mean retry
+
+- **WHEN** observed replies are `Nack { NotSynced }` or `Nack { Busy }`
+  while the rotation window is open
+- **THEN** the monitor retries later and does not recreate
+
+#### Scenario: Explicit rejection recreates
+
+- **WHEN** every observed reply across the retry rounds is a nack and at
+  least one carries reason `Invalid`
+- **THEN** a replacement event is published (bounded by the attempt cap)
 
 #### Scenario: Budget exhaustion parks, not drops
 
@@ -179,42 +241,3 @@ SHALL be closed as failed and the failure surfaced to the client.
 - **WHEN** the configured recreation attempt cap is reached without any
   positive outcome
 - **THEN** the record is closed as failed and the client is informed
-
-### Requirement: Message uid for recreate dedup
-
-The chat message payload SHALL carry a sender-generated `uid` that
-remains identical across recreations of the same message. Receiving
-clients SHALL treat messages with equal `uid` as one logical message for
-display purposes. Payload decoding SHALL be version-aware so peers that
-do not understand the new field still decode old payloads.
-
-#### Scenario: Recreated message does not double-render
-
-- **WHEN** a receiving client has already displayed the original message
-  and later receives its recreation
-- **THEN** the recreation is not rendered as a second message
-
-#### Scenario: Old payloads still decode
-
-- **WHEN** a client that understands `uid` receives a payload without
-  one
-- **THEN** the payload decodes via its version and renders normally
-
-### Requirement: App displays delivery state
-
-The app SHALL subscribe to delivery statuses for its own outbound
-messages and expose per-message delivery state keyed by `uid`:
-`sending` (no replies yet), `delivered` (any `Has` reply), `failed`
-(record closed at the attempt cap). Delivery state SHALL NOT be
-presented as evidence that any particular recipient read the message.
-
-#### Scenario: Tick on first acceptance
-
-- **WHEN** any peer replies `Has` for the app's outbound message
-- **THEN** the message's state becomes `delivered`
-
-#### Scenario: Failure is visible
-
-- **WHEN** a message's record closes as failed
-- **THEN** the app shows the message as failed rather than leaving it
-  indefinitely in `sending`

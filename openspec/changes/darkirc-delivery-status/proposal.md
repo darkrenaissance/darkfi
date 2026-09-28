@@ -16,8 +16,10 @@ network.
 - New p2p message `EventPutStatus` in `src/event_graph/proto.rs`: a reply
   sent by the receiver of an `EventPut` describing the outcome. Enum
   variants use explicit `u8` discriminants for a stable wire format:
-  - `Has { inserted: bool }` — peer has the event (freshly inserted, or
-    already known from earlier propagation)
+  - `Has { inserted: bool }` — peer has the event (freshly inserted,
+    already known, **or found in a retained older rotation slot** — the
+    historical check runs before nacking `TooOld`, so a peer still
+    holding a rotated-away message answers `Has` instead of `TooOld`)
   - `Nack { reason }` with coarse reasons: `TooOld`, `NotSynced`,
     `Invalid`, `Busy`. No fine-grained validation detail (avoids turning
     nacks into a validation oracle).
@@ -28,43 +30,49 @@ network.
   The event layer is a dumb pipe; delivery policy lives in applications.
 - darkirc (`bin/darkirc`):
   - Persistent outbound table (kvdb tree, written before broadcast):
-    event id, `uid`, plaintext privmsg, state, attempts.
-  - Receipt aggregation keyed by (event_id, peer channel).
-  - Delivery monitor: rebroadcast-first when reconnected and synced;
-    recreate when nacked `TooOld`, when all responses are nacks, or when
-    zero responses persist after bounded retries.
-  - Recreate = new event from stored plaintext (fresh parents/timestamp,
-    fresh saltbox nonce, same `uid`), new RLN slot when RLN is enabled
-    (`BudgetExhausted` parks the attempt until the next epoch), bounded
-    attempt count.
-- `Privmsg` gains a client-generated `uid` field (constant across
-  recreates) with a version bump, so receiving clients dedup a recreated
-  message against its original. Serialization change must be sequenced
-  with the in-flight `darkirc-mod` content-tag work.
-- `app` (`bin/app`): subscribes to `receipt_pub` in-process and maps
-  `uid` to per-message delivery state (sending / delivered / failed);
-  message identity switches to `uid`-based dedup.
+    event id, plaintext privmsg, state, attempts, `superseded_by` link.
+  - Receipt aggregation keyed by (event_id, peer channel); a foreign
+    event whose DAG ancestry includes our outbound event also counts as
+    positive delivery evidence (free secondary signal, no wire change).
+  - Delivery monitor — rebroadcast-first when reconnected and synced.
+    Silence alone never triggers recreation while the rotation window
+    is open; recreate only when the window is closed (locally or via
+    `TooOld` nacks) with no holder answering, or when every observed
+    reply is an explicit rejection. `NotSynced`/`Busy`/silence mean
+    retry, not evidence.
+- Recreate = new event from stored plaintext (fresh parents/timestamp,
+  fresh saltbox nonce), new RLN slot when RLN is enabled
+  (`BudgetExhausted` parks the attempt until the next epoch), bounded
+  attempt count, `superseded_by` chain for local correlation.
 
 Non-goals: read receipts stored in the event graph (pollutes the DAG,
-burns RLN budget, leaks linkability); IRC-surface receipt display (only
-the app displays them); pull-based possession verification via
-`EventReq`; `StaticPut` status (nickserv already has a deferred-broadcast
-queue); recipient-identifying receipts (nodes are anonymous; this is
-delivery-to-network evidence only).
+burns RLN budget, leaks linkability); IRC-surface receipt display;
+`bin/app` integration (delivery-state UI, subscriptions, or any other
+app-side changes — darkirc is the reference implementation here and the
+app consumes the same generic pipe in a follow-up change); pull-based
+possession verification via `EventReq`; `StaticPut` status (nickserv
+already has a deferred-broadcast queue); recipient-identifying receipts
+(nodes are anonymous; this is delivery-to-network evidence only). A
+`Privmsg` dedup field (`uid`) was considered and deliberately deferred:
+with the historical-slot check and the silence-never-recreates rule,
+recreation almost never overlaps with "someone already rendered the
+original", and adding such a field later is an additive version bump
+while removing it after shipping would be a wire break. Known accepted
+cost: rare duplicate renders during mixed-version rollout windows and
+under adversarial fake-nack griefing.
 
 ## Capabilities
 
 ### New Capabilities
 
 - `msg-delivery-status`: outcome reporting for `EventPut` broadcast,
-  delivery-state exposure to applications, sender-side rebroadcast/recreate
-  policy for darkirc, and client-side dedup/display of delivery state in
-  the app.
+  delivery-state exposure to applications, and the sender-side
+  rebroadcast/recreate policy implemented by darkirc as the reference
+  consumer.
 
 ### Modified Capabilities
 
-(none — `chatview` is untouched; app-side rendering is covered by
-`msg-delivery-status` requirements.)
+(none — no existing specs change.)
 
 ## Impact
 
@@ -73,13 +81,12 @@ delivery-to-network evidence only).
   panic-free on untrusted input, keep flood/strike policing unchanged.
 - `bin/darkirc` (client.rs, server.rs, lib.rs, crypto/rln.rs interplay) —
   outbound table, monitor task, recreate path.
-- `bin/app/src/plugin/darkirc.rs` — send path wrapping, `uid` dedup,
-  receipt subscription.
-- `bin/tau/taud` — unaffected consumer; may adopt the same pipe later.
+- `bin/tau/taud` and `bin/app` — untouched consumers; they may adopt the
+  same `receipt_pub` pipe in follow-up changes.
+- No `Privmsg` or other consensus/content serialization changes in this
+  change.
 - Wire compatibility: peers without `EventPutStatus` support simply never
-  reply; senders treat silence as "no response" (drives rebroadcast
-  retries, never correctness). New `Privmsg` field requires version-aware
-  decoding.
-- Sequencing: coordinate `Privmsg` serialization with `darkirc-mod`.
+  reply; senders treat silence as "retry later, never a verdict", so
+  correctness does not depend on reply availability.
 - Per repo policy, `event_graph` protocol changes require
   `@anon-security-review` before apply/archive.
