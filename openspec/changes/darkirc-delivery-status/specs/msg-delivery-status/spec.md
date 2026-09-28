@@ -3,11 +3,12 @@
 ## Purpose
 
 Gives senders of event-graph broadcast messages evidence about whether
-peers accepted them, and defines the sender-side rebroadcast/recreate
-policy that prevents messages written while offline from being silently
-lost to DAG rotation. Covers the reply wire format, delivery-state
-exposure to applications, and darkirc's outbound tracking, rebroadcast,
-and recreate flow as the reference implementation.
+peers accepted them, and defines a durable, oldest-first broadcast queue
+that retains messages until acknowledged rather than silently losing
+them to DAG rotation. Covers the reply wire format, delivery-state
+exposure to applications, and darkirc's head-only retry/recreate flow as
+the reference implementation. ACKs are unverified network-delivery
+evidence, not recipient receipts or a guarantee of recipient display order.
 
 ## ADDED Requirements
 
@@ -29,8 +30,8 @@ A node that receives an `EventPut` SHALL send the sender an
   initial DAG sync and skipped the event
 - `Nack { reason: Invalid }` when the event fails structural or
   proof validation
-- `Nack { reason: Busy }` when an internal condition prevented
-  processing
+- `Nack { reason: Busy }` when a transient parent-fetch failure or an
+  internal condition prevented processing, without established invalidity
 
 Replies apply to relayed events equally: the receiver cannot and does not
 distinguish originator from relay.
@@ -67,6 +68,12 @@ distinguish originator from relay.
 - **WHEN** a peer that has not finished initial sync receives an
   `EventPut`
 - **THEN** it replies `Nack { reason: NotSynced }`
+
+#### Scenario: Transient processing failure is not invalidity
+
+- **WHEN** parent retrieval fails transiently without establishing that
+  the event is invalid
+- **THEN** the receiver replies `Nack { reason: Busy }`, not `Invalid`
 
 #### Scenario: Malicious input keeps existing policing
 
@@ -119,125 +126,199 @@ or make retry decisions; that policy belongs to applications.
 - **THEN** the subscription still delivers it; consuming it is the
   application's choice
 
-### Requirement: darkirc persists outbound records before broadcast
+### Requirement: Durable oldest-first broadcast queue
 
-When darkirc publishes a chat message event, it SHALL first persist an
-outbound record containing the event id, the plaintext message fields
-needed to rebuild it, a state, an attempt counter, and a link to any
-superseding replacement event. Records SHALL survive restart. Records
-SHALL be closed (removable) once a positive outcome is observed or the
-attempt cap is reached.
+darkirc SHALL durably enqueue each accepted outgoing chat message in one
+global FIFO, preserving its plaintext rebuild fields and enqueue order
+across restart. Only the oldest unacknowledged logical message, the head,
+SHALL be eligible for event creation or network exposure. Later messages
+SHALL remain queued without publishing events, including through DAG
+relay/sync. The head SHALL be materialized and sent only when darkirc is
+DAG-synced and has the configured minimum number of peer connections.
+FIFO guarantees local send sequencing, not recipient display ordering.
 
-#### Scenario: Restart does not lose pending sends
+#### Scenario: Later messages cannot overtake the head
 
-- **WHEN** darkirc commits an outbound event locally, broadcasts it, and
-  the process restarts before any reply arrives
-- **THEN** after restart the outbound record is still present and the
-  delivery policy resumes evaluating it
+- **WHEN** messages A and B are accepted in that order and A is not ACK'd
+- **THEN** B remains queued without an event being created or exposed to
+  peers, even while A is disconnected, retrying, or parked
 
-### Requirement: Rebroadcast-first delivery policy
+#### Scenario: Offline enqueue order survives restart
 
-For an outbound record with no positive outcome, darkirc SHALL wait
-until it is DAG-synced and has at least a configured minimum number of
-peer connections, then rebroadcast the original event unchanged. It
-SHALL retry with backoff, bounded by a configured maximum number of
-rounds. A single `Has` outcome (either `inserted` value) SHALL close the
-record as delivered.
+- **WHEN** messages are accepted while offline or initially unsynced and
+  darkirc restarts before sending them
+- **THEN** their contents and queue order survive, and only the oldest
+  becomes eligible when sync/connectivity requirements are met
 
-#### Scenario: Reconnect triggers rebroadcast
+### Requirement: Recoverable head generations before network exposure
 
-- **WHEN** a pending record exists, the node is synced, and the minimum
-  connection count is reached
-- **THEN** the original event is rebroadcast unchanged
+Before exposing a head generation to the network, darkirc SHALL durably
+retain its exact event and blob. Unchanged retries SHALL remain possible
+after local DAG pruning. Replacements SHALL keep the logical message's
+queue position and preserve old-to-new supersession links and generation
+ids until ACK. Committing a replacement SHALL be crash-recoverable, with
+only one active generation; restart SHALL NOT bypass the head or generate
+a second replacement for an already committed transition.
 
-#### Scenario: Prior propagation is detected, not recreated
+#### Scenario: Pruning does not prevent unchanged rebroadcast
 
-- **WHEN** a rebroadcast reaches peers that already hold the event via
-  earlier propagation or in a retained older rotation slot
-- **THEN** their `Has { inserted: false }` replies close the record and
-  no recreation happens
+- **WHEN** a head event is pruned from all local DAG slots before ACK and
+  darkirc restarts
+- **THEN** its exact event and blob remain available for rebroadcast
 
-### Requirement: Ancestry reference counts as delivery evidence
+#### Scenario: Replacement persistence fails
 
-The delivery monitor SHALL treat a foreign event whose DAG ancestry
-includes one of its tracked outbound events as positive delivery
-evidence, closing the outbound record as delivered. This is a local
-computation over already-received events and adds no wire traffic.
+- **WHEN** a replacement cannot be durably retained
+- **THEN** it is not exposed to peers and the existing head remains queued
 
-#### Scenario: Foreign child closes the record
+#### Scenario: Crash after replacement commit
 
-- **WHEN** a new event arrives whose ancestry (walked through parent
-  references) contains a pending outbound event
-- **THEN** the outbound record is closed as delivered without waiting
-  for any explicit status reply
+- **WHEN** darkirc restarts after committing a replacement but before
+  broadcasting it
+- **THEN** it resumes that generation at the same queue position, with
+  the old generation's supersession link intact
 
-### Requirement: Recreate only on explicit evidence
+### Requirement: ACK-only queue advancement
 
-darkirc SHALL create a replacement event from the stored plaintext —
-fresh timestamp and DAG parents, fresh encryption nonce — only when
-either:
+A `Has` outcome with either inserted value for any generation of the head
+SHALL ACK its logical message. An accepted foreign event whose ancestry
+includes any such generation SHALL also ACK it, using local computation
+over received events without additional wire queries. Locally generated
+events alone SHALL NOT constitute foreign delivery evidence.
 
-- the rotation window for the original event is closed (known locally
-  from the rotation schedule, or indicated by `TooOld` nacks) and no
-  peer has answered `Has` for it, or
-- every observed reply is a nack and at least one carries reason
-  `Invalid`
+ACK SHALL durably dequeue the logical message exactly once, cancel its
+pending retries/recreation, and permit service of the next head. ACK
+processing SHALL NOT depend on retry timers or the current connection
+count. Duplicate, unrelated, or late statuses SHALL NOT remove another
+message. Concurrent recreation work SHALL NOT resurrect an ACK'd entry.
+An ACK is unverified network evidence, not proof of forwarding or recipient
+receipt; already-broadcast generations cannot be recalled.
 
-The following observations SHALL NOT trigger recreation while the
-rotation window is open: silence, `Nack { NotSynced }`, and
-`Nack { Busy }` mean retry later. Silence SHALL NOT trigger recreation
-even after the window closes when no status reply of any kind has ever
-been received from status-capable peers. A replacement links back via
-the supersession chain so the sender can correlate attempts locally.
+#### Scenario: Either Has variant advances the queue
 
-Recreation SHALL consume a fresh rate-limit slot when rate limiting is
-enabled; if the epoch budget is exhausted the attempt SHALL be parked
-and retried after epoch rollover rather than dropped or sent unproven.
-Recreation attempts SHALL be capped; once the cap is reached the record
-SHALL be closed as failed and the failure surfaced to the client.
+- **WHEN** the head receives `Has { inserted: true }` or
+  `Has { inserted: false }` for one of its generations
+- **THEN** it is durably dequeued and the next message becomes eligible
 
-#### Scenario: Rotation makes the original undeliverable
+#### Scenario: Foreign descendant acknowledges the head
 
-- **WHEN** a pending record's rotation window has closed and no peer
-  answers `Has` after a rebroadcast round
-- **THEN** a replacement event with fresh parents/timestamp is published
-  and linked via the supersession chain
+- **WHEN** an accepted foreign event's ancestry contains a head generation
+- **THEN** the head is ACK'd without waiting for a status reply
 
-#### Scenario: Holder answers before recreation
+#### Scenario: Own events are not ACKs
 
-- **WHEN** the rotation window has closed but a rebroadcast round
-  returns `Has { inserted: false }` from any peer holding the event in a
-  retained slot
-- **THEN** the record is closed as delivered and no replacement is
-  created
+- **WHEN** only a locally generated event references the head generation
+- **THEN** that reference does not advance the queue
 
-#### Scenario: Silence never recreates on its own
+#### Scenario: Old-generation ACK races with recreation
 
-- **WHEN** no status replies of any kind are observed (for example all
-  peers run versions without status support)
-- **THEN** the monitor keeps rebroadcasting at a bounded rate and does
-  not create replacements
+- **WHEN** an ACK for an older head generation arrives during recreation
+- **THEN** the logical message is dequeued exactly once and stale work
+  cannot restore it or start further retries
 
-#### Scenario: Transient nacks mean retry
+#### Scenario: Duplicate ACK after restart
 
-- **WHEN** observed replies are `Nack { NotSynced }` or `Nack { Busy }`
-  while the rotation window is open
-- **THEN** the monitor retries later and does not recreate
+- **WHEN** an ACK'd head has been durably dequeued, darkirc restarts, and
+  another ACK arrives for that removed message
+- **THEN** the current head remains queued unless independently ACK'd
 
-#### Scenario: Explicit rejection recreates
+### Requirement: Retry the head until ACK
 
-- **WHEN** every observed reply across the retry rounds is a nack and at
-  least one carries reason `Invalid`
-- **THEN** a replacement event is published (bounded by the attempt cap)
+For a materialized, unacknowledged head, darkirc SHALL rebroadcast the
+active event unchanged when sync/connectivity requirements are met. It
+SHALL use backoff for a configured number of rounds and continue at a
+capped slow rate thereafter. There SHALL be no total retry-round,
+recreation-attempt, or lifetime limit that discards an unacknowledged
+message or advances the queue. Negative replies SHALL NOT bypass backoff.
 
-#### Scenario: Budget exhaustion parks, not drops
+#### Scenario: Reconnect retries only the head
 
-- **WHEN** recreation is due but the rate-limit epoch budget is spent
-- **THEN** no unproven replacement is broadcast and the record waits for
-  the next epoch
+- **WHEN** queued messages exist and sync/connectivity requirements are
+  restored for a materialized head
+- **THEN** the head's active event is rebroadcast unchanged and later
+  messages are not sent
 
-#### Scenario: Attempt cap surfaces failure
+#### Scenario: Retry limits never discard the head
 
-- **WHEN** the configured recreation attempt cap is reached without any
-  positive outcome
-- **THEN** the record is closed as failed and the client is informed
+- **WHEN** repeated retry rounds and rotations pass without ACK
+- **THEN** the logical message remains at the head; retries and eligible
+  recreations continue at bounded rate while required resources exist
+
+### Requirement: Recreate the head only after expiry
+
+darkirc SHALL recreate the active head event only when its rotation
+window has closed, known locally or indicated by `TooOld`, and a
+rebroadcast round completes without ACK for any head generation. This
+SHALL apply even when no status replies have ever arrived. The replacement
+SHALL use fresh timestamp, parents, and encryption nonce, preserve queue
+position, and link the old generation to the new one locally.
+
+Silence, `Invalid`, `NotSynced`, and `Busy` alone SHALL NOT cause recreation
+or dequeue. Any ACK SHALL stop further recreation of that logical message.
+
+#### Scenario: Local expiry with silent peers
+
+- **WHEN** the head's active event is locally known to be expired and a
+  rebroadcast round completes without ACK, even with no replies ever
+  received, and materialization resources are available
+- **THEN** a replacement is durably retained and sent at the same queue
+  position; no later message is sent
+
+#### Scenario: Retained-slot holder answers before recreation
+
+- **WHEN** an expired head receives `Has { inserted: false }` from a peer
+  holding it in a retained slot
+- **THEN** it is ACK'd and dequeued without recreation
+
+#### Scenario: Rejection or silence during an open window
+
+- **WHEN** the active window is open and the head sees only silence,
+  `Invalid`, `NotSynced`, or `Busy`
+- **THEN** it retries unchanged with backoff, without recreation or dequeue
+
+### Requirement: Park rather than discard a blocked head
+
+Every new generation SHALL use a fresh rate-limit slot when rate limiting
+is enabled. Exhausted budget SHALL park the head until epoch rollover;
+missing identity SHALL park it until identity is available. Processing
+or storage failures SHALL preserve the head and prevent later sends from
+bypassing it. Retrying the same event SHALL NOT re-encrypt it or consume
+a new rate-limit slot. No unproven replacement SHALL be sent. Retryable
+errors SHALL be retried at bounded rate, not treated as terminal dequeue.
+Blocked-send error notices to connected clients SHALL NOT imply removal
+from the queue; receipt/status display remains out of scope.
+
+#### Scenario: Budget exhaustion parks the whole queue
+
+- **WHEN** the head needs a new generation but the rate-limit epoch budget
+  is spent
+- **THEN** the head waits for rollover without publishing an unproven
+  event, and later messages remain queued
+
+#### Scenario: Missing identity does not lose the head
+
+- **WHEN** an enabled rate-limit path cannot obtain an identity
+- **THEN** the head remains queued and can resume when identity becomes
+  available, without advancing to another message
+
+### Requirement: Bounded queue storage with explicit backpressure
+
+Queue storage SHALL have a configured bound covering pending messages,
+active event/blob data, and retained generation metadata. When a new
+enqueue cannot fit or cannot be persisted, darkirc SHALL explicitly reject
+it to the connected client rather than report acceptance. Storage pressure
+SHALL NOT evict unacknowledged entries or their required retry/correlation
+data. Recreation that cannot fit SHALL park the head. ACK'd entries MAY
+be removed to reclaim queue storage.
+
+#### Scenario: Full queue rejects a new send
+
+- **WHEN** a new message would exceed the queue storage bound
+- **THEN** its enqueue is explicitly rejected and existing queued messages
+  retain their contents and order
+
+#### Scenario: Generation metadata fills the storage budget
+
+- **WHEN** recreation would exceed the bound for retained generation data
+- **THEN** the head parks without dropping previous generation ids or
+  allowing later messages to bypass it

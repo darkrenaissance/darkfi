@@ -29,46 +29,65 @@ network.
   `event_pub`) that republishes every inbound `EventPutStatus` unfiltered.
   The event layer is a dumb pipe; delivery policy lives in applications.
 - darkirc (`bin/darkirc`):
-  - Persistent outbound table (kvdb tree, written before broadcast):
-    event id, plaintext privmsg, state, attempts, `superseded_by` link.
-  - Receipt aggregation keyed by (event_id, peer channel); a foreign
-    event whose DAG ancestry includes our outbound event also counts as
-    positive delivery evidence (free secondary signal, no wire change).
-  - Delivery monitor — rebroadcast-first when reconnected and synced.
-    Silence alone never triggers recreation while the rotation window
-    is open; recreate only when the window is closed (locally or via
-    `TooOld` nacks) with no holder answering, or when every observed
-    reply is an explicit rejection. `NotSynced`/`Busy`/silence mean
-    retry, not evidence.
+  - Durable global FIFO of logical messages, preserving plaintext and
+    enqueue order across restart. Only the oldest unacknowledged message
+    creates/exposes an event when synced and sufficiently connected;
+    later messages cannot bypass it. Every generation is retained before
+    network exposure, including its unchanged event/blob independently
+    of DAG pruning and old-to-new `superseded_by` links.
+  - ACK = `Has` for any head generation, or an accepted foreign event
+    whose ancestry includes that generation. ACK durably dequeues the
+    logical message exactly once and permits the next send. Receipt
+    aggregation uses ephemeral peer-channel identity, not peer addresses.
+  - Head-only worker retries unchanged with capped backoff until ACK,
+    without a lifetime or attempt cap. Recreate only after expiry
+    (local rotation knowledge or `TooOld`) and a rebroadcast round
+    without ACK. Silence, `Invalid`, `NotSynced`, and `Busy` alone
+    neither recreate nor dequeue. Local expiry permits recreation even
+    when no replies have ever arrived.
+  - Bound storage, including retained generation metadata. Reject new
+    enqueues explicitly when full; park the head if recreation cannot
+    fit. Never evict unacknowledged messages to make progress.
 - Recreate = new event from stored plaintext (fresh parents/timestamp,
-  fresh saltbox nonce), new RLN slot when RLN is enabled
-  (`BudgetExhausted` parks the attempt until the next epoch), bounded
-  attempt count, `superseded_by` chain for local correlation.
+  fresh saltbox nonce), new RLN slot when RLN is enabled, same queue
+  position, and `superseded_by` chain for local correlation. Exhausted
+  budget, missing identity, and processing/storage failures park the
+  head rather than discard it or send an unproven replacement.
 
 Non-goals: read receipts stored in the event graph (pollutes the DAG,
-burns RLN budget, leaks linkability); IRC-surface receipt display;
+burns RLN budget, leaks linkability); IRC-surface receipt/status display
+(enqueue rejection and blocked-send error notices to connected clients
+remain in scope);
 `bin/app` integration (delivery-state UI, subscriptions, or any other
 app-side changes — darkirc is the reference implementation here and the
 app consumes the same generic pipe in a follow-up change); pull-based
 possession verification via `EventReq`; `StaticPut` status (nickserv
 already has a deferred-broadcast queue); recipient-identifying receipts
-(nodes are anonymous; this is delivery-to-network evidence only). A
+(nodes are anonymous; this is delivery-to-network evidence only);
+recipient display ordering (FIFO governs local submission, not network
+propagation); automatic fail-and-skip or per-conversation queues. A
 `Privmsg` dedup field (`uid`) was considered and deliberately deferred:
-with the historical-slot check and the silence-never-recreates rule,
-recreation almost never overlaps with "someone already rendered the
-original", and adding such a field later is an additive version bump
-while removing it after shipping would be a wire break. Known accepted
-cost: rare duplicate renders during mixed-version rollout windows and
-under adversarial fake-nack griefing.
+the historical-slot check and the no-recreation-on-silence rule while
+the window is open reduce, but do not eliminate, overlap with "someone
+already rendered the original". Adding such a field later is an
+additive version bump while removing it after shipping would be a wire
+break. Accepted cost: duplicate renders during mixed-version rollout,
+with unreachable holders or lost replies, and under adversarial
+fake-nack griefing; their frequency is not established. Statuses are
+unverified evidence: even one peer with knowledge of an event id can
+lie `Has` and suppress recovery without forwarding the event.
+The global FIFO intentionally accepts indefinite head-of-line blocking,
+including across conversations. Backoff and storage bounds constrain
+resource use, not total lifetime retries or successful delivery.
 
 ## Capabilities
 
 ### New Capabilities
 
 - `msg-delivery-status`: outcome reporting for `EventPut` broadcast,
-  delivery-state exposure to applications, and the sender-side
-  rebroadcast/recreate policy implemented by darkirc as the reference
-  consumer.
+  delivery-state exposure to applications, and a durable ACK-driven FIFO
+  with head-only rebroadcast/recreation implemented by darkirc as the
+  reference consumer.
 
 ### Modified Capabilities
 
@@ -80,13 +99,20 @@ under adversarial fake-nack griefing.
   status emission, receipt publisher. Protocol-handler surface: must stay
   panic-free on untrusted input, keep flood/strike policing unchanged.
 - `bin/darkirc` (client.rs, server.rs, lib.rs, crypto/rln.rs interplay) —
-  outbound table, monitor task, recreate path.
+  outbound FIFO, head-only worker, enqueue/error path, recreate path.
 - `bin/tau/taud` and `bin/app` — untouched consumers; they may adopt the
   same `receipt_pub` pipe in follow-up changes.
 - No `Privmsg` or other consensus/content serialization changes in this
   change.
-- Wire compatibility: peers without `EventPutStatus` support simply never
-  reply; senders treat silence as "retry later, never a verdict", so
-  correctness does not depend on reply availability.
+- Wire compatibility is conditional on the first task proving unknown
+  message tolerance. If old channels reject the new message type, stop
+  and revisit capability gating before implementation continues. Old
+  peers do not reply; silence alone is not a verdict, but local expiry
+  can justify recreation without replies and may cause duplicates.
+- Persisted plaintext is sensitive local data, including after rollback.
+- Stop for human review before implementation changes touching RLN,
+  crypto, circuits, or canonical serialization. This plan does not
+  authorize changes to those protected areas.
 - Per repo policy, `event_graph` protocol changes require
-  `@anon-security-review` before apply/archive.
+  `@anon-security-review` before marking ready to apply/archive; this
+  triage does not replace CI or human review.

@@ -22,15 +22,19 @@ Constraints that shape the design:
 - RLN is currently inactive on the network (empty blobs), but the
   enabled path must stay correct: recreations must reserve a fresh
   message slot or risk self-slashing.
+- This plan is not crypto sign-off. Stop for human review before any
+  implementation change touching RLN, crypto, circuits, or canonical
+  serialization; the security-agent verdict does not replace that review.
 
 ## Goals / Non-Goals
 
 **Goals:**
 
 - Outcome replies for `EventPut` with zero policy in the generic layer.
-- darkirc: durable outbound tracking, rebroadcast-first, bounded
-  recreate only on explicit evidence; survives restart; safe with RLN
-  on or off.
+- darkirc: a durable global FIFO, oldest logical message first, retained
+  until acknowledged; rebroadcast unchanged and recreate only after
+  expiry. Preserve order across restart and use the existing RLN-safe
+  send path when rate limiting is enabled.
 - Stable wire format (`u8` discriminants), no new panics on untrusted
   input.
 
@@ -38,7 +42,7 @@ Constraints that shape the design:
 
 - Pull-based possession verification (`EventReq` challenges) — dropped;
   status replies plus ancestry references are the only signals, treated
-  as hints whose worst-case lie is bounded by attempt caps.
+  as unverified hints, not proof of delivery to a recipient.
 - `bin/app` integration — out of scope entirely (no UI, subscriptions,
   or send-path changes there). darkirc is the reference implementation;
   the app consumes the same generic `receipt_pub` pipe in a follow-up
@@ -46,8 +50,13 @@ Constraints that shape the design:
 - `Privmsg` payload changes (`uid`/dedup field) — deferred (see
   Alternatives Considered). No content serialization changes in this
   change.
-- Status for `StaticPut`, IRC-surface receipt display, read-by-recipient
-  semantics, changes to strike/flood policing or the relay path.
+- Status for `StaticPut`, IRC-surface receipt/status display,
+  read-by-recipient semantics, changes to strike/flood policing or the
+  relay path. Enqueue rejection and blocked-send error notices to
+  connected clients remain in scope; a delivery-status UI does not.
+- Recipient display ordering and wire-level deduplication. FIFO governs
+  local submission only; propagation and delayed generations can still
+  arrive out of order or render twice.
 
 ## Decisions
 
@@ -98,7 +107,8 @@ versioned together.
 | `!is_synced()` skip | `Nack { NotSynced }` |
 | `main_tree` duplicate | `Has { inserted: false }` |
 | `timestamp < genesis_ts` | check retained slots first: present → `Has { inserted: false }`; absent → `Nack { TooOld }` |
-| `validate_new` / structural / RLN / parent-fetch failure | `Nack { Invalid }` |
+| established structural / proof / parent invalidity | `Nack { Invalid }` |
+| transient parent-fetch failure or internal processing failure | `Nack { Busy }` |
 | internal insert error after verification | `Nack { Busy }` |
 | `insert_verified_signal` success | `Has { inserted: true }` |
 
@@ -127,69 +137,100 @@ chat, taud would want its own rules, the app embeds evgr in-process and
 needs the events for UI, not policy). Keeping the generic layer stateless
 also keeps it out of the security-sensitive blast radius.
 
-### D4: darkirc outbound table
+### D4: Durable global outbound FIFO
 
-New kvdb tree `darkirc_outbound`, key = event id, value (serial):
-`{ event_id, plaintext Privmsg fields, created_ts, state:
-Pending|Delivered|Failed, attempts: u16, last_broadcast_ts,
-superseded_by: Option<event_id> }`. Written in `publish_events` before
-`p2p.broadcast`. Plaintext-at-rest is inside the existing local-wallet
-trust boundary (same kvdb that holds RLN identity secrets).
+Use the `darkirc_outbound` kvdb tree for ordered logical-message records,
+not an unordered set of independently retried event ids. Persist a
+stable queue position, plaintext Privmsg fields, enqueue time, optional
+active event/blob, supersession metadata, and retry/parked state.
+Concurrent enqueues must obtain one durable order; restart preserves it.
+Accepting a send means its queue record is durable, including while
+offline or initially unsynced. On enqueue/storage-limit failure, report
+rejection to the connected client instead of claiming the send is queued.
 
-The `superseded_by` chain is the sender-side correlation handle: when a
-record is recreated, the new event id links back to the old, so clients
-can map statuses for any generation onto one logical message without
-any wire-level dedup field.
+All initial sends go through this queue. Only the head may materialize
+an event or expose it to the network, including via local DAG insertion
+and relay/sync. Later messages remain plaintext queue entries until every
+predecessor is acknowledged. The sender's queue order is not a guarantee
+of recipient display order.
 
-### D5: Delivery monitor (darkirc)
+Keep the head's exact active event and blob independently of DAG
+retention for unchanged retries after pruning. Keep generation ids and
+old-to-new `superseded_by` links until the logical message is acknowledged.
+A replacement keeps the same queue position; it is not appended as a
+new logical message. Persist its event/blob, active-generation pointer,
+and supersession link as one crash-recoverable transition before network
+exposure. Recovery must never create two active generations or bypass
+an unacknowledged head.
 
-One task on `IrcServer` (started alongside the client loop):
+Bound queue storage, including active event/blob and generation metadata.
+At capacity, reject new enqueues explicitly; if a replacement cannot be
+retained, park the head rather than evicting unacknowledged state.
+Acknowledged entries are removable. There is no lifetime or recreation
+attempt cap: storage pressure can block progress, not justify dropping
+the head. Plaintext-at-rest adds sensitive message history within the
+local kvdb trust boundary. Never log or publish that stored plaintext;
+rollback does not erase it.
 
-- Subscribes `receipt_pub`; per (event_id, channel-address) aggregates
-  replies; any `Has` (live or historical) closes the record as
-  Delivered.
-- Ancestry references count as positive evidence: when a new foreign
-  event is observed whose ancestry includes a tracked outbound event
-  (local walk via the existing `get_ancestors` machinery), the record
-  closes as Delivered. Zero wire cost; works among mixed-version peers.
-- Periodic sweep (30 s) over `Pending` records, gated by
+### D5: ACK-driven head-only worker
+
+One task on `IrcServer` owns queue advancement and retry scheduling:
+
+- Subscribe to `receipt_pub`; filter to tracked generation ids and use
+  ephemeral connection identity, never peer address, for any per-channel
+  aggregation. Do not persist connection identity or log peer addresses.
+- An ACK is either `Has` (either inserted value) for any generation of
+  the head, or an accepted foreign event whose ancestry includes such
+  a generation. Ancestry is local computation, not an additional query.
+  Locally generated events alone are not foreign delivery evidence.
+- ACK processing durably dequeues the logical message exactly once,
+  cancels pending retries/recreation, and permits the next head to run.
+  Duplicate/late statuses cannot dequeue another message. Serialize
+  ACK, materialization, and supersession transitions so stale work
+  cannot resurrect an acknowledged head. Already-broadcast generations
+  cannot be recalled.
+- A periodic wakeup (30 s) services only the head, with sends gated by
   `is_synced() && connection_count >= K` (K = 2, both session directions
-  counted via the existing session APIs).
-- No evidence → rebroadcast the original `EventPut` unchanged (event and
-  blob refetched from the local DAG + `dag_blob_fetch`), backoff
-  doubling from 30 s, at most `R_MAX` (= 5) rounds per window, then
-  keep rebroadcasting at the slow rate.
+  counted via the existing session APIs). ACK processing is not gated
+  on connectivity or the retry timer.
+- For a materialized head without ACK, rebroadcast its exact active
+  `EventPut`. Backoff doubles from 30 s for `R_MAX` (= 5) rounds, then
+  continues at the capped slow rate until ACK. There is no total-round
+  limit. Negative replies must not bypass the retry schedule.
+- Recreate only after the active event's rotation window has closed
+  (local rotation knowledge or `TooOld`) and a rebroadcast round has
+  completed without ACK for any generation. This includes locally
+  known expiry with no replies ever received. A retained-slot `Has`
+  cancels recreation. Silence, `Invalid`, `NotSynced`, and `Busy` alone
+  never trigger recreation or advance the queue.
 
-**Recreate only on explicit evidence (the complete trigger set):**
+The global FIFO intentionally accepts head-of-line blocking: an
+unacknowledged message blocks all later sends, even to other conversations.
+There is no automatic fail-and-skip policy.
 
-1. *Window closed, no holder:* the rotation window for the record's slot
-   has closed (known locally from the rotation schedule, or indicated by
-   `TooOld` nacks) and no peer answered `Has` in the rebroadcast round →
-   recreate. This covers: offline across rotation (the canonical case),
-   sent into the void while "synced" with zero peers, and clock-skew
-   `TooOld` while we believed the window open.
-2. *Explicit rejection while open:* every observed reply is a nack and
-   at least one is `Invalid` → recreate (bounded by `A_MAX`; reasons
-   surface to the user).
+### D6: Head materialization, recreation, and parking
 
-Never recreates on: silence (open window — this is what prevents
-mass-duplication during mixed-version rollout), `NotSynced`, `Busy`,
-or any `Has`. Silence after window close, with no status reply ever
-received from any status-capable peer, still recreates — local rotation
-knowledge is explicit evidence, and the alternative (gray forever,
-possibly lost) is worse than a rare duplicate for old-version holders.
+Reuse the existing send-path internals only for an eligible head:
+stored plaintext → `try_encrypt` (fresh nonce for each new generation)
+→ `Event::new` (fresh tips/timestamp) → existing RLN reservation/proof
+path when enabled. Durably persist the prepared event/blob and any
+supersession transition before local insertion or broadcast makes it
+network-visible. Then use the existing insertion/broadcast path. Recover
+a committed generation by retrying that generation, not by regenerating
+it. Unchanged rebroadcast never re-encrypts or reserves a new RLN slot.
 
-### D6: Recreate procedure
+Recreation stays at the head and uses a fresh nonce and, when enabled,
+a fresh RLN message slot. `BudgetExhausted` parks until epoch rollover;
+`MissingIdentity` parks until an identity is available. Processing and
+storage failures likewise preserve the head and prevent later sends
+from bypassing it. Enqueue/blocked-send error notices may inform a
+connected client but do not imply dequeue or terminal failure. Retry
+these conditions with bounded rate; never send an unproven replacement
+or turn an error into a queue-advancement signal.
 
-Reuse the existing send path internals: stored plaintext →
-`try_encrypt` (fresh nonce — never reuse the old ciphertext) →
-`Event::new` (fresh tips/timestamp) → RLN branch:
-`reserve_rln_message_id` → `BudgetExhausted` parks the record until
-epoch rollover; `MissingIdentity` closes it as Failed → `create_signal`
-→ `insert_signal_with_blob` → broadcast → write the new record with
-`superseded_by` pointing at the old; `attempts` is shared across the
-chain and caps at `A_MAX` (= 2), then Failed + client notice (IRC error
-reply to the connected client).
+The enabled RLN reservation/recovery path requires human review before
+implementation. This design does not authorize slot reuse, crypto
+changes, or altered RLN semantics.
 
 ## Alternatives Considered
 
@@ -210,26 +251,32 @@ verification with extra steps; (iv) no rejection reasons.
 **`Privmsg.uid` dedup field.** Deferred. It protects against duplicate
 renders when a recreate fires while someone already holds the original.
 With D2's historical check and D5's explicit-evidence rule, that overlap
-shrinks to: mixed-version rollout windows (old peers can't answer
-`Has`), adversarial fake-nack griefing, and recreate-of-recreate — all
-rare and cosmetic. Asymmetry decides: adding a payload field later is an
+is reduced but not eliminated: mixed-version rollout windows (old peers
+can't answer `Has`), unreachable holders, lost replies, adversarial
+fake-nack griefing, and recreate-of-recreate can produce duplicates.
+Their frequency is not established. Asymmetry decides: adding a payload field later is an
 additive `Privmsg.version` bump; removing one after shipping is a wire
 break. Revisit on field evidence of annoying duplicates.
 
-**Hold-at-send (don't broadcast with zero connections).** Candidate
-follow-up: gate `publish_events` on connection count so doomed events
-aren't created at all. Not required for correctness (D5 handles them);
-deferred as a small polish item.
+**Independent retries and hold-at-send.** Independent record sweeps were
+rejected because later messages could overtake an unacknowledged send.
+Holding messages before event creation is now part of the FIFO design:
+only an eligible head is materialized. Per-conversation queues and
+automatic fail-and-skip are not part of this change.
 
 ## Risks / Trade-offs
 
 - [Fake statuses: a peer can lie `Has` (suppresses recreate → silent
-  loss) or spam `Nack` (forces recreates → budget burn + injected
-  duplicates)] → bounded: statuses only count for ids in our own
-  outbound table (blake3 ids are unguessable to non-recipients),
-  attempts capped at `A_MAX`, and a peer that has the event relays it
-  anyway. Total eclipse defeats this — accepted (an eclipsed node has
-  larger problems).
+  loss) or lie `TooOld` (forces recreates → budget burn + duplicates)]
+  → only tracked ids affect state; backoff, storage bounds, and enabled
+  RLN budget bound resource use/rate, not total lifetime attempts. Even
+  one malicious connected peer that knows an id can falsely acknowledge
+  it without forwarding. ACK means observed network-delivery evidence,
+  not verified delivery to a recipient. This limitation is accepted.
+- [Head-of-line blocking and indefinite retention] → intentional
+  ACK-only dequeue; no liveness guarantee without ACK. Cap storage and
+  reject new enqueues explicitly rather than silently evicting messages.
+  Storage exhaustion may also park recreation; no later send bypasses it.
 - [Reply amplification: one reply per relay edge] → ~70 bytes on the
   wire against events measured in hundreds of bytes to kilobytes, on
   RLN-rate-limited volume; the flood window is untouched (replies are
@@ -241,30 +288,34 @@ deferred as a small polish item.
   replies until a capability flag exists. First implementation task
   resolves this.
 - [Duplicate renders without uid: mixed-version transition, adversarial
-  nacks, reply loss] → accepted, rare, cosmetic; documented in the
+  nacks, reply loss] → accepted possibility, frequency unknown; documented in the
   proposal's non-goals; additive fix available later if needed.
-- [Clock skew: slightly-future local timestamps can earn spurious
-  `TooOld` nacks] → worst case is a harmless recreate.
-- [RLN interplay: recreate with a stale slot would self-slash] →
-  impossible by construction: recreations go through
-  `reserve_rln_message_id`, parking on exhaustion, never reusing a
-  reserved slot.
+- [Clock skew: disagreement about rotation boundaries can earn spurious
+  `TooOld` nacks] → recreation can duplicate a message and consume
+  budget; bounded in rate and storage, not in total attempts or harm.
+- [RLN interplay: recreation with a reused slot risks self-slashing] →
+  use `reserve_rln_message_id`, park on exhaustion, never reuse a
+  reserved slot; require human review and enabled-path tests, including
+  restart handling, before relying on this guarantee.
 - [Plaintext messages persisted in kvdb] → same trust boundary as the
   existing wallet/RLN secrets; tree is local-only.
 
 ## Migration Plan
 
 Additive wire message first (`src/event_graph`), verified against a
-mixed-version two-node test; then darkirc table+monitor. No content
+mixed-version two-node test; then darkirc queue+worker. No content
 serialization changes, so no coordination with `darkirc-mod` is
 required. Rollback: the message and records are inert for old code;
-reverting leaves a harmless `darkirc_outbound` tree. App integration is
+reverting leaves a `darkirc_outbound` tree containing sensitive
+plaintext and pending state, not a harmless cache. Handle retained data
+under the same local storage protections. App integration is
 a follow-up change that reuses the same `receipt_pub` pipe and copies
-the darkirc monitor logic.
+the darkirc queue policy.
 
 ## Open Questions
 
-- Exact values of K, `R_MAX`, `A_MAX`, sweep interval — tuning consts,
-  safe to adjust after rollout.
+- Exact values of K, `R_MAX`, wakeup interval, and queue storage limit —
+  tuning parameters; they must not change head-only service, ACK-only
+  dequeue, bounded resource use, or the absence of a lifetime retry cap.
 - Whether taud later reuses the same policy for task events — deferred,
   out of scope.
