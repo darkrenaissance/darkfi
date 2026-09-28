@@ -69,7 +69,7 @@ pub fn create_setting(name: &str) -> SceneNode {
         PropertyPermission::default(),
     );
     prop.set_enum_items(vec!["tcp", "tor"]).unwrap();
-    prop.set_defaults_str(vec!["tcp".to_string()]).unwrap();
+    prop.set_default_enum(0, "tcp").unwrap();
     node.add_property(prop).unwrap();
 
     let mut prop = Property::new(

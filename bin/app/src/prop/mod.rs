@@ -102,11 +102,14 @@ impl Role {
     pub const Ignored: Role = Role(1 << 3);
     /// Theme engine writes (stamped by `ThemeCtx` setters)
     pub const Theme: Role = Role(1 << 4);
+    /// Debug backend (netdbg/pydrk) override: bypasses all permission
+    /// masks. Never part of a mask, never used by app code.
+    pub const Root: Role = Role(1 << 5);
 
     /// The empty mask
     pub const NONE: Role = Role(0);
     /// All roles
-    pub const ALL: Role = Role(0b1_1111);
+    pub const ALL: Role = Role(0b11_1111);
 
     /// True when every bit of `other` is also set in `self`.
     pub fn contains(self, other: Role) -> bool {
@@ -379,16 +382,18 @@ impl Property {
         *self.node.lock().unwrap() = Some(node);
     }
 
-    /// Read-mask check for the acting role.
+    /// Read-mask check for the acting role. `Role::Root` overrides
+    /// every mask.
     #[inline]
     pub fn can_read(&self, role: Role) -> bool {
-        self.permission.read.contains(role)
+        role == Role::Root || self.permission.read.contains(role)
     }
 
-    /// Write-mask check for the acting role.
+    /// Write-mask check for the acting role. `Role::Root` overrides
+    /// every mask.
     #[inline]
     pub fn can_write(&self, role: Role) -> bool {
-        self.permission.write.contains(role)
+        role == Role::Root || self.permission.write.contains(role)
     }
 
     /// Central write enforcement: called at the top of every mutating
@@ -2256,6 +2261,26 @@ mod tests {
         // The widget's computed value stands
         prop.set_f32(atom, Role::Internal, 0, 0.5).unwrap();
         assert_eq!(prop.get_f32(0).unwrap(), 0.5);
+    }
+
+    #[test]
+    fn test_permission_root_override() {
+        // Role::Root (netdbg backend) bypasses every mask, even masks
+        // that exclude all other roles.
+        let mut temp = Property::new(
+            "alpha",
+            PropertyType::Float32,
+            PropertySubType::Null,
+            PropertyPermission { read: Role::ALL, write: Role::Internal | Role::App },
+        );
+        temp.set_defaults_f32(vec![0.]).unwrap();
+        let prop = Arc::new(temp);
+        let atom = &mut PropertyAtomicGuard::none();
+
+        assert!(prop.can_write(Role::Root));
+        assert!(prop.can_read(Role::Root));
+        prop.set_f32(atom, Role::Root, 0, 7.).unwrap();
+        assert_eq!(prop.get_f32(0).unwrap(), 7.);
     }
 
     #[test]

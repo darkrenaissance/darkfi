@@ -22,6 +22,7 @@ use crate::{
             create_button, create_dropdown, create_layer, create_singleline_edit, create_slider,
             create_text, create_vector_art,
         },
+        schema::menu::edit_switch::edit_switch,
         App,
     },
     expr::{self, Compiler},
@@ -52,6 +53,8 @@ mod android_ui_consts {
     pub const SETTING_LABEL_X: f32 = 40.;
     pub const SETTING_LABEL_LINESPACE: f32 = 140.;
     pub const SEARCH_BAR_Y: f32 = SETTING_LABEL_LINESPACE;
+    pub const SEARCH_INPUT_FONTSIZE: f32 = 32.;
+    pub const SEARCH_INPUT_BASELINE: f32 = 32.;
     pub const SETTING_LABEL_Y: f32 = (SETTING_LABEL_LINESPACE - 1.2 * SETTING_LABEL_FONTSIZE) / 2.;
     pub const SLIDER_PAD: f32 = 20.;
     pub const RESET_BTN_W: f32 = 70.;
@@ -97,6 +100,8 @@ mod ui_consts {
     pub const SETTING_LABEL_X: f32 = 20.;
     pub const SETTING_LABEL_LINESPACE: f32 = 60.;
     pub const SEARCH_BAR_Y: f32 = SETTING_LABEL_LINESPACE;
+    pub const SEARCH_INPUT_FONTSIZE: f32 = 16.;
+    pub const SEARCH_INPUT_BASELINE: f32 = 16.;
     pub const SETTING_LABEL_Y: f32 = (SETTING_LABEL_LINESPACE - 1.2 * SETTING_LABEL_FONTSIZE) / 2.;
     pub const SLIDER_PAD: f32 = 10.;
     pub const RESET_BTN_W: f32 = 35.;
@@ -352,6 +357,7 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish) {
     layer_node.link(node);
 
     // Search Bar Input
+    let mut edit_nodes: Vec<SceneNodePtr> = vec![];
     let editbox_node = create_singleline_edit("search_input");
     editbox_node.set_property_bool(atom, Role::App, "is_active", true).unwrap();
     editbox_node.set_property_bool(atom, Role::App, "is_focused", true).unwrap();
@@ -381,8 +387,16 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish) {
     editbox_node.set_property_u32(atom, Role::App, "z_index", 2).unwrap();
     editbox_node.set_property_bool(atom, Role::App, "is_active", true).unwrap();
     editbox_node.set_property_bool(atom, Role::App, "is_focused", true).unwrap();
-    editbox_node.get_property("font_size").unwrap().set_f32(atom, Role::App, 0, 16.).unwrap();
-    editbox_node.get_property("baseline").unwrap().set_default_f32(0, 16.).unwrap();
+    editbox_node
+        .get_property("font_size")
+        .unwrap()
+        .set_default_f32(0, SEARCH_INPUT_FONTSIZE)
+        .unwrap();
+    editbox_node
+        .get_property("baseline")
+        .unwrap()
+        .set_default_f32(0, SEARCH_INPUT_BASELINE)
+        .unwrap();
 
     // Search icon
     let node = create_vector_art("search_icon");
@@ -529,7 +543,8 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish) {
             )
         })
         .await;
-    layer_node.link(node);
+    layer_node.link(node.clone());
+    edit_nodes.push(node);
 
     // Search background
     let node = create_vector_art("search_bg");
@@ -663,7 +678,7 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish) {
         let setting_clone = setting.clone();
         let setting_name = setting_clone.name.clone();
         let is_bool = matches!(setting_clone.get_value(), PropertyValue::Bool(_));
-        let is_enum = matches!(setting_clone.get_value(), PropertyValue::Enum(_));
+        let is_enum = setting_clone.prop.typ == PropertyType::Enum;
 
         setting_y += SETTING_LABEL_LINESPACE;
 
@@ -958,6 +973,7 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish) {
         setting_layer_node.link(label_value_node);
 
         let editz_text: Option<PropertyStr>;
+        let mut row_edit_node: Option<SceneNodePtr> = None;
         if !is_enum {
             // Text edit
             let editbox_node = create_singleline_edit("value_editbox");
@@ -1056,7 +1072,9 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish) {
                     )
                 })
                 .await;
-            setting_layer_node.link(node);
+            setting_layer_node.link(node.clone());
+            edit_nodes.push(node.clone());
+            row_edit_node = Some(node);
         } else {
             editz_text = None;
             let value_prop = setting_clone.prop.clone();
@@ -1536,9 +1554,13 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish) {
                 let (slot, recvr) = Slot::new("select_clicked");
                 node.register("click", slot).unwrap();
                 let select2 = select.clone();
+                let row_edit_node2 = if is_bool { None } else { row_edit_node.clone() };
                 let listen_click = app.ex.spawn(async move {
                     while let Ok(_) = recvr.recv().await {
                         select2();
+                        if let Some(edit_node) = &row_edit_node2 {
+                            edit_node.call_method("focus", vec![]).await.unwrap();
+                        }
                     }
                 });
                 app.tasks.lock().push(listen_click);
@@ -1711,6 +1733,8 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish) {
         }
     }
 
+    edit_switch(&mut app.tasks.lock(), &edit_nodes, app.ex.clone());
+
     // Sync with current settings
     {
         let sg_root2 = app.sg_root.clone();
@@ -1869,6 +1893,7 @@ async fn update_setting(
         node.set_property_bool(atom, Role::App, "is_active", false).unwrap();
         node.set_property_bool(atom, Role::App, "is_focused", false).unwrap();
         node.set_property_str(atom, Role::App, "text", "").unwrap();
+        node.call_method("unfocus", vec![]).await.unwrap();
     }
 
     let Some(editz_text) = editz_text else { return };

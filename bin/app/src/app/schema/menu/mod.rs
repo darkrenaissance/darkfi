@@ -119,7 +119,7 @@ mod ui_consts {
 pub mod channel;
 pub mod contact;
 mod edit_buttons;
-mod edit_switch;
+pub mod edit_switch;
 
 pub async fn make(
     app: &App,
