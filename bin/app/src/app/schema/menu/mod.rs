@@ -66,7 +66,7 @@ mod android_ui_consts {
     pub const BTN_TEXT_FONTSIZE: f32 = 50.;
     pub const BTN_TEXT_Y: f32 = 30.;
     pub const LABEL_LINESPACE: f32 = 60.;
-    pub const WALLET_SQUARE: f32 = 255.;
+    pub const WALLET_SQUARE: f32 = 240.;
     pub const WALLET_BORDER_T: f32 = 1.;
     pub const WALLET_ICON_SCALE: f32 = 17.25;
     pub const MENU_ICON_SCALE: f32 = 220.5;
@@ -355,14 +355,14 @@ pub async fn make(
         node.setup(|me| VectorArt::new(me, app.renderer.clone(), app.redraw_trigger.clone())).await;
     layer_node.link(node);
 
-    // Write / Menu button
+    // Write / Menu button (stacked above the settings button)
     let node = create_button("write_btn");
     node.set_property_bool(atom, Role::App, "is_active", true).unwrap();
     let prop = node.get_property("rect").unwrap();
     let code = cc.compile("w - WALLET_SQUARE - CHANNEL_LABEL_X").unwrap();
     prop.set_default_expr(0, code).unwrap();
     let code = cc
-        .compile("h - WALLET_SQUARE - CHANNEL_LABEL_X - MENU_ICON_GAP - MENU_ICON_SCALE * MENU_ICON_ART_H")
+        .compile("h - 2 * CHANNEL_LABEL_X - 2 * MENU_BTN_W_R - MENU_ICON_GAP - MENU_ICON_SCALE * MENU_ICON_ART_H")
         .unwrap();
     prop.set_default_expr(1, code).unwrap();
     prop.set_default_f32(2, WALLET_SQUARE).unwrap();
@@ -398,7 +398,7 @@ pub async fn make(
         .unwrap();
     prop.set_default_expr(0, code).unwrap();
     let code = cc
-        .compile("h - WALLET_SQUARE - CHANNEL_LABEL_X - MENU_ICON_GAP + MENU_ICON_SCALE * MENU_ICON_ART_Y1")
+        .compile("h - 2 * CHANNEL_LABEL_X - 2 * MENU_BTN_W_R - MENU_ICON_GAP + MENU_ICON_SCALE * MENU_ICON_ART_Y1")
         .unwrap();
     prop.set_default_expr(1, code).unwrap();
     prop.set_default_f32(2, MENU_ICON_SCALE).unwrap();
