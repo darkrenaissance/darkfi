@@ -301,8 +301,7 @@ pub async fn make(
     prop.set_default_f32(0, 0.).unwrap();
     prop.set_default_f32(1, MAIN_MENU_HEADER_HEIGHT).unwrap();
     prop.set_default_expr(2, expr::load_var("w")).unwrap();
-    let code = cc.compile("h - MAIN_MENU_HEADER_HEIGHT").unwrap();
-    prop.set_default_expr(3, code).unwrap();
+    prop.set_default_f32(3, 460.).unwrap();
     main_menu_layer.set_property_bool(atom, Role::App, "is_visible", false).unwrap();
     main_menu_layer.set_property_u32(atom, Role::App, "z_index", 10).unwrap();
     main_menu_layer.set_property_u32(atom, Role::App, "priority", 10).unwrap();
@@ -344,7 +343,15 @@ pub async fn make(
         expr::const_f32(0.),
         expr::load_var("w"),
         expr::load_var("h"),
-        [0., 0., 0., 1.],
+        [0., 0., 0., 0.4],
+    );
+    shape.add_outline(
+        expr::const_f32(0.),
+        expr::const_f32(0.),
+        expr::load_var("w"),
+        expr::load_var("h"),
+        1.,
+        rgba!(0x00F0FFff),
     );
     node.set_property_shape(atom, Role::App, "shape", shape).unwrap();
     let node =
@@ -353,14 +360,14 @@ pub async fn make(
 
     let node = create_text("theme_txt_label");
     let prop = node.get_property("rect").unwrap();
-    prop.set_default_f32(0, 0.).unwrap();
-    prop.set_default_f32(1, 0.).unwrap();
+    prop.set_default_f32(0, 40.).unwrap();
+    prop.set_default_f32(1, 60.).unwrap();
     prop.set_default_f32(2, 1000.).unwrap();
     prop.set_default_f32(3, 1000.).unwrap();
-    node.get_property("font_size").unwrap().set_default_f32(0, 40.).unwrap();
+    node.get_property("font_size").unwrap().set_default_f32(0, 28.).unwrap();
     node.set_property_str(atom, Role::App, "text", "THEME").unwrap();
     let prop = node.get_property("text_color").unwrap();
-    prop.set_default_f32_multi(&[1., 1., 1., 1.]).unwrap();
+    prop.set_default_f32_multi(&rgba!(0x77FFBEff)).unwrap();
     node.set_property_u32(atom, Role::App, "z_index", 3).unwrap();
 
     let label_node = node
@@ -380,11 +387,13 @@ pub async fn make(
     let prop = node.get_property("rect").unwrap();
     let code = cc.compile("w / 2").unwrap();
     prop.set_default_expr(0, code).unwrap();
-    prop.set_default_f32(1, 0.).unwrap();
+    prop.set_default_f32(1, 60.).unwrap();
     prop.set_default_f32(2, 1000.).unwrap();
     prop.set_default_f32(3, 1000.).unwrap();
-    node.get_property("font_size").unwrap().set_default_f32(0, 40.).unwrap();
-    node.set_property_str(atom, Role::App, "text", "THEME").unwrap();
+    node.get_property("font_size").unwrap().set_default_f32(0, 32.).unwrap();
+    let setting_node = app.sg_root.lookup_node("/setting").unwrap();
+    let curr_theme = setting_node.get_property_enum("theme").unwrap();
+    node.set_property_str(atom, Role::App, "text", curr_theme).unwrap();
     let prop = node.get_property("text_color").unwrap();
     prop.set_default_f32_multi(&[1., 1., 1., 1.]).unwrap();
     node.set_property_u32(atom, Role::App, "z_index", 3).unwrap();
@@ -506,6 +515,141 @@ pub async fn make(
 
     let node =
         node.setup(|me| Button::new(me, app.renderer.clone(), app.redraw_trigger.clone())).await;
+    main_menu_layer.link(node);
+
+    let node = create_button("about_btn");
+    node.set_property_bool(atom, Role::App, "is_active", true).unwrap();
+    node.set_property_u32(atom, Role::App, "z_index", 2).unwrap();
+    node.set_property_u32(atom, Role::App, "priority", 1).unwrap();
+    let prop = node.get_property("rect").unwrap();
+    prop.set_default_f32(0, 40.).unwrap();
+    prop.set_default_f32(1, 200.).unwrap();
+    prop.set_default_f32(2, 120.).unwrap();
+    prop.set_default_f32(3, 120.).unwrap();
+
+    let sg_root = app.sg_root.clone();
+    let redraw = app.redraw_trigger.clone();
+    let ex = app.ex.clone();
+    let (slot, recvr) = Slot::new("about_clicked");
+    node.register("click", slot).unwrap();
+    let listen_click = ex.spawn(async move {
+        while recvr.recv().await.is_ok() {
+            i!("clicked about");
+        }
+    });
+    app.tasks.lock().push(listen_click);
+
+    let node =
+        node.setup(|me| Button::new(me, app.renderer.clone(), app.redraw_trigger.clone())).await;
+    main_menu_layer.link(node);
+
+    let node = create_button("exit_btn");
+    node.set_property_bool(atom, Role::App, "is_active", true).unwrap();
+    node.set_property_u32(atom, Role::App, "z_index", 2).unwrap();
+    node.set_property_u32(atom, Role::App, "priority", 1).unwrap();
+    let prop = node.get_property("rect").unwrap();
+    prop.set_default_f32(0, 40.).unwrap();
+    prop.set_default_f32(1, 300.).unwrap();
+    prop.set_default_f32(2, 220.).unwrap();
+    prop.set_default_f32(3, 80.).unwrap();
+
+    let sg_root = app.sg_root.clone();
+    let redraw = app.redraw_trigger.clone();
+    let ex = app.ex.clone();
+    let (slot, recvr) = Slot::new("about_clicked");
+    node.register("click", slot).unwrap();
+    let listen_click = ex.spawn(async move {
+        while recvr.recv().await.is_ok() {
+            i!("clicked exit");
+            miniquad::window::request_quit();
+        }
+    });
+    app.tasks.lock().push(listen_click);
+
+    let node =
+        node.setup(|me| Button::new(me, app.renderer.clone(), app.redraw_trigger.clone())).await;
+    main_menu_layer.link(node);
+
+    let node = create_vector_art("other_btn_bg");
+    let prop = node.get_property("rect").unwrap();
+    prop.set_default_f32(0, 40.).unwrap();
+    prop.set_default_f32(1, 200.).unwrap();
+    prop.set_default_f32(2, 220.).unwrap();
+    prop.set_default_f32(3, 300.).unwrap();
+    node.set_property_bool(atom, Role::App, "is_visible", true).unwrap();
+    node.set_property_u32(atom, Role::App, "z_index", 1).unwrap();
+    let mut shape = VectorShape::new();
+    shape.add_outline(
+        expr::const_f32(0.),
+        expr::const_f32(0.),
+        expr::const_f32(160.),
+        expr::const_f32(80.),
+        2.,
+        rgba!(0x14AEB8ff),
+    );
+    shape.add_outline(
+        expr::const_f32(0.),
+        expr::const_f32(100.),
+        expr::const_f32(220.),
+        expr::const_f32(180.),
+        2.,
+        rgba!(0xFF284Eff),
+    );
+    node.set_property_shape(atom, Role::App, "shape", shape).unwrap();
+    let node =
+        node.setup(|me| VectorArt::new(me, app.renderer.clone(), app.redraw_trigger.clone())).await;
+    main_menu_layer.link(node);
+
+    let node = create_text("about_btn_label");
+    let prop = node.get_property("rect").unwrap();
+    prop.set_default_f32(0, 80.).unwrap();
+    prop.set_default_f32(1, 220.).unwrap();
+    prop.set_default_f32(2, 1000.).unwrap();
+    prop.set_default_f32(3, 1000.).unwrap();
+    node.get_property("font_size").unwrap().set_default_f32(0, 28.).unwrap();
+    node.set_property_str(atom, Role::App, "text", "about").unwrap();
+    let prop = node.get_property("text_color").unwrap();
+    prop.set_default_f32_multi(&rgba!(0x14AEB8ff)).unwrap();
+    node.set_property_u32(atom, Role::App, "z_index", 3).unwrap();
+
+    let node = node
+        .setup(|me| {
+            Text::new(
+                me,
+                window_scale.clone(),
+                app.renderer.clone(),
+                i18n_fish.clone(),
+                app.redraw_trigger.clone(),
+            )
+        })
+        .await;
+    let theme_label = PropertyStr::wrap(&node, Role::App, "text", 0).unwrap();
+    main_menu_layer.link(node);
+
+    let node = create_text("exit_btn_label");
+    let prop = node.get_property("rect").unwrap();
+    prop.set_default_f32(0, 80.).unwrap();
+    prop.set_default_f32(1, 320.).unwrap();
+    prop.set_default_f32(2, 1000.).unwrap();
+    prop.set_default_f32(3, 1000.).unwrap();
+    node.get_property("font_size").unwrap().set_default_f32(0, 28.).unwrap();
+    node.set_property_str(atom, Role::App, "text", "exit app").unwrap();
+    let prop = node.get_property("text_color").unwrap();
+    prop.set_default_f32_multi(&rgba!(0xFF284Eff)).unwrap();
+    node.set_property_u32(atom, Role::App, "z_index", 3).unwrap();
+
+    let node = node
+        .setup(|me| {
+            Text::new(
+                me,
+                window_scale.clone(),
+                app.renderer.clone(),
+                i18n_fish.clone(),
+                app.redraw_trigger.clone(),
+            )
+        })
+        .await;
+    let theme_label = PropertyStr::wrap(&node, Role::App, "text", 0).unwrap();
     main_menu_layer.link(node);
 
     // The first-run splash and the king video background are theme
