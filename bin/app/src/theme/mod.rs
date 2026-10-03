@@ -45,6 +45,7 @@ use crate::{
     ui::{get_ui_object3, get_ui_object_ptr, RedrawTrigger},
 };
 
+pub mod light;
 pub mod scifi;
 
 /// Every token a theme may set, and the value it falls back to when no
@@ -63,57 +64,33 @@ fn color_prop(name: &str, val: [f32; 4]) -> Property {
     prop
 }
 
-fn f32_prop(name: &str, val: f32) -> Property {
-    let mut prop = Property::new(
-        name,
-        PropertyType::Float32,
-        PropertySubType::Pixel,
-        PropertyPermission { read: Role::ALL, write: Role::Theme },
-    );
-    prop.set_defaults_f32(vec![val]).unwrap();
-    prop
-}
-
 /// The shared token vocabulary with the `minimal` palette as defaults.
-/// Schema default-wiring may reference ONLY these tokens — a default
-/// must never dangle when its theme is inactive (design D6). Themes are
-/// not boxed in by this list: they mint private tokens as tracked child
-/// nodes under `/theme/<name>` (engine task).
+/// Every token here is wired by schema `wire_color` calls — nothing
+/// unused ships in the vocabulary. A default must never dangle when
+/// its theme is inactive (design D6). Themes are not boxed in by this
+/// list: they mint private tokens as tracked child nodes under
+/// `/theme/<name>` (engine task).
 pub fn shared_token_props() -> Vec<Property> {
     vec![
         // Generic surfaces
         color_prop("text_color", [0.92, 0.92, 0.92, 1.]),
-        color_prop("text_dim_color", [0.62, 0.62, 0.62, 1.]),
-        color_prop("bg_color", [0.07, 0.07, 0.07, 1.]),
-        color_prop("bg_dim_color", [0.04, 0.04, 0.04, 1.]),
-        color_prop("bg_overlay_color", [0.03, 0.03, 0.03, 0.92]),
-        color_prop("accent_color", [0.75, 0.75, 0.75, 1.]),
-        color_prop("sep_color", [0.28, 0.28, 0.28, 1.]),
         // Edit widget
         color_prop("edit.text_color", [0.92, 0.92, 0.92, 1.]),
-        color_prop("edit.bg_color", [0.10, 0.10, 0.10, 1.]),
         color_prop("edit.hi_bg_color", [0.35, 0.35, 0.35, 1.]),
         color_prop("edit.text_hi_color", [0., 0., 0., 1.]),
         color_prop("edit.cursor_color", [0.90, 0.90, 0.90, 1.]),
-        color_prop("edit.placeholder_color", [0.50, 0.50, 0.50, 1.]),
         color_prop("edit.action_fg_color", [0.90, 0.90, 0.90, 1.]),
         color_prop("edit.action_bg_color", [0.15, 0.15, 0.15, 1.]),
         // Menu widget
         color_prop("menu.bg_color", [0.05, 0.05, 0.05, 0.5]),
-        color_prop("menu.sep_color", [0.28, 0.28, 0.28, 1.]),
         color_prop("menu.role1_color", [0.60, 0.60, 0.60, 1.]),
         color_prop("menu.role2_color", [0.75, 0.75, 0.75, 1.]),
         // ChatView
-        color_prop("chatview.bg_color", [0.02, 0.02, 0.02, 1.]),
         color_prop("chatview.timestamp_color", [0.55, 0.55, 0.55, 1.]),
         color_prop("chatview.text_color", [0.92, 0.92, 0.92, 1.]),
         color_prop("chatview.hi_bg_color", [0.25, 0.25, 0.25, 1.]),
         color_prop("chatview.action_text_color", [0.80, 0.80, 0.80, 1.]),
         color_prop("chatview.url_text_color", [0.70, 0.80, 0.90, 1.]),
-        // Typography / spacing
-        f32_prop("font_size", 18.),
-        f32_prop("message_spacing", 8.),
-        f32_prop("line_height", 1.2),
     ]
 }
 
@@ -153,21 +130,6 @@ pub fn wire_color(
         prop.set_default_expr(i, expr::load_var(&local))?;
         prop.add_depend(Role::App, &token, i, local);
     }
-    Ok(())
-}
-
-/// Single-f32 variant of [`wire_color`] for `font_size`, spacing, etc.
-pub fn wire_f32(
-    node: &SceneNode,
-    prop_name: &str,
-    theme: &SceneNode,
-    token_name: &str,
-) -> Result<()> {
-    let prop = node.get_property(prop_name).ok_or(Error::PropertyNotFound)?;
-    let token = theme.get_property(token_name).ok_or(Error::PropertyNotFound)?;
-    let local = token_name.to_string();
-    prop.set_default_expr(0, expr::load_var(&local))?;
-    prop.add_depend(Role::App, &token, 0, local);
     Ok(())
 }
 
@@ -343,16 +305,6 @@ impl ThemeCtx {
         Ok(())
     }
 
-    /// Set a single-f32 property value (see `set_touched`).
-    pub fn set_touched_f32(
-        &self,
-        atom: &mut PropertyAtomicGuard,
-        prop: &PropertyPtr,
-        val: f32,
-    ) -> Result<()> {
-        self.set_touched(atom, prop, 0, PropertyValue::Float32(val))
-    }
-
     /// Add a dependency edge, recording it for removal (D5). Theme
     /// local names must be fresh (convention: `th_`-prefixed) — a
     /// duplicate local name would shadow another in the eval globals.
@@ -389,18 +341,6 @@ impl ThemeCtx {
         let prop = theme.get_property(name).ok_or(Error::PropertyNotFound)?;
         self.set_touched_color(atom, &prop, val)
     }
-
-    /// Single-f32 variant of [`ThemeCtx::set_shared_token_color`].
-    pub fn set_shared_token_f32(
-        &self,
-        atom: &mut PropertyAtomicGuard,
-        name: &str,
-        val: f32,
-    ) -> Result<()> {
-        let theme = self.sg_root.lookup_node("/theme").ok_or(Error::NodeNotFound)?;
-        let prop = theme.get_property(name).ok_or(Error::PropertyNotFound)?;
-        self.set_touched_f32(atom, &prop, val)
-    }
 }
 
 /// A theme: a name and an apply routine. `minimal` is the registry's
@@ -430,7 +370,7 @@ pub const DEFAULT_THEME: &str = "scifi";
 
 /// Compile-time registry. Dynamic/runtime-loaded themes are a non-goal.
 pub fn registry() -> Vec<&'static dyn Theme> {
-    vec![&MinimalTheme, &scifi::ScifiTheme]
+    vec![&MinimalTheme, &scifi::ScifiTheme, &light::LightTheme]
 }
 
 pub fn registry_lookup(name: &str) -> Option<&'static dyn Theme> {
@@ -574,10 +514,10 @@ mod tests {
         sg_root.link(widget.clone());
 
         // 1. Touch one shared token.
-        ctx.set_shared_token_color(atom, "accent_color", [0., 0.94, 1., 1.]).unwrap();
-        let accent = theme_node.get_property("accent_color").unwrap();
-        assert_eq!(accent.get_f32(0).unwrap(), 0.);
-        assert_eq!(accent.get_f32(1).unwrap(), 0.94);
+        ctx.set_shared_token_color(atom, "text_color", [0., 0.94, 1., 1.]).unwrap();
+        let text = theme_node.get_property("text_color").unwrap();
+        assert_eq!(text.get_f32(0).unwrap(), 0.);
+        assert_eq!(text.get_f32(1).unwrap(), 0.94);
 
         // 2. Private token child wired to the widget (journaled edge).
         let mut priv_tok = Property::new(
@@ -655,9 +595,9 @@ mod tests {
         unload(&ctx, atom);
 
         // Token restored to the minimal default.
-        assert_eq!(accent.get_f32(0).unwrap(), 0.75);
-        assert_eq!(accent.get_f32(1).unwrap(), 0.75);
-        assert!(accent.get_raw_value(0).unwrap().is_unset());
+        assert_eq!(text.get_f32(0).unwrap(), 0.92);
+        assert_eq!(text.get_f32(1).unwrap(), 0.92);
+        assert!(text.get_raw_value(0).unwrap().is_unset());
 
         // Bounded override gone: falls to the (unwired) default tier.
         assert!(color_prop.get_raw_value(0).unwrap().is_unset());
@@ -683,8 +623,8 @@ mod tests {
         assert!(!done.load(std::sync::atomic::Ordering::SeqCst));
     }
 
-    /// Every shared-token name referenced by schema `wire_*` calls and
-    /// by the scifi theme's `set_shared_token_*` writes must exist on
+    /// Every shared-token name referenced by schema `wire_color` calls
+    /// and by the themes' `set_shared_token_color` writes must exist on
     /// the `/theme` node — a missing one is a runtime
     /// `PropertyNotFound` panic in `schema::make` (found the hard way).
     #[test]
@@ -693,37 +633,23 @@ mod tests {
         let referenced = [
             // generic
             "text_color",
-            "text_dim_color",
-            "bg_color",
-            "bg_dim_color",
-            "bg_overlay_color",
-            "accent_color",
-            "sep_color",
             // edit
             "edit.text_color",
-            "edit.bg_color",
             "edit.hi_bg_color",
             "edit.text_hi_color",
             "edit.cursor_color",
-            "edit.placeholder_color",
             "edit.action_fg_color",
             "edit.action_bg_color",
             // menu
             "menu.bg_color",
-            "menu.sep_color",
             "menu.role1_color",
             "menu.role2_color",
             // chatview
-            "chatview.bg_color",
             "chatview.timestamp_color",
             "chatview.text_color",
             "chatview.hi_bg_color",
             "chatview.action_text_color",
             "chatview.url_text_color",
-            // f32
-            "font_size",
-            "message_spacing",
-            "line_height",
         ];
         for name in referenced {
             assert!(theme.get_property(name).is_some(), "missing shared token: {name}");

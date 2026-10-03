@@ -30,7 +30,7 @@ use indoc::indoc;
 
 use crate::{
     app::{
-        node::create_video,
+        node::{create_vector_art, create_video},
         schema::{VID_ASPECT_RATIO, VID_PATH},
     },
     error::{Error, Result},
@@ -42,7 +42,7 @@ use crate::{
     },
     scene::{SceneNode, SceneNodeType},
     theme::{Theme, ThemeCtx},
-    ui::Video,
+    ui::{VectorArt, VectorShape, Video},
 };
 
 pub struct ScifiTheme;
@@ -83,25 +83,15 @@ async fn scifi_apply(ctx: &ThemeCtx) -> Result<()> {
     // ------------------------------------------------------------------
     let tokens: &[(&str, [f32; 4])] = &[
         ("text_color", [1., 1., 1., 1.]),
-        ("text_dim_color", [0.47, 1., 0.75, 1.]),
-        ("bg_color", [0., 0.11, 0.11, 1.]),
-        ("bg_dim_color", [0., 0.04, 0.04, 1.]),
-        ("bg_overlay_color", [0., 0.1, 0.1, 0.7]),
-        ("accent_color", [0., 0.94, 1., 1.]),
-        ("sep_color", [0.41, 0.6, 0.65, 1.]),
         ("edit.text_color", [1., 1., 1., 1.]),
-        ("edit.bg_color", [0., 0.13, 0.08, 1.]),
         ("edit.hi_bg_color", [0., 0.27, 0.22, 1.]),
         ("edit.text_hi_color", [0.44, 0.96, 1., 1.]),
         ("edit.cursor_color", [0.816, 0.627, 1., 1.]),
-        ("edit.placeholder_color", [1., 1., 1., 0.45]),
         ("edit.action_fg_color", [0., 0.94, 1., 1.]),
         ("edit.action_bg_color", [0.1, 0.1, 0.1, 0.9]),
         ("menu.bg_color", [0., 0., 0., 0.5]),
-        ("menu.sep_color", [0.41, 0.6, 0.65, 1.]),
         ("menu.role1_color", [0.36, 1., 0.51, 1.]),
         ("menu.role2_color", [0.56, 0.61, 1., 1.]),
-        ("chatview.bg_color", [0., 0., 0., 0.]),
         ("chatview.timestamp_color", [0.407, 0.604, 0.647, 1.]),
         ("chatview.text_color", [1., 1., 1., 1.]),
         ("chatview.hi_bg_color", [0., 0.2, 0.2, 1.]),
@@ -159,9 +149,12 @@ async fn scifi_apply(ctx: &ThemeCtx) -> Result<()> {
 
     // ------------------------------------------------------------------
     // 4. King video background (tracked structural node, reserved low
-    //    z band under /window/content)
+    //    z band under /window/content) plus the full-screen fade meshes
+    //    darkening it behind the chat and wallet screens
     // ------------------------------------------------------------------
     king_video_node(ctx).await?;
+    bg_fade_node(ctx, "/window/content/chat/main_chat_layer", "bg").await?;
+    bg_fade_node(ctx, "/window/content/wallet/main_layer", "wallet_bg").await?;
 
     // ------------------------------------------------------------------
     // 5. First-run scramble splash (theme content, design D12)
@@ -262,5 +255,33 @@ async fn king_video_node(ctx: &ThemeCtx) -> Result<()> {
         })
         .await;
     ctx.link_tracked(&content, node);
+    Ok(())
+}
+
+/// The full-screen fade mesh darkening the king video behind a screen
+/// layer, as a tracked structural node in the reserved low z band.
+async fn bg_fade_node(ctx: &ThemeCtx, parent_path: &str, name: &str) -> Result<()> {
+    let Some(app) = ctx.app() else { return Err(Error::ThemeNotFound) };
+    let parent = ctx.sg_root().lookup_node(parent_path).ok_or(Error::NodeNotFound)?;
+
+    let node = create_vector_art(name);
+    let prop = node.get_property("rect").unwrap();
+    prop.set_default_f32(0, 0.).unwrap();
+    prop.set_default_f32(1, 0.).unwrap();
+    prop.set_default_expr(2, expr::load_var("w")).unwrap();
+    prop.set_default_expr(3, expr::load_var("h")).unwrap();
+    node.set_property_u32(&mut PropertyAtomicGuard::none(), Role::App, "z_index", 0).unwrap();
+    let mut shape = VectorShape::new();
+    shape.add_gradient_box(
+        expr::const_f32(0.),
+        expr::const_f32(0.),
+        expr::load_var("w"),
+        expr::load_var("h"),
+        [[0., 0., 0., 0.5], [0., 0., 0., 0.5], [0., 0., 0., 0.5], [0., 0., 0., 0.8]],
+    );
+    node.set_property_shape(&mut PropertyAtomicGuard::none(), Role::App, "shape", shape).unwrap();
+    let node =
+        node.setup(|me| VectorArt::new(me, app.renderer.clone(), app.redraw_trigger.clone())).await;
+    ctx.link_tracked(&parent, node);
     Ok(())
 }

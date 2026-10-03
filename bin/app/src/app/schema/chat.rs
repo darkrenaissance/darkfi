@@ -282,26 +282,6 @@ pub async fn make(
     let layer_node = layer_node.setup(|me| Layer::new(me, renderer.clone(), redraw.clone())).await;
     content.link(layer_node.clone());
 
-    // Create a bg mesh on top to fade the bg image
-    let node = create_vector_art("bg");
-    let prop = node.get_property("rect").unwrap();
-    prop.set_default_f32(0, 0.).unwrap();
-    prop.set_default_f32(1, 0.).unwrap();
-    prop.set_default_expr(2, expr::load_var("w")).unwrap();
-    prop.set_default_expr(3, expr::load_var("h")).unwrap();
-    node.set_property_u32(atom, Role::App, "z_index", 0).unwrap();
-    let mut shape = VectorShape::new();
-    shape.add_gradient_box(
-        expr::const_f32(0.),
-        expr::const_f32(0.),
-        expr::load_var("w"),
-        expr::load_var("h"),
-        [[0., 0., 0., 0.5], [0., 0., 0., 0.5], [0., 0., 0., 0.5], [0., 0., 0., 0.8]],
-    );
-    node.set_property_shape(atom, Role::App, "shape", shape).unwrap();
-    let node = node.setup(|me| VectorArt::new(me, renderer.clone(), redraw.clone())).await;
-    layer_node.link(node);
-
     // Create the toolbar bg
     let node = create_vector_art("toolbar_bg");
     let prop = node.get_property("rect").unwrap();

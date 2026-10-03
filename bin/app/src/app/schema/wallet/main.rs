@@ -72,7 +72,6 @@ pub async fn make(
 
     let main_is_visible = PropertyBool::wrap(&main_layer, Role::App, "is_visible", 0).unwrap();
 
-    create_bg_mesh(app, atom, &main_layer, "wallet_bg").await;
     create_header_bg(app, atom, &main_layer, "wallet_header_bg").await;
 
     // Back arrow

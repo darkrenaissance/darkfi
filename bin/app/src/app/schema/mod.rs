@@ -33,7 +33,7 @@ use crate::{
     mesh::rgba,
     prop::{PropertyAtomicGuard, PropertyEnum, PropertyFloat32, PropertyStr, Role},
     scene::{SceneNodePtr, Slot},
-    sfx, shape,
+    sfx, shape, theme,
     ui::{emoji_picker, Button, Layer, Shortcut, Text, VectorArt, VectorShape},
     util::i18n::I18nBabelFish,
 };
@@ -343,7 +343,7 @@ pub async fn make(
         expr::const_f32(0.),
         expr::load_var("w"),
         expr::load_var("h"),
-        [0., 0., 0., 0.4],
+        [0., 0., 0., 0.6],
     );
     shape.add_outline(
         expr::const_f32(0.),
@@ -416,9 +416,9 @@ pub async fn make(
     // BTN_H: 120
     // BTN_GAP: 10
 
-    // Switch theme button (green bg). Toggles /setting/theme between
-    // the scifi and minimal themes; the engine-owned watcher applies
-    // the live switch.
+    // Switch theme button (green bg). Cycles /setting/theme through
+    // the registry (minimal, scifi, light); the engine-owned watcher
+    // applies the live switch.
     let node = create_vector_art("theme_btn_bg");
     let prop = node.get_property("rect").unwrap();
     let code = cc.compile("w - 40 - 120 - 10 - 120").unwrap();
@@ -472,7 +472,12 @@ pub async fn make(
             i!("clicked prev theme");
             let setting_node = sg_root.lookup_node("/setting").unwrap();
             let theme_prop = PropertyEnum::wrap(&setting_node, Role::User, "theme", 0).unwrap();
-            let prev = if theme_prop.get() == "scifi" { "minimal" } else { "scifi" };
+            let prev = {
+                let names: Vec<&str> = theme::registry().iter().map(|t| t.name()).collect();
+                let cur = theme_prop.get();
+                let idx = names.iter().position(|n| *n == cur).unwrap_or(0);
+                names[(idx + names.len() - 1) % names.len()]
+            };
             let atom = &mut redraw.make_guard(gfxtag!("prev theme"));
             theme_prop.set(atom, prev);
             theme_label2.set(atom, prev);
@@ -505,7 +510,12 @@ pub async fn make(
             i!("clicked next theme");
             let setting_node = sg_root.lookup_node("/setting").unwrap();
             let theme_prop = PropertyEnum::wrap(&setting_node, Role::User, "theme", 0).unwrap();
-            let next = if theme_prop.get() == "scifi" { "minimal" } else { "scifi" };
+            let next = {
+                let names: Vec<&str> = theme::registry().iter().map(|t| t.name()).collect();
+                let cur = theme_prop.get();
+                let idx = names.iter().position(|n| *n == cur).unwrap_or(0);
+                names[(idx + 1) % names.len()]
+            };
             let atom = &mut redraw.make_guard(gfxtag!("next theme"));
             theme_prop.set(atom, next);
             theme_label.set(atom, next);
