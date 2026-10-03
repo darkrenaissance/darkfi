@@ -7,6 +7,8 @@ import android.view.inputmethod.EditorInfo;
 import android.text.InputType;
 import android.content.Intent;
 import android.net.Uri;
+import android.os.Handler;
+import android.os.Looper;
 import android.util.Log;
 import java.io.File;
 import java.io.FileWriter;
@@ -177,6 +179,22 @@ public void openUrl(String url) {
     } catch (Exception e) {
         Log.e("darkfi", "Failed to open URL " + url + ": " + e.getMessage());
     }
+}
+
+public void exitApp() {
+    Log.d("darkfi", "exitApp: stopping service and finishing");
+    Intent serviceIntent = new Intent(this, ForegroundService.class);
+    stopService(serviceIntent);
+    finishAndRemoveTask();
+    // Let the finish animation and window removal complete before the
+    // process dies, else WindowManager throws DeadObjectException
+    // dispatching visibility to the dead window.
+    new Handler(Looper.getMainLooper()).postDelayed(new Runnable() {
+        @Override
+        public void run() {
+            System.exit(0);
+        }
+    }, 750);
 }
 
 //% END

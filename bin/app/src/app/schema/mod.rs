@@ -571,6 +571,9 @@ pub async fn make(
     let listen_click = ex.spawn(async move {
         while recvr.recv().await.is_ok() {
             i!("clicked exit");
+            #[cfg(target_os = "android")]
+            crate::android::exit_app();
+            #[cfg(not(target_os = "android"))]
             miniquad::window::request_quit();
         }
     });

@@ -106,3 +106,13 @@ pub fn open_url(url: &str) {
         delete_local_ref(env, jurl);
     }
 }
+
+/// Fully exit the app by calling the `exitApp` method on MainActivity:
+/// stops the ForegroundService, closes the activity, and kills the
+/// process. Android only.
+pub fn exit_app() {
+    unsafe {
+        let env = get_jni_env();
+        ndk_utils::call_void_method!(env, android::ACTIVITY, "exitApp", "()V");
+    }
+}
