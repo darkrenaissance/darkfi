@@ -24,7 +24,7 @@ use crate::{
         App,
     },
     expr,
-    gfx::{gfxtag, Point},
+    gfx::gfxtag,
     mesh::{COLOR_CYAN, COLOR_TEAL},
     prop::{PropertyAtomicGuard, PropertyBool, PropertyFloat32, Role},
     scene::{SceneNodePtr, Slot},
@@ -72,38 +72,16 @@ pub async fn make(
 
     let main_is_visible = PropertyBool::wrap(&main_layer, Role::App, "is_visible", 0).unwrap();
 
-    create_header_bg(app, atom, &main_layer, "wallet_header_bg").await;
-
     // Back arrow
     let node = create_vector_art("wallet_back_btn_bg");
     let prop = node.get_property("rect").unwrap();
-    prop.set_default_f32(0, 0.).unwrap();
-    prop.set_default_f32(1, 0.).unwrap();
-    prop.set_default_f32(2, BACKARROW_BG_W + BACK_SEP_W).unwrap();
-    prop.set_default_f32(3, HEADER_HEIGHT).unwrap();
+    prop.set_default_f32(0, BACKARROW_X).unwrap();
+    prop.set_default_f32(1, BACKARROW_Y).unwrap();
+    prop.set_default_f32(2, BACKARROW_SCALE).unwrap();
+    prop.set_default_f32(3, BACKARROW_SCALE).unwrap();
     node.set_property_u32(atom, Role::App, "z_index", 3).unwrap();
     node.set_property_bool(atom, Role::App, "is_visible", false).unwrap();
-    let mut shape = VectorShape::new();
-    let (_bg_color, sep_color) = ([0., 0., 0., 1.], [0.41, 0.6, 0.65, 1.]);
-    shape.add_filled_box(
-        expr::const_f32(0.),
-        expr::const_f32(0.),
-        expr::const_f32(BACKARROW_BG_W),
-        expr::load_var("h"),
-        [0.0, 0.106, 0.114, 1.0],
-    );
-    shape.add_filled_box(
-        expr::const_f32(BACKARROW_BG_W),
-        expr::const_f32(0.),
-        expr::const_f32(BACKARROW_BG_W + BACK_SEP_W),
-        expr::load_var("h"),
-        sep_color,
-    );
-    shape.join(
-        shape::create_back_arrow()
-            .scaled(BACKARROW_SCALE)
-            .offset(Point::new(BACKARROW_X, BACKARROW_Y)),
-    );
+    let shape = shape::create_back_arrow().scaled(BACKARROW_SCALE);
     node.set_property_shape(atom, Role::App, "shape", shape).unwrap();
     let node =
         node.setup(|me| VectorArt::new(me, app.renderer.clone(), app.redraw_trigger.clone())).await;
@@ -346,7 +324,7 @@ pub async fn make(
         1.,
         COLOR_TEAL,
     );
-    node.set_property_shape(atom, Role::App, "shape", shape).unwrap();
+    node.get_property("shape").unwrap().set_default_shape(0, shape).unwrap();
     let node =
         node.setup(|me| VectorArt::new(me, app.renderer.clone(), app.redraw_trigger.clone())).await;
     main_layer.link(node);
@@ -454,7 +432,7 @@ pub async fn make(
         1.,
         COLOR_TEAL,
     );
-    node.set_property_shape(atom, Role::App, "shape", shape).unwrap();
+    node.get_property("shape").unwrap().set_default_shape(0, shape).unwrap();
     let node =
         node.setup(|me| VectorArt::new(me, app.renderer.clone(), app.redraw_trigger.clone())).await;
     main_layer.link(node);
@@ -531,7 +509,17 @@ pub async fn make(
     )
     .await;
 
-    create_title(app, atom, &main_layer, &window_scale, i18n_fish, "TOKENS", &mut y).await;
+    create_title(
+        app,
+        atom,
+        &main_layer,
+        &window_scale,
+        i18n_fish,
+        "tokens_label",
+        "tokens",
+        &mut y,
+    )
+    .await;
 
     let mut cc = expr::Compiler::new();
     cc.add_const_f32("PADDING_X", PADDING_X);
@@ -570,37 +558,6 @@ async fn create_chat_btn(
     cc: &expr::Compiler,
     parent: &SceneNodePtr,
 ) {
-    let node = create_vector_art("chat_btn_bg");
-    let prop = node.get_property("rect").unwrap();
-    let code = cc.compile(format!("w - {CHAT_BTN_SIZE} - {CHAT_BTN_MARGIN}")).unwrap();
-    prop.set_default_expr(0, code).unwrap();
-    let code = cc.compile(format!("h - {CHAT_BTN_SIZE} - {CHAT_BTN_MARGIN}")).unwrap();
-    prop.set_default_expr(1, code).unwrap();
-    prop.set_default_f32(2, CHAT_BTN_SIZE).unwrap();
-    prop.set_default_f32(3, CHAT_BTN_SIZE).unwrap();
-    node.set_property_u32(atom, Role::App, "z_index", 2).unwrap();
-    let mut shape = VectorShape::new();
-
-    shape.add_filled_box(
-        expr::const_f32(0.),
-        expr::const_f32(0.),
-        expr::load_var("w"),
-        expr::load_var("h"),
-        [0., 0.098, 0.098, 1.],
-    );
-    shape.add_outline(
-        expr::const_f32(0.),
-        expr::const_f32(0.),
-        expr::load_var("w"),
-        expr::load_var("h"),
-        1.,
-        [0.2, 0.2745, 0.2784, 1.],
-    );
-    node.set_property_shape(atom, Role::App, "shape", shape).unwrap();
-    let node =
-        node.setup(|me| VectorArt::new(me, app.renderer.clone(), app.redraw_trigger.clone())).await;
-    parent.link(node);
-
     let node = create_vector_art("chat_btn_shape");
     let prop = node.get_property("rect").unwrap();
     let code = cc.compile(format!("w - {CHAT_BTN_SIZE}/2 - {CHAT_BTN_MARGIN}")).unwrap();
@@ -614,7 +571,8 @@ async fn create_chat_btn(
     let mut shape = shape::create_netlogo1([0., 0.94, 1., 1.]);
     shape.join(shape::create_netlogo2([0., 0.94, 1., 1.]));
     shape.join(shape::create_netlogo3([0., 0.94, 1., 1.]));
-    node.set_property_shape(atom, Role::App, "shape", shape).unwrap();
+    let prop = node.get_property("shape").unwrap();
+    prop.set_default_shape(0, shape).unwrap();
     let node =
         node.setup(|me| VectorArt::new(me, app.renderer.clone(), app.redraw_trigger.clone())).await;
     parent.link(node);

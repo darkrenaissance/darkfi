@@ -116,11 +116,11 @@ pub async fn make(
         PropertyBool::wrap(&tx_status_layer, Role::App, "is_visible", 0).unwrap();
 
     create_bg_mesh(app, atom, &tx_status_layer, "tx_status_bg").await;
-    create_header_bg(app, atom, &tx_status_layer, "tx_status_header_bg").await;
 
     let mut y = HEADER_HEIGHT;
 
-    create_title(app, atom, &tx_status_layer, &window_scale, i18n_fish, "SEND", &mut y).await;
+    create_title(app, atom, &tx_status_layer, &window_scale, i18n_fish, "SEND", "SEND", &mut y)
+        .await;
 
     // Status text
     let node = create_text("status");

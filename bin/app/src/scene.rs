@@ -46,7 +46,7 @@ pub struct ScenePath(VecDeque<String>);
 impl<S: Into<String>> From<S> for ScenePath {
     fn from(path: S) -> Self {
         let path: String = path.into();
-        (&path).parse().expect("invalid ScenePath &str")
+        (&path).parse().expect(&format!("invalid ScenePath {path}"))
     }
 }
 

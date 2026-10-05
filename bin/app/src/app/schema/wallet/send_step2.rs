@@ -107,13 +107,13 @@ pub async fn make(
         PropertyBool::wrap(&send_step2_layer, Role::App, "is_visible", 0).unwrap();
 
     create_bg_mesh(app, atom, &send_step2_layer, "send_bg2").await;
-    create_header_bg(app, atom, &send_step2_layer, "send_header_bg2").await;
 
     let mut y = 0.;
 
     y += HEADER_HEIGHT;
 
-    create_title(app, atom, &send_step2_layer, &window_scale, i18n_fish, "SEND", &mut y).await;
+    create_title(app, atom, &send_step2_layer, &window_scale, i18n_fish, "SEND", "SEND", &mut y)
+        .await;
 
     // Selected token display
     let node = create_text("send_selected_token_symbol");

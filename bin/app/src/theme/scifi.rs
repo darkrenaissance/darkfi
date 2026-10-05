@@ -31,7 +31,10 @@ use indoc::indoc;
 use crate::{
     app::{
         node::{create_vector_art, create_video},
-        schema::{VID_ASPECT_RATIO, VID_PATH},
+        schema::{
+            wallet::data::{CHAT_BTN_MARGIN, CHAT_BTN_SIZE},
+            MAIN_MENU_HEADER_HEIGHT, VID_ASPECT_RATIO, VID_PATH,
+        },
     },
     error::{Error, Result},
     expr::{self, Compiler},
@@ -75,8 +78,10 @@ fn private_token_props() -> Vec<Property> {
 }
 
 async fn scifi_apply(ctx: &ThemeCtx) -> Result<()> {
-    let Some(app) = ctx.app() else { return Err(Error::ThemeNotFound) };
+    let app = ctx.app().unwrap();
     let atom = &mut PropertyAtomicGuard::none();
+
+    let cc = Compiler::new();
 
     // ------------------------------------------------------------------
     // 1. Shared token values: the cyan palette over the minimal baseline
@@ -152,9 +157,42 @@ async fn scifi_apply(ctx: &ThemeCtx) -> Result<()> {
     //    z band under /window/content) plus the full-screen fade meshes
     //    darkening it behind the chat and wallet screens
     // ------------------------------------------------------------------
-    king_video_node(ctx).await?;
+    king_video_node(ctx).await;
     bg_fade_node(ctx, "/window/content/chat/main_chat_layer", "bg").await?;
     bg_fade_node(ctx, "/window/content/wallet/main_layer", "wallet_bg").await?;
+
+    // Bg for wallet btn to navigate to chat screen
+    let node = create_vector_art("chat_btn_bg");
+    let prop = node.get_property("rect").unwrap();
+    let code = cc.compile(format!("w - {CHAT_BTN_SIZE} - {CHAT_BTN_MARGIN}")).unwrap();
+    prop.set_default_expr(0, code).unwrap();
+    let code = cc.compile(format!("h - {CHAT_BTN_SIZE} - {CHAT_BTN_MARGIN}")).unwrap();
+    prop.set_default_expr(1, code).unwrap();
+    prop.set_default_f32(2, CHAT_BTN_SIZE).unwrap();
+    prop.set_default_f32(3, CHAT_BTN_SIZE).unwrap();
+    node.set_property_u32(atom, Role::App, "z_index", 2).unwrap();
+    let mut shape = VectorShape::new();
+
+    shape.add_filled_box(
+        expr::const_f32(0.),
+        expr::const_f32(0.),
+        expr::load_var("w"),
+        expr::load_var("h"),
+        [0., 0.098, 0.098, 1.],
+    );
+    shape.add_outline(
+        expr::const_f32(0.),
+        expr::const_f32(0.),
+        expr::load_var("w"),
+        expr::load_var("h"),
+        1.,
+        [0.2, 0.2745, 0.2784, 1.],
+    );
+    node.set_property_shape(atom, Role::App, "shape", shape).unwrap();
+    let node =
+        node.setup(|me| VectorArt::new(me, app.renderer.clone(), app.redraw_trigger.clone())).await;
+    let parent = ctx.sg_root().lookup_node("/window/content/wallet/main_layer").unwrap();
+    ctx.link_tracked(&parent, node);
 
     // ------------------------------------------------------------------
     // 5. First-run scramble splash (theme content, design D12)
@@ -208,9 +246,9 @@ async fn scifi_apply(ctx: &ThemeCtx) -> Result<()> {
 }
 
 /// The king video background, as a tracked structural node.
-async fn king_video_node(ctx: &ThemeCtx) -> Result<()> {
-    let Some(app) = ctx.app() else { return Err(Error::ThemeNotFound) };
-    let content = ctx.sg_root().lookup_node("/window/content").ok_or(Error::NodeNotFound)?;
+async fn king_video_node(ctx: &ThemeCtx) {
+    let app = ctx.app().unwrap();
+    let content = ctx.sg_root().lookup_node("/window/content").unwrap();
 
     let mut cc = Compiler::new();
     let node = create_video("king");
@@ -255,11 +293,9 @@ async fn king_video_node(ctx: &ThemeCtx) -> Result<()> {
         })
         .await;
     ctx.link_tracked(&content, node);
-    Ok(())
 }
 
-/// The full-screen fade mesh darkening the king video behind a screen
-/// layer, as a tracked structural node in the reserved low z band.
+/// The fade mesh below the shared header, darkening the king video behind a screen.
 async fn bg_fade_node(ctx: &ThemeCtx, parent_path: &str, name: &str) -> Result<()> {
     let Some(app) = ctx.app() else { return Err(Error::ThemeNotFound) };
     let parent = ctx.sg_root().lookup_node(parent_path).ok_or(Error::NodeNotFound)?;
@@ -267,9 +303,11 @@ async fn bg_fade_node(ctx: &ThemeCtx, parent_path: &str, name: &str) -> Result<(
     let node = create_vector_art(name);
     let prop = node.get_property("rect").unwrap();
     prop.set_default_f32(0, 0.).unwrap();
-    prop.set_default_f32(1, 0.).unwrap();
+    prop.set_default_f32(1, MAIN_MENU_HEADER_HEIGHT + 1.).unwrap();
     prop.set_default_expr(2, expr::load_var("w")).unwrap();
-    prop.set_default_expr(3, expr::load_var("h")).unwrap();
+    let cc = Compiler::new();
+    prop.set_default_expr(3, cc.compile(format!("h - {MAIN_MENU_HEADER_HEIGHT} - 1")).unwrap())
+        .unwrap();
     node.set_property_u32(&mut PropertyAtomicGuard::none(), Role::App, "z_index", 0).unwrap();
     let mut shape = VectorShape::new();
     shape.add_gradient_box(

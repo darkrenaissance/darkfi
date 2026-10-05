@@ -76,13 +76,13 @@ pub async fn make(
         PropertyBool::wrap(&send_step1_layer, Role::App, "is_visible", 0).unwrap();
 
     create_bg_mesh(app, atom, &send_step1_layer, "send_bg").await;
-    create_header_bg(app, atom, &send_step1_layer, "send_header_bg").await;
 
     let mut y = 0.;
 
     y += HEADER_HEIGHT;
 
-    create_title(app, atom, &send_step1_layer, &window_scale, i18n_fish, "SEND", &mut y).await;
+    create_title(app, atom, &send_step1_layer, &window_scale, i18n_fish, "SEND", "SEND", &mut y)
+        .await;
 
     create_subtitle(
         app,

@@ -64,7 +64,7 @@ pub const COLOR_PURPLE: Color = [1., 0., 1., 1.];
 #[allow(dead_code)]
 pub const COLOR_WHITE: Color = [1., 1., 1., 1.];
 #[allow(dead_code)]
-pub const COLOR_BLACK: Color = [1., 1., 1., 1.];
+pub const COLOR_BLACK: Color = [0., 0., 0., 1.];
 #[allow(dead_code)]
 pub const COLOR_GREY: Color = [0.5, 0.5, 0.5, 1.];
 #[allow(dead_code)]

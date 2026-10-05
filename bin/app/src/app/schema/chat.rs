@@ -104,7 +104,6 @@ mod android_ui_consts {
     // Action menu
     pub const ACTION_PADDING: f32 = 32.;
     pub const ACTION_SPACING: f32 = 8.;
-    pub const BACK_SEP_W: f32 = 1.;
 
     pub const COPY_BTN_SCALE: f32 = 38.;
     pub const COPY_BTN_X_OFF: f32 = 70.;
@@ -188,7 +187,6 @@ mod ui_consts {
     // Action menu
     pub const ACTION_PADDING: f32 = 8.;
     pub const ACTION_SPACING: f32 = 4.;
-    pub const BACK_SEP_W: f32 = 0.5;
 
     pub const COPY_BTN_SCALE: f32 = 19.;
     pub const COPY_BTN_X_OFF: f32 = 30.;
@@ -281,63 +279,6 @@ pub async fn make(
     layer_node.set_property_u32(atom, Role::App, "z_index", 1).unwrap();
     let layer_node = layer_node.setup(|me| Layer::new(me, renderer.clone(), redraw.clone())).await;
     content.link(layer_node.clone());
-
-    // Create the toolbar bg
-    let node = create_vector_art("toolbar_bg");
-    let prop = node.get_property("rect").unwrap();
-    prop.set_default_f32(0, 0.).unwrap();
-    prop.set_default_f32(1, 0.).unwrap();
-    prop.set_default_expr(2, expr::load_var("w")).unwrap();
-    prop.set_default_f32(3, CHATEDIT_HEIGHT).unwrap();
-    node.set_property_u32(atom, Role::App, "z_index", 2).unwrap();
-
-    let (bg_color, sep_color) = ([0., 0., 0., 1.], [0.41, 0.6, 0.65, 1.]);
-    let mut shape = VectorShape::new();
-    shape.add_filled_box(
-        expr::const_f32(0.),
-        expr::const_f32(0.),
-        expr::load_var("w"),
-        expr::load_var("h"),
-        bg_color,
-    );
-    shape.add_filled_box(
-        expr::const_f32(0.),
-        expr::const_f32(0.),
-        expr::const_f32(BACKARROW_BG_W),
-        expr::load_var("h"),
-        [0.0, 0.106, 0.114, 1.0],
-    );
-    shape.add_filled_box(
-        expr::const_f32(BACKARROW_BG_W),
-        expr::const_f32(0.),
-        expr::const_f32(BACKARROW_BG_W + BACK_SEP_W),
-        expr::load_var("h"),
-        sep_color,
-    );
-    shape.add_filled_box(
-        expr::const_f32(0.),
-        expr::load_var("h"),
-        expr::load_var("w"),
-        cc.compile("h + 0.5").unwrap(),
-        sep_color,
-    );
-    let color1 = [0.2, 0.2, 0.2, 0.5];
-    let color2 = [0.5, 0.5, 0.5, 0.];
-    shape.add_smooth_vertical_gradient(
-        expr::const_f32(BACKARROW_BG_W + 1.),
-        expr::const_f32(0.),
-        expr::load_var("w"),
-        cc.compile("h / 2").unwrap(),
-        color1,
-        color2,
-        8,
-        0.2,
-    );
-
-    node.set_property_shape(atom, Role::App, "shape", shape).unwrap();
-
-    let node = node.setup(|me| VectorArt::new(me, renderer.clone(), redraw.clone())).await;
-    layer_node.link(node);
 
     // Create the send button
     let node = create_vector_art("back_btn_bg");

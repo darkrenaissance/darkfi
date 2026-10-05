@@ -148,6 +148,7 @@ pub async fn create_title(
     window_scale: &PropertyFloat32,
     i18n_fish: &I18nBabelFish,
     name: &str,
+    text: &str,
     y: &mut f32,
 ) -> SceneNodePtr {
     let node = create_text(name);
@@ -157,7 +158,7 @@ pub async fn create_title(
     prop.set_default_f32(2, 1000.).unwrap();
     prop.set_default_f32(3, TITLE_FONTSIZE).unwrap();
     node.get_property("font_size").unwrap().set_default_f32(0, TITLE_FONTSIZE).unwrap();
-    node.set_property_str(atom, Role::App, "text", name).unwrap();
+    node.set_property_str(atom, Role::App, "text", text).unwrap();
     let prop = node.get_property("text_color").unwrap();
     prop.set_default_f32_multi(&[1., 1., 1., 1.]).unwrap();
     node.set_property_u32(atom, Role::App, "z_index", 2).unwrap();
@@ -181,7 +182,7 @@ pub async fn create_title(
         &app.redraw_trigger,
         atom,
         layer,
-        &format!("{}_separator", name),
+        &format!("{name}_separator"),
         y,
     )
     .await;
@@ -239,7 +240,7 @@ pub async fn create_subtitle(
     node
 }
 
-/// Creates a background mesh with gradient box.
+/// Creates a background mesh below the shared header and its separator.
 pub async fn create_bg_mesh(
     app: &App,
     atom: &mut PropertyAtomicGuard,
@@ -249,9 +250,10 @@ pub async fn create_bg_mesh(
     let node = create_vector_art(name);
     let prop = node.get_property("rect").unwrap();
     prop.set_default_f32(0, 0.).unwrap();
-    prop.set_default_f32(1, 0.).unwrap();
+    prop.set_default_f32(1, HEADER_HEIGHT + 1.).unwrap();
     prop.set_default_expr(2, expr::load_var("w")).unwrap();
-    prop.set_default_expr(3, expr::load_var("h")).unwrap();
+    let cc = Compiler::new();
+    prop.set_default_expr(3, cc.compile(format!("h - {HEADER_HEIGHT} - 1")).unwrap()).unwrap();
     node.set_property_u32(atom, Role::App, "z_index", 0).unwrap();
     let mut shape = VectorShape::new();
     shape.add_gradient_box(
@@ -260,57 +262,6 @@ pub async fn create_bg_mesh(
         expr::load_var("w"),
         expr::load_var("h"),
         [[0., 0., 0., 0.5], [0., 0., 0., 0.5], [0., 0., 0., 0.5], [0., 0., 0., 0.8]],
-    );
-    node.set_property_shape(atom, Role::App, "shape", shape).unwrap();
-    let node =
-        node.setup(|me| VectorArt::new(me, app.renderer.clone(), app.redraw_trigger.clone())).await;
-    layer.link(node);
-}
-
-/// Creates a header background with filled box and separator line at bottom.
-pub async fn create_header_bg(
-    app: &App,
-    atom: &mut PropertyAtomicGuard,
-    layer: &SceneNodePtr,
-    name: &str,
-) {
-    let node = create_vector_art(name);
-    let prop = node.get_property("rect").unwrap();
-    prop.set_default_f32(0, 0.).unwrap();
-    prop.set_default_f32(1, 0.).unwrap();
-    prop.set_default_expr(2, expr::load_var("w")).unwrap();
-    prop.set_default_f32(3, HEADER_HEIGHT).unwrap();
-    node.set_property_u32(atom, Role::App, "z_index", 1).unwrap();
-
-    let (bg_color, sep_color) = ([0., 0., 0., 1.], [0.41, 0.6, 0.65, 1.]);
-
-    let cc = Compiler::new();
-    let mut shape = VectorShape::new();
-    shape.add_filled_box(
-        expr::const_f32(0.),
-        expr::const_f32(0.),
-        expr::load_var("w"),
-        expr::load_var("h"),
-        bg_color,
-    );
-    shape.add_filled_box(
-        expr::const_f32(0.),
-        expr::load_var("h"),
-        expr::load_var("w"),
-        cc.compile("h + 0.5").unwrap(),
-        sep_color,
-    );
-    let color1 = [0.2, 0.2, 0.2, 0.5];
-    let color2 = [0.5, 0.5, 0.5, 0.];
-    shape.add_smooth_vertical_gradient(
-        expr::const_f32(0.),
-        expr::const_f32(0.),
-        expr::load_var("w"),
-        cc.compile("h / 2").unwrap(),
-        color1,
-        color2,
-        8,
-        0.2,
     );
     node.set_property_shape(atom, Role::App, "shape", shape).unwrap();
     let node =

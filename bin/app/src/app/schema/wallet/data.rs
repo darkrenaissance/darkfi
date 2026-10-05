@@ -44,7 +44,6 @@ mod android_ui_consts {
     pub const RECIPIENT_INPUT_HEIGHT: f32 = 120.;
     pub const RECIPIENT_INPUT_FONTSIZE: f32 = 48.;
     pub const HEADER_HEIGHT: f32 = 140.;
-    pub const BACK_SEP_W: f32 = 1.;
     pub const ROW_HEIGHT: f32 = 80.;
     pub const COPY_WIDTH: f32 = 200.;
     pub const COPY_SCALE: f32 = 30.;
@@ -102,7 +101,6 @@ mod ui_consts {
     pub const RECIPIENT_INPUT_HEIGHT: f32 = 60.;
     pub const RECIPIENT_INPUT_FONTSIZE: f32 = 20.;
     pub const HEADER_HEIGHT: f32 = 60.;
-    pub const BACK_SEP_W: f32 = 0.5;
     pub const ROW_HEIGHT: f32 = 80.;
     pub const COPY_WIDTH: f32 = 100.;
     pub const COPY_SCALE: f32 = 15.;

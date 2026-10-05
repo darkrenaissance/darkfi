@@ -96,7 +96,6 @@ mod android_ui_consts {
     pub const COPY_SCALE: f32 = 35.;
     pub const COPY_BTN_SIZE: f32 = CHATEDIT_HEIGHT;
     pub const CONTENT_OUTLINE_SIZE: f32 = 0.5;
-    pub const BACK_SEP_W: f32 = 1.;
     pub const TAB_LABEL_X: f32 = 90.;
     pub const CHANNELS_TAB_ICON_GAP: f32 = 12.;
     pub const CONTACTS_TAB_ICON_GAP: f32 = 8.5;
@@ -148,7 +147,6 @@ mod ui_consts {
     pub const COPY_SCALE: f32 = 15.;
     pub const COPY_BTN_SIZE: f32 = CHATEDIT_HEIGHT;
     pub const CONTENT_OUTLINE_SIZE: f32 = 0.3;
-    pub const BACK_SEP_W: f32 = 0.5;
     pub const TAB_LABEL_X: f32 = 45.;
     pub const CHANNELS_TAB_ICON_GAP: f32 = 6.;
     pub const CONTACTS_TAB_ICON_GAP: f32 = 4.25;
@@ -191,63 +189,6 @@ pub async fn make(
     cc.add_const_f32("CHANNEL_ITEM_HEIGHT", CHANNEL_ITEM_HEIGHT);
 
     let atom = &mut PropertyAtomicGuard::none();
-
-    // Header
-    let node = create_vector_art("header_bg");
-    let prop = node.get_property("rect").unwrap();
-    prop.set_default_f32(0, 0.).unwrap();
-    prop.set_default_f32(1, 0.).unwrap();
-    prop.set_default_expr(2, expr::load_var("w")).unwrap();
-    prop.set_default_f32(3, HEADER_HEIGHT).unwrap();
-    node.set_property_u32(atom, Role::App, "z_index", 2).unwrap();
-
-    let (bg_color, sep_color) = ([0., 0., 0., 1.], [0.41, 0.6, 0.65, 1.]);
-    let mut shape = VectorShape::new();
-    shape.add_filled_box(
-        expr::const_f32(0.),
-        expr::const_f32(0.),
-        expr::load_var("w"),
-        expr::load_var("h"),
-        bg_color,
-    );
-    shape.add_filled_box(
-        expr::const_f32(0.),
-        expr::const_f32(0.),
-        expr::const_f32(BACKARROW_BG_W),
-        expr::load_var("h"),
-        [0.0, 0.106, 0.114, 1.0],
-    );
-    shape.add_filled_box(
-        expr::const_f32(BACKARROW_BG_W),
-        expr::const_f32(0.),
-        expr::const_f32(BACKARROW_BG_W + BACK_SEP_W),
-        expr::load_var("h"),
-        sep_color,
-    );
-    shape.add_filled_box(
-        expr::const_f32(0.),
-        expr::load_var("h"),
-        expr::load_var("w"),
-        cc.compile("h + 0.5").unwrap(),
-        sep_color,
-    );
-    let color1 = [0.2, 0.2, 0.2, 0.5];
-    let color2 = [0.5, 0.5, 0.5, 0.];
-    shape.add_smooth_vertical_gradient(
-        expr::const_f32(BACKARROW_BG_W + 1.),
-        expr::const_f32(0.),
-        expr::load_var("w"),
-        cc.compile("h / 2").unwrap(),
-        color1,
-        color2,
-        8,
-        0.2,
-    );
-
-    node.set_property_shape(atom, Role::App, "shape", shape).unwrap();
-    let node =
-        node.setup(|me| VectorArt::new(me, app.renderer.clone(), app.redraw_trigger.clone())).await;
-    content.link(node);
 
     // Create back arrow
     let node = create_vector_art("back_btn_bg");

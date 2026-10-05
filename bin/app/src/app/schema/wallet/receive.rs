@@ -61,13 +61,13 @@ pub async fn make(
     create_back_shortcut(app, atom, &receive_layer).await;
 
     create_bg_mesh(app, atom, &receive_layer, "receive_bg").await;
-    create_header_bg(app, atom, &receive_layer, "receive_header_bg").await;
 
     let mut y = 0.;
 
     y += HEADER_HEIGHT;
 
-    create_title(app, atom, &receive_layer, &window_scale, i18n_fish, "RECEIVE", &mut y).await;
+    create_title(app, atom, &receive_layer, &window_scale, i18n_fish, "RECEIVE", "RECEIVE", &mut y)
+        .await;
 
     create_subtitle(
         app,

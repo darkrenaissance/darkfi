@@ -206,52 +206,13 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish) {
     prop.set_default_expr(2, expr::load_var("w")).unwrap();
     prop.set_default_expr(3, expr::load_var("h")).unwrap();
     layer_node.set_property_bool(atom, Role::App, "is_visible", true).unwrap();
-    layer_node.set_property_u32(atom, Role::App, "z_index", 1).unwrap();
+    layer_node.set_property_u32(atom, Role::App, "z_index", 2).unwrap();
     let layer_node = layer_node
         .setup(|me| Layer::new(me, app.renderer.clone(), app.redraw_trigger.clone()))
         .await;
     window.link(layer_node.clone());
 
     let mut setting_y = 0.;
-
-    // Create the toolbar bg
-    let node = create_vector_art("toolbar_bg");
-    let prop = node.get_property("rect").unwrap();
-    prop.set_default_f32(0, 0.).unwrap();
-    prop.set_default_f32(1, 0.).unwrap();
-    prop.set_default_expr(2, expr::load_var("w")).unwrap();
-    prop.set_default_f32(3, SETTING_LABEL_LINESPACE).unwrap();
-    node.set_property_u32(atom, Role::App, "z_index", 2).unwrap();
-
-    let (bg_color, sep_color) = ([0., 0.11, 0.11, 1.], [0.41, 0.6, 0.65, 1.]);
-    let mut shape = VectorShape::new();
-    shape.add_filled_box(
-        expr::const_f32(0.),
-        expr::const_f32(0.),
-        expr::const_f32(BACKARROW_BG_W),
-        expr::load_var("h"),
-        bg_color,
-    );
-    shape.add_filled_box(
-        expr::const_f32(BACKARROW_BG_W),
-        expr::const_f32(0.),
-        expr::const_f32(BACKARROW_BG_W + 1.),
-        expr::load_var("h"),
-        sep_color,
-    );
-    shape.add_filled_box(
-        expr::const_f32(0.),
-        expr::load_var("h"),
-        expr::load_var("w"),
-        cc.compile("h + 1").unwrap(),
-        sep_color,
-    );
-
-    node.set_property_shape(atom, Role::App, "shape", shape).unwrap();
-
-    let node =
-        node.setup(|me| VectorArt::new(me, app.renderer.clone(), app.redraw_trigger.clone())).await;
-    layer_node.link(node);
 
     // Create the back button
     let node = create_vector_art("back_btn_bg");

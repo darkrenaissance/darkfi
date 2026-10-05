@@ -35,10 +35,7 @@ use crate::{
     scene::{SceneNodePtr, Slot},
     sfx, shape,
     theme::wire_color,
-    ui::{
-        emoji_picker::EmojiMeshesPtr, Button, Layer, Menu, ShapeVertex, Text, VectorArt,
-        VectorShape,
-    },
+    ui::{emoji_picker::EmojiMeshesPtr, Button, Layer, Menu, ShapeVertex, Text, VectorArt},
     util::i18n::I18nBabelFish,
 };
 
@@ -72,13 +69,8 @@ mod android_ui_consts {
     pub const DARKFI_LOGO_SCALE: f32 = 40.;
 }
 
-#[cfg(target_os = "android")]
-mod ui_consts {
-    pub use super::android_ui_consts::*;
-}
-
-#[cfg(feature = "emulate-android")]
-mod ui_consts {
+#[cfg(any(target_os = "android", feature = "emulate-android"))]
+pub mod ui_consts {
     pub use super::android_ui_consts::*;
 }
 
@@ -86,7 +78,7 @@ mod ui_consts {
     any(target_os = "linux", target_os = "macos", target_os = "windows"),
     not(feature = "emulate-android")
 ))]
-mod ui_consts {
+pub mod ui_consts {
     pub const CHANNEL_LABEL_X: f32 = 20.;
     pub const CHANNEL_HEADER_HEIGHT: f32 = 60.;
     pub const CHANNEL_ITEM_HEIGHT: f32 = 40.;
@@ -228,49 +220,6 @@ pub async fn make(
     )
     .await;
 
-    // Channels label bg
-    let node = create_vector_art("channels_label_bg");
-    let prop = node.get_property("rect").unwrap();
-    prop.set_default_f32(0, 0.).unwrap();
-    prop.set_default_f32(1, 0.).unwrap();
-    prop.set_default_expr(2, expr::load_var("w")).unwrap();
-    prop.set_default_f32(3, CHANNEL_HEADER_HEIGHT).unwrap();
-    node.set_property_u32(atom, Role::App, "z_index", 0).unwrap();
-
-    let mut shape = VectorShape::new();
-    let (bg_color, sep_color) = ([0., 0., 0., 1.], [0.41, 0.6, 0.65, 1.]);
-    shape.add_filled_box(
-        expr::const_f32(0.),
-        expr::const_f32(0.),
-        expr::load_var("w"),
-        expr::load_var("h"),
-        bg_color,
-    );
-    shape.add_filled_box(
-        expr::const_f32(0.),
-        expr::load_var("h"),
-        expr::load_var("w"),
-        cc.compile("h + 0.5").unwrap(),
-        sep_color,
-    );
-    let color1 = [0.2, 0.2, 0.2, 0.5];
-    let color2 = [0.5, 0.5, 0.5, 0.];
-    shape.add_smooth_vertical_gradient(
-        expr::const_f32(0.),
-        expr::const_f32(0.),
-        expr::load_var("w"),
-        cc.compile("h / 2").unwrap(),
-        color1,
-        color2,
-        8,
-        0.2,
-    );
-
-    node.set_property_shape(atom, Role::App, "shape", shape).unwrap();
-    let node =
-        node.setup(|me| VectorArt::new(me, app.renderer.clone(), app.redraw_trigger.clone())).await;
-    layer_node.link(node);
-
     // Create some text
     let node = create_text("channels_label");
     let prop = node.get_property("rect").unwrap();
@@ -352,12 +301,11 @@ pub async fn make(
     // Main button layer
     let node = create_layer("mainbtn_layer");
     let prop = node.get_property("rect").unwrap();
-    prop.set_default_f32(0, CHANNEL_LABEL_X).unwrap();
-    let code = cc.compile("h - MENU_BTN_H - CHANNEL_LABEL_X").unwrap();
+    prop.set_default_f32(0, 0.).unwrap();
+    let code = cc.compile("h - 3 * MENU_BTN_W_R - 3 * CHANNEL_LABEL_X").unwrap();
     prop.set_default_expr(1, code).unwrap();
-    let code = cc.compile("w - 2 * CHANNEL_LABEL_X").unwrap();
-    prop.set_default_expr(2, code).unwrap();
-    prop.set_default_f32(3, MENU_BTN_H).unwrap();
+    prop.set_default_expr(2, expr::load_var("w")).unwrap();
+    prop.set_default_f32(3, 3. * MENU_BTN_W_R + 2. * CHANNEL_LABEL_X).unwrap();
     node.set_property_bool(atom, Role::App, "is_visible", true).unwrap();
     node.set_property_u32(atom, Role::App, "z_index", 2).unwrap();
     node.set_property_u32(atom, Role::App, "priority", 1).unwrap();
@@ -389,11 +337,12 @@ pub async fn make(
     let node = create_button("write_btn");
     node.set_property_bool(atom, Role::App, "is_active", true).unwrap();
     let prop = node.get_property("rect").unwrap();
-    let code = cc.compile("w - MENU_BTN_W_R").unwrap();
+    let code = cc.compile("w - MENU_BTN_W_R - CHANNEL_LABEL_X").unwrap();
     prop.set_default_expr(0, code).unwrap();
-    prop.set_default_f32(1, 0.).unwrap();
+    let code = cc.compile("h - MENU_BTN_H").unwrap();
+    prop.set_default_expr(1, code).unwrap();
     prop.set_default_f32(2, MENU_BTN_W_R).unwrap();
-    prop.set_default_expr(3, expr::load_var("h")).unwrap();
+    prop.set_default_f32(3, MENU_BTN_H).unwrap();
     //Uncomment this to see the button outline
     //node.set_property_bool(atom, Role::App, "debug", true).unwrap();
     //node.set_property_u32(atom, Role::App, "z_index", 1).unwrap();
@@ -419,14 +368,17 @@ pub async fn make(
 
     let node = create_vector_art("write_icon");
     let prop = node.get_property("rect").unwrap();
-    let code = cc.compile("w - MENU_BTN_W_R / 2 - MENU_ICON_SCALE * 0.45").unwrap();
+    let code =
+        cc.compile("w - CHANNEL_LABEL_X - MENU_BTN_W_R / 2 - MENU_ICON_SCALE * 0.45").unwrap();
     prop.set_default_expr(0, code).unwrap();
-    prop.set_default_f32(1, MENU_BTN_H / 2. + MENU_ICON_SCALE * 0.36).unwrap();
+    let code = cc.compile("h - MENU_BTN_H / 2 + MENU_ICON_SCALE * 0.36").unwrap();
+    prop.set_default_expr(1, code).unwrap();
     prop.set_default_f32(2, MENU_ICON_SCALE).unwrap();
     prop.set_default_f32(3, MENU_ICON_SCALE).unwrap();
     node.set_property_u32(atom, Role::App, "z_index", 3).unwrap();
     let shape = shape::create_menu_icon(COLOR_CYAN).scaled(MENU_ICON_SCALE);
-    node.set_property_shape(atom, Role::App, "shape", shape).unwrap();
+    let prop = node.get_property("shape").unwrap();
+    prop.set_default_shape(0, shape).unwrap();
     let node =
         node.setup(|me| VectorArt::new(me, app.renderer.clone(), app.redraw_trigger.clone())).await;
     mainlayer_node.link(node);
@@ -562,11 +514,10 @@ pub async fn setup_wallet_button(app: &App, chat_layer: SceneNodePtr, i18n_fish:
     let atom = &mut PropertyAtomicGuard::none();
     let mut cc = expr::Compiler::new();
     cc.add_const_f32("MENU_BTN_W_R", MENU_BTN_W_R);
-    cc.add_const_f32("MENU_BTN_H", MENU_BTN_H);
     cc.add_const_f32("CHANNEL_LABEL_X", CHANNEL_LABEL_X);
 
     let chat_is_visible = PropertyBool::wrap(&chat_layer, Role::App, "is_visible", 0).unwrap();
-    let menu_layer = chat_layer.lookup_node("/menu_layer").unwrap();
+    let mainlayer_node = chat_layer.lookup_node("/menu_layer/mainbtn_layer").unwrap();
 
     // Wallet status icon (blockchain netlogo, all cyan = fully connected)
     // Positioned at center of wallet button area, above write_btn
@@ -574,10 +525,7 @@ pub async fn setup_wallet_button(app: &App, chat_layer: SceneNodePtr, i18n_fish:
     let prop = node.get_property("rect").unwrap();
     let code = cc.compile("w - MENU_BTN_W_R / 2 - CHANNEL_LABEL_X").unwrap();
     prop.set_default_expr(0, code).unwrap();
-    let code = cc
-        .compile("h - CHANNEL_LABEL_X - 3 * MENU_BTN_W_R - 2 * CHANNEL_LABEL_X + MENU_BTN_W_R / 2")
-        .unwrap();
-    prop.set_default_expr(1, code).unwrap();
+    prop.set_default_f32(1, MENU_BTN_W_R / 2.).unwrap();
     prop.set_default_f32(2, 1.).unwrap();
     prop.set_default_f32(3, 1.).unwrap();
     node.set_property_u32(atom, Role::App, "z_index", 3).unwrap();
@@ -586,10 +534,11 @@ pub async fn setup_wallet_button(app: &App, chat_layer: SceneNodePtr, i18n_fish:
     shape.join(shape::create_blockchain_netlogo2(COLOR_CYAN));
     shape.join(shape::create_blockchain_netlogo3(COLOR_CYAN));
     shape.join(shape::create_blockchain_netlogo4(COLOR_CYAN));
-    node.set_property_shape(atom, Role::App, "shape", shape).unwrap();
+    let prop = node.get_property("shape").unwrap();
+    prop.set_default_shape(0, shape).unwrap();
     let node =
         node.setup(|me| VectorArt::new(me, app.renderer.clone(), app.redraw_trigger.clone())).await;
-    menu_layer.link(node);
+    mainlayer_node.link(node);
 
     // Wallet button (above write_btn, square: w = h = MENU_BTN_W_R)
     let node = create_button("wallet_btn");
@@ -597,8 +546,7 @@ pub async fn setup_wallet_button(app: &App, chat_layer: SceneNodePtr, i18n_fish:
     let prop = node.get_property("rect").unwrap();
     let code = cc.compile("w - MENU_BTN_W_R - CHANNEL_LABEL_X").unwrap();
     prop.set_default_expr(0, code).unwrap();
-    let code = cc.compile("h - CHANNEL_LABEL_X - 3 * MENU_BTN_W_R - 2 * CHANNEL_LABEL_X").unwrap();
-    prop.set_default_expr(1, code).unwrap();
+    prop.set_default_f32(1, 0.).unwrap();
     prop.set_default_f32(2, MENU_BTN_W_R).unwrap();
     prop.set_default_f32(3, MENU_BTN_W_R).unwrap();
     //node.set_property_bool(atom, Role::App, "debug", true).unwrap();
@@ -627,7 +575,7 @@ pub async fn setup_wallet_button(app: &App, chat_layer: SceneNodePtr, i18n_fish:
     let redraw = app.redraw_trigger.clone();
 
     let node = node.setup(|me| Button::new(me, renderer, redraw)).await;
-    menu_layer.link(node);
+    mainlayer_node.link(node);
 }
 
 pub async fn setup_settings_button(app: &App, chat_layer: SceneNodePtr) {
@@ -637,25 +585,23 @@ pub async fn setup_settings_button(app: &App, chat_layer: SceneNodePtr) {
     cc.add_const_f32("CHANNEL_LABEL_X", CHANNEL_LABEL_X);
     cc.add_const_f32("SETTINGS_ICON_SCALE", SETTINGS_ICON_SCALE);
 
-    let menu_layer = chat_layer.lookup_node("/menu_layer").unwrap();
+    let mainlayer_node = chat_layer.lookup_node("/menu_layer/mainbtn_layer").unwrap();
 
     // Settings icon
     let node = create_vector_art("settings_icon");
     let prop = node.get_property("rect").unwrap();
     let code = cc.compile("w - MENU_BTN_W_R / 2 - CHANNEL_LABEL_X").unwrap();
     prop.set_default_expr(0, code).unwrap();
-    let code = cc
-        .compile("h - CHANNEL_LABEL_X - 2 * MENU_BTN_W_R - CHANNEL_LABEL_X + MENU_BTN_W_R / 2")
-        .unwrap();
-    prop.set_default_expr(1, code).unwrap();
+    prop.set_default_f32(1, 1.5 * MENU_BTN_W_R + CHANNEL_LABEL_X).unwrap();
     prop.set_default_f32(2, SETTINGS_ICON_SCALE).unwrap();
     prop.set_default_f32(3, SETTINGS_ICON_SCALE).unwrap();
     node.set_property_u32(atom, Role::App, "z_index", 3).unwrap();
     let shape = shape::create_settings(COLOR_CYAN).scaled(SETTINGS_ICON_SCALE);
-    node.set_property_shape(atom, Role::App, "shape", shape).unwrap();
+    let prop = node.get_property("shape").unwrap();
+    prop.set_default_shape(0, shape).unwrap();
     let node =
         node.setup(|me| VectorArt::new(me, app.renderer.clone(), app.redraw_trigger.clone())).await;
-    menu_layer.link(node);
+    mainlayer_node.link(node);
 
     // Settings button
     let node = create_button("settings_btn");
@@ -663,8 +609,7 @@ pub async fn setup_settings_button(app: &App, chat_layer: SceneNodePtr) {
     let prop = node.get_property("rect").unwrap();
     let code = cc.compile("w - MENU_BTN_W_R - CHANNEL_LABEL_X").unwrap();
     prop.set_default_expr(0, code).unwrap();
-    let code = cc.compile("h - CHANNEL_LABEL_X - 2 * MENU_BTN_W_R - CHANNEL_LABEL_X").unwrap();
-    prop.set_default_expr(1, code).unwrap();
+    prop.set_default_f32(1, MENU_BTN_W_R + CHANNEL_LABEL_X).unwrap();
     prop.set_default_f32(2, MENU_BTN_W_R).unwrap();
     prop.set_default_f32(3, MENU_BTN_W_R).unwrap();
     //node.set_property_bool(atom, Role::App, "debug", true).unwrap();
@@ -688,5 +633,5 @@ pub async fn setup_settings_button(app: &App, chat_layer: SceneNodePtr) {
     let redraw = app.redraw_trigger.clone();
 
     let node = node.setup(|me| Button::new(me, renderer, redraw)).await;
-    menu_layer.link(node);
+    mainlayer_node.link(node);
 }

@@ -46,7 +46,7 @@ pub mod test;
 pub mod test_chatview;
 pub mod test_edit;
 pub mod test_scroll_layer;
-mod wallet;
+pub mod wallet;
 
 macro_rules! i { ($($arg:tt)*) => { info!(target: "app::schema", $($arg)*); } }
 macro_rules! e { ($($arg:tt)*) => { error!(target: "app::schema", $($arg)*); } }
@@ -188,7 +188,7 @@ mod ui_consts {
 pub use ui_consts::*;
 
 pub static DEFAULT_CHANNELS: &'static [&str] =
-    &["dev", "media", "hackers", "memes", "philosophy", "markets", "math", "random"];
+    &["dev", "media", "hackers", "memes", "philosophy", "markets", "math", "random", "fit"];
 
 /// Read the ordered list of joined channels/contacts (prefixed names like "#dev", "@alice").
 pub fn read_joined_channels() -> Vec<String> {
@@ -293,6 +293,44 @@ pub async fn make(
     let content =
         content.setup(|me| Layer::new(me, app.renderer.clone(), app.redraw_trigger.clone())).await;
     window.link(content.clone());
+
+    // Shared header below screen controls and above theme backgrounds.
+    let node = create_vector_art("header_bg");
+    let prop = node.get_property("rect").unwrap();
+    prop.set_default_f32(0, 0.).unwrap();
+    prop.set_default_f32(1, 0.).unwrap();
+    prop.set_default_expr(2, expr::load_var("w")).unwrap();
+    prop.set_default_f32(3, MAIN_MENU_HEADER_HEIGHT).unwrap();
+    node.set_property_u32(atom, Role::App, "z_index", 1).unwrap();
+    let mut shape = VectorShape::new();
+    shape.add_filled_box(
+        expr::const_f32(0.),
+        expr::const_f32(0.),
+        expr::load_var("w"),
+        expr::load_var("h"),
+        [0., 0., 0., 1.],
+    );
+    shape.add_filled_box(
+        expr::const_f32(0.),
+        expr::load_var("h"),
+        expr::load_var("w"),
+        cc.compile("h + 0.5").unwrap(),
+        [0.41, 0.6, 0.65, 1.],
+    );
+    shape.add_smooth_vertical_gradient(
+        expr::const_f32(0.),
+        expr::const_f32(0.),
+        expr::load_var("w"),
+        cc.compile("h / 2").unwrap(),
+        [0.2, 0.2, 0.2, 0.5],
+        [0.5, 0.5, 0.5, 0.],
+        8,
+        0.2,
+    );
+    node.get_property("shape").unwrap().set_default_shape(0, shape).unwrap();
+    let node =
+        node.setup(|me| VectorArt::new(me, app.renderer.clone(), app.redraw_trigger.clone())).await;
+    content.link(node);
 
     // Main menu overlay, toggled by the main_menu_btn shown on the main
     // wallet and main chat screens. Sits above both sections.
@@ -693,7 +731,7 @@ pub async fn make(
     prop.set_default_expr(2, expr::load_var("w")).unwrap();
     prop.set_default_expr(3, expr::load_var("h")).unwrap();
     chat_layer.set_property_bool(atom, Role::App, "is_visible", false).unwrap();
-    chat_layer.set_property_u32(atom, Role::App, "z_index", 1).unwrap();
+    chat_layer.set_property_u32(atom, Role::App, "z_index", 2).unwrap();
     let chat_layer = chat_layer
         .setup(|me| Layer::new(me, app.renderer.clone(), app.redraw_trigger.clone()))
         .await;
