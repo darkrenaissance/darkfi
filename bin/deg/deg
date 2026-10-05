@@ -17,49 +17,107 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-import asyncio, re, sys, base58
+import asyncio, sys, base58
 import urwid as u
 import networkx as nx
+from collections import Counter
 from datetime import datetime
-# import matplotlib.pyplot as plt
 import src.rpc
 
-from os.path import join
+NULL_HASH = '0' * 64
 
-# this is counter-intuitive because the dag is reversed
-resolved = [True, True]
+def format_timestamp(timestamp):
+    ts = int(timestamp)
+    dt = datetime.fromtimestamp(ts) if ts < 1e10 else datetime.fromtimestamp(int(ts/1000))
+    return str(dt)
 
-def graph(event, longest_path):
-    global resolved
-    merge = len(event['parents']) > 1
-    fork = len(event['children']) > 1
+# Rows are rendered newest-first so parents always sit below their children.
+# Every active branch owns a fixed 3-character lane. Lanes are assigned in a
+# first pass: a node consumes its lane and hands it to one parent, extra
+# parents open lanes to the right with a heavy 'M━┑' bend, and when a second
+# child shares an already-promised parent an S-bend taps that lane on the
+# child's own row: 'o──┘' into a lane on the right, '┌──o' into a lane on the
+# left. A shared parent (a fork) is kept aligned with its leftmost child's
+# lane, and every parent below it follows that same lane, so a fork never
+# indents to the right merely because its right branch was processed first.
+# A second pass then draws every row using those resolved lanes.
+def render_graph_glyphs(events):
+    parents_of = {e['hash']: list(dict.fromkeys(
+                     p for p in e['parents'] if p != NULL_HASH)) for e in events}
+    kids = Counter(p for ps in parents_of.values() for p in ps)
+    fork = {p for p, c in kids.items() if c > 1}
 
-    if merge and not fork:
-        if not resolved[0]:
-            resolved[1] = False
-        if resolved[0]:
-            resolved[0] = False
-    
-        return "M━┑"
-
-    if fork and not merge:
-        if resolved[1]:
-            resolved[0] = True
-        if not resolved[1]:
-            resolved[1] = True
-
-        return "o─┘"
-
-    if merge and fork:
-        return "M━┪"
-    if not merge and not fork:
-        if not resolved[0]:
-            if event['hash'] in longest_path:
-                return "o │"
-            else:
-                return "│ o"
+    # First pass: resolve the lane every node will be drawn on. A fork parent
+    # collects the lanes of all its children and takes the leftmost one.
+    promised = {}
+    fork_lanes = {}
+    fresh = set()
+    n_lanes = 0
+    final_lane = {}
+    for event in events:
+        node = event['hash']
+        if node in promised:
+            lane = promised.pop(node)
+        elif node in fork_lanes:
+            lane = min(fork_lanes[node])
         else:
-            return "o  "
+            lane = n_lanes
+            n_lanes += 1
+        final_lane[node] = lane
+
+        own = True
+        for parent in parents_of[node]:
+            if parent in promised:
+                continue
+            if parent in fork:
+                fork_lanes.setdefault(parent, []).append(lane)
+                own = False
+            elif own:
+                promised[parent] = lane
+                own = False
+            else:
+                promised[parent] = n_lanes
+                fresh.add((node, parent))
+                n_lanes += 1
+
+    # Second pass: draw the rows using the resolved lanes.
+    promised = {}
+    glyphs = []
+    for event in events:
+        node = event['hash']
+        lane = final_lane[node]
+        promised.pop(node, None)
+
+        edges = []
+        for parent in parents_of[node]:
+            parent_lane = final_lane[parent]
+            promised.setdefault(parent, parent_lane)
+            if parent_lane != lane:
+                edges.append((parent_lane, (node, parent) in fresh))
+
+        grid = [' '] * (3 * n_lanes)
+        for target in promised.values():
+            if target != lane:
+                grid[3 * target + 1] = '│'
+
+        for target, is_fresh in edges:
+            lo, hi = sorted((lane, target))
+            if is_fresh:
+                grid[3 * target + 1] = '┑'
+                run = '━'
+            elif target > lane:
+                grid[3 * target + 1] = '┘'
+                run = '─'
+            else:
+                grid[3 * target + 1] = '┌'
+                run = '─'
+            for col in range(3 * lo + 2, 3 * hi + 1):
+                grid[col] = run
+
+        grid[3 * lane + 1] = 'M' if len(parents_of[node]) > 1 else 'o'
+        glyphs.append(''.join(grid).rstrip())
+
+    return glyphs
 
 # because tab character is broken in urwid texts
 def indent(num):
@@ -67,17 +125,16 @@ def indent(num):
 
 class ListItem(u.WidgetWrap):
     
-    def __init__ (self, event, longest_path):
-        g = graph(event, longest_path)
+    def __init__ (self, event):
+        g = event['glyph']
         self.content = event
         layer_num = int(event["layer"])
         layer = "layer " + str(layer_num) + indent(layer_num) if layer_num != 0 else "genesis       "
-        dt = datetime.fromtimestamp(int(event['timestamp'])) if int(event['timestamp']) < 1e10 else datetime.fromtimestamp(int(int(event['timestamp'])/1000))
-        dt = event['hash'][:10] + " │ " + str(dt)
+        dt = event['hash'][:10] + " │ " + format_timestamp(event['timestamp'])
         t = u.AttrMap(u.Text([('word', dt),
                               ('layer-num', " " + layer),
                               ('word', g),
-                              ('cont', event['content'])], wrap="ellipsis"),
+                              ('cont', ' ' + event['content'])], wrap="ellipsis"),
                               {'word':'datetime', 'layer-num': 'reporter', 'cont': 'content'},
                               {'word':'event_selected', 'layer-num': 'event_selected', 'cont': 'event_selected'})
         u.WidgetWrap.__init__(self, t)
@@ -87,6 +144,18 @@ class ListItem(u.WidgetWrap):
     
     def keypress(self, size, key):
         return key
+
+# Not event header
+class HeaderItem(u.WidgetWrap):
+
+    def __init__ (self, info):
+        dt = format_timestamp(info['timestamp'])
+        title = f" DAG genesis {info['hash'][:10]} @ {dt}, {info['count']} events "
+        t = u.AttrMap(u.Text('──' + title + '─' * max(4, 60 - len(title))), 'header')
+        u.WidgetWrap.__init__(self, t)
+
+    def selectable(self):
+        return False
 
 class ListView(u.WidgetWrap):
 
@@ -104,8 +173,8 @@ class ListView(u.WidgetWrap):
             print("DAG is empty!")
             exit(-1)
 
-    def set_data(self, events, longest_path):
-        events_widgets = [ListItem(e, longest_path) for e in events]
+    def set_data(self, items):
+        events_widgets = [HeaderItem(i) if i.get('type') == 'header' else ListItem(i) for i in items]
         u.disconnect_signal(self.walker, 'modified', self.modified)
 
         while len(self.walker) > 0:
@@ -113,7 +182,10 @@ class ListView(u.WidgetWrap):
         
         self.walker.extend(events_widgets)
         u.connect_signal(self.walker, "modified", self.modified)
-        self.walker.set_focus(0)
+        for idx, widget in enumerate(events_widgets):
+            if widget.selectable():
+                self.walker.set_focus(idx)
+                break
 
 class DetailView(u.WidgetWrap):
     
@@ -170,50 +242,78 @@ class App(object):
             ('datetime',         "light blue",      "black"),
             ('reporter',         "dark green",      "black"),
             ('content',          "",                "black"),
+            ("header",           "dark cyan",       "black"),
             ("footer",           "white, bold",     "dark red")
         }
     
     async def update_data(self, config, replay_mode):
-            self.config = config
-            dag_dict = await recreate_dag(config, replay_mode)
-            dag_list = list(dag_dict.items())
-            parent_child_pairs = []
-            for item in dag_list:
-                parents = item[1]['parents']
-                child = item[0]
-                for parent in parents:
-                    if parent == '0' * 64:
-                        continue
-                    parent_child_pairs.append((parent, child))
-                    
-            # Create a directed graph
-            dag = nx.DiGraph()
+        self.config = config
+        dag_dict = await recreate_dag(config, replay_mode)
+        if not dag_dict:
+            print("DAG is empty!")
+            exit(-1)
 
-            # Add edges to the graph (this also adds nodes)
-            dag.add_edges_from(parent_child_pairs)
-            l = []
-            topological_order = list(nx.topological_sort(dag))
-            for node in reversed(topological_order):
-                event_details = dag_dict.get(node) # details
-                if event_details is None:
+        parent_child_pairs = []
+        for node, details in dag_dict.items():
+            for parent in details['parents']:
+                if parent == NULL_HASH:
                     continue
+                parent_child_pairs.append((parent, node))
+
+        # Create a directed graph (genesis events are added explicitly so
+        # they are never dropped even when nothing references them)
+        dag = nx.DiGraph()
+        dag.add_nodes_from(dag_dict.keys())
+        dag.add_edges_from(parent_child_pairs)
+
+        # Partition events into one section per DAG
+        genesis_nodes = sorted(
+            (n for n, details in dag_dict.items() if int(details['layer']) == 0),
+            key=lambda n: int(dag_dict[n]['timestamp']), reverse=True)
+
+        sections = []
+        grouped = set()
+        for genesis in genesis_nodes:
+            members = [genesis] + sorted(
+                n for n in nx.descendants(dag, genesis) if n not in grouped)
+            grouped.update(members)
+            sections.append((genesis, members))
+
+        # defensive: events unreachable from any known genesis
+        leftovers = [n for n in dag_dict if n not in grouped]
+        if leftovers:
+            root = min(leftovers, key=lambda n: int(dag_dict[n]['layer']))
+            sections.append((root, leftovers))
+
+        items = []
+        for root, members in sections:
+            sub = dag.subgraph(members)
+            order = list(reversed(list(nx.topological_sort(sub))))
+
+            l = []
+            for node in order:
+                event_details = dag_dict[node] # details
                 layer = int(event_details['layer'])
                 content = event_details['content'] # event content
                 timestamp = event_details['timestamp']
-                children = list(dag.successors(node))
-                parents = list(dag.predecessors(node))
-                pattern = r'\\x[0-9A-Fa-f]{2}'
-                decoded_str = str(base58.b58decode(content))
-                y = re.sub(pattern, ' ', decoded_str)
-                if y.startswith("b'"):
-                    matches = y.replace("b'", "")[:-1]
-                elif y.startswith('b"'):
-                    matches = y.replace('b"', "")[:-1]
-                
+                children = list(sub.successors(node))
+                parents = list(sub.predecessors(node))
+                try:
+                    raw = base58.b58decode(content)
+                except ValueError:
+                    raw = content.encode('utf-8', 'replace')
+                matches = ''.join(ch if ch.isprintable() else ' ' for ch in raw.decode('utf-8', 'replace')).strip()
+
                 l.append({"layer":f"{layer}", "hash":f"{node}", "children":children, "parents":parents, "content":f"{matches}", "timestamp": f"{timestamp}"})
 
-            longest_path = nx.dag_longest_path(dag)
-            self.view_one.set_data(l, longest_path)
+            glyphs = render_graph_glyphs(l)
+            for event, glyph in zip(l, glyphs):
+                event['glyph'] = glyph
+
+            items.append({"type":"header", "hash":root, "timestamp":dag_dict[root]['timestamp'], "count":len(order)})
+            items.extend(l)
+
+        self.view_one.set_data(items)
 
     async def start(self, config, replay_mode):
         await self.update_data(config, replay_mode)
@@ -245,7 +345,7 @@ async def recreate_dag(config, replay_mode):
         
 
 async def main(argv):
-    val = str('127.0.0.1:26660')
+    val = str('127.0.0.1:9605')
     for i in range(1, len(sys.argv)):
         if sys.argv[i] == "-e":
             try:
@@ -258,7 +358,7 @@ async def main(argv):
     try:
         config['host'], config['port'] = val.split(':')
     except ValueError:
-        print("Please provide a port as in: 127.0.0.1:26660")
+        print("Please provide a port as in: 127.0.0.1:9605")
         exit(-1)
 
     replay_mode = False
@@ -266,9 +366,9 @@ async def main(argv):
         if '-r' in argv:
             replay_mode = True
         if set(argv) & set(['darkirc', 'irc']):
-            config['port'] = 26660
+            config['port'] = 9605
         elif set(argv) & set(['taud', 'tau']):
-            config['port'] = 23330
+            config['port'] = 9805
 
     app = App()
     await app.start(config, replay_mode)
