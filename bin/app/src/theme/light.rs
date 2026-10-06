@@ -29,11 +29,14 @@ use std::sync::Arc;
 use crate::{
     app::{
         node::create_vector_art,
-        schema::menu::ui_consts::{MENU_ICON_SCALE, SETTINGS_ICON_SCALE},
+        schema::{
+            chat::ui_consts::{BACKARROW_SCALE, EMOJI_CLOSE_SCALE, EMOJI_SCALE},
+            menu::ui_consts::{MENU_ICON_SCALE, SETTINGS_ICON_SCALE},
+        },
     },
     error::{Error, Result},
     expr,
-    mesh::{rgba, COLOR_BLACK},
+    mesh::{rgba, COLOR_BLACK, COLOR_WHITE},
     prop::{PropertyAtomicGuard, PropertyValue, Role},
     shape,
     theme::{Theme, ThemeCtx},
@@ -62,7 +65,7 @@ async fn light_apply(ctx: &ThemeCtx) -> Result<()> {
         ("edit.text_color", [0.08, 0.08, 0.08, 1.]),
         ("edit.hi_bg_color", [0.65, 0.65, 0.65, 1.]),
         ("edit.text_hi_color", [1., 1., 1., 1.]),
-        ("edit.cursor_color", [0.10, 0.10, 0.10, 1.]),
+        ("edit.cursor_color", rgba!(0x3300ffff)),
         ("edit.action_fg_color", [0.10, 0.10, 0.10, 1.]),
         ("edit.action_bg_color", [0.85, 0.85, 0.85, 1.]),
         ("menu.bg_color", [0.95, 0.95, 0.95, 0.5]),
@@ -149,6 +152,13 @@ async fn light_apply(ctx: &ThemeCtx) -> Result<()> {
     let prop = node.get_property("text_color").unwrap();
     ctx.set_touched_color(atom, &prop, COLOR_BLACK)?;
 
+    let node = sg_root.lookup_node("/window/content/chat/main_chat_layer/channel_label").unwrap();
+    let prop = node.get_property("text_color").unwrap();
+    ctx.set_touched_color(atom, &prop, COLOR_BLACK)?;
+    let node = sg_root.lookup_node("/window/content/chat/menu_layer/channels_label").unwrap();
+    let prop = node.get_property("text_color").unwrap();
+    ctx.set_touched_color(atom, &prop, COLOR_BLACK)?;
+
     let node = sg_root.lookup_node("/window/content/header_bg").unwrap();
     let mut shape = VectorShape::new();
     shape.add_filled_box(
@@ -172,6 +182,93 @@ async fn light_apply(ctx: &ThemeCtx) -> Result<()> {
     );
     let prop = node.get_property("shape").unwrap();
     ctx.set_touched(atom, &prop, 0, PropertyValue::VectorShape(Arc::new(shape)))?;
+
+    let node =
+        sg_root.lookup_node("/window/content/chat/main_chat_layer/content/editbox_bg").unwrap();
+    let (bg_color, line_color) = (COLOR_WHITE, rgba!(0x263B3Cff));
+    let mut shape = VectorShape::new();
+    // Main green background
+    shape.add_filled_box(
+        expr::const_f32(0.),
+        expr::const_f32(0.),
+        expr::load_var("w"),
+        expr::load_var("h"),
+        bg_color,
+    );
+    // Top line
+    shape.add_filled_box(
+        expr::const_f32(0.),
+        expr::const_f32(0.),
+        expr::load_var("w"),
+        expr::const_f32(1.),
+        line_color,
+    );
+    shape.add_radial_glow(
+        // Center
+        cc.compile("w / 2").unwrap(),
+        expr::load_var("h"),
+        // Size
+        expr::load_var("w"),
+        cc.compile("h / 4").unwrap(),
+        // Segments
+        8,
+        // Angles
+        std::f32::consts::PI,
+        2. * std::f32::consts::PI,
+        // Color
+        [0., 0.28, 0.2, 1.],
+    );
+    let prop = node.get_property("shape").unwrap();
+    ctx.set_touched(atom, &prop, 0, PropertyValue::VectorShape(Arc::new(shape)))?;
+
+    // Chat editor icons
+
+    let color = rgba!(0x3300ffff);
+
+    let node =
+        sg_root.lookup_node("/window/content/chat/main_chat_layer/content/send_btn_bg").unwrap();
+    let shape = shape::create_send_arrow(color).scaled(EMOJI_SCALE);
+    let prop = node.get_property("shape").unwrap();
+    ctx.set_touched(atom, &prop, 0, PropertyValue::VectorShape(Arc::new(shape)))?;
+
+    let node =
+        sg_root.lookup_node("/window/content/chat/main_chat_layer/content/emoji_btn_bg").unwrap();
+    let shape = shape::create_emoji_selector(color).scaled(EMOJI_SCALE);
+    let prop = node.get_property("shape").unwrap();
+    ctx.set_touched(atom, &prop, 0, PropertyValue::VectorShape(Arc::new(shape)))?;
+
+    let node = sg_root
+        .lookup_node("/window/content/chat/main_chat_layer/content/emoji_close_btn_bg")
+        .unwrap();
+    let shape = shape::create_close_icon(color).scaled(EMOJI_CLOSE_SCALE);
+    let prop = node.get_property("shape").unwrap();
+    ctx.set_touched(atom, &prop, 0, PropertyValue::VectorShape(Arc::new(shape)))?;
+
+    // Back buttons
+
+    let shape = Arc::new(shape::create_back_arrow(color).scaled(BACKARROW_SCALE));
+
+    let node = sg_root.lookup_node("/window/content/chat/main_chat_layer/back_btn_bg").unwrap();
+    let prop = node.get_property("shape").unwrap();
+    ctx.set_touched(atom, &prop, 0, PropertyValue::VectorShape(shape.clone()))?;
+
+    let node =
+        sg_root.lookup_node("/window/content/chat/contact_screen_layer/back_btn_bg").unwrap();
+    let prop = node.get_property("shape").unwrap();
+    ctx.set_touched(atom, &prop, 0, PropertyValue::VectorShape(shape.clone()))?;
+
+    let node =
+        sg_root.lookup_node("/window/content/chat/channel_screen_layer/back_btn_bg").unwrap();
+    let prop = node.get_property("shape").unwrap();
+    ctx.set_touched(atom, &prop, 0, PropertyValue::VectorShape(shape.clone()))?;
+
+    let node = sg_root.lookup_node("/window/content/wallet/wallet_back_btn_bg").unwrap();
+    let prop = node.get_property("shape").unwrap();
+    ctx.set_touched(atom, &prop, 0, PropertyValue::VectorShape(shape.clone()))?;
+
+    let node = sg_root.lookup_node("/window/content/settings_layer/back_btn_bg").unwrap();
+    let prop = node.get_property("shape").unwrap();
+    ctx.set_touched(atom, &prop, 0, PropertyValue::VectorShape(shape.clone()))?;
 
     Ok(())
 }

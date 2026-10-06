@@ -81,8 +81,9 @@ pub async fn make(
     prop.set_default_f32(3, BACKARROW_SCALE).unwrap();
     node.set_property_u32(atom, Role::App, "z_index", 3).unwrap();
     node.set_property_bool(atom, Role::App, "is_visible", false).unwrap();
-    let shape = shape::create_back_arrow().scaled(BACKARROW_SCALE);
-    node.set_property_shape(atom, Role::App, "shape", shape).unwrap();
+    let shape = shape::create_back_arrow([0., 1., 1., 1.]).scaled(BACKARROW_SCALE);
+    let prop = node.get_property("shape").unwrap();
+    prop.set_default_shape(0, shape).unwrap();
     let node =
         node.setup(|me| VectorArt::new(me, app.renderer.clone(), app.redraw_trigger.clone())).await;
     wallet_layer.link(node.clone());
@@ -516,7 +517,7 @@ pub async fn make(
         &window_scale,
         i18n_fish,
         "tokens_label",
-        "tokens",
+        "TOKENS",
         &mut y,
     )
     .await;

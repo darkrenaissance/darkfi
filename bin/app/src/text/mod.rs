@@ -190,6 +190,35 @@ pub fn make_layout2(
     text_align: parley::Alignment,
     overflow_wrap: parley::OverflowWrap,
 ) -> TextLayout {
+    make_layout_with_indent(
+        text,
+        text_color,
+        font_size,
+        lineheight,
+        window_scale,
+        width,
+        underlines,
+        foreground_colors,
+        text_align,
+        overflow_wrap,
+        0.,
+    )
+}
+
+/// Reserve space before the first line without changing text or style ranges.
+pub fn make_layout_with_indent(
+    text: &str,
+    text_color: Color,
+    font_size: f32,
+    lineheight: f32,
+    window_scale: f32,
+    width: Option<f32>,
+    underlines: &[Range<usize>],
+    foreground_colors: &[(Range<usize>, Color)],
+    text_align: parley::Alignment,
+    overflow_wrap: parley::OverflowWrap,
+    first_line_indent: f32,
+) -> TextLayout {
     THREAD_LAYOUT_CTX.with(|layout_ctx| {
         let mut layout_ctx = layout_ctx.borrow_mut();
         let mut font_ctx = GLOBAL_FONT_CTX.clone();
@@ -212,8 +241,90 @@ pub fn make_layout2(
         let mut layout: parley::Layout<Color> = builder.build(text);
         // The wrap width is given in virtual units while the layout
         // coordinates are physical, so scale it up before breaking.
-        layout.break_all_lines(width.map(|w| w * window_scale));
+        let width = width.map(|w| w * window_scale);
+        if first_line_indent > 0. {
+            let width = width.unwrap_or(f32::MAX);
+            let indent = first_line_indent * window_scale;
+            let mut breaker = layout.break_lines();
+            breaker.state_mut().set_layout_max_advance(width);
+            breaker.state_mut().set_line_max_advance((width - indent).max(0.));
+            breaker.state_mut().set_line_x(indent);
+            breaker.break_next();
+            breaker.state_mut().set_line_x(0.);
+            breaker.break_remaining(width);
+        } else {
+            layout.break_all_lines(width);
+        }
         layout.align(text_align, parley::AlignmentOptions::default());
         TextLayout { layout, scale: window_scale }
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn first_line_indent_uses_full_width_on_continuations() {
+        for scale in [1., 1.5, 2.] {
+            let text = "word ".repeat(30);
+            let layout = make_layout_with_indent(
+                &text,
+                [1.; 4],
+                14.,
+                20. / 14.,
+                scale,
+                Some(200.),
+                &[],
+                &[],
+                parley::Alignment::Start,
+                parley::OverflowWrap::Normal,
+                50.,
+            );
+            assert!(layout.lines().count() > 2);
+            for (i, line) in layout.lines().enumerate() {
+                let run = line
+                    .items()
+                    .find_map(|item| match item {
+                        parley::PositionedLayoutItem::GlyphRun(run) => Some(run),
+                        _ => None,
+                    })
+                    .unwrap();
+                let expected = if i == 0 { 50. } else { 0. };
+                assert!((run.offset() / scale - expected).abs() < 0.01);
+            }
+            let old_layout = make_layout(&text, [1.; 4], 14., 20. / 14., scale, Some(150.), &[]);
+            assert!(layout.height() < old_layout.height());
+            for line in old_layout.lines() {
+                assert_eq!(line.metrics().offset, 0.);
+            }
+        }
+    }
+
+    #[test]
+    fn first_line_indent_preserves_empty_and_overflow_metrics() {
+        for text in ["", "\n", "first\nsecond", "averylongunbrokenword"] {
+            for width in [0., 30., 80., 200.] {
+                let layout = make_layout_with_indent(
+                    text,
+                    [1.; 4],
+                    14.,
+                    20. / 14.,
+                    1.,
+                    Some(width),
+                    &[],
+                    &[],
+                    parley::Alignment::Start,
+                    parley::OverflowWrap::Normal,
+                    50.,
+                );
+                let expected_lines = if text.contains('\n') { 2 } else { 1 };
+                assert_eq!(layout.lines().count(), expected_lines, "{text:?}, width={width}");
+                assert!((layout.height() - 20. * expected_lines as f32).abs() < 0.01);
+                for (i, line) in layout.lines().enumerate() {
+                    assert_eq!(line.metrics().offset, if i == 0 { 50. } else { 0. });
+                }
+            }
+        }
+    }
 }

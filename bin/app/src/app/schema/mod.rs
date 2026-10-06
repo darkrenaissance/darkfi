@@ -38,7 +38,7 @@ use crate::{
     util::i18n::I18nBabelFish,
 };
 
-mod chat;
+pub mod chat;
 pub mod menu;
 use menu::channel::Channel;
 mod settings;

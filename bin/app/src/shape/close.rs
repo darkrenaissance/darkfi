@@ -16,8 +16,11 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use crate::ui::{ShapeVertex, VectorShape};
-pub fn create_close_icon() -> VectorShape {
+use crate::{
+    mesh::Color,
+    ui::{ShapeVertex, VectorShape},
+};
+pub fn create_close_icon(color: Color) -> VectorShape {
     VectorShape {
         verts: vec![
             ShapeVertex::from_xy(0.0, 0.0, [0., 1., 1., 1.]),

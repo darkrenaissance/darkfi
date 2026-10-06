@@ -223,8 +223,9 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish) {
     prop.set_default_f32(3, 0.).unwrap();
     node.set_property_u32(atom, Role::App, "z_index", 3).unwrap();
 
-    let shape = shape::create_back_arrow().scaled(BACKARROW_SCALE);
-    node.set_property_shape(atom, Role::App, "shape", shape).unwrap();
+    let shape = shape::create_back_arrow([0., 1., 1., 1.]).scaled(BACKARROW_SCALE);
+    let prop = node.get_property("shape").unwrap();
+    prop.set_default_shape(0, shape).unwrap();
     let node =
         node.setup(|me| VectorArt::new(me, app.renderer.clone(), app.redraw_trigger.clone())).await;
     layer_node.link(node);

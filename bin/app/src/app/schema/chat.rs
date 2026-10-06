@@ -124,12 +124,12 @@ mod android_ui_consts {
 }
 
 #[cfg(target_os = "android")]
-mod ui_consts {
+pub mod ui_consts {
     pub use super::android_ui_consts::*;
 }
 
 #[cfg(feature = "emulate-android")]
-mod ui_consts {
+pub mod ui_consts {
     pub use super::android_ui_consts::*;
 }
 
@@ -137,7 +137,7 @@ mod ui_consts {
     any(target_os = "linux", target_os = "macos", target_os = "windows"),
     not(feature = "emulate-android")
 ))]
-mod ui_consts {
+pub mod ui_consts {
     // Chat UI
     pub const CHANNEL_LABEL_X: f32 = 100.;
     pub const CHANNEL_LABEL_Y: f32 = 14.;
@@ -289,8 +289,9 @@ pub async fn make(
     prop.set_default_f32(3, BACKARROW_SCALE).unwrap();
     node.set_property_u32(atom, Role::App, "z_index", 3).unwrap();
 
-    let shape = shape::create_back_arrow().scaled(BACKARROW_SCALE);
-    node.set_property_shape(atom, Role::App, "shape", shape).unwrap();
+    let shape = shape::create_back_arrow([0., 1., 1., 1.]).scaled(BACKARROW_SCALE);
+    let prop = node.get_property("shape").unwrap();
+    prop.set_default_shape(0, shape).unwrap();
     let back_btn_bg_node =
         node.setup(|me| VectorArt::new(me, renderer.clone(), redraw.clone())).await;
     layer_node.link(back_btn_bg_node.clone());
@@ -827,8 +828,7 @@ pub async fn make(
 
     let editbox_bg_rect_prop = prop.clone();
 
-    let (bg_color, lhs_bg_color, line_color) =
-        ([0., 0.13, 0.08, 1.], [0., 0.11, 0.11, 1.], [0.41, 0.6, 0.65, 1.]);
+    let (bg_color, line_color) = ([0., 0.13, 0.08, 1.], [0.41, 0.6, 0.65, 1.]);
 
     let mut shape = VectorShape::new();
     // Main green background
@@ -862,15 +862,8 @@ pub async fn make(
         // Color
         [0., 0.28, 0.2, 1.],
     );
-    // Bottom line
-    //shape.add_filled_box(
-    //    expr::const_f32(0.),
-    //    cc.compile("h - 1").unwrap(),
-    //    expr::load_var("w"),
-    //    expr::load_var("h"),
-    //    [0.41, 0.6, 0.65, 1.],
-    //);
-    node.set_property_shape(atom, Role::App, "shape", shape).unwrap();
+    let prop = node.get_property("shape").unwrap();
+    prop.set_default_shape(0, shape).unwrap();
     let node = node.setup(|me| VectorArt::new(me, renderer.clone(), redraw.clone())).await;
     layer_node.link(node);
 
@@ -884,8 +877,9 @@ pub async fn make(
     prop.set_default_f32(2, 500.).unwrap();
     prop.set_default_f32(3, 500.).unwrap();
     node.set_property_u32(atom, Role::App, "z_index", 5).unwrap();
-    let shape = shape::create_send_arrow().scaled(EMOJI_SCALE);
-    node.set_property_shape(atom, Role::App, "shape", shape).unwrap();
+    let shape = shape::create_send_arrow([0., 1., 1., 1.]).scaled(EMOJI_SCALE);
+    let prop = node.get_property("shape").unwrap();
+    prop.set_default_shape(0, shape).unwrap();
     let node = node.setup(|me| VectorArt::new(me, renderer.clone(), redraw.clone())).await;
     layer_node.link(node);
 
@@ -899,9 +893,9 @@ pub async fn make(
     prop.set_default_f32(2, 500.).unwrap();
     prop.set_default_f32(3, 500.).unwrap();
     node.set_property_u32(atom, Role::App, "z_index", 5).unwrap();
-    let color = [0., 1., 1., 1.];
-    let shape = shape::create_emoji_selector(color).scaled(EMOJI_SCALE);
-    node.set_property_shape(atom, Role::App, "shape", shape).unwrap();
+    let shape = shape::create_emoji_selector([0., 1., 1., 1.]).scaled(EMOJI_SCALE);
+    let prop = node.get_property("shape").unwrap();
+    prop.set_default_shape(0, shape).unwrap();
     let node = node.setup(|me| VectorArt::new(me, renderer.clone(), redraw.clone())).await;
     layer_node.link(node);
 
@@ -916,8 +910,9 @@ pub async fn make(
     prop.set_default_f32(2, 500.).unwrap();
     prop.set_default_f32(3, 500.).unwrap();
     node.set_property_u32(atom, Role::App, "z_index", 5).unwrap();
-    let shape = shape::create_close_icon().scaled(EMOJI_CLOSE_SCALE);
-    node.set_property_shape(atom, Role::App, "shape", shape).unwrap();
+    let shape = shape::create_close_icon([0., 1., 1., 1.]).scaled(EMOJI_CLOSE_SCALE);
+    let prop = node.get_property("shape").unwrap();
+    prop.set_default_shape(0, shape).unwrap();
     let node = node.setup(|me| VectorArt::new(me, renderer.clone(), redraw.clone())).await;
     layer_node.link(node);
 
