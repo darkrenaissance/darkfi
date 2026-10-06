@@ -15,6 +15,7 @@ from .api import (
     Api,
     CallArgType,
     Expr,
+    NODE_TYPE_NAMES,
     PropertyStatus,
     PropertySubType,
     PropertyType,
@@ -40,13 +41,6 @@ def error_name(err):
     name = name.replace("ID", "Id")
     name = name.replace("SExpr", "Sexpr")
     return re.sub(r"(?<!^)(?=[A-Z])", "_", name).lower()
-
-
-NODE_TYPE_NAMES = {
-    getattr(SceneNodeType, name): name.lower()
-    for name in dir(SceneNodeType)
-    if name.isupper()
-}
 
 
 def resolve_path(cwd, arg):
@@ -230,11 +224,13 @@ COMMAND_PARSERS = {}
 MAIN_PARSER = argparse.ArgumentParser()
 
 
-SHELL_BUILTINS = ("cd", "pwd", "exit", "quit")
+SHELL_BUILTINS = ("cd", "..", "...", "pwd", "exit", "quit")
 
 
 BUILTIN_HELP = {
     "cd": "cd [path]           change the working node (no arg = /, .. pops one)",
+    "..": ".., ..., ....       go up one, two, three, ... nodes",
+    "...": ".., ..., ....       go up one, two, three, ... nodes",
     "pwd": "pwd                 print the working node path",
     "exit": "exit | quit         leave the shell (Ctrl-D also works)",
     "quit": "exit | quit         leave the shell (Ctrl-D also works)",
@@ -247,7 +243,7 @@ def print_help(command=None):
         MAIN_PARSER.print_help()
         print()
         print("shell builtins (interactive mode only):")
-        for name in ("cd", "pwd", "exit", "help"):
+        for name in ("cd", "..", "pwd", "exit", "help"):
             print(f"  {BUILTIN_HELP[name]}")
     elif command in COMMAND_PARSERS:
         COMMAND_PARSERS[command].print_help()
@@ -300,6 +296,9 @@ class Shell:
             return
 
         cmd = tokens[0]
+        if len(tokens) == 1 and len(cmd) >= 2 and not cmd.strip("."):
+            self.cd(["/".join([".."] * (len(cmd) - 1))])
+            return
         if cmd in ("exit", "quit"):
             raise ShellExit
         if cmd == "pwd":
@@ -905,6 +904,10 @@ def cmd_call(api, args, cwd):
 
 
 def run_selftests():
+    from contextlib import redirect_stderr, redirect_stdout
+    from io import StringIO
+    from unittest.mock import Mock
+
     from .api import Expr, Property, PropertyStatus, PropertyType
 
     assert format_value(None) == "null"
@@ -923,6 +926,26 @@ def run_selftests():
     assert NODE_TYPE_NAMES[SceneNodeType.LAYER] == "layer"
     assert NODE_TYPE_NAMES[SceneNodeType.VECTOR_ART] == "vector_art"
     assert NODE_TYPE_NAMES[SceneNodeType.PLUGIN_ROOT] == "plugin_root"
+    for node_type, name in (
+        (25, "chat_view"),
+        (26, "priv_msg_node"),
+        (27, "date_msg_node"),
+        (28, "file_msg_node"),
+        (29, "slider"),
+        (30, "dropdown"),
+    ):
+        assert NODE_TYPE_NAMES[node_type] == name
+        api = Mock()
+        api.get_children.return_value = [("node", 42, node_type)]
+        api.get_properties.return_value = []
+        api.get_signals.return_value = []
+        api.get_methods.return_value = []
+        output = StringIO()
+        with redirect_stdout(output):
+            cmd_ls(api, argparse.Namespace(path="/"), [])
+            print_tree(api, depth=1)
+        assert f"node 42 {name}\n" in output.getvalue()
+        assert f"[{name}]\n" in output.getvalue()
 
     assert error_name(exc.SExprGlobalNotFound()) == "sexpr_global_not_found"
     assert error_name(exc.PropertySExprNotAllowed()) == "property_sexpr_not_allowed"
@@ -942,6 +965,34 @@ def run_selftests():
     assert resolve_path(["window"], "../setting") == "/setting"
     assert resolve_path(["window"], "./content/.") == "/window/content"
     assert resolve_path([], "window//content/") == "/window/content"
+    assert resolve_path(["a", "b", "c"], "../../foo/") == "/a/foo"
+
+    api = Mock()
+    api.get_children.return_value = [
+        ("a", 1, SceneNodeType.LAYER),
+        ("b", 2, SceneNodeType.LAYER),
+        ("foo", 3, SceneNodeType.LAYER),
+    ]
+    shell = Shell(api)
+    for command, expected in (
+        ("..", ["a", "b"]),
+        ("...", ["a"]),
+        ("....", []),
+        ("........", []),
+        ("cd ../../foo/", ["a", "foo"]),
+    ):
+        shell.cwd = ["a", "b", "c"]
+        shell.execute(command)
+        assert shell.cwd == expected, command
+    api.get_children.assert_called_with("/a")
+    shell.cwd = []
+    shell.execute("..")
+    assert shell.cwd == []
+    shell.cwd = ["a", "b", "c"]
+    with redirect_stderr(StringIO()) as errors:
+        shell.execute("cd ../../missing/")
+    assert "node_not_found: /a/missing" in errors.getvalue()
+    assert shell.cwd == ["a", "b", "c"]
 
     assert parse_get_args(["alpha"], []) == ("/", "alpha", None)
     assert parse_get_args(["/window/content", "alpha"], []) == ("/window/content", "alpha", None)

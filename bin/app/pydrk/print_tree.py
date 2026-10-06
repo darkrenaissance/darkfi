@@ -1,4 +1,4 @@
-from .api import Api, PropertyType, SceneNodeType, CallArgType, Expr
+from .api import Api, PropertyType, NODE_TYPE_NAMES, CallArgType, Expr
 
 def print_tree(api, node_path="/", depth=None):
     print(node_path)
@@ -10,37 +10,7 @@ def print_node_info(api, parent_path, depth, indent):
 
     ws = " "*4*indent
     for (child_name, child_id, child_type) in api.get_children(parent_path):
-        match child_type:
-            case SceneNodeType.ROOT:
-                child_type = "root"
-            case SceneNodeType.WINDOW:
-                child_type = "window"
-            case SceneNodeType.WINDOW_INPUT:
-                child_type = "window_input"
-            case SceneNodeType.KEYBOARD:
-                child_type = "keyboard"
-            case SceneNodeType.MOUSE:
-                child_type = "mouse"
-            case SceneNodeType.LAYER:
-                child_type = "layer"
-            case SceneNodeType.OBJECT:
-                child_type = "object"
-            case SceneNodeType.VECTOR_ART:
-                child_type = "vector_art"
-            case SceneNodeType.TEXT:
-                child_type = "text"
-            case SceneNodeType.TEXTURE:
-                child_type = "texture"
-            case SceneNodeType.FONTS:
-                child_type = "fonts"
-            case SceneNodeType.FONT:
-                child_type = "font"
-            case SceneNodeType.CHAT_VIEW:
-                child_type = "chat_view"
-            case SceneNodeType.BUTTON:
-                child_type = "button"
-            case SceneNodeType.SETTING:
-                child_type = "setting"
+        child_type = NODE_TYPE_NAMES.get(child_type, child_type)
 
         desc = f"{ws}{child_name}:{child_id}/"
         desc += " "*(50 - len(desc))

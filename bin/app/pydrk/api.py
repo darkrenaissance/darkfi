@@ -63,7 +63,6 @@ class SceneNodeType:
     TEXTURE = 10
     FONTS = 11
     FONT = 12
-    CHAT_VIEW = 13
     EDIT = 14
     IMAGE = 15
     BUTTON = 16
@@ -74,8 +73,20 @@ class SceneNodeType:
     MENU = 22
     TOKEN_TABLE = 23
     TEXT_SCRAMBLE = 24
+    CHAT_VIEW = 25
+    PRIV_MSG_NODE = 26
+    DATE_MSG_NODE = 27
+    FILE_MSG_NODE = 28
+    SLIDER = 29
+    DROPDOWN = 30
     PLUGIN_ROOT = 100
     PLUGIN = 101
+
+NODE_TYPE_NAMES = {
+    getattr(SceneNodeType, name): name.lower()
+    for name in dir(SceneNodeType)
+    if name.isupper()
+}
 
 class PropertyType:
     NULL = 0
@@ -732,4 +743,3 @@ class Api:
         cur = self._make_request(Command.CALL_METHOD, req)
         result = serial.decode_opt(cur, serial.decode_buf)
         return result
-
