@@ -48,15 +48,17 @@ use crate::{
     },
     scene::{CallArgType, Pimpl, SceneNode, SceneNodePtr, SceneNodeType, SceneNodeWeak},
     text,
-    ui::UIObject,
+    ui::{
+        chatview::{
+            buffer::MsgBuffer, codec, loader::Loader, ChatView, MessageId, MsgRecord, MsgType,
+            Timestamp, Wakeup,
+        },
+        UIObject,
+    },
     ExecutorPtr,
 };
 
 use super::{evict_beyond, filemsg::get_file_url, DrawOutcome, Hit, SharedProps};
-use crate::ui::chatview::{
-    buffer::MsgBuffer, codec, loader::Loader, ChatView, MessageId, MsgRecord, MsgType, Timestamp,
-    Wakeup,
-};
 
 macro_rules! t { ($($arg:tt)*) => { trace!(target: "ui::chatview::privmsg", $($arg)*); } }
 
@@ -205,6 +207,7 @@ impl PrivData {
 #[derive(PartialEq)]
 struct LayoutSig {
     width: f32,
+    timestamp_width: f32,
     font_size: f32,
     timestamp_font_size: f32,
     line_height: f32,
@@ -325,7 +328,7 @@ impl PrivMsgNode {
 
     /// Read the current layout signature off the live properties.
     fn current_sig(&self, data: &PrivData) -> LayoutSig {
-        let width = self.shared.rect.get().w - self.shared.timestamp_width.get();
+        let width = self.shared.rect.get().w;
         let font_size = if data.is_notice {
             self.shared.font_size.get() * 0.8
         } else {
@@ -346,6 +349,7 @@ impl PrivMsgNode {
         };
         LayoutSig {
             width,
+            timestamp_width: self.shared.timestamp_width.get(),
             font_size,
             timestamp_font_size: self.shared.timestamp_font_size.get(),
             line_height: self.shared.line_height.get(),
@@ -377,33 +381,19 @@ impl PrivMsgNode {
             self.own.url_text_color.get(),
         ));
 
-        let txt_layout = if data.is_notice {
-            text::make_layout2(
-                &linetext,
-                sig.body_color,
-                sig.font_size,
-                line_height / sig.font_size,
-                window_scale,
-                Some(sig.width),
-                &[],
-                &[],
-                parley::Alignment::Start,
-                parley::OverflowWrap::Normal,
-            )
-        } else {
-            text::make_layout2(
-                &linetext,
-                sig.body_color,
-                sig.font_size,
-                line_height / sig.font_size,
-                window_scale,
-                Some(sig.width),
-                &[],
-                &foreground_colors,
-                parley::Alignment::Start,
-                parley::OverflowWrap::Normal,
-            )
-        };
+        let txt_layout = text::make_layout_with_indent(
+            &linetext,
+            sig.body_color,
+            sig.font_size,
+            line_height / sig.font_size,
+            window_scale,
+            Some(sig.width),
+            &[],
+            if data.is_notice { &[] } else { &foreground_colors },
+            parley::Alignment::Start,
+            parley::OverflowWrap::Normal,
+            sig.timestamp_width,
+        );
 
         let timestr = gen_timestr(data.ts);
         let ts_layout = text::make_layout(
@@ -420,11 +410,9 @@ impl PrivMsgNode {
         // clickable regions in message-local coordinates.
         let url_color = self.own.url_text_color.get();
         let nick_color = sig.nick_color;
-        let timestamp_width = self.shared.timestamp_width.get();
         let url_rects = Self::compute_hit_rects(
             &txt_layout,
             &data,
-            timestamp_width,
             url_color,
             &url_ranges_of(&data, url_color),
             |raw| sanitize_url(raw),
@@ -433,14 +421,9 @@ impl PrivMsgNode {
             vec![]
         } else {
             let nick_range = 0..data.body_offset();
-            Self::compute_hit_rects(
-                &txt_layout,
-                &data,
-                timestamp_width,
-                nick_color,
-                &[nick_range],
-                |raw| Some(raw.trim_end().to_string()),
-            )
+            Self::compute_hit_rects(&txt_layout, &data, nick_color, &[nick_range], |raw| {
+                Some(raw.trim_end().to_string())
+            })
         };
 
         // Cap/expand: long messages collapse to the cap by default.
@@ -607,7 +590,6 @@ impl PrivMsgNode {
         if inst.instrs.is_none() {
             let mut instrs =
                 text::render_layout(&inst.ts_layout, renderer, gfxtag!("chatview_privmsg_ts"));
-            instrs.push(DrawInstruction::Move(Point::new(self.shared.timestamp_width.get(), 0.)));
 
             // URL backgrounds (and optional borders) behind the URL
             // runs, under the glyphs. render_backgrounds matches runs
@@ -731,7 +713,6 @@ impl PrivMsgNode {
     fn compute_hit_rects(
         layout: &text::TextLayout,
         data: &PrivData,
-        timestamp_width: f32,
         match_color: Color,
         ranges: &[std::ops::Range<usize>],
         payload_fn: impl Fn(&str) -> Option<String>,
@@ -758,7 +739,7 @@ impl PrivMsgNode {
                 let Some(payload) = payload_fn(&linetext[hit_range.clone()]) else { continue };
 
                 let metrics = glyph_run.run().metrics();
-                let x = timestamp_width + glyph_run.offset() / scale;
+                let x = glyph_run.offset() / scale;
                 let y = (glyph_run.baseline() - metrics.ascent) / scale;
                 let w = glyph_run.advance() / scale;
                 let h = (metrics.ascent + metrics.descent) / scale;
@@ -1164,6 +1145,51 @@ mod tests {
     }
 
     #[test]
+    fn message_variants_indent_only_first_line() {
+        let (chat, node, _buffer) = smol::block_on(make_node("leftwrap"));
+        let atom = &mut PropertyAtomicGuard::none();
+        chat.get_property("rect").unwrap().set_f32(atom, Role::App, 2, 240.).unwrap();
+        let body = "word ".repeat(30);
+        for (nick, text, copied) in [
+            ("alice", body.clone(), format!("alice {body}")),
+            ("alice", format!("\u{1}ACTION {body}\u{1}"), format!("* alice {body}")),
+            ("NOTICE", body.clone(), body.clone()),
+        ] {
+            let mut rec = rec_of(1_000_000, b'a', &text, true);
+            rec.payload = codec::encode_privmsg_payload(nick, &text, true);
+            let height = node.measure(&rec);
+            assert_eq!(node.copy_text(&rec), Some(copied));
+            let inner = node.inner.lock();
+            let inst = &inner.instances[&(rec.ts, rec.id)];
+            assert!(inst.txt_layout.lines().count() > 2);
+            for (i, line) in inst.txt_layout.lines().enumerate() {
+                assert_eq!(line.metrics().offset, if i == 0 { 50. } else { 0. });
+                assert_eq!(line.metrics().inline_max_coord, 240.);
+            }
+            assert!((height - inst.txt_layout.height() - 4.).abs() < 0.01);
+        }
+    }
+
+    #[test]
+    fn timestamp_width_change_rebuilds_first_line() {
+        let (chat, node, _buffer) = smol::block_on(make_node("timestampwidth"));
+        let rec = rec_of(1_000_000, b'a', "hello", true);
+        let height = node.measure(&rec);
+        assert_eq!(node.nick_rects(&rec)[0].1.x, 50.);
+
+        let atom = &mut PropertyAtomicGuard::none();
+        chat.set_property_f32(atom, Role::App, "timestamp_width", 80.).unwrap();
+        assert_eq!(node.measure(&rec), height);
+        assert_eq!(node.inner.lock().layout_builds, 2);
+        assert_eq!(node.nick_rects(&rec)[0].1.x, 80.);
+
+        node.shared.window_scale.set(atom, 1.5);
+        assert!((node.measure(&rec) - height).abs() < 0.01);
+        assert_eq!(node.inner.lock().layout_builds, 3);
+        assert!((node.nick_rects(&rec)[0].1.x - 80.).abs() < 0.01);
+    }
+
+    #[test]
     fn styling_and_data_changes_invalidate() {
         let (chat, node, _buffer) = smol::block_on(make_node("styling"));
         let rec = rec_of(1_000_000, b'a', "hello", true);
@@ -1309,6 +1335,7 @@ mod tests {
         assert!(!nicks.is_empty(), "nick prefix is clickable");
         let (nick, nrect) = &nicks[0];
         assert_eq!(nick, "alice");
+        assert_eq!(nrect.x, 50.);
         assert_eq!(
             node.hit_test(&rec, Point::new(nrect.x + nrect.w / 2., nrect.y + nrect.h / 2.)),
             Some(Hit::Nick("alice".to_string()))
@@ -1332,9 +1359,14 @@ mod tests {
 
         let rects = node.url_rects(&rec);
         assert!(rects.len() >= 2, "wrapped URL runs: {}", rects.len());
-        for (url, _rect) in &rects {
+        for (url, rect) in &rects {
             assert!(url.starts_with("https://example.com/"), "{url}");
+            assert_eq!(
+                node.hit_test(&rec, Point::new(rect.x + 1., rect.y + rect.h / 2.)),
+                Some(Hit::Url(url.clone()))
+            );
         }
+        assert!(rects.iter().any(|(_, rect)| rect.x == 0. && rect.y > 20.));
     }
 
     #[test]
