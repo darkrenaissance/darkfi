@@ -58,12 +58,6 @@ use crate::{
     ExecutorPtr,
 };
 
-// TODO: should be configurable at runtime
-//const DARKFID_ENDPOINT: &str = "tcp://127.0.0.1:18345";
-/// Testnet endpoint from drk_config.toml
-const DARKFID_ENDPOINT_TCP: &str = "tcp://127.0.0.1:18345";
-/// TODO: replace with the real darkfid tor endpoint
-const DARKFID_ENDPOINT_TOR: &str = "tor://darkfid-tor-placeholder.onion:18345";
 const DARKFID_RETRY_TIME: u64 = 20;
 const BLOCK_BATCHES_BUFFER: usize = 3;
 const NEW_WALLET_INIT_RETRY_TIME: u64 = 5;
@@ -160,7 +154,7 @@ impl DrkPlugin {
         let net_transport =
             PropertyEnum::wrap(&setting_node, Role::Internal, "net.transport", 0).unwrap();
 
-        let endpoint = Self::endpoint(&net_transport);
+        let endpoint = Self::endpoint(&sg_root, &net_transport);
         i!("Using {endpoint} transport for darkfid connection");
 
         let drk = match Drk::new(
@@ -308,14 +302,16 @@ impl DrkPlugin {
     }
 
     /// Endpoint for the darkfid daemon connection, derived from the
-    /// `net.transport` setting
-    fn endpoint(net_transport: &PropertyEnum) -> Url {
-        let endpoint = match net_transport.get().as_str() {
-            "tor" => DARKFID_ENDPOINT_TOR,
-            "tcp" => DARKFID_ENDPOINT_TCP,
+    /// `net.transport` and `wallet.*.rpc` settings
+    fn endpoint(sg_root: &SceneNodePtr, net_transport: &PropertyEnum) -> Url {
+        let setting_node = sg_root.lookup_node("/setting").unwrap();
+        let prop = match net_transport.get().as_str() {
+            "tor" => "wallet.tor.rpc",
+            "tcp" => "wallet.tcp.rpc",
             unhandled => panic!("Unhandled net.transport value: {unhandled}"),
         };
-        Url::parse(endpoint).unwrap()
+        let endpoint = setting_node.get_property_str(prop).unwrap();
+        Url::parse(&endpoint).unwrap()
     }
 
     pub async fn get_default_address(&self) -> Result<String> {
@@ -575,7 +571,7 @@ impl DrkPlugin {
         let start_height = height;
 
         // Create RPC client for block fetching
-        let endpoint = Self::endpoint(&self.net_transport);
+        let endpoint = Self::endpoint(&self.sg_root, &self.net_transport);
         let rpc_client = match RpcClient::new(endpoint, self.ex.clone()).await {
             Ok(client) => client,
             Err(e) => return Err(DarkFiError::Custom(format!("Failed to create RPC client: {e}"))),
@@ -846,8 +842,10 @@ impl DrkPlugin {
         let publisher = Publisher::new();
         let subscription = publisher.clone().subscribe().await;
         let _publisher = publisher.clone();
-        let rpc_client =
-            Arc::new(RpcClient::new(Self::endpoint(&self.net_transport), self.ex.clone()).await?);
+        let rpc_client = Arc::new(
+            RpcClient::new(Self::endpoint(&self.sg_root, &self.net_transport), self.ex.clone())
+                .await?,
+        );
         let rpc_client_ = rpc_client.clone();
 
         rpc_task.clone().start(
@@ -1406,12 +1404,37 @@ impl DrkPlugin {
         true
     }
 
+    /// `net.transport` or one of the `wallet.*.rpc` endpoint settings was
+    /// changed: cancel the scan/subscribe session, stop drk's RPC client,
+    /// and swap it over to the recomputed endpoint. The subscribe loop in
+    /// `Self::start()` sees the dead session and reconnects immediately.
+    async fn restart_rpc_connection(&self) {
+        let endpoint = Self::endpoint(&self.sg_root, &self.net_transport);
+        i!("Restarting darkfid connection at {endpoint}");
+
+        // Cancel the scan/subscribe task
+        let subscribe_task = self.subscribe_task.lock().take();
+        if let Some(subscribe_task) = &subscribe_task {
+            subscribe_task.stop_nowait();
+        }
+
+        // Stop drk's rpc client
+        let old_client = self.drk.write().await.rpc_client.take();
+        if let Some(old_client) = old_client {
+            old_client.read().await.stop().await;
+        }
+
+        // Swap drk's rpc client over to the new endpoint
+        let new_client = DarkfidRpcClient::new(endpoint, self.ex.clone()).await;
+        self.drk.write().await.rpc_client = Some(RwLock::new(new_client));
+    }
+
     async fn start(self: Arc<Self>, tasks: Vec<smol::Task<()>>) {
         let me2 = Arc::downgrade(&self);
         let subscribe_task = self.ex.spawn(async move {
             loop {
                 let Some(self2) = me2.upgrade() else { break };
-                let endpoint = Self::endpoint(&self2.net_transport);
+                let endpoint = Self::endpoint(&self2.sg_root, &self2.net_transport);
                 i!("Attempting to connect to darkfid daemon at {}", endpoint);
                 let subscribe_rpc_task = StoppableTask::new();
                 let subscribe_rpc_task_ = subscribe_rpc_task.clone();
@@ -1466,7 +1489,7 @@ impl DrkPlugin {
                 }
 
                 // Endpoint changed while we were connected, no need to sleep
-                if Self::endpoint(&self2.net_transport) != endpoint {
+                if Self::endpoint(&self2.sg_root, &self2.net_transport) != endpoint {
                     continue
                 }
 
@@ -1477,42 +1500,31 @@ impl DrkPlugin {
             }
         });
 
-        let net_transport = self.net_transport.clone();
-        let net_transport_sub = net_transport.prop().subscribe_modify();
-        let me3 = Arc::downgrade(&self);
-        let ex_ = self.ex.clone();
-        let transport_task = self.ex.spawn(async move {
-            while let Ok(_) = net_transport_sub.receive().await {
-                let Some(self2) = me3.upgrade() else { break };
-                let transport = net_transport.get();
-                let endpoint = Self::endpoint(&self2.net_transport);
-                i!("Transport changed to {transport}, restarting darkfid connection at {endpoint}");
-
-                // Cancel the scan/subscribe task
-                let subscribe_task = {
-                    let mut task = self2.subscribe_task.lock();
-                    task.take()
-                };
-                if let Some(subscribe_task) = &subscribe_task {
-                    subscribe_task.stop_nowait();
+        // Watch the settings feeding the darkfid endpoint. Changing any of
+        // them restarts the RPC connection at the recomputed endpoint.
+        let setting_node = self.sg_root.lookup_node("/setting").unwrap();
+        let watch_props = vec![
+            self.net_transport.prop(),
+            setting_node.get_property("wallet.tcp.rpc").unwrap(),
+            setting_node.get_property("wallet.tor.rpc").unwrap(),
+        ];
+        let mut watch_tasks = vec![];
+        for prop in watch_props {
+            let me = Arc::downgrade(&self);
+            let name = prop.name.clone();
+            let sub = prop.subscribe_modify();
+            let task = self.ex.spawn(async move {
+                while let Ok(_) = sub.receive().await {
+                    let Some(me2) = me.upgrade() else { break };
+                    i!("Setting {name} changed, restarting darkfid connection");
+                    me2.restart_rpc_connection().await;
                 }
+            });
+            watch_tasks.push(task);
+        }
 
-                // Stop drk's rpc client
-                let old_client = {
-                    let mut drk = self2.drk.write().await;
-                    drk.rpc_client.take()
-                };
-                if let Some(old_client) = old_client {
-                    old_client.read().await.stop().await;
-                }
-
-                // Swap drk's rpc client over to the new endpoint
-                let new_client = DarkfidRpcClient::new(endpoint, ex_.clone()).await;
-                self2.drk.write().await.rpc_client = Some(RwLock::new(new_client));
-            }
-        });
-
-        let mut all_tasks = vec![subscribe_task, transport_task];
+        let mut all_tasks = vec![subscribe_task];
+        all_tasks.extend(watch_tasks);
         all_tasks.extend(tasks);
         self.tasks.set(all_tasks).unwrap();
     }

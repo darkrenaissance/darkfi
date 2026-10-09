@@ -50,6 +50,11 @@ use crate::{
 ///
 /// Although the `/setting` root has no knowledge of property paths underneath there
 /// is a convention of using `foo.bar.baz` to namespace the settings.
+/// Testnet endpoint from drk_config.toml
+const DARKFID_ENDPOINT_TCP: &str = "tcp+tls://node0.testnet.dark.fi:18345";
+/// TODO: replace with the real darkfid tor endpoint
+const DARKFID_ENDPOINT_TOR: &str = "tor://darkfid-tor-placeholder.onion:18345";
+
 pub fn create_setting(name: &str) -> SceneNode {
     let mut node = SceneNode::new(name, SceneNodeType::Setting);
 
@@ -70,6 +75,24 @@ pub fn create_setting(name: &str) -> SceneNode {
     );
     prop.set_enum_items(vec!["tcp", "tor"]).unwrap();
     prop.set_default_enum(0, "tcp").unwrap();
+    node.add_property(prop).unwrap();
+
+    let mut prop = Property::new(
+        "wallet.tcp.rpc",
+        PropertyType::Str,
+        PropertySubType::Null,
+        PropertyPermission::default(),
+    );
+    prop.set_defaults_str(vec![DARKFID_ENDPOINT_TCP.to_string()]).unwrap();
+    node.add_property(prop).unwrap();
+
+    let mut prop = Property::new(
+        "wallet.tor.rpc",
+        PropertyType::Str,
+        PropertySubType::Null,
+        PropertyPermission::default(),
+    );
+    prop.set_defaults_str(vec![DARKFID_ENDPOINT_TOR.to_string()]).unwrap();
     node.add_property(prop).unwrap();
 
     let mut prop = Property::new(

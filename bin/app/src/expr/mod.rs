@@ -258,6 +258,7 @@ impl<'a> SExprMachine<'a> {
                 return Ok(val.clone())
             }
         }
+        warn!(target: "expr", "Global not found: {var}");
         Err(Error::SExprGlobalNotFound)
     }
     fn store_var(&mut self, var: &str, val: &Op) -> Result<SExprVal> {

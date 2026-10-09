@@ -83,8 +83,8 @@ pub fn shared_token_props() -> Vec<Property> {
         color_prop("edit.action_bg_color", [0.15, 0.15, 0.15, 1.]),
         // Menu widget
         color_prop("menu.bg_color", [0.05, 0.05, 0.05, 0.5]),
-        color_prop("menu.role1_color", [0.60, 0.60, 0.60, 1.]),
-        color_prop("menu.role2_color", [0.75, 0.75, 0.75, 1.]),
+        color_prop("menu.role1_color", [0.36, 1., 0.51, 1.]),
+        color_prop("menu.role2_color", [0.56, 0.61, 1., 1.]),
         // ChatView
         color_prop("chatview.timestamp_color", [0.55, 0.55, 0.55, 1.]),
         color_prop("chatview.text_color", [0.92, 0.92, 0.92, 1.]),

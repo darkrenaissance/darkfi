@@ -138,7 +138,10 @@ impl VectorArt {
         // without a separate last_rect field.
         let prev_rect = self.rect.get();
         if let Err(e) = self.rect.eval(atom, &parent_rect) {
-            warn!(target: "ui::vector_art", "Rect eval failure: {e}");
+            warn!(
+                target: "ui::vector_art",
+                "Rect eval failure: {e}, node: {:?}", self.node.upgrade().unwrap()
+            );
             return None
         }
         let rect_changed = self.rect.get() != prev_rect;
