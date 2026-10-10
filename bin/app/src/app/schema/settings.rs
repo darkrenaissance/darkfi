@@ -994,6 +994,7 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish) {
                 .set_default_f32_multi(&[0.5, 0.5, 0.5, 1.])
                 .unwrap();
             editbox_node.set_property_u32(atom, Role::App, "z_index", 1).unwrap();
+            editbox_node.set_property_u32(atom, Role::App, "priority", 1).unwrap();
             editbox_node.set_property_bool(atom, Role::App, "is_active", false).unwrap();
             editbox_node.set_property_bool(atom, Role::App, "is_focused", false).unwrap();
 
@@ -1385,6 +1386,11 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish) {
                             node.set_property_bool(atom, Role::App, "is_focused", false).unwrap();
                             node.set_property_str(atom, Role::App, "text", "").unwrap();
                         }
+
+                        // Re-enable the selector button of the deselected setting
+                        if let Some(node) = old_node.lookup_node("/selector_btn") {
+                            node.set_property_bool(atom, Role::App, "is_active", true).unwrap();
+                        }
                     }
 
                     // Hide conftrm button
@@ -1501,6 +1507,13 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish) {
                         .unwrap();
                     }
 
+                    // Disable the selector button so the editbox receives clicks
+                    setting_root2
+                        .lookup_node("/selector_btn")
+                        .unwrap()
+                        .set_property_bool(atom, Role::App, "is_active", false)
+                        .unwrap();
+
                     // Show confirm button
                     setting_root2
                         .lookup_node("/confirm_btn_bg")
@@ -1575,6 +1588,7 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish) {
             prop.set_default_f32(2, CONFIRM_BTN_W).unwrap();
             prop.set_default_f32(3, SETTING_LABEL_LINESPACE).unwrap();
             node.set_property_u32(atom, Role::App, "z_index", 3).unwrap();
+            node.set_property_u32(atom, Role::App, "priority", 2).unwrap();
 
             let node = node
                 .setup(|me| Button::new(me, app.renderer.clone(), app.redraw_trigger.clone()))
@@ -1856,6 +1870,18 @@ async fn update_setting(
         node.set_property_bool(atom, Role::App, "is_focused", false).unwrap();
         node.set_property_str(atom, Role::App, "text", "").unwrap();
         node.call_method("unfocus", vec![]).await.unwrap();
+    }
+
+    // Re-enable the selector button so the row can be selected again
+    // The win.scale row is excluded: it uses a slider and its selector must
+    // stay disabled, since select() would unwrap a "/value_label" node that
+    // this row does not have
+    if setting.name != "win.scale" {
+        // Enum rows have no selector button, and bool rows keep theirs
+        // always active, so the lookup is skipped or a no-op for them
+        if let Some(node) = sn.lookup_node("/selector_btn") {
+            node.set_property_bool(atom, Role::App, "is_active", true).unwrap();
+        }
     }
 
     let Some(editz_text) = editz_text else { return };
