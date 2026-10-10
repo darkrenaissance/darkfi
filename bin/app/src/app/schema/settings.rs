@@ -1865,6 +1865,10 @@ async fn update_setting(
 ) {
     let atom = &mut PropertyAtomicGuard::none();
 
+    // Snapshot the edited text before the editbox is cleared below, since
+    // editz_text wraps the very property that gets reset to empty
+    let edited_text = editz_text.map(|prop| prop.get());
+
     if let Some(node) = sn.lookup_node("/value_editbox") {
         node.set_property_bool(atom, Role::App, "is_active", false).unwrap();
         node.set_property_bool(atom, Role::App, "is_focused", false).unwrap();
@@ -1884,15 +1888,14 @@ async fn update_setting(
         }
     }
 
-    let Some(editz_text) = editz_text else { return };
+    let Some(value_str) = edited_text else { return };
 
     match &setting.get_value() {
         PropertyValue::Uint32(_) => {
-            let value_str = editz_text.get();
             let parsed = value_str.parse::<u32>();
             if let Ok(value) = parsed {
                 if let Some(node) = sn.lookup_node("/value_label") {
-                    node.set_property_str(atom, Role::App, "text", value_str).unwrap();
+                    node.set_property_str(atom, Role::App, "text", &value_str).unwrap();
                 }
                 if let Some(node) = sn.lookup_node("/confirm_btn_bg") {
                     node.set_property_bool(atom, Role::App, "is_visible", false).unwrap();
@@ -1903,11 +1906,10 @@ async fn update_setting(
             }
         }
         PropertyValue::Float32(_) => {
-            let value_str = editz_text.get();
             let parsed = value_str.parse::<f32>();
             if let Ok(value) = parsed {
                 if let Some(node) = sn.lookup_node("/value_label") {
-                    node.set_property_str(atom, Role::App, "text", value_str).unwrap();
+                    node.set_property_str(atom, Role::App, "text", &value_str).unwrap();
                 }
                 if let Some(node) = sn.lookup_node("/confirm_btn_bg") {
                     node.set_property_bool(atom, Role::App, "is_visible", false).unwrap();
@@ -1918,14 +1920,13 @@ async fn update_setting(
             }
         }
         PropertyValue::Str(_) => {
-            let value_str = editz_text.get();
             if let Some(node) = sn.lookup_node("/value_label") {
                 node.set_property_str(atom, Role::App, "text", &value_str).unwrap();
             }
             if let Some(node) = sn.lookup_node("/confirm_btn_bg") {
                 node.set_property_bool(atom, Role::App, "is_visible", false).unwrap();
             }
-            setting.prop.set_str(atom, Role::User, 0, value_str).unwrap();
+            setting.prop.set_str(atom, Role::User, 0, &value_str).unwrap();
             let mut active_setting_value = active_setting.lock().unwrap();
             *active_setting_value = None;
         }
