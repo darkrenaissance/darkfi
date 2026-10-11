@@ -68,7 +68,7 @@ mod android_ui_consts {
     pub const SETTING_TITLE_X: f32 = 150.;
     pub const SETTING_TITLE_FONTSIZE: f32 = 40.;
     pub const SETTING_TITLE_Y: f32 = (SETTING_LABEL_LINESPACE - 1.2 * SETTING_TITLE_FONTSIZE) / 2.;
-    pub const SETTING_EDIT_BASELINE: f32 = 82.;
+    pub const SETTING_EDIT_BASELINE: f32 = 32.;
     pub const SEARCH_PADDING_X: f32 = 120.;
     pub const BORDER_RIGHT_SCALE: f32 = 5.;
     pub const CURSOR_ASCENT: f32 = 50.;
@@ -115,7 +115,7 @@ mod ui_consts {
     pub const SETTING_TITLE_X: f32 = 100.;
     pub const SETTING_TITLE_FONTSIZE: f32 = 20.;
     pub const SETTING_TITLE_Y: f32 = (SETTING_LABEL_LINESPACE - 1.2 * SETTING_TITLE_FONTSIZE) / 2.;
-    pub const SETTING_EDIT_BASELINE: f32 = 37.;
+    pub const SETTING_EDIT_BASELINE: f32 = 15.;
     pub const SEARCH_PADDING_X: f32 = 80.;
     pub const BORDER_RIGHT_SCALE: f32 = 10.;
     pub const CURSOR_ASCENT: f32 = 24.;
@@ -330,22 +330,16 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish) {
         .set_expr(atom, Role::App, 2, cc.compile("parent_w - SEARCH_PADDING_X*2").unwrap())
         .unwrap();
     prop.set_default_f32(3, SETTING_LABEL_LINESPACE).unwrap();
-    editbox_node
-        .get_property("text_color")
-        .unwrap()
-        .set_default_f32_multi(&[0.92, 0.92, 0.92, 1.])
-        .unwrap();
-    let prop = editbox_node.get_property("cursor_color").unwrap();
-    prop.set_default_f32_multi(&[0.5, 0.5, 0.5, 1.]).unwrap();
+    wire_color(&editbox_node, "text_color", &theme, "edit.text_color").unwrap();
+    wire_color(&editbox_node, "text_hi_color", &theme, "edit.text_hi_color").unwrap();
+    wire_color(&editbox_node, "cursor_color", &theme, "edit.cursor_color").unwrap();
+    wire_color(&editbox_node, "hi_bg_color", &theme, "edit.hi_bg_color").unwrap();
+    wire_color(&editbox_node, "action_fg_color", &theme, "edit.action_fg_color").unwrap();
+    wire_color(&editbox_node, "action_bg_color", &theme, "edit.action_bg_color").unwrap();
     editbox_node.set_property_f32(atom, Role::App, "cursor_ascent", CURSOR_ASCENT).unwrap();
     editbox_node.set_property_f32(atom, Role::App, "cursor_descent", CURSOR_DESCENT).unwrap();
     editbox_node.set_property_f32(atom, Role::App, "select_ascent", SELECT_ASCENT).unwrap();
     editbox_node.set_property_f32(atom, Role::App, "select_descent", SELECT_DESCENT).unwrap();
-    editbox_node
-        .get_property("hi_bg_color")
-        .unwrap()
-        .set_default_f32_multi(&[0.5, 0.5, 0.5, 1.])
-        .unwrap();
     editbox_node.set_property_u32(atom, Role::App, "z_index", 2).unwrap();
     editbox_node.set_property_bool(atom, Role::App, "is_active", true).unwrap();
     editbox_node.set_property_bool(atom, Role::App, "is_focused", true).unwrap();
@@ -978,21 +972,12 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish) {
             editbox_node
                 .set_property_f32(atom, Role::App, "select_descent", SELECT_DESCENT)
                 .unwrap();
-            editbox_node
-                .get_property("text_color")
-                .unwrap()
-                .set_default_f32_multi(&[0.7, 0.7, 0.7, 1.])
-                .unwrap();
-            editbox_node
-                .get_property("cursor_color")
-                .unwrap()
-                .set_default_f32_multi(&[0.5, 0.5, 0.5, 1.])
-                .unwrap();
-            editbox_node
-                .get_property("hi_bg_color")
-                .unwrap()
-                .set_default_f32_multi(&[0.5, 0.5, 0.5, 1.])
-                .unwrap();
+            wire_color(&editbox_node, "text_color", &theme, "edit.text_color").unwrap();
+            wire_color(&editbox_node, "text_hi_color", &theme, "edit.text_hi_color").unwrap();
+            wire_color(&editbox_node, "cursor_color", &theme, "edit.cursor_color").unwrap();
+            wire_color(&editbox_node, "hi_bg_color", &theme, "edit.hi_bg_color").unwrap();
+            wire_color(&editbox_node, "action_fg_color", &theme, "edit.action_fg_color").unwrap();
+            wire_color(&editbox_node, "action_bg_color", &theme, "edit.action_bg_color").unwrap();
             editbox_node.set_property_u32(atom, Role::App, "z_index", 1).unwrap();
             editbox_node.set_property_u32(atom, Role::App, "priority", 1).unwrap();
             editbox_node.set_property_bool(atom, Role::App, "is_active", false).unwrap();

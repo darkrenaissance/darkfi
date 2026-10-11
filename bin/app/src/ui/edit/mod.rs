@@ -562,13 +562,19 @@ impl BaseEdit {
         true
     }
 
-    fn handle_key(&self, key: &KeyCode, mods: &KeyMods, atom: &mut PropertyAtomicGuard) -> bool {
+    async fn handle_key(
+        &self,
+        key: &KeyCode,
+        mods: &KeyMods,
+        atom: &mut PropertyAtomicGuard,
+    ) -> bool {
         #[cfg(not(target_os = "macos"))]
         let action_mod = mods.ctrl;
         #[cfg(target_os = "macos")]
         let action_mod = mods.logo;
 
         t!("handle_key({:?}, {:?}) action_mod={action_mod}", key, mods);
+        let mut enter_pressed = false;
         {
             let mut editor = self.editor.lock();
             match key {
@@ -619,9 +625,7 @@ impl BaseEdit {
                             editor.on_buffer_changed(atom);
                         }
                     } else {
-                        //let node = self.node.upgrade().unwrap();
-                        //node.trigger("enter_pressed", vec![]).await.unwrap();
-                        return false;
+                        enter_pressed = true;
                     }
                 }
                 KeyCode::Delete => {
@@ -674,6 +678,16 @@ impl BaseEdit {
             } else {
                 self.select_text.clone().set_null(atom, Role::Internal, 0).unwrap();
             }
+        }
+
+        if enter_pressed {
+            ed!("handle_key: {key:?} pressed, triggering enter_pressed");
+            let node = self.node.upgrade().unwrap();
+            node.trigger("enter_pressed", vec![]).await.unwrap();
+
+            // Still reported as unhandled so the key keeps propagating,
+            // e.g. to sibling shortcut nodes listening for "enter"
+            return false
         }
 
         self.behave.apply_cursor_scroll();
@@ -1668,6 +1682,12 @@ impl UIObject for BaseEdit {
             self_.redraw.trigger();
         }
         async fn set_text(self_: Arc<BaseEdit>, _batch: BatchGuardPtr) {
+            // An external text change collapses the selection, so any
+            // phone-style selection (and its handles) must be finished
+            // too — the draw pass asserts a non-collapsed selection
+            // while phone-select is active
+            let atom = &mut self_.redraw.make_guard(gfxtag!("BaseEdit::set_text"));
+            self_.finish_select(atom);
             self_.editor.lock().on_text_prop_changed();
             self_.redraw.trigger();
         }
@@ -1878,7 +1898,7 @@ impl UIObject for BaseEdit {
 
         let mut is_handled = false;
         for _ in 0..actions {
-            is_handled = self.handle_key(&key, &mods, atom);
+            is_handled = self.handle_key(&key, &mods, atom).await;
         }
         ed!("handle_key_down: {key:?} handled={is_handled} after=[{}]", self.dbg_state());
         is_handled
