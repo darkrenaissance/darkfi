@@ -38,7 +38,7 @@ use url::Url;
 use crate::{
     app::node::{create_datemsg_node, create_filemsg_node, create_privmsg_node},
     gfx::{DrawInstruction, Point, Renderer},
-    prop::{PropertyColor, PropertyFloat32, PropertyPtr, PropertyRect, Role},
+    prop::{PropertyBool, PropertyColor, PropertyFloat32, PropertyPtr, PropertyRect, Role},
     scene::{Pimpl, SceneNodePtr, SceneNodeWeak},
     util::i18n::I18nBabelFish,
 };
@@ -68,6 +68,8 @@ pub struct SharedProps {
     pub timestamp_color: PropertyColor,
     pub text_color: PropertyColor,
     pub hi_bg_color: PropertyColor,
+    /// Whether each privmsg renders its channel name in the gutter.
+    pub show_channel: PropertyBool,
     pub window_scale: PropertyFloat32,
     /// The chatview's rect; `.w` is the wrap width.
     pub rect: PropertyRect,
@@ -97,6 +99,8 @@ impl SharedProps {
             .expect("chatview text_color");
         let hi_bg_color = PropertyColor::wrap(chatview_node, Role::Internal, "hi_bg_color")
             .expect("chatview hi_bg_color");
+        let show_channel = PropertyBool::wrap(chatview_node, Role::Internal, "show_channel", 0)
+            .expect("chatview show_channel");
         let rect =
             PropertyRect::wrap(chatview_node, Role::Internal, "rect").expect("chatview rect");
 
@@ -110,6 +114,7 @@ impl SharedProps {
             timestamp_color,
             text_color,
             hi_bg_color,
+            show_channel,
             window_scale,
             rect,
         }
@@ -122,6 +127,9 @@ impl SharedProps {
 pub enum Hit {
     Url(String),
     Nick(String),
+    /// The channel span in the timestamp gutter (the message's room,
+    /// clickable for navigation).
+    Channel(String),
     /// The collapsed/expanded toggle affordance of a capped message.
     Expand,
     /// A file message's activation (download request) target.

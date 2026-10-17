@@ -366,7 +366,7 @@ fn populate_tree(tree: &Tree) {
         id_bytes[..8].copy_from_slice(&(idx as u64).to_be_bytes());
         let id = MessageId(id_bytes);
 
-        let payload = codec::encode_privmsg_payload(&nick, &text, true);
+        let payload = codec::encode_privmsg_payload(&nick, &text, true, DEV_CHANNEL);
         let val = codec::encode_value(MsgType::PrivMsg, &payload);
         let key = codec::encode_key(timest, &id);
         tree.insert(&key, &val).unwrap();

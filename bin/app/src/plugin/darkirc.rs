@@ -534,11 +534,17 @@ impl DarkIrc {
             // Route the message. An already-decrypted (plaintext) message names a
             // channel we hold directly: encrypted channels arrive as base58
             // ciphertext, so a channel key we recognise is plaintext by definition
-            // and is accepted as-is. Anything else must decrypt as a channel or DM;
-            // undecryptable traffic (base58 garbage in neither map) is silently dropped.
+            // and is accepted as-is. Public channels are plaintext on the network
+            // whether or not we joined them — a `#`-prefixed channel name cannot
+            // be ciphertext (base58 has no `#`), so every public room is relayed
+            // and the global feed carries it. Anything else must decrypt as a
+            // channel or DM; undecryptable traffic (base58 garbage in neither
+            // map) is silently dropped.
             let mut privmsg = privmsg;
             // Is this a plaintext channel?
-            let is_plaintext = self.channels.read().await.contains_key(&privmsg.channel);
+            let is_public = privmsg.channel.starts_with('#');
+            let is_plaintext =
+                is_public || self.channels.read().await.contains_key(&privmsg.channel);
             if !is_plaintext && !self.try_decrypt(&mut privmsg, &self.nick.get()).await {
                 continue;
             }

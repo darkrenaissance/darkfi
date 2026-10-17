@@ -16,21 +16,27 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use darkfi_serial::Decodable;
+use darkfi_serial::{Decodable, Encodable};
 
 use crate::{
     app::{
-        node::{create_button, create_layer, create_text, create_tokentable, create_vector_art},
+        node::{
+            create_button, create_chatview, create_layer, create_text, create_tokentable,
+            create_vector_art,
+        },
         App,
     },
     expr,
     gfx::gfxtag,
-    mesh::{COLOR_CYAN, COLOR_TEAL},
+    mesh::{rgba, COLOR_CYAN, COLOR_TEAL},
     prop::{PropertyAtomicGuard, PropertyBool, PropertyFloat32, Role},
-    scene::{SceneNodePtr, Slot},
+    scene::{Pimpl, SceneNodePtr, Slot},
     shape,
     theme::wire_color,
-    ui::{Button, Layer, Text, TokenTable, VectorArt, VectorShape},
+    ui::{
+        chatview::{MessageId, FEED_CHANNEL},
+        Button, ChatView, Layer, Text, TokenTable, VectorArt, VectorShape,
+    },
     util::i18n::I18nBabelFish,
 };
 
@@ -71,6 +77,188 @@ pub async fn make(
     wallet_layer.link(main_layer.clone());
 
     let main_is_visible = PropertyBool::wrap(&main_layer, Role::App, "is_visible", 0).unwrap();
+
+    // ============================================
+    // Feed Layer (bottom half of the screen)
+    // ============================================
+    cc.add_const_f32("FEED_LAYER_PADDING", FEED_LAYER_PADDING);
+    cc.add_const_f32("FEED_HEADER_HEIGHT", FEED_HEADER_HEIGHT);
+    let feed_layer = create_layer("feed_layer");
+    let prop = feed_layer.get_property("rect").unwrap();
+    prop.set_default_f32(0, FEED_LAYER_PADDING).unwrap();
+    let code = cc.compile("h / 2 + FEED_LAYER_PADDING").unwrap();
+    prop.set_default_expr(1, code).unwrap();
+    let code = cc.compile("w - 2 * FEED_LAYER_PADDING").unwrap();
+    prop.set_default_expr(2, code).unwrap();
+    let code = cc.compile("h / 2 - 2 * FEED_LAYER_PADDING").unwrap();
+    prop.set_default_expr(3, code).unwrap();
+    feed_layer.set_property_bool(atom, Role::App, "is_visible", true).unwrap();
+    feed_layer.set_property_u32(atom, Role::App, "z_index", 2).unwrap();
+    let feed_layer = feed_layer
+        .setup(|me| Layer::new(me, app.renderer.clone(), app.redraw_trigger.clone()))
+        .await;
+    // Child of the main wallet layer: shows with the main screen and
+    // hides with it when navigating to send/receive screens.
+    main_layer.link(feed_layer.clone());
+
+    // Feed layer background: covers the entire layer. Transparent grey
+    // by default; the active theme may restyle it (scifi recolors it).
+    let node = create_vector_art("bg");
+    let prop = node.get_property("rect").unwrap();
+    prop.set_default_f32(0, 0.).unwrap();
+    prop.set_default_f32(1, 0.).unwrap();
+    prop.set_default_expr(2, expr::load_var("w")).unwrap();
+    prop.set_default_expr(3, expr::load_var("h")).unwrap();
+    node.set_property_u32(atom, Role::App, "z_index", 0).unwrap();
+    let mut shape = VectorShape::new();
+    shape.add_filled_box(
+        expr::const_f32(0.),
+        expr::const_f32(0.),
+        expr::load_var("w"),
+        expr::load_var("h"),
+        [0.5, 0.5, 0.5, 0.5],
+    );
+    node.set_property_shape(atom, Role::App, "shape", shape).unwrap();
+    let node =
+        node.setup(|me| VectorArt::new(me, app.renderer.clone(), app.redraw_trigger.clone())).await;
+    feed_layer.link(node);
+
+    // The global feed chatview, bound to the reserved `*` pseudo-channel.
+    // Starts below the feed header band and fills the rest of the layer.
+    // Channel labels are forced on (the feed is unread without them).
+    let node = create_chatview("feed_chatty");
+    let prop = node.get_property("rect").unwrap();
+    prop.set_default_f32(0, 0.).unwrap();
+    prop.set_default_f32(1, FEED_HEADER_HEIGHT).unwrap();
+    prop.set_default_expr(2, expr::load_var("w")).unwrap();
+    let code = cc.compile("h - FEED_HEADER_HEIGHT").unwrap();
+    prop.set_default_expr(3, code).unwrap();
+    node.get_property("font_size").unwrap().set_default_f32(0, FEED_FONTSIZE).unwrap();
+    node.get_property("timestamp_font_size")
+        .unwrap()
+        .set_default_f32(0, FEED_TIMESTAMP_FONTSIZE)
+        .unwrap();
+    node.get_property("timestamp_width").unwrap().set_default_f32(0, FEED_TIMESTAMP_WIDTH).unwrap();
+    node.get_property("line_height").unwrap().set_default_f32(0, FEED_LINE_HEIGHT).unwrap();
+    node.get_property("message_spacing").unwrap().set_default_f32(0, FEED_MESSAGE_SPACING).unwrap();
+    node.get_property("baseline").unwrap().set_default_f32(0, FEED_BASELINE).unwrap();
+    node.set_property_f32(atom, Role::App, "wheel_page_frac", 0.2).unwrap();
+    node.set_property_bool(atom, Role::App, "show_channel", true).unwrap();
+    node.set_property_u32(atom, Role::App, "z_index", 1).unwrap();
+
+    // Class wiring onto the shared /theme tokens.
+    let theme = app.sg_root.lookup_node("/theme").unwrap();
+    wire_color(&node, "timestamp_color", &theme, "chatview.timestamp_color").unwrap();
+    wire_color(&node, "text_color", &theme, "chatview.text_color").unwrap();
+    wire_color(&node, "hi_bg_color", &theme, "chatview.hi_bg_color").unwrap();
+
+    let kv_db = app.kv_db.get().expect("app kvdb set in setup()").clone();
+    let feed_chatty = node
+        .setup(|me| {
+            ChatView::new(
+                me,
+                kv_db,
+                window_scale.clone(),
+                i18n_fish.clone(),
+                app.renderer.clone(),
+                app.redraw_trigger.clone(),
+                app.ex.clone(),
+            )
+        })
+        .await;
+    feed_layer.link(feed_chatty.clone());
+
+    // Type-node styling: privmsg + date separator.
+    let privmsg_node = feed_chatty.lookup_node("/privmsg").expect("privmsg type node");
+    privmsg_node.set_property_f32(atom, Role::App, "cap_max_height", 1000.).unwrap();
+    wire_color(&privmsg_node, "action_text_color", &theme, "chatview.action_text_color").unwrap();
+    wire_color(&privmsg_node, "url_text_color", &theme, "chatview.url_text_color").unwrap();
+    wire_color(&privmsg_node, "channel_color", &theme, "chatview.channel_color").unwrap();
+    let prop = privmsg_node.get_property("url_bg_color").unwrap();
+    prop.set_default_f32_multi(&[0., 0.13, 0.08, 1.]).unwrap();
+    privmsg_node.get_property("url_bg_border_size").unwrap().set_default_f32(0, 1.).unwrap();
+    let prop = privmsg_node.get_property("url_bg_border_color").unwrap();
+    prop.set_default_f32_multi(&[0.11, 0.6, 0.63, 1.]).unwrap();
+    // Channel label chip: same values as the chat screen.
+    let prop = privmsg_node.get_property("channel_bg_color").unwrap();
+    prop.set_default_f32_multi(&rgba!(0x263B3Cff)).unwrap();
+    let prop = privmsg_node.get_property("channel_border_color").unwrap();
+    prop.set_default_f32_multi(&rgba!(0x689AA5ff)).unwrap();
+    privmsg_node.get_property("channel_border_size").unwrap().set_default_f32(0, 1.).unwrap();
+    privmsg_node
+        .get_property("channel_font_size")
+        .unwrap()
+        .set_default_f32(0, FEED_TIMESTAMP_FONTSIZE)
+        .unwrap();
+    privmsg_node
+        .get_property("channel_spacing")
+        .unwrap()
+        .set_default_f32(0, FEED_CHANNEL_SPACING)
+        .unwrap();
+    let prop = privmsg_node.get_property("nick_colors").unwrap();
+    #[rustfmt::skip]
+    let nick_colors = [
+        0.00, 0.94, 1.00, 1.,
+        0.36, 1.00, 0.69, 1.,
+        0.29, 1.00, 0.45, 1.,
+        0.00, 0.73, 0.38, 1.,
+        0.21, 0.67, 0.67, 1.,
+        0.56, 0.61, 1.00, 1.,
+        0.84, 0.48, 1.00, 1.,
+        1.00, 0.61, 0.94, 1.,
+        1.00, 0.36, 0.48, 1.,
+        1.00, 0.30, 0.00, 1.,
+    ];
+    prop.set_default_f32_multi(&nick_colors).unwrap();
+
+    let datemsg_node = feed_chatty.lookup_node("/datemsg").expect("datemsg type node");
+    datemsg_node.get_property("font_size").unwrap().set_default_f32(0, FEED_DATE_FONTSIZE).unwrap();
+    let prop = datemsg_node.get_property("color").unwrap();
+    prop.set_default_f32_multi(&[0.5, 0.5, 0.5, 1.]).unwrap();
+
+    // Clicking a channel label navigates to the chat screen and opens
+    // that channel (mirrors the channels-menu click path).
+    {
+        let (slot, recvr) = Slot::new("feed_channel_nav");
+        privmsg_node.register("channel_clicked", slot).unwrap();
+        let sg_root = app.sg_root.clone();
+        let redraw = app.redraw_trigger.clone();
+        let listen_channel = app.ex.spawn(async move {
+            while let Ok(data) = recvr.recv().await {
+                let mut cur = std::io::Cursor::new(&data);
+                let Ok(_id) = MessageId::decode(&mut cur) else { continue };
+                let Ok(channel) = String::decode(&mut cur) else { continue };
+                if channel == FEED_CHANNEL {
+                    continue
+                }
+                let atom = &mut redraw.make_guard(gfxtag!("feed channel nav"));
+                let Some(chat_screen) = sg_root.lookup_node("/window/content/chat") else {
+                    continue
+                };
+                chat_screen.set_property_bool(atom, Role::App, "is_visible", true).unwrap();
+                let wallet_screen = sg_root.lookup_node("/window/content/wallet").unwrap();
+                wallet_screen.set_property_bool(atom, Role::App, "is_visible", false).unwrap();
+                let Some(node) = sg_root.lookup_node("/window/content/chat/main_chat_layer") else {
+                    continue
+                };
+                node.set_property_bool(atom, Role::App, "is_visible", true).unwrap();
+                let menu_node = sg_root.lookup_node("/window/content/chat/menu_layer").unwrap();
+                menu_node.set_property_bool(atom, Role::App, "is_visible", false).unwrap();
+                let chatty = node.lookup_node("/content/chatty").unwrap();
+                let mut chan_data = vec![];
+                channel.encode(&mut chan_data).unwrap();
+                let _ = chatty.call_method("set_channel", chan_data).await;
+            }
+        });
+        app.tasks.lock().push(listen_channel);
+    }
+
+    // Bind to the feed. Direct pimpl call (not the method bus): the
+    // bus has no buffering, so a call before the node's start()
+    // subscribes would be silently dropped. The loader's wake flag
+    // persists, so binding before start() spawns the pump is safe.
+    let Pimpl::ChatView(feed_view) = feed_chatty.pimpl() else { unreachable!() };
+    feed_view.handle_set_channel(FEED_CHANNEL.to_string()).await;
 
     // Back arrow
     let node = create_vector_art("wallet_back_btn_bg");

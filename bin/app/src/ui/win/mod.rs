@@ -490,10 +490,12 @@ impl Window {
     }
 
     async fn handle_mouse_wheel(&self, mut wheel_pos: Point) {
+        t!("handle_mouse_wheel({wheel_pos:?})");
         self.local_scale(&mut wheel_pos);
         for child in self.get_children() {
             let obj = get_ui_object3(&child);
             if obj.handle_mouse_wheel(wheel_pos).await {
+                t!("wheel swallowed by {child:?}");
                 return
             }
         }

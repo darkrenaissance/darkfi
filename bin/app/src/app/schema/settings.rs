@@ -205,7 +205,12 @@ pub async fn make(app: &App, window: SceneNodePtr, i18n_fish: &I18nBabelFish) {
     prop.set_default_f32(1, 0.).unwrap();
     prop.set_default_expr(2, expr::load_var("w")).unwrap();
     prop.set_default_expr(3, expr::load_var("h")).unwrap();
-    layer_node.set_property_bool(atom, Role::App, "is_visible", true).unwrap();
+    // Hidden until the settings button opens it. A visible-by-default
+    // full-screen layer would draw under the screens but still sit
+    // above them in the input dispatch order (priority-0 siblings
+    // iterate newest-linked first), its hovered edits swallowing
+    // wheel events meant for the screens behind.
+    layer_node.set_property_bool(atom, Role::App, "is_visible", false).unwrap();
     layer_node.set_property_u32(atom, Role::App, "z_index", 2).unwrap();
     let layer_node = layer_node
         .setup(|me| Layer::new(me, app.renderer.clone(), app.redraw_trigger.clone()))

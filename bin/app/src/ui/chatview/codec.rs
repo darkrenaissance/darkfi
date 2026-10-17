@@ -22,8 +22,12 @@
 //! kv value: `[u8 tag][type-owned bytes]` — the tag is the `MsgType`
 //! discriminant, the rest is owned by the message type.
 //!
-//! privmsg payload: `[nick: String][text: String][confirmed: bool]`
+//! privmsg payload: `[nick: String][text: String][confirmed: bool][channel: String]`
 //! datemsg payload: `[local-midnight ts: u64]` (derived; never stored)
+//!
+//! The channel is always present so entries read from any tree — their
+//! own channel's or an aggregate like the global feed — identify their
+//! room.
 //!
 //! This is a clean break from the previous chatview: values it cannot
 //! decode are corrupt data and fail explicitly (panic) with a message
@@ -93,7 +97,7 @@ pub fn decode_value(val: &[u8], ts: Timestamp, id: &MessageId) -> MsgRecord {
 
     match msg_type {
         MsgType::PrivMsg => {
-            let (_nick, _text, _confirmed) = decode_privmsg_payload(payload, ts, id);
+            let (_nick, _text, _confirmed, _channel) = decode_privmsg_payload(payload, ts, id);
         }
         MsgType::DateMsg => {
             let _midnight = decode_datemsg_payload(payload, ts, id);
@@ -106,16 +110,18 @@ pub fn decode_value(val: &[u8], ts: Timestamp, id: &MessageId) -> MsgRecord {
     MsgRecord { ts, id: *id, msg_type, payload: payload.to_vec(), height: 0. }
 }
 
-/// Encode the privmsg payload: `[nick][text][confirmed]`.
-pub fn encode_privmsg_payload(nick: &str, text: &str, confirmed: bool) -> Vec<u8> {
+/// Encode the privmsg payload: `[nick][text][confirmed][channel]`.
+pub fn encode_privmsg_payload(nick: &str, text: &str, confirmed: bool, channel: &str) -> Vec<u8> {
     let mut payload = vec![];
     nick.encode(&mut payload).unwrap();
     text.encode(&mut payload).unwrap();
     confirmed.encode(&mut payload).unwrap();
+    channel.encode(&mut payload).unwrap();
     payload
 }
 
-/// Decode the privmsg payload back into `(nick, text, confirmed)`.
+/// Decode the privmsg payload back into
+/// `(nick, text, confirmed, channel)`.
 ///
 /// ## Panics
 ///
@@ -124,7 +130,7 @@ pub fn decode_privmsg_payload(
     payload: &[u8],
     ts: Timestamp,
     id: &MessageId,
-) -> (String, String, bool) {
+) -> (String, String, bool, String) {
     let mut cur = Cursor::new(payload);
     let ctx = |what: &str| format!("corrupt chat entry: {what} [ts={ts} id={id}]");
     let nick =
@@ -133,7 +139,9 @@ pub fn decode_privmsg_payload(
         String::decode(&mut cur).unwrap_or_else(|e| panic!("{}: {e}", ctx("bad privmsg text")));
     let confirmed = bool::decode(&mut cur)
         .unwrap_or_else(|e| panic!("{}: {e}", ctx("bad privmsg confirmed flag")));
-    (nick, text, confirmed)
+    let channel =
+        String::decode(&mut cur).unwrap_or_else(|e| panic!("{}: {e}", ctx("bad privmsg channel")));
+    (nick, text, confirmed, channel)
 }
 
 /// Encode the datemsg payload: the separator day's local-midnight ts.
@@ -175,7 +183,7 @@ mod tests {
     #[test]
     fn privmsg_value_round_trip() {
         let id = rid(1);
-        let payload = encode_privmsg_payload("alice", "hello world", false);
+        let payload = encode_privmsg_payload("alice", "hello world", false, "#dev");
         let val = encode_value(MsgType::PrivMsg, &payload);
         assert_eq!(val[0], MsgType::PrivMsg as u8);
 
@@ -186,15 +194,24 @@ mod tests {
         assert_eq!(rec.height, 0.);
         assert_eq!(
             decode_privmsg_payload(&rec.payload, 123, &id),
-            ("alice".to_string(), "hello world".to_string(), false)
+            ("alice".to_string(), "hello world".to_string(), false, "#dev".to_string())
         );
 
-        let payload = encode_privmsg_payload("NOTICE", "\u{1}ACTION waves\u{1}", true);
+        // A feed-tree entry reads back with its room.
+        let payload = encode_privmsg_payload("bob", "hi", true, "#ramen");
         let val = encode_value(MsgType::PrivMsg, &payload);
         let rec = decode_value(&val, 124, &id);
         assert_eq!(
             decode_privmsg_payload(&rec.payload, 124, &id),
-            ("NOTICE".to_string(), "\u{1}ACTION waves\u{1}".to_string(), true)
+            ("bob".to_string(), "hi".to_string(), true, "#ramen".to_string())
+        );
+
+        let payload = encode_privmsg_payload("NOTICE", "\u{1}ACTION waves\u{1}", true, "#dev");
+        let val = encode_value(MsgType::PrivMsg, &payload);
+        let rec = decode_value(&val, 125, &id);
+        assert_eq!(
+            decode_privmsg_payload(&rec.payload, 125, &id),
+            ("NOTICE".to_string(), "\u{1}ACTION waves\u{1}".to_string(), true, "#dev".to_string())
         );
     }
 
@@ -232,16 +249,28 @@ mod tests {
     #[test]
     #[should_panic(expected = "bad privmsg text")]
     fn truncated_privmsg_payload_panics() {
-        let mut payload = encode_privmsg_payload("alice", "hello", true);
+        let mut payload = encode_privmsg_payload("alice", "hello", true, "#dev");
         payload.truncate(6);
+        decode_privmsg_payload(&payload, 5, &rid(2));
+    }
+
+    #[test]
+    #[should_panic(expected = "bad privmsg channel")]
+    fn missing_channel_panics() {
+        // v2-era payload `[nick][text][confirmed]` — no channel bytes.
+        let mut payload = encode_privmsg_payload("alice", "hello", true, "#dev");
+        // Strip the trailing channel string (its varint length + bytes).
+        let channel_len = "#dev".len() + 1;
+        payload.truncate(payload.len() - channel_len);
         decode_privmsg_payload(&payload, 5, &rid(2));
     }
 
     #[test]
     #[should_panic(expected = "bad privmsg confirmed flag")]
     fn missing_confirmed_flag_panics() {
-        let mut payload = encode_privmsg_payload("alice", "hello", true);
-        payload.pop();
+        let mut payload = encode_privmsg_payload("alice", "hello", true, "#dev");
+        // Strip confirmed flag and channel.
+        payload.truncate(payload.len() - ("#dev".len() + 2));
         decode_privmsg_payload(&payload, 5, &rid(2));
     }
 

@@ -41,7 +41,7 @@ use url::Url;
 
 use crate::{
     gfx::{gfxtag, DrawInstruction, EpochTracker, Point, Rectangle, Renderer},
-    mesh::Color,
+    mesh::{Color, MeshBuilder},
     prop::{
         Property, PropertyAtomicGuard, PropertyColor, PropertyFloat32, PropertyPermission,
         PropertyPtr, PropertyStr, PropertySubType, PropertyType, Role,
@@ -128,6 +128,14 @@ pub struct PrivOwnProps {
     pub url_bg_border_size: PropertyFloat32,
     pub url_bg_border_color: PropertyColor,
     pub cap_max_height: PropertyFloat32,
+    /// Channel label styling (the room-name span).
+    pub channel_color: PropertyColor,
+    pub channel_font_size: PropertyFloat32,
+    /// Spacing between timestamp, chip, and line.
+    pub channel_spacing: PropertyFloat32,
+    pub channel_bg_color: PropertyColor,
+    pub channel_border_size: PropertyFloat32,
+    pub channel_border_color: PropertyColor,
 }
 
 /// Everything a materialized instance needs to render: data decoded
@@ -142,6 +150,11 @@ pub struct PrivMsg {
     sig: LayoutSig,
     txt_layout: text::TextLayout,
     ts_layout: text::TextLayout,
+    /// The channel span's layout, when rendered (show_channel active).
+    chan_layout: Option<text::TextLayout>,
+    /// The channel chip rect (label bounds + padding for bg/border),
+    /// when the span is rendered.
+    channel_chip: Option<Rectangle>,
     instrs: Option<Vec<DrawInstruction>>,
     /// URL hit rects in message-local coordinates, tagged with their
     /// URL string.
@@ -149,6 +162,9 @@ pub struct PrivMsg {
     /// Nick-prefix hit rects in message-local coordinates, tagged with
     /// the nick.
     nick_rects: Vec<(String, Rectangle)>,
+    /// The channel span's hit rect (the label's row, after the
+    /// timestamp), when rendered.
+    channel_rect: Option<Rectangle>,
     /// The expand/collapse affordance hit rect, when the message is
     /// over the cap.
     affordance_rect: Option<Rectangle>,
@@ -168,6 +184,9 @@ pub struct PrivData {
     pub nick: String,
     pub text: String,
     pub confirmed: bool,
+    /// The channel the message belongs to (from the payload); rendered
+    /// as the channel span when channel display is active.
+    pub channel: String,
     /// IRC-style CTCP ACTION (`/me`); `text` holds the stripped body.
     pub is_action: bool,
     pub is_notice: bool,
@@ -207,16 +226,25 @@ impl PrivData {
 #[derive(PartialEq)]
 struct LayoutSig {
     width: f32,
-    timestamp_width: f32,
     font_size: f32,
     timestamp_font_size: f32,
     line_height: f32,
     window_scale: f32,
     confirmed: bool,
     expanded: bool,
+    show_channel: bool,
     body_color: Color,
     nick_color: Color,
     ts_color: Color,
+    channel_color: Color,
+    /// The channel label's font size (timestamp size when inherited).
+    channel_font_size: f32,
+    /// Spacing between timestamp, chip, and line (auto fraction of
+    /// the channel font size when the property is 0).
+    channel_spacing: f32,
+    channel_bg_color: Color,
+    channel_border_color: Color,
+    channel_border_size: f32,
 }
 
 struct PrivInner {
@@ -277,6 +305,17 @@ impl PrivMsgNode {
             PropertyColor::wrap(node_ref, Role::Internal, "url_bg_border_color").unwrap();
         let cap_max_height =
             PropertyFloat32::wrap(node_ref, Role::Internal, "cap_max_height", 0).unwrap();
+        let channel_color = PropertyColor::wrap(node_ref, Role::Internal, "channel_color").unwrap();
+        let channel_font_size =
+            PropertyFloat32::wrap(node_ref, Role::Internal, "channel_font_size", 0).unwrap();
+        let channel_spacing =
+            PropertyFloat32::wrap(node_ref, Role::Internal, "channel_spacing", 0).unwrap();
+        let channel_bg_color =
+            PropertyColor::wrap(node_ref, Role::Internal, "channel_bg_color").unwrap();
+        let channel_border_size =
+            PropertyFloat32::wrap(node_ref, Role::Internal, "channel_border_size", 0).unwrap();
+        let channel_border_color =
+            PropertyColor::wrap(node_ref, Role::Internal, "channel_border_color").unwrap();
         let url_copy_text =
             PropertyStr::wrap(node_ref, Role::Internal, "url_copy_text", 0).unwrap();
         let url_copy_fg_color =
@@ -303,6 +342,12 @@ impl PrivMsgNode {
                 url_bg_border_size,
                 url_bg_border_color,
                 cap_max_height,
+                channel_color,
+                channel_font_size,
+                channel_spacing,
+                channel_bg_color,
+                channel_border_size,
+                channel_border_color,
             },
             loader,
             buffer,
@@ -328,6 +373,8 @@ impl PrivMsgNode {
 
     /// Read the current layout signature off the live properties.
     fn current_sig(&self, data: &PrivData) -> LayoutSig {
+        // The body wraps at the full view width; the first line is
+        // indented past the gutter via the layout's text-indent.
         let width = self.shared.rect.get().w;
         let font_size = if data.is_notice {
             self.shared.font_size.get() * 0.8
@@ -349,16 +396,22 @@ impl PrivMsgNode {
         };
         LayoutSig {
             width,
-            timestamp_width: self.shared.timestamp_width.get(),
             font_size,
             timestamp_font_size: self.shared.timestamp_font_size.get(),
             line_height: self.shared.line_height.get(),
             window_scale: self.shared.window_scale.get(),
             confirmed: data.confirmed,
             expanded: data.expanded,
+            show_channel: self.shared.show_channel.get(),
             body_color,
             nick_color,
             ts_color: self.shared.timestamp_color.get(),
+            channel_color: self.own.channel_color.get(),
+            channel_font_size: self.own.channel_font_size.get(),
+            channel_spacing: self.own.channel_spacing.get(),
+            channel_bg_color: self.own.channel_bg_color.get(),
+            channel_border_color: self.own.channel_border_color.get(),
+            channel_border_size: self.own.channel_border_size.get(),
         }
     }
 
@@ -381,6 +434,56 @@ impl PrivMsgNode {
             self.own.url_text_color.get(),
         ));
 
+        let timestr = gen_timestr(data.ts);
+        let ts_layout = text::make_layout(
+            &timestr,
+            sig.ts_color,
+            sig.timestamp_font_size,
+            line_height / sig.timestamp_font_size,
+            window_scale,
+            None,
+            &[],
+        );
+        // The spacing property governs every junction on the first
+        // line: timestamp → line when the label is hidden, and
+        // timestamp → chip → line when it is shown. Wrapped lines
+        // return to the view's left edge.
+        let gap = sig.channel_spacing;
+        let (chan_layout, channel_rect, channel_chip, body_indent) = if sig.show_channel &&
+            !data.channel.is_empty()
+        {
+            let chan_x = ts_layout.width() + gap;
+            // Keep an absurd room name from eating the line.
+            let max_chan_w = (self.shared.rect.get().w * 0.3).max(sig.channel_font_size);
+            let label =
+                ellipsize_to_width(&data.channel, max_chan_w, sig.channel_font_size, window_scale);
+            let layout = text::make_layout(
+                &label,
+                sig.channel_color,
+                sig.channel_font_size,
+                line_height / sig.channel_font_size,
+                window_scale,
+                None,
+                &[],
+            );
+            let rect = Rectangle::new(chan_x, 0., layout.width(), ts_layout.height());
+            // The chip (bg + border) hugs the label's glyphs. The
+            // bounds are in the label layout's LOCAL coordinates,
+            // so shift them onto the label's position on the
+            // timestamp row before padding.
+            let pad = sig.channel_border_size + sig.channel_font_size * 0.2;
+            let bounds = layout_glyph_bounds(&layout);
+            let chip =
+                inflate_rect(&Rectangle::new(bounds.x + chan_x, bounds.y, bounds.w, bounds.h), pad);
+            let indent = chan_x + layout.width() + gap;
+            (Some(layout), Some(rect), Some(chip), indent)
+        } else {
+            (None, None, None, ts_layout.width() + gap)
+        };
+
+        // The body wraps at the full view width; the first line is
+        // indented past the gutter (and channel span) via the
+        // layout's text-indent, continuation lines start at x=0.
         let txt_layout = text::make_layout_with_indent(
             &linetext,
             sig.body_color,
@@ -392,22 +495,13 @@ impl PrivMsgNode {
             if data.is_notice { &[] } else { &foreground_colors },
             parley::Alignment::Start,
             parley::OverflowWrap::Normal,
-            sig.timestamp_width,
-        );
-
-        let timestr = gen_timestr(data.ts);
-        let ts_layout = text::make_layout(
-            &timestr,
-            sig.ts_color,
-            sig.timestamp_font_size,
-            line_height / sig.timestamp_font_size,
-            window_scale,
-            None,
-            &[],
+            body_indent,
         );
 
         // Hit rects: URL-colored and nick-colored glyph runs become
-        // clickable regions in message-local coordinates.
+        // clickable regions in message-local coordinates. The body
+        // layout spans the full width (the first line's indent is
+        // internal), so run offsets are already view-relative.
         let url_color = self.own.url_text_color.get();
         let nick_color = sig.nick_color;
         let url_rects = Self::compute_hit_rects(
@@ -446,9 +540,12 @@ impl PrivMsgNode {
             sig,
             txt_layout,
             ts_layout,
+            chan_layout,
+            channel_chip,
             instrs: None,
             url_rects,
             nick_rects,
+            channel_rect,
             affordance_rect,
             full_text_height,
             over_cap,
@@ -472,7 +569,8 @@ impl PrivMsgNode {
             }
         }
 
-        let (nick, text, confirmed) = codec::decode_privmsg_payload(&rec.payload, rec.ts, &rec.id);
+        let (nick, text, confirmed, channel) =
+            codec::decode_privmsg_payload(&rec.payload, rec.ts, &rec.id);
         let (is_action, text) = match parse_ctcp_action(&text) {
             Some(action) => (true, action.to_string()),
             None => (false, text),
@@ -484,6 +582,7 @@ impl PrivMsgNode {
             nick,
             text,
             confirmed,
+            channel,
             is_action,
             is_notice,
             expanded: true,
@@ -570,6 +669,12 @@ impl PrivMsgNode {
         self.own.action_text_color.eval(atom).expect("action_text_color");
         self.own.url_text_color.eval(atom).expect("url_text_color");
         self.own.cap_max_height.eval(atom).expect("cap_max_height");
+        self.own.channel_color.eval(atom).expect("channel_color");
+        self.own.channel_font_size.eval(atom).expect("channel_font_size");
+        self.own.channel_spacing.eval(atom).expect("channel_spacing");
+        self.own.channel_bg_color.eval(atom).expect("channel_bg_color");
+        self.own.channel_border_color.eval(atom).expect("channel_border_color");
+        self.own.channel_border_size.eval(atom).expect("channel_border_size");
     }
 
     pub fn draw(&self, rec: &MsgRecord, renderer: &Renderer) -> super::DrawOutcome {
@@ -588,12 +693,25 @@ impl PrivMsgNode {
 
         let Some(inst) = inner.instances.get_mut(&key) else { return DrawOutcome::Inline(vec![]) };
         if inst.instrs.is_none() {
+            // `Move` offsets are RELATIVE (they add to the draw
+            // cursor), so the assembly below tracks the cursor
+            // explicitly and emits deltas to each segment's absolute
+            // message-local position.
+            let mut cursor = Point::new(0., 0.);
+            let mut move_to =
+                |instrs: &mut Vec<DrawInstruction>, cursor: &mut Point, x: f32, y: f32| {
+                    instrs.push(DrawInstruction::Move(Point::new(x - cursor.x, y - cursor.y)));
+                    *cursor = Point::new(x, y);
+                };
+
+            // Timestamp at the message origin.
             let mut instrs =
                 text::render_layout(&inst.ts_layout, renderer, gfxtag!("chatview_privmsg_ts"));
 
-            // URL backgrounds (and optional borders) behind the URL
-            // runs, under the glyphs. render_backgrounds matches runs
-            // by their style brush, so only URL-colored runs get a box.
+            // The body renders at the origin too: its layout spans the
+            // full width and carries the first line's gutter indent
+            // internally, so wrapped lines begin at the left edge.
+            // (No Move needed — the cursor never left the origin.)
             if url_regex().is_match(&inst.data.text) {
                 let bg_instrs = text::render_backgrounds(
                     &inst.txt_layout,
@@ -611,6 +729,32 @@ impl PrivMsgNode {
                 text::render_layout(&inst.txt_layout, renderer, gfxtag!("chatview_privmsg_text"));
             instrs.extend(text_instrs);
 
+            // The channel chip: bg fill + border behind the label,
+            // drawn at the origin (absolute coords) so it sits under
+            // the label's Move. Invisible parts are skipped by the
+            // same alpha/size rules the URL chip uses.
+            if let (Some(chan_layout), Some(rect), Some(chip)) =
+                (&inst.chan_layout, &inst.channel_rect, &inst.channel_chip)
+            {
+                let bg_color = self.own.channel_bg_color.get();
+                let border_color = self.own.channel_border_color.get();
+                let border_size = self.own.channel_border_size.get();
+                if bg_color[3] > 0.01 || (border_size > 0.01 && border_color[3] > 0.01) {
+                    let mut mesh = MeshBuilder::new(gfxtag!("chatview_privmsg_chanbg"));
+                    if bg_color[3] > 0.01 {
+                        mesh.draw_filled_box(chip, bg_color);
+                    }
+                    if border_size > 0.01 && border_color[3] > 0.01 {
+                        mesh.draw_outline(chip, border_color, border_size);
+                    }
+                    instrs.push(DrawInstruction::Draw(mesh.alloc(renderer).draw_untextured()));
+                }
+                move_to(&mut instrs, &mut cursor, rect.x, 0.);
+                let chan_instrs =
+                    text::render_layout(chan_layout, renderer, gfxtag!("chatview_privmsg_chan"));
+                instrs.extend(chan_instrs);
+            }
+
             // The expand/collapse affordance label, centered in its rect.
             if let Some(rect) = &inst.affordance_rect {
                 let label = if inst.collapsed { "+" } else { "-" };
@@ -623,10 +767,12 @@ impl PrivMsgNode {
                     None,
                     &[],
                 );
-                instrs.push(DrawInstruction::Move(Point::new(
+                move_to(
+                    &mut instrs,
+                    &mut cursor,
                     rect.x + (rect.w - label_layout.width()) / 2.,
                     rect.y + (rect.h - label_layout.height()) / 2.,
-                )));
+                );
                 let label_instrs =
                     text::render_layout(&label_layout, renderer, gfxtag!("chatview_privmsg_cap"));
                 instrs.extend(label_instrs);
@@ -662,6 +808,11 @@ impl PrivMsgNode {
         for (nick, rect) in &inst.nick_rects {
             if rect.contains(pos) {
                 return Some(Hit::Nick(nick.clone()))
+            }
+        }
+        if let Some(rect) = &inst.channel_rect {
+            if rect.contains(pos) {
+                return Some(Hit::Channel(inst.data.channel.clone()))
             }
         }
         if let Some(rect) = &inst.affordance_rect {
@@ -703,6 +854,20 @@ impl PrivMsgNode {
             .get(&(rec.ts, rec.id))
             .map(|inst| inst.nick_rects.clone())
             .unwrap_or_default()
+    }
+
+    /// The channel span's hit rect of a materialized instance, when
+    /// rendered (test access).
+    pub(crate) fn channel_rect(&self, rec: &MsgRecord) -> Option<Rectangle> {
+        let inner = self.inner.lock();
+        inner.instances.get(&(rec.ts, rec.id)).and_then(|inst| inst.channel_rect)
+    }
+
+    /// The channel chip rect of a materialized instance, when the
+    /// span is rendered (test access).
+    pub(crate) fn channel_chip(&self, rec: &MsgRecord) -> Option<Rectangle> {
+        let inner = self.inner.lock();
+        inner.instances.get(&(rec.ts, rec.id)).and_then(|inst| inst.channel_chip)
     }
 
     /// Build hit rects for the glyph runs whose brush matches
@@ -749,30 +914,43 @@ impl PrivMsgNode {
         rects
     }
 
-    /// Insert a confirmed privmsg: persist via the loader (dedup by
-    /// composite key), measure, insert into the buffer, keep the view
-    /// stable if the message grows content below the viewport. An
-    /// insert for an already-stored message acts as its confirmation.
-    pub async fn insert_line(&self, ts: Timestamp, id: MessageId, nick: String, text: String) {
-        self.insert_privmsg(ts, id, nick, text, true).await
+    /// Insert a confirmed privmsg into the buffer (display-only:
+    /// persistence is the receive path's job — `handle_receive`
+    /// persists through `persist_side_channel` before showing).
+    /// Measure, insert, keep the view stable if the message grows
+    /// content below the viewport. An insert for a message this view
+    /// is already showing acts as its confirmation.
+    pub async fn insert_line(
+        &self,
+        ts: Timestamp,
+        id: MessageId,
+        channel: String,
+        nick: String,
+        text: String,
+    ) {
+        self.insert_privmsg(ts, id, channel, nick, text, true).await
     }
 
     /// Insert an unconfirmed (sent, not yet seen on the network)
-    /// privmsg; persisted with the confirmed flag in the payload.
+    /// privmsg — display-only, nothing is persisted; the trees only
+    /// ever hold confirmed copies (written by the receive path when
+    /// the network relay comes back).
     pub async fn insert_unconf_line(
         &self,
         ts: Timestamp,
         id: MessageId,
+        channel: String,
         nick: String,
         text: String,
     ) {
-        self.insert_privmsg(ts, id, nick, text, false).await
+        self.insert_privmsg(ts, id, channel, nick, text, false).await
     }
 
     async fn insert_privmsg(
         &self,
         ts: Timestamp,
         id: MessageId,
+        channel: String,
         nick: String,
         text: String,
         confirmed: bool,
@@ -781,22 +959,24 @@ impl PrivMsgNode {
             error!(target: "ui::chatview::privmsg", "rejecting insert with non-millisecond timestamp {ts}");
             return
         }
-        t!("insert ts={ts} id={id} nick={nick} confirmed={confirmed}");
+        t!("insert ts={ts} id={id} channel={channel} nick={nick} confirmed={confirmed}");
 
-        let payload = codec::encode_privmsg_payload(&nick, &text, confirmed);
-        if !self.loader.store(ts, &id, MsgType::PrivMsg, &payload) {
-            // Already stored — this is the confirmation of a message we
-            // have been showing as unconfirmed (or a duplicate relay).
-            self.confirm(id).await;
-            return
-        }
-
+        // Display-only: persistence is the receive path's job
+        // (`handle_receive` persists every message through
+        // `persist_side_channel` before deciding to show it). The
+        // buffer insert is the per-view gate: a composite key already
+        // present means this view is showing it — the re-receive is
+        // its confirmation (unconfirmed → confirmed flip), or a
+        // duplicate relay, for which confirm is inert.
+        let payload = codec::encode_privmsg_payload(&nick, &text, confirmed, &channel);
         let rec = MsgRecord { ts, id: id.clone(), msg_type: MsgType::PrivMsg, payload, height: 0. };
         let height = self.measure(&rec);
 
         let full_rec = MsgRecord { height, ..rec };
         let mut buffer = self.buffer.lock().await;
         if !buffer.insert(full_rec.clone()) {
+            drop(buffer);
+            self.confirm(id).await;
             return
         }
         let top = buffer.pos_of_key(&(full_rec.ts, full_rec.id));
@@ -826,6 +1006,10 @@ impl PrivMsgNode {
 
     /// Mark an unconfirmed message confirmed: rewrite the payload in
     /// place (same kvdb entry), update the record, regen for styling.
+    /// Mark an unconfirmed message confirmed: flip the buffered
+    /// record's payload and regen for styling. Buffer-only — the trees
+    /// only ever hold confirmed copies (persistence is the receive
+    /// path's job).
     pub async fn confirm(&self, id: MessageId) {
         let (ts, payload) = {
             let buffer = self.buffer.lock().await;
@@ -836,13 +1020,12 @@ impl PrivMsgNode {
             (rec.ts, rec.payload.clone())
         };
 
-        let (nick, text, confirmed) = codec::decode_privmsg_payload(&payload, ts, &id);
+        let (nick, text, confirmed, channel) = codec::decode_privmsg_payload(&payload, ts, &id);
         if confirmed {
             return
         }
 
-        let new_payload = codec::encode_privmsg_payload(&nick, &text, true);
-        self.loader.update(ts, &id, MsgType::PrivMsg, &new_payload);
+        let new_payload = codec::encode_privmsg_payload(&nick, &text, true, &channel);
         {
             let mut buffer = self.buffer.lock().await;
             if let Some(rec) = buffer.record_mut(&id) {
@@ -905,6 +1088,68 @@ fn url_regex() -> &'static regex::Regex {
         .get_or_init(|| regex::Regex::new(r"https?://[^\s]+|fud://[^\s]+|www\.[^\s]+").unwrap())
 }
 
+/// The tight glyph bounds of a layout, in virtual units. Empty when
+/// the layout holds no glyphs.
+fn layout_glyph_bounds(layout: &text::TextLayout) -> Rectangle {
+    let scale = layout.scale();
+    let mut x0 = f32::MAX;
+    let mut y0 = f32::MAX;
+    let mut x1 = f32::MIN;
+    let mut y1 = f32::MIN;
+    for line in layout.lines() {
+        for item in line.items() {
+            let parley::PositionedLayoutItem::GlyphRun(run) = item else { continue };
+            let metrics = run.run().metrics();
+            let x = run.offset() / scale;
+            let y = (run.baseline() - metrics.ascent) / scale;
+            x0 = x0.min(x);
+            y0 = y0.min(y);
+            x1 = x1.max(x + run.advance() / scale);
+            y1 = y1.max(y + (metrics.ascent + metrics.descent) / scale);
+        }
+    }
+    if x0 > x1 || y0 > y1 {
+        return Rectangle::zero()
+    }
+    Rectangle::new(x0, y0, x1 - x0, y1 - y0)
+}
+
+/// A rectangle grown by `pad` on every side.
+fn inflate_rect(rect: &Rectangle, pad: f32) -> Rectangle {
+    Rectangle::new(rect.x - pad, rect.y - pad, rect.w + 2. * pad, rect.h + 2. * pad)
+}
+
+/// Truncate `s` until it fits `max_w` at `font_size`, marking the cut
+/// with an ellipsis. Room names are short; this runs per
+/// materialization only (cached in the instance). A monospace width
+/// estimate bounds the probe start so an absurdly long name cannot
+/// turn this into quadratic layout work.
+fn ellipsize_to_width(s: &str, max_w: f32, font_size: f32, window_scale: f32) -> String {
+    let chars: Vec<char> = s.chars().collect();
+    let estimate = ((max_w / (font_size * 0.6)).ceil() as usize).saturating_add(4);
+    let mut len = chars.len().min(estimate);
+    while len > 0 {
+        let mut candidate: String = chars[..len].iter().collect();
+        if len < chars.len() {
+            candidate.push('…');
+        }
+        let probe = text::make_layout(
+            &candidate,
+            [1., 1., 1., 1.],
+            font_size,
+            1.2,
+            window_scale,
+            None,
+            &[],
+        );
+        if probe.width() <= max_w {
+            return candidate
+        }
+        len -= 1;
+    }
+    s.chars().take(1).collect()
+}
+
 /// Sanitize an extracted URL match for use as a hit payload (opening,
 /// copying): strip trailing punctuation and control characters (an
 /// interior NUL would abort the Android intent JNI path), resolve
@@ -954,21 +1199,29 @@ fn url_color_ranges(
 
 /// Scene node factory for the privmsg type node.
 
-/// Decode `(ts, id, nick, text)` method-call data.
-pub fn decode_insert_data(data: &[u8]) -> Option<(Timestamp, MessageId, String, String)> {
+/// Decode `(ts, id, channel, nick, text)` method-call data.
+pub fn decode_insert_data(data: &[u8]) -> Option<(Timestamp, MessageId, String, String, String)> {
     let mut cur = Cursor::new(data);
     let ts = Timestamp::decode(&mut cur).ok()?;
     let id = MessageId::decode(&mut cur).ok()?;
+    let channel = String::decode(&mut cur).ok()?;
     let nick = String::decode(&mut cur).ok()?;
     let text = String::decode(&mut cur).ok()?;
-    Some((ts, id, nick, text))
+    Some((ts, id, channel, nick, text))
 }
 
-/// Encode `(ts, id, nick, text)` for method-call data.
-pub fn encode_insert_data(ts: Timestamp, id: &MessageId, nick: &str, text: &str) -> Vec<u8> {
+/// Encode `(ts, id, channel, nick, text)` for method-call data.
+pub fn encode_insert_data(
+    ts: Timestamp,
+    id: &MessageId,
+    channel: &str,
+    nick: &str,
+    text: &str,
+) -> Vec<u8> {
     let mut data = vec![];
     ts.encode(&mut data).unwrap();
     id.encode(&mut data).unwrap();
+    channel.encode(&mut data).unwrap();
     nick.encode(&mut data).unwrap();
     text.encode(&mut data).unwrap();
     data
@@ -1015,7 +1268,7 @@ mod tests {
             .join(format!("darkfi-chatview-privmsg-{tag}-{}.db", std::process::id()));
         let _ = std::fs::remove_file(&path);
         let db = kvdb_overlay::Database::open_default(&path).unwrap();
-        let tree = db.open_tree_default("chat").unwrap();
+        let tree = db.open_tree_default("#dev__chat_tree_v3").unwrap();
         (
             Loader::new(
                 Arc::new(AsyncMutex::new(MsgBuffer::new())),
@@ -1058,9 +1311,9 @@ mod tests {
         let buffer = Arc::new(AsyncMutex::new(raw));
         let (redraw, _rx) = crate::ui::RedrawTrigger::new();
         let loader = Loader::new(buffer.clone(), redraw);
-        loader.bind(tag.to_string(), fixture_loader(tag).1);
+        loader.bind("#dev".to_string(), fixture_loader(tag).1);
 
-        // A dangling chat weak: insert still persists and buffers, it
+        // A dangling chat weak: insert still displays and buffers, it
         // just skips view compensation (no chatview to talk to).
         let chat_weak: Weak<ChatView> = Weak::new();
 
@@ -1090,7 +1343,7 @@ mod tests {
     fn rec_of(ts: Timestamp, idb: u8, text: &str, confirmed: bool) -> MsgRecord {
         let mut id = [0u8; 32];
         id[0] = idb;
-        let payload = codec::encode_privmsg_payload("alice", text, confirmed);
+        let payload = codec::encode_privmsg_payload("alice", text, confirmed, "#dev");
         MsgRecord { ts, id: MessageId(id), msg_type: MsgType::PrivMsg, payload, height: 0. }
     }
 
@@ -1149,6 +1402,13 @@ mod tests {
         let (chat, node, _buffer) = smol::block_on(make_node("leftwrap"));
         let atom = &mut PropertyAtomicGuard::none();
         chat.get_property("rect").unwrap().set_f32(atom, Role::App, 2, 240.).unwrap();
+        // Fixed spacing so the expected first-line offset is exact:
+        // timestamp glyph width + spacing.
+        node.node()
+            .upgrade()
+            .unwrap()
+            .set_property_f32(atom, Role::App, "channel_spacing", 20.)
+            .unwrap();
         let body = "word ".repeat(30);
         for (nick, text, copied) in [
             ("alice", body.clone(), format!("alice {body}")),
@@ -1156,14 +1416,22 @@ mod tests {
             ("NOTICE", body.clone(), body.clone()),
         ] {
             let mut rec = rec_of(1_000_000, b'a', &text, true);
-            rec.payload = codec::encode_privmsg_payload(nick, &text, true);
+            rec.payload = codec::encode_privmsg_payload(nick, &text, true, "#dev");
             let height = node.measure(&rec);
             assert_eq!(node.copy_text(&rec), Some(copied));
             let inner = node.inner.lock();
             let inst = &inner.instances[&(rec.ts, rec.id)];
             assert!(inst.txt_layout.lines().count() > 2);
+            let expected_first = inst.ts_layout.width() + 20.;
             for (i, line) in inst.txt_layout.lines().enumerate() {
-                assert_eq!(line.metrics().offset, if i == 0 { 50. } else { 0. });
+                // The indent lives in the line's inline_min_coord (the
+                // breaker positions the line at the indent; align does
+                // not carry it in metrics().offset).
+                let expected = if i == 0 { expected_first } else { 0. };
+                assert!(
+                    (line.metrics().inline_min_coord - expected).abs() < 0.1,
+                    "line {i} starts at {expected}"
+                );
                 assert_eq!(line.metrics().inline_max_coord, 240.);
             }
             assert!((height - inst.txt_layout.height() - 4.).abs() < 0.01);
@@ -1171,22 +1439,29 @@ mod tests {
     }
 
     #[test]
-    fn timestamp_width_change_rebuilds_first_line() {
-        let (chat, node, _buffer) = smol::block_on(make_node("timestampwidth"));
+    fn channel_spacing_change_rebuilds_first_line() {
+        let (_chat, node, _buffer) = smol::block_on(make_node("chanspacing"));
         let rec = rec_of(1_000_000, b'a', "hello", true);
         let height = node.measure(&rec);
-        assert_eq!(node.nick_rects(&rec)[0].1.x, 50.);
+        let ts_w = {
+            let inner = node.inner.lock();
+            inner.instances[&(rec.ts, rec.id)].ts_layout.width()
+        };
 
         let atom = &mut PropertyAtomicGuard::none();
-        chat.set_property_f32(atom, Role::App, "timestamp_width", 80.).unwrap();
+        node.node()
+            .upgrade()
+            .unwrap()
+            .set_property_f32(atom, Role::App, "channel_spacing", 30.)
+            .unwrap();
         assert_eq!(node.measure(&rec), height);
         assert_eq!(node.inner.lock().layout_builds, 2);
-        assert_eq!(node.nick_rects(&rec)[0].1.x, 80.);
+        assert!((node.nick_rects(&rec)[0].1.x - (ts_w + 30.)).abs() < 0.5);
 
         node.shared.window_scale.set(atom, 1.5);
         assert!((node.measure(&rec) - height).abs() < 0.01);
         assert_eq!(node.inner.lock().layout_builds, 3);
-        assert!((node.nick_rects(&rec)[0].1.x - 80.).abs() < 0.01);
+        assert!((node.nick_rects(&rec)[0].1.x - (ts_w + 30.)).abs() < 0.5);
     }
 
     #[test]
@@ -1209,12 +1484,13 @@ mod tests {
     }
 
     #[test]
-    fn insert_line_persists_and_buffers() {
+    fn insert_line_displays_and_buffers() {
         let (_chat, node, buffer) = smol::block_on(make_node("insert"));
         smol::block_on(async {
             node.insert_line(
                 1_756_000_000_000,
                 MessageId([b'x'; 32]),
+                "#dev".to_string(),
                 "alice".to_string(),
                 "hi there".to_string(),
             )
@@ -1225,8 +1501,35 @@ mod tests {
         assert_eq!(buffer.len(), 1);
         let rec = buffer.record(&MessageId([b'x'; 32])).unwrap();
         assert!(rec.height > 0., "inserted with measured height");
-        let (_, _, confirmed) = codec::decode_privmsg_payload(&rec.payload, rec.ts, &rec.id);
+        let (_, _, confirmed, channel) =
+            codec::decode_privmsg_payload(&rec.payload, rec.ts, &rec.id);
         assert!(confirmed);
+        assert_eq!(channel, "#dev", "payload carries the channel");
+    }
+
+    #[test]
+    fn confirm_flips_buffer_in_place() {
+        let (_chat, node, buffer) = smol::block_on(make_node("confirm"));
+        let id = MessageId([b'x'; 32]);
+        let ts = 1_756_000_000_000;
+
+        smol::block_on(async {
+            node.insert_unconf_line(
+                ts,
+                id,
+                "#dev".to_string(),
+                "alice".to_string(),
+                "hi".to_string(),
+            )
+            .await;
+            node.confirm(id).await;
+        });
+
+        let buffer = smol::block_on(buffer.lock());
+        assert_eq!(buffer.len(), 1, "no duplicate record");
+        let rec = buffer.record(&id).unwrap();
+        let (_, _, confirmed, _) = codec::decode_privmsg_payload(&rec.payload, rec.ts, &rec.id);
+        assert!(confirmed, "confirmed in place in the buffer");
     }
 
     #[test]
@@ -1236,13 +1539,20 @@ mod tests {
         let ts = 1_756_000_000_000;
 
         smol::block_on(async {
-            node.insert_unconf_line(ts, id, "alice".to_string(), "hi".to_string()).await;
+            node.insert_unconf_line(
+                ts,
+                id,
+                "#dev".to_string(),
+                "alice".to_string(),
+                "hi".to_string(),
+            )
+            .await;
         });
         {
             let buffer = smol::block_on(buffer.lock());
             assert_eq!(buffer.len(), 1);
             let rec = buffer.record(&id).unwrap();
-            let (_, _, confirmed) = codec::decode_privmsg_payload(&rec.payload, rec.ts, &rec.id);
+            let (_, _, confirmed, _) = codec::decode_privmsg_payload(&rec.payload, rec.ts, &rec.id);
             assert!(!confirmed, "starts unconfirmed");
         }
 
@@ -1250,13 +1560,14 @@ mod tests {
         // one entry, confirmed payload, regen invalidated the rendered
         // state (lazily rebuilt on the next touch).
         smol::block_on(async {
-            node.insert_line(ts, id, "alice".to_string(), "hi".to_string()).await;
+            node.insert_line(ts, id, "#dev".to_string(), "alice".to_string(), "hi".to_string())
+                .await;
         });
         {
             let buffer = smol::block_on(buffer.lock());
             assert_eq!(buffer.len(), 1, "no duplicate record");
             let rec = buffer.record(&id).unwrap();
-            let (_, _, confirmed) = codec::decode_privmsg_payload(&rec.payload, rec.ts, &rec.id);
+            let (_, _, confirmed, _) = codec::decode_privmsg_payload(&rec.payload, rec.ts, &rec.id);
             assert!(confirmed, "confirmed in place");
         }
         assert!(
@@ -1282,7 +1593,8 @@ mod tests {
         // A plain duplicate changes nothing.
         let builds = node.inner.lock().layout_builds;
         smol::block_on(async {
-            node.insert_line(ts, id, "alice".to_string(), "hi".to_string()).await;
+            node.insert_line(ts, id, "#dev".to_string(), "alice".to_string(), "hi".to_string())
+                .await;
         });
         let buffer = smol::block_on(buffer.lock());
         assert_eq!(buffer.len(), 1);
@@ -1298,6 +1610,7 @@ mod tests {
             nick: "alice".to_string(),
             text: "waves".to_string(),
             confirmed: true,
+            channel: "#dev".to_string(),
             is_action: true,
             is_notice: false,
             expanded: true,
@@ -1312,6 +1625,111 @@ mod tests {
         let data = PrivData { nick: "NOTICE".to_string(), is_notice: true, ..data };
         assert_eq!(data.line_text(), "waves");
         assert_eq!(data.body_offset(), 0);
+    }
+
+    #[test]
+    fn channel_span_renders_only_when_shown() {
+        let (chat, node, _buffer) = smol::block_on(make_node("chanspan"));
+
+        let rec = rec_of(1_000_000, b'a', "hello", true);
+        node.measure(&rec);
+        assert!(node.channel_rect(&rec).is_none(), "hidden by default");
+
+        // No channel hit in the gutter while display is inactive.
+        assert_eq!(node.hit_test(&rec, Point::new(5., 25.)), None);
+
+        // Toggling display rebuilds the instance with the span.
+        let atom = &mut PropertyAtomicGuard::none();
+        chat.set_property_bool(atom, Role::App, "show_channel", true).unwrap();
+        let builds = node.inner.lock().layout_builds;
+        node.measure(&rec);
+        assert_eq!(node.inner.lock().layout_builds, builds + 1, "toggle regenerates");
+
+        let rect = node.channel_rect(&rec).expect("span rendered");
+        assert!(rect.x > 0., "after the timestamp: {:?}", rect);
+        let mid = Point::new(rect.x + rect.w / 2., rect.y + rect.h / 2.);
+        assert_eq!(node.hit_test(&rec, mid), Some(Hit::Channel("#dev".to_string())));
+
+        // The chip hugs the label — it must not reach back over the
+        // timestamp (x=0) and must cover the label's middle.
+        let chip = node.channel_chip(&rec).expect("chip rect present");
+        assert!(chip.x > 0., "chip clear of the timestamp: {:?}", chip);
+        assert!(chip.x <= mid.x && mid.x <= chip.x + chip.w, "chip covers the label");
+        assert!(chip.y <= mid.y && mid.y <= chip.y + chip.h, "chip covers the label vertically");
+
+        // The spacing property widens the timestamp → chip gap (and
+        // the chip → line indent) and regens the rendered state.
+        let chip_x = chip.x;
+        node.node()
+            .upgrade()
+            .unwrap()
+            .set_property_f32(atom, Role::App, "channel_spacing", 30.)
+            .unwrap();
+        node.measure(&rec);
+        let chip2 = node.channel_chip(&rec).expect("chip after respacing");
+        assert!(chip2.x > chip_x + 20., "gap widened: {chip_x:?} -> {:?}", chip2.x);
+
+        // Toggling back off removes the span and its hit target.
+        chat.set_property_bool(atom, Role::App, "show_channel", false).unwrap();
+        node.measure(&rec);
+        assert!(node.channel_rect(&rec).is_none(), "hidden again");
+        assert_eq!(node.hit_test(&rec, mid), None);
+    }
+
+    #[test]
+    fn channel_ellipsizes_when_absurdly_long() {
+        use super::ellipsize_to_width;
+        assert_eq!(ellipsize_to_width("#dev", 240., 10., 1.), "#dev");
+        let long = ellipsize_to_width("#a-very-long-channel-name-here", 50., 10., 1.);
+        assert!(long.ends_with('…'), "cut marked: {long}");
+        assert!(long.chars().count() < "#a-very-long-channel-name-here".chars().count());
+        // The ellipsized form fits the bound.
+        let probe = text::make_layout(&long, [1., 1., 1., 1.], 10., 1.2, 1., None, &[]);
+        assert!(probe.width() <= 50.);
+    }
+
+    #[test]
+    fn wrapped_lines_return_to_the_left_edge() {
+        let (chat, node, _buffer) = smol::block_on(make_node("outdent"));
+
+        // A message long enough to wrap at the full width.
+        let long = "word ".repeat(60);
+        let rec = rec_of(1_000_000, b'a', &long, true);
+        node.measure(&rec);
+
+        // The first line is indented past the gutter; the second line
+        // starts at the view's left edge (x=0).
+        let layout = {
+            let inner = node.inner.lock();
+            inner.instances.get(&(rec.ts, rec.id)).expect("materialized").txt_layout.clone()
+        };
+        let mut lines = layout.lines();
+        let scale = layout.scale();
+        let line_x = |line: parley::Line<'_, Color>| {
+            let mut x = None;
+            for item in line.items() {
+                if let parley::PositionedLayoutItem::GlyphRun(run) = item {
+                    x = Some(run.offset());
+                    break
+                }
+            }
+            x.unwrap_or(0.) / scale
+        };
+        let first = lines.next().expect("first line");
+        let second = lines.next().expect("wrapped second line");
+        let first_x = line_x(first);
+        let second_x = line_x(second);
+        // The first line starts after the timestamp glyphs plus the
+        // spacing (auto here: a fraction of the channel font size).
+        // The exact ts width is font-metric dependent ("HH:MM" at
+        // font 10 ≈ 30px), so assert a conservative lower bound.
+        assert!(first_x >= 25., "first line clears the timestamp: {first_x}");
+        assert!(second_x.abs() < 0.5, "continuation at the left edge: {second_x}");
+
+        // The wrap width is the full view width, not width minus gutter.
+        assert!(layout.width() <= 800.);
+
+        let _ = chat;
     }
 
     #[test]
@@ -1335,7 +1753,14 @@ mod tests {
         assert!(!nicks.is_empty(), "nick prefix is clickable");
         let (nick, nrect) = &nicks[0];
         assert_eq!(nick, "alice");
-        assert_eq!(nrect.x, 50.);
+        // The nick starts at the first-line indent: timestamp glyph
+        // width plus the channel spacing (the factory default here —
+        // the test harness doesn't set it).
+        let ts_w = {
+            let inner = node.inner.lock();
+            inner.instances[&(rec.ts, rec.id)].ts_layout.width()
+        };
+        assert!((nrect.x - (ts_w + 4.)).abs() < 0.5, "nick at the indent: {}", nrect.x);
         assert_eq!(
             node.hit_test(&rec, Point::new(nrect.x + nrect.w / 2., nrect.y + nrect.h / 2.)),
             Some(Hit::Nick("alice".to_string()))

@@ -98,6 +98,7 @@ async fn scifi_apply(ctx: &ThemeCtx) -> Result<()> {
         //("menu.role1_color", [0.36, 1., 0.51, 1.]),
         //("menu.role2_color", [0.56, 0.61, 1., 1.]),
         ("chatview.timestamp_color", [0.407, 0.604, 0.647, 1.]),
+        ("chatview.channel_color", [0., 0.941, 1., 1.]),
         ("chatview.text_color", [1., 1., 1., 1.]),
         ("chatview.hi_bg_color", [0., 0.2, 0.2, 1.]),
         ("chatview.action_text_color", [0.5, 0.25, 0.75, 1.]),
@@ -160,6 +161,22 @@ async fn scifi_apply(ctx: &ThemeCtx) -> Result<()> {
     king_video_node(ctx).await;
     bg_fade_node(ctx, "/window/content/chat/main_chat_layer", "bg").await?;
     bg_fade_node(ctx, "/window/content/wallet/main_layer", "wallet_bg").await?;
+
+    // Feed layer bg on the main wallet screen: restyle the schema's
+    // neutral fill with the scifi dark teal.
+    if let Some(node) = ctx.sg_root().lookup_node("/window/content/wallet/main_layer/feed_layer/bg")
+    {
+        let mut shape = VectorShape::new();
+        shape.add_filled_box(
+            expr::const_f32(0.),
+            expr::const_f32(0.),
+            expr::load_var("w"),
+            expr::load_var("h"),
+            [0., 0.09, 0.106, 1.],
+        );
+        node.set_property_shape(&mut PropertyAtomicGuard::none(), Role::Theme, "shape", shape)
+            .unwrap();
+    }
 
     // Bg for wallet btn to navigate to chat screen
     let node = create_vector_art("chat_btn_bg");

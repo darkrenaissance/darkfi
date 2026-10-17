@@ -43,8 +43,9 @@ use crate::{
     shape,
     theme::wire_color,
     ui::{
-        chatview::MessageId, emoji_picker, BaseEdit, BaseEditType, Button, ChatView, EmojiPicker,
-        Layer, RedrawTrigger, Shortcut, Text, VectorArt, VectorShape,
+        chatview::{MessageId, FEED_CHANNEL},
+        emoji_picker, BaseEdit, BaseEditType, Button, ChatView, EmojiPicker, Layer, RedrawTrigger,
+        Shortcut, Text, VectorArt, VectorShape,
     },
     util::{i18n::I18nBabelFish, unixtime},
     ExecutorPtr,
@@ -87,6 +88,8 @@ mod android_ui_consts {
     pub const FONTSIZE: f32 = 50.;
     pub const TIMESTAMP_FONTSIZE: f32 = 30.;
     pub const TIMESTAMP_WIDTH: f32 = 135.;
+    /// Default timestamp→line / chip spacing (the shipped look).
+    pub const CHANNEL_SPACING: f32 = 45.;
     pub const MESSAGE_SPACING: f32 = 15.;
     pub const LINE_HEIGHT: f32 = 58.;
     pub const CHATVIEW_BASELINE: f32 = 36.;
@@ -170,6 +173,8 @@ pub mod ui_consts {
     pub const FONTSIZE: f32 = 25.;
     pub const TIMESTAMP_FONTSIZE: f32 = 12.;
     pub const TIMESTAMP_WIDTH: f32 = 60.;
+    /// Default timestamp→line / chip spacing (the shipped look).
+    pub const CHANNEL_SPACING: f32 = 24.;
     pub const MESSAGE_SPACING: f32 = 5.;
     pub const LINE_HEIGHT: f32 = 30.;
     pub const CHATVIEW_BASELINE: f32 = 20.;
@@ -516,22 +521,38 @@ pub async fn make(
         .await;
     layer_node.link(chatview_node.clone());
 
-    let tree_name = "#dev__chat_tree_v2";
+    let tree_name = "#dev__chat_tree_v3";
     let tree = kv_db.open_tree_default(&tree_name).unwrap();
     if tree.is_empty().expect("cannot read dev chat tree") {
         populate_tree(&tree);
     }
 
-    // The label follows the bound channel.
+    // The feed tree mirrors the fixture (interleaved across a few
+    // channels) so the `*` view has labeled, mixed-room content to
+    // test with before any live traffic arrives.
+    let feed_tree = kv_db.open_tree_default(&ChatView::tree_name(FEED_CHANNEL)).unwrap();
+    if feed_tree.is_empty().expect("cannot read feed chat tree") {
+        populate_feed_tree(&feed_tree);
+    }
+
+    // The label follows the bound channel; the feed binding also
+    // forces channel names on (the feed is unread without them).
     {
         let channel_prop = PropertyStr::wrap(&chatview_node, Role::App, "channel", 0).unwrap();
         let channel_sub = channel_prop.prop().subscribe_modify();
         let label_text = PropertyStr::wrap(&label_node, Role::App, "text", 0).unwrap();
+        let show_channel_prop =
+            PropertyBool::wrap(&chatview_node, Role::App, "show_channel", 0).unwrap();
         let redraw2 = redraw.clone();
         let label_task = ex.spawn(async move {
             while let Ok(_) = channel_sub.receive().await {
                 let atom = &mut redraw2.make_guard(gfxtag!("channel label"));
-                label_text.set(atom, channel_prop.get());
+                let channel = channel_prop.get();
+                label_text.set(atom, channel.clone());
+                let shown = channel == FEED_CHANNEL;
+                if show_channel_prop.get() != shown {
+                    show_channel_prop.set(atom, shown);
+                }
             }
         });
         chatview_node.push_task(label_task);
@@ -542,6 +563,28 @@ pub async fn make(
     privmsg_node.set_property_f32(atom, Role::App, "cap_max_height", 1000.).unwrap();
     wire_color(&privmsg_node, "action_text_color", &theme, "chatview.action_text_color").unwrap();
     wire_color(&privmsg_node, "url_text_color", &theme, "chatview.url_text_color").unwrap();
+
+    // Channel label styling: text color follows the shared token; the
+    // chip gets a visible bg + border. Font size and spacing match the
+    // timestamp size / the shipped timestamp→line gap now that the
+    // fixed gutter no longer drives the body indent.
+    wire_color(&privmsg_node, "channel_color", &theme, "chatview.channel_color").unwrap();
+    let prop = privmsg_node.get_property("channel_bg_color").unwrap();
+    prop.set_default_f32_multi(&rgba!(0x263B3Cff)).unwrap();
+    let prop = privmsg_node.get_property("channel_border_color").unwrap();
+    prop.set_default_f32_multi(&rgba!(0x689AA5ff)).unwrap();
+    privmsg_node.get_property("channel_border_size").unwrap().set_default_f32(0, 1.).unwrap();
+    privmsg_node
+        .get_property("channel_font_size")
+        .unwrap()
+        .set_default_f32(0, TIMESTAMP_FONTSIZE)
+        .unwrap();
+    privmsg_node
+        .get_property("channel_spacing")
+        .unwrap()
+        .set_default_f32(0, CHANNEL_SPACING)
+        .unwrap();
+
     let prop = privmsg_node.get_property("url_bg_color").unwrap();
     prop.set_default_f32_multi(&[0., 0.13, 0.08, 1.]).unwrap();
     privmsg_node.get_property("url_bg_border_size").unwrap().set_default_f32(0, 1.).unwrap();
@@ -575,6 +618,28 @@ pub async fn make(
         1.00, 0.30, 0.00, 1.
     ];
     prop.set_default_f32_multi(&nick_colors).unwrap();
+
+    // Clicking a rendered channel name navigates to that channel
+    // (one chat screen, retargeted).
+    {
+        let (slot, recvr) = Slot::new("channel_nav");
+        privmsg_node.register("channel_clicked", slot).unwrap();
+        let chatview_node2 = chatview_node.clone();
+        let listen_channel = ex.spawn(async move {
+            while let Ok(data) = recvr.recv().await {
+                let mut cur = Cursor::new(&data);
+                let Ok(_id) = MessageId::decode(&mut cur) else { continue };
+                let Ok(channel) = String::decode(&mut cur) else { continue };
+                if channel == FEED_CHANNEL {
+                    continue
+                }
+                let mut chan_data = vec![];
+                channel.encode(&mut chan_data).unwrap();
+                let _ = chatview_node2.call_method("set_channel", chan_data).await;
+            }
+        });
+        layer_node.push_task(listen_channel);
+    }
 
     // Date separator styling.
     let datemsg_node = chatview_node.lookup_node("/datemsg").expect("datemsg type node");
@@ -1100,7 +1165,6 @@ pub async fn make(
         async move {
             let mut text = editz_text.get();
             let channel = chatview_node.get_property_str("channel").unwrap_or_default();
-            let privmsg_node = chatview_node.lookup_node("/privmsg").expect("privmsg type node");
             trace!(target: "app::chat", "send to channel: {channel}");
             {
                 let atom = &mut redraw.make_guard(gfxtag!("sendmsg clear edit"));
@@ -1123,12 +1187,16 @@ pub async fn make(
                 let msg = format!("You are now known as <{nick}>");
                 let id: [u8; 32] = rand::random();
 
+                // Route the local echo through the chatview's receive:
+                // it persists (channel tree + feed mirror) and shows it
+                // in the bound view — insert_line is display-only.
                 let mut data = vec![];
+                channel.encode(&mut data).unwrap();
                 unixtime().encode(&mut data).unwrap();
                 id.encode(&mut data).unwrap();
                 "NOTICE".encode(&mut data).unwrap();
                 msg.encode(&mut data).unwrap();
-                privmsg_node.call_method("insert_line", data).await.unwrap();
+                chatview_node.call_method("receive", data).await.unwrap();
 
                 return
             }
@@ -1668,6 +1736,22 @@ pub async fn make(
 // Just for testing
 #[allow(dead_code)]
 pub(super) fn populate_tree(tree: &Tree) {
+    populate_tree_chan(tree, |_| "#dev".to_string());
+}
+
+/// Feed fixture: the same chat.txt lines re-stamped across a few
+/// channels (stable per nick, so conversations stay coherent) — the
+/// `*` view gets labeled, mixed-room content to test with.
+#[allow(dead_code)]
+pub(super) fn populate_feed_tree(tree: &Tree) {
+    const FEED_CHANNELS: [&str; 3] = ["#dev", "#ramen", "#darkfi"];
+    populate_tree_chan(tree, |nick| {
+        let hash = nick.bytes().map(|b| b as usize).sum::<usize>();
+        FEED_CHANNELS[hash % FEED_CHANNELS.len()].to_string()
+    });
+}
+
+fn populate_tree_chan(tree: &Tree, channel_of: impl Fn(&str) -> String) {
     use crate::ui::chatview::{codec, MessageId, MsgType};
     use chrono::{Local, NaiveDate, NaiveDateTime, TimeZone};
 
@@ -1697,13 +1781,14 @@ pub(super) fn populate_tree(tree: &Tree) {
 
         let nick = nick.to_string();
         let text = text.to_string();
+        let channel = channel_of(&nick);
 
         // Unique id per line: the minute timestamp alone can repeat.
         let mut id_bytes = [0u8; 32];
         id_bytes[..8].copy_from_slice(&(idx as u64).to_be_bytes());
         let id = MessageId(id_bytes);
 
-        let payload = codec::encode_privmsg_payload(&nick, &text, true);
+        let payload = codec::encode_privmsg_payload(&nick, &text, true, &channel);
         let val = codec::encode_value(MsgType::PrivMsg, &payload);
         let key = codec::encode_key(timest, &id);
         tree.insert(&key, &val).unwrap();

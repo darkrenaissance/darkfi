@@ -998,6 +998,12 @@ pub fn create_chatview(name: &str) -> SceneNode {
     node.add_property(prop).unwrap();
 
     let mut prop =
+        Property::new("show_channel", PropertyType::Bool, PropertySubType::Null, PERM_APP);
+    prop.set_ui_text("Show channel", "Render each message's channel name beside the timestamp");
+    prop.set_defaults_bool(vec![false]).unwrap();
+    node.add_property(prop).unwrap();
+
+    let mut prop =
         Property::new("text_color", PropertyType::Float32, PropertySubType::Color, PERM_STYLE);
     prop.set_array_len(4);
     prop.set_range_f32(0., 1.);
@@ -1130,6 +1136,65 @@ pub fn create_privmsg_node(name: &str) -> SceneNode {
     prop.allow_exprs();
     node.add_property(prop).unwrap();
 
+    // Channel label (the room-name span shown when channel display is
+    // active). Type-specific styling: lives here, on the privmsg node.
+    let mut prop =
+        Property::new("channel_color", PropertyType::Float32, PropertySubType::Color, PERM_STYLE);
+    prop.set_array_len(4);
+    prop.set_range_f32(0., 1.);
+    prop.allow_exprs();
+    node.add_property(prop).unwrap();
+
+    let mut prop = Property::new(
+        "channel_font_size",
+        PropertyType::Float32,
+        PropertySubType::Pixel,
+        PERM_STYLE,
+    );
+    prop.set_defaults_f32(vec![12.]).unwrap();
+    prop.set_range_f32(0.01, f32::MAX);
+    prop.allow_exprs();
+    node.add_property(prop).unwrap();
+
+    let mut prop =
+        Property::new("channel_spacing", PropertyType::Float32, PropertySubType::Pixel, PERM_STYLE);
+    prop.set_defaults_f32(vec![4.]).unwrap();
+    prop.set_range_f32(0.01, f32::MAX);
+    prop.allow_exprs();
+    node.add_property(prop).unwrap();
+
+    let mut prop = Property::new(
+        "channel_bg_color",
+        PropertyType::Float32,
+        PropertySubType::Color,
+        PERM_STYLE,
+    );
+    prop.set_array_len(4);
+    prop.set_range_f32(0., 1.);
+    prop.allow_exprs();
+    node.add_property(prop).unwrap();
+
+    let mut prop = Property::new(
+        "channel_border_size",
+        PropertyType::Float32,
+        PropertySubType::Pixel,
+        PERM_STYLE,
+    );
+    prop.set_range_f32(0., f32::MAX);
+    prop.allow_exprs();
+    node.add_property(prop).unwrap();
+
+    let mut prop = Property::new(
+        "channel_border_color",
+        PropertyType::Float32,
+        PropertySubType::Color,
+        PERM_STYLE,
+    );
+    prop.set_array_len(4);
+    prop.set_range_f32(0., 1.);
+    prop.allow_exprs();
+    node.add_property(prop).unwrap();
+
     let mut prop =
         Property::new("cap_max_height", PropertyType::Float32, PropertySubType::Pixel, PERM_APP);
     prop.set_range_f32(0., f32::MAX);
@@ -1196,6 +1261,16 @@ pub fn create_privmsg_node(name: &str) -> SceneNode {
         "nick_clicked",
         "A nick was clicked",
         vec![("id", "Message ID", CallArgType::Hash), ("nick", "Nickname", CallArgType::Str)],
+    )
+    .unwrap();
+
+    node.add_signal(
+        "channel_clicked",
+        "A channel name was clicked",
+        vec![
+            ("id", "Message ID", CallArgType::Hash),
+            ("channel", "Channel name", CallArgType::Str),
+        ],
     )
     .unwrap();
 

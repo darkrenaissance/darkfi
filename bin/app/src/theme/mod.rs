@@ -87,6 +87,7 @@ pub fn shared_token_props() -> Vec<Property> {
         color_prop("menu.role2_color", [0.56, 0.61, 1., 1.]),
         // ChatView
         color_prop("chatview.timestamp_color", [0.55, 0.55, 0.55, 1.]),
+        color_prop("chatview.channel_color", [0.55, 0.55, 0.55, 1.]),
         color_prop("chatview.text_color", [0.92, 0.92, 0.92, 1.]),
         color_prop("chatview.hi_bg_color", [0.25, 0.25, 0.25, 1.]),
         color_prop("chatview.action_text_color", [0.80, 0.80, 0.80, 1.]),
@@ -646,6 +647,7 @@ mod tests {
             "menu.role2_color",
             // chatview
             "chatview.timestamp_color",
+            "chatview.channel_color",
             "chatview.text_color",
             "chatview.hi_bg_color",
             "chatview.action_text_color",

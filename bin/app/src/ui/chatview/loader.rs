@@ -145,16 +145,6 @@ impl Loader {
         self.wake(Wakeup::FilterChange);
     }
 
-    /// Overwrite the stored entry for this composite key in place
-    /// (confirmation rewrites the payload; never creates a duplicate).
-    pub fn update(&self, ts: Timestamp, id: &MessageId, msg_type: MsgType, payload: &[u8]) {
-        let tree = self.tree.lock();
-        let Some((_, tree)) = tree.as_ref() else { return };
-        let key = codec::encode_key(ts, id);
-        let val = codec::encode_value(msg_type, payload);
-        tree.insert(&key, &val).expect("cannot update chat entry");
-    }
-
     /// Install the record-measuring callback the pump uses to give
     /// loaded records their heights (type nodes lay out text; the
     /// loader stays geometry-free).
@@ -166,23 +156,6 @@ impl Loader {
     /// messages from loaded privmsg text.
     pub fn set_derive(&self, f: Arc<dyn Fn(&MsgRecord) -> Option<MsgRecord> + Send + Sync>) {
         *self.derive.lock() = Some(f);
-    }
-
-    /// Persist a live message into the bound channel tree. Dedup by
-    /// the composite key; returns false when the entry already exists.
-    pub fn store(&self, ts: Timestamp, id: &MessageId, msg_type: MsgType, payload: &[u8]) -> bool {
-        let tree = self.tree.lock();
-        let Some((_, tree)) = tree.as_ref() else { return false };
-        let key = codec::encode_key(ts, id);
-        match tree.contains_key(&key) {
-            Ok(true) => false,
-            Err(_) => false,
-            Ok(false) => {
-                let val = codec::encode_value(msg_type, payload);
-                tree.insert(&key, &val).expect("cannot persist chat entry");
-                true
-            }
-        }
     }
 
     /// The background task: wait for wakes, drain the reason bits,
@@ -233,7 +206,7 @@ impl Loader {
         let shortfall = need - covered;
 
         let tree_guard = self.tree.lock();
-        let Some((tree_name, tree)) = tree_guard.as_ref() else { return };
+        let Some((tree_name, tree)) = &*tree_guard else { return };
         let tree_name = tree_name.clone();
         t!("pump reasons={reasons:#04x} tree={tree_name} covered={covered} need={need}");
 
@@ -262,7 +235,7 @@ impl Loader {
             if !filter(&rec) {
                 continue
             }
-            if let Some(measure) = self.measure.lock().as_ref() {
+            if let Some(measure) = &*self.measure.lock() {
                 rec.height = measure(&rec);
             }
             batch_height += rec.height;
@@ -270,10 +243,10 @@ impl Loader {
             let is_privmsg = rec.msg_type == MsgType::PrivMsg;
             batch.push(rec);
             if is_privmsg {
-                if let Some(derive) = self.derive.lock().as_ref() {
+                if let Some(derive) = &*self.derive.lock() {
                     if let Some(file_rec) = derive(batch.last().unwrap()) {
                         let mut file_rec = file_rec;
-                        if let Some(measure) = self.measure.lock().as_ref() {
+                        if let Some(measure) = &*self.measure.lock() {
                             file_rec.height = measure(&file_rec);
                         }
                         batch_height += file_rec.height;
@@ -294,7 +267,7 @@ impl Loader {
 
         // Separators derived by the batch arrive unmeasured (they are
         // not in the tree); give them heights through the type nodes.
-        if let Some(measure) = self.measure.lock().as_ref() {
+        if let Some(measure) = &*self.measure.lock() {
             let mut ids = vec![];
             for rec in buffer.iter_display_order() {
                 if rec.msg_type.is_derived() && rec.height == 0. {
@@ -333,7 +306,7 @@ mod tests {
             let mut id = [0u8; 32];
             id[0] = *idb;
             let id = MessageId(id);
-            let payload = codec::encode_privmsg_payload("nick", "text", true);
+            let payload = codec::encode_privmsg_payload("nick", "text", true, "#dev");
             let val = codec::encode_value(MsgType::PrivMsg, &payload);
             let key = codec::encode_key(*ts, &id);
             tree.insert(&key, &val).unwrap();

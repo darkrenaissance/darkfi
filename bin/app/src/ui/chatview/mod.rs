@@ -60,7 +60,7 @@ use crate::{
         eval_f32_multi, PropertyAtomicGuard, PropertyBool, PropertyColor, PropertyFloat32,
         PropertyPermission, PropertyRect, PropertyStr, PropertyUint32, Role,
     },
-    scene::{MethodCallSub, Pimpl, SceneNodeWeak},
+    scene::{MethodCallSub, Pimpl, SceneNodePtr, SceneNodeWeak},
     text,
     util::{clipboard, i18n::I18nBabelFish},
     ExecutorPtr,
@@ -86,6 +86,71 @@ macro_rules! i { ($($arg:tt)*) => { info!(target: "ui::chatview", $($arg)*); } }
 
 /// Unix-millisecond message timestamps.
 pub type Timestamp = u64;
+
+/// The reserved pseudo-channel naming the global feed view. Binding it
+/// via `set_channel` shows all rooms' messages. Real channels and
+/// contacts are always `#`/`@`-prefixed (the darkirc relay asserts
+/// this), so `*` can never collide with a channel or DM — the feed
+/// tree is distinct by construction, no refusal machinery needed.
+pub const FEED_CHANNEL: &str = "*";
+
+/// Whether a relayed message should be shown in this view: true when
+/// the view is bound to the message's own channel, or to the feed
+/// (`*` shows every channel).
+#[inline]
+pub(crate) fn receive_should_show(active: &str, channel: &str) -> bool {
+    active == channel || active == FEED_CHANNEL
+}
+
+/// Write an entry into the feed tree (caller-site dual-write). Same
+/// key/value as the channel write — the bound tree may already be the
+/// feed itself, in which case the dedup makes this a no-op.
+/// Best-effort: the feed is a derived view, a missed mirror line never
+/// costs channel history. `dedup` skips the write when the key already
+/// exists (fresh stores); updates overwrite in place.
+pub(crate) fn mirror_feed(
+    feed: &Tree,
+    ts: Timestamp,
+    id: &MessageId,
+    msg_type: MsgType,
+    payload: &[u8],
+    dedup: bool,
+) {
+    let key = codec::encode_key(ts, id);
+    if dedup && feed.contains_key(&key).expect("cannot read feed tree") {
+        return
+    }
+    let val = codec::encode_value(msg_type, payload);
+    feed.insert(&key, &val).expect("cannot persist feed entry");
+}
+
+/// Persist a received message: its own channel's tree plus the
+/// feed-tree mirror, deduped per tree by the composite key.
+pub(crate) fn persist_side_channel(
+    kv_db: &KvDb,
+    channel: &str,
+    ts: Timestamp,
+    id: &MessageId,
+    nick: &str,
+    text: &str,
+) {
+    let payload = codec::encode_privmsg_payload(nick, text, true, channel);
+    let key = codec::encode_key(ts, id);
+    let val = codec::encode_value(MsgType::PrivMsg, &payload);
+
+    let tree_name = ChatView::tree_name(channel);
+    let tree = kv_db.open_tree_default(&tree_name).expect("cannot open side-channel tree");
+    if !tree.contains_key(&key).expect("cannot read side-channel tree") {
+        tree.insert(&key, &val).expect("cannot persist chat entry");
+        t!("side-channel store {channel} ts={ts}");
+    }
+
+    // The feed mirror shares the key; the live insert may have written
+    // it already (feed bound), so dedup again here.
+    let feed_name = ChatView::tree_name(FEED_CHANNEL);
+    let feed = kv_db.open_tree_default(&feed_name).expect("cannot open feed tree");
+    mirror_feed(&feed, ts, id, MsgType::PrivMsg, &payload, true);
+}
 
 /// A message's unique identity. The 32 bytes come from darkirc's
 /// message hash; derived records (date separators) use the zero id with
@@ -360,7 +425,7 @@ impl ChatView {
         let loader_measure = types.clone();
         self_.loader.set_measure(Arc::new(move |rec| loader_measure.measure(rec)));
         self_.loader.set_derive(Arc::new(|rec: &MsgRecord| {
-            let (_, text, _) = codec::decode_privmsg_payload(&rec.payload, rec.ts, &rec.id);
+            let (_, text, _, _) = codec::decode_privmsg_payload(&rec.payload, rec.ts, &rec.id);
             msg::filemsg::derive_filemsg(rec, &text)
         }));
         if self_.types.set(types).is_err() {
@@ -398,10 +463,10 @@ impl ChatView {
         t!("derived filemsg for {nick}: {url}");
     }
 
-    /// The channel tree name for a channel: `{channel}__chat_tree_v2`.
+    /// The channel tree name for a channel: `{channel}__chat_tree_v3`.
     /// Versioned so the clean-break format never reads old trees.
     pub fn tree_name(channel: &str) -> String {
-        format!("{channel}__chat_tree_v2")
+        format!("{channel}__chat_tree_v3")
     }
 
     /// Update the `is_at_bottom` property when the position crosses the
@@ -554,6 +619,16 @@ impl ChatView {
                 }
                 true
             }
+            msg::Hit::Channel(channel) => {
+                t!("channel clicked");
+                if let Some(node) = self.types().privmsg.node().upgrade() {
+                    let mut data = vec![];
+                    darkfi_serial::Encodable::encode(&id, &mut data).unwrap();
+                    darkfi_serial::Encodable::encode(&channel, &mut data).unwrap();
+                    let _ = node.trigger("channel_clicked", data).await;
+                }
+                true
+            }
             msg::Hit::File(url) => {
                 t!("file activated");
                 self.types().filemsg.request_download(&id, &url).await;
@@ -689,7 +764,7 @@ impl ChatView {
         let view_h = self.rect.get().h;
 
         // Save where the user left the outgoing channel.
-        if let Some((old_name, _)) = self.channel.lock().as_ref() {
+        if let Some((old_name, _)) = &*self.channel.lock() {
             let buffer = self.buffer.lock().await;
             let oldest_visible = {
                 let scroll = self.controller.lock().scroll();
@@ -728,10 +803,13 @@ impl ChatView {
         self.redraw.trigger();
     }
 
-    /// Receive a message from the relay: messages for the bound
-    /// channel insert live; anything else is persisted to its own
-    /// channel tree for later (the buffer is not touched — unread
-    /// indication is the relayer's concern).
+    /// Receive a message from the relay. Persistence and display are
+    /// decoupled: every message is persisted (its own channel tree
+    /// plus the feed mirror, deduped per tree), and the buffer insert
+    /// happens only when this view is bound to the message's channel
+    /// or to the feed (unread indication is the relayer's concern).
+    /// The bound-channel guard is dropped before the await (parking_lot
+    /// guards are !Send).
     pub async fn handle_receive(
         &self,
         channel: &str,
@@ -740,29 +818,13 @@ impl ChatView {
         nick: String,
         text: String,
     ) {
-        let active = self.channel.lock().as_ref().map(|(name, _)| name.clone());
-        match active {
-            Some(active) if active == channel => {
-                self.types().privmsg.insert_line(ts, id, nick, text).await;
-            }
-            _ => {
-                // Side-channel store: dedup by composite key, codec write.
-                let tree_name = Self::tree_name(channel);
-                let Ok(tree) = self.kv_db.open_tree_default(&tree_name) else {
-                    error!(target: "ui::chatview", "cannot open side-channel tree {tree_name}");
-                    return
-                };
-                let payload = codec::encode_privmsg_payload(&nick, &text, true);
-                let key = codec::encode_key(ts, &id);
-                match tree.contains_key(&key) {
-                    Ok(false) => {
-                        let val = codec::encode_value(MsgType::PrivMsg, &payload);
-                        tree.insert(&key, &val).expect("cannot persist chat entry");
-                        t!("side-channel store {channel} ts={ts}");
-                    }
-                    _ => {}
-                }
-            }
+        persist_side_channel(&self.kv_db, channel, ts, &id, &nick, &text);
+        let mut show = false;
+        if let Some((active, _)) = &*self.channel.lock() {
+            show = receive_should_show(active, channel);
+        }
+        if show {
+            self.types().privmsg.insert_line(ts, id, channel.to_string(), nick, text).await;
         }
     }
 
@@ -1032,7 +1094,9 @@ impl ChatView {
         };
         assert!(method_call.send_res.is_none());
 
-        let Some((ts, id, nick, text)) = msg::privmsg::decode_insert_data(&method_call.data) else {
+        let Some((ts, id, channel, nick, text)) =
+            msg::privmsg::decode_insert_data(&method_call.data)
+        else {
             t!("insert_line() method invalid arg data");
             return true
         };
@@ -1042,9 +1106,9 @@ impl ChatView {
         };
         let privmsg = self_.types().privmsg.clone();
         if confirmed {
-            privmsg.insert_line(ts, id, nick, text).await;
+            privmsg.insert_line(ts, id, channel, nick, text).await;
         } else {
-            privmsg.insert_unconf_line(ts, id, nick, text).await;
+            privmsg.insert_unconf_line(ts, id, channel, nick, text).await;
         }
         true
     }
@@ -1274,7 +1338,11 @@ impl UIObject for ChatView {
         on_modify.when_change_external(self.rect.prop(), |self_, _| async move {
             self_.redraw.trigger();
         });
-        i!("chatview start: {} tasks spawned", tasks.len());
+        i!(
+            "chatview start: {} tasks spawned [node={:?}]",
+            tasks.len(),
+            self.node.upgrade().unwrap()
+        );
 
         // Styling changes re-wrap: the reflow protocol. Every shared
         // styling property that shapes text (and the privmsg node's
@@ -1289,13 +1357,25 @@ impl UIObject for ChatView {
             "baseline",
             "timestamp_color",
             "text_color",
+            "show_channel",
         ] {
             let Some(prop) = node_ref.get_property(name) else { continue };
             on_modify.when_change_external(prop, |self_, _| async move {
                 self_.reflow().await;
             });
         }
-        for name in ["cap_max_height", "nick_colors", "action_text_color", "url_text_color"] {
+        for name in [
+            "cap_max_height",
+            "nick_colors",
+            "action_text_color",
+            "url_text_color",
+            "channel_color",
+            "channel_font_size",
+            "channel_spacing",
+            "channel_bg_color",
+            "channel_border_color",
+            "channel_border_size",
+        ] {
             let Some(prop) = self.types().privmsg.node().upgrade().unwrap().get_property(name)
             else {
                 continue
@@ -1584,6 +1664,7 @@ impl UIObject for ChatView {
         let rect = self.rect.get();
 
         let mouse_pos = self.mouse_pos.lock().clone();
+        t!("handle_mouse_wheel({wheel_pos:?}) rect={rect:?} mouse_pos={mouse_pos:?}");
         if !rect.contains(mouse_pos) {
             return false
         }
@@ -1681,6 +1762,392 @@ mod tests {
     use super::*;
     use crate::app::node::create_chatview;
 
+    /// Replicates the wallet feed's layer chain (window → wallet →
+    /// main → feed → bg/chatview, with a full-screen netstatus layer
+    /// linked after main) and drives the mouse move + wheel dispatch
+    /// through it. Pins the input path that desktop wheel scrolling
+    /// depends on: the chatview must receive the move (tracking the
+    /// position) and then swallow the wheel (containment passing).
+    /// Two chatviews share one kvdb (the chat screen's chatty and the
+    /// wallet's feed view). Every relayed message is received by both
+    /// (`main.rs` fan-out); whichever processes it first dual-writes
+    /// the trees, so the second one's store dedups. The second view
+    /// must still SHOW the message — its buffer, not the tree, is the
+    /// per-view dedup. Covers both fan-out orders.
+    #[test]
+    fn cross_view_receive_shows_in_both_views() {
+        smol::block_on(async {
+            let ex: ExecutorPtr = Arc::new(smol::Executor::new());
+            let (redraw_tx, _redraw_rx) = RedrawTrigger::new();
+            let (method_tx, _method_rx) = async_channel::unbounded();
+            let renderer = Renderer::new(method_tx);
+
+            let window_scale = {
+                let mut w = crate::app::node::create_chatview("w");
+                w.add_property(crate::prop::Property::new(
+                    "scale",
+                    crate::prop::PropertyType::Float32,
+                    crate::prop::PropertySubType::Null,
+                    crate::prop::PropertyPermission::default(),
+                ))
+                .unwrap();
+                let w = w.setup_null();
+                let atom = &mut PropertyAtomicGuard::none();
+                w.set_property_f32(atom, Role::App, "scale", 1.).unwrap();
+                PropertyFloat32::wrap(&w, Role::Internal, "scale", 0).unwrap()
+            };
+            let i18n_fish = crate::util::i18n::I18nBabelFish::new(String::new(), "en-US");
+
+            let make_view = |name: &str, kv_db: KvDb| {
+                let name = name.to_string();
+                let renderer = renderer.clone();
+                let redraw = redraw_tx.clone();
+                let scale = window_scale.clone();
+                let i18n = i18n_fish.clone();
+                let ex = ex.clone();
+                async move {
+                    let node = create_chatview(&name);
+                    let node = node
+                        .setup(move |me| {
+                            ChatView::new(me, kv_db, scale, i18n, renderer, redraw, ex)
+                        })
+                        .await;
+                    let Pimpl::ChatView(ptr) = node.pimpl() else { panic!("chatview pimpl") };
+                    ptr.clone()
+                }
+            };
+
+            // Order A: the chat screen chatty (bound to #dev) processes
+            // first, then the feed view.
+            {
+                let path = std::env::temp_dir()
+                    .join(format!("darkfi-chatview-crossview-a-{}.db", std::process::id()));
+                let _ = std::fs::remove_file(&path);
+                let kv_db = KvDb::open_default(&path).unwrap();
+                let chat_view = make_view("chat_chatty", kv_db.clone()).await;
+                let feed_view = make_view("feed_chatty", kv_db).await;
+                chat_view.handle_set_channel("#dev".to_string()).await;
+                feed_view.handle_set_channel(FEED_CHANNEL.to_string()).await;
+
+                let id = MessageId([7u8; 32]);
+                chat_view
+                    .handle_receive(
+                        &"#ramen".to_string(),
+                        1_756_000_000_000,
+                        id,
+                        "alice".to_string(),
+                        "hi".to_string(),
+                    )
+                    .await;
+                feed_view
+                    .handle_receive(
+                        &"#ramen".to_string(),
+                        1_756_000_000_000,
+                        id,
+                        "alice".to_string(),
+                        "hi".to_string(),
+                    )
+                    .await;
+
+                let feed_buffer = feed_view.buffer.lock().await;
+                assert!(
+                    feed_buffer.record(&id).is_some(),
+                    "feed view missing a message persisted by the chat view first"
+                );
+            }
+
+            // Order B: the feed view processes first, then a chat view
+            // bound to the message's own channel.
+            {
+                let path = std::env::temp_dir()
+                    .join(format!("darkfi-chatview-crossview-b-{}.db", std::process::id()));
+                let _ = std::fs::remove_file(&path);
+                let kv_db = KvDb::open_default(&path).unwrap();
+                let chat_view = make_view("chat_chatty", kv_db.clone()).await;
+                let feed_view = make_view("feed_chatty", kv_db).await;
+                chat_view.handle_set_channel("#ramen".to_string()).await;
+                feed_view.handle_set_channel(FEED_CHANNEL.to_string()).await;
+
+                let id = MessageId([9u8; 32]);
+                feed_view
+                    .handle_receive(
+                        &"#ramen".to_string(),
+                        1_756_000_000_000,
+                        id,
+                        "bob".to_string(),
+                        "yo".to_string(),
+                    )
+                    .await;
+                chat_view
+                    .handle_receive(
+                        &"#ramen".to_string(),
+                        1_756_000_000_000,
+                        id,
+                        "bob".to_string(),
+                        "yo".to_string(),
+                    )
+                    .await;
+
+                let chat_buffer = chat_view.buffer.lock().await;
+                assert!(
+                    chat_buffer.record(&id).is_some(),
+                    "channel view missing a message persisted by the feed view first"
+                );
+            }
+        });
+    }
+
+    #[test]
+    fn wheel_dispatch_through_wallet_feed_layers() {
+        smol::block_on(async {
+            let ex: ExecutorPtr = Arc::new(smol::Executor::new());
+            let (redraw_tx, _redraw_rx) = RedrawTrigger::new();
+            let (method_tx, _method_rx) = async_channel::unbounded();
+            let renderer = Renderer::new(method_tx);
+
+            let root = crate::scene::SceneNode::root();
+
+            let window_scale = {
+                let mut w = crate::app::node::create_chatview("w");
+                w.add_property(crate::prop::Property::new(
+                    "scale",
+                    crate::prop::PropertyType::Float32,
+                    crate::prop::PropertySubType::Null,
+                    crate::prop::PropertyPermission::default(),
+                ))
+                .unwrap();
+                let w = w.setup_null();
+                let atom = &mut PropertyAtomicGuard::none();
+                w.set_property_f32(atom, Role::App, "scale", 1.).unwrap();
+                PropertyFloat32::wrap(&w, Role::Internal, "scale", 0).unwrap()
+            };
+
+            // wallet_layer (0,0,1000,800)
+            let wallet_layer = crate::app::node::create_layer("wallet");
+            {
+                let atom = &mut PropertyAtomicGuard::none();
+                wallet_layer.set_property_bool(atom, Role::App, "is_visible", true).unwrap();
+                for (i, v) in [0., 0., 1000., 800.].into_iter().enumerate() {
+                    wallet_layer
+                        .get_property("rect")
+                        .unwrap()
+                        .set_f32(atom, Role::App, i, v)
+                        .unwrap();
+                }
+            }
+            let wallet_layer = wallet_layer
+                .setup(|me| crate::ui::Layer::new(me, renderer.clone(), redraw_tx.clone()))
+                .await;
+            root.link(wallet_layer.clone());
+
+            // main_layer (0,0,1000,800)
+            let main_layer = crate::app::node::create_layer("main_layer");
+            {
+                let atom = &mut PropertyAtomicGuard::none();
+                main_layer.set_property_bool(atom, Role::App, "is_visible", true).unwrap();
+                for (i, v) in [0., 0., 1000., 800.].into_iter().enumerate() {
+                    main_layer
+                        .get_property("rect")
+                        .unwrap()
+                        .set_f32(atom, Role::App, i, v)
+                        .unwrap();
+                }
+            }
+            let main_layer = main_layer
+                .setup(|me| crate::ui::Layer::new(me, renderer.clone(), redraw_tx.clone()))
+                .await;
+            wallet_layer.link(main_layer.clone());
+
+            // netstatus_layer linked AFTER main (as in the schema):
+            // full-width, tall, visible — must not swallow input.
+            let netstatus_layer = crate::app::node::create_layer("netstatus_layer");
+            {
+                let atom = &mut PropertyAtomicGuard::none();
+                netstatus_layer.set_property_bool(atom, Role::App, "is_visible", true).unwrap();
+                for (i, v) in [0., 0., 1000., 1000.].into_iter().enumerate() {
+                    netstatus_layer
+                        .get_property("rect")
+                        .unwrap()
+                        .set_f32(atom, Role::App, i, v)
+                        .unwrap();
+                }
+            }
+            let netstatus_layer = netstatus_layer
+                .setup(|me| crate::ui::Layer::new(me, renderer.clone(), redraw_tx.clone()))
+                .await;
+            wallet_layer.link(netstatus_layer.clone());
+
+            // feed_layer (15, 415, 970, 370) — the bottom half, inset.
+            let feed_layer = crate::app::node::create_layer("feed_layer");
+            {
+                let atom = &mut PropertyAtomicGuard::none();
+                feed_layer.set_property_bool(atom, Role::App, "is_visible", true).unwrap();
+                for (i, v) in [15., 415., 970., 370.].into_iter().enumerate() {
+                    feed_layer
+                        .get_property("rect")
+                        .unwrap()
+                        .set_f32(atom, Role::App, i, v)
+                        .unwrap();
+                }
+            }
+            let feed_layer = feed_layer
+                .setup(|me| crate::ui::Layer::new(me, renderer.clone(), redraw_tx.clone()))
+                .await;
+            main_layer.link(feed_layer.clone());
+
+            // bg vector art covering the whole feed layer, linked first.
+            let bg = crate::app::node::create_vector_art("bg");
+            {
+                let atom = &mut PropertyAtomicGuard::none();
+                for (i, v) in [0., 0., 970., 370.].into_iter().enumerate() {
+                    bg.get_property("rect").unwrap().set_f32(atom, Role::App, i, v).unwrap();
+                }
+            }
+            let bg = bg
+                .setup(|me| crate::ui::VectorArt::new(me, renderer.clone(), redraw_tx.clone()))
+                .await;
+            feed_layer.link(bg);
+
+            // The feed chatview: (0, 30, 970, 340) feed-layer-local.
+            let path = std::env::temp_dir()
+                .join(format!("darkfi-chatview-wheeltest-{}.db", std::process::id()));
+            let _ = std::fs::remove_file(&path);
+            let kv_db = KvDb::open_default(&path).unwrap();
+            let chatty = create_chatview("feed_chatty");
+            {
+                let atom = &mut PropertyAtomicGuard::none();
+                for (i, v) in [0., 30., 970., 340.].into_iter().enumerate() {
+                    chatty.get_property("rect").unwrap().set_f32(atom, Role::App, i, v).unwrap();
+                }
+                // Styling defaults (as the schema sets): without them
+                // every record measures ~0px tall and max_scroll
+                // stays 0 — nothing can ever scroll.
+                chatty.set_property_f32(atom, Role::App, "font_size", 14.).unwrap();
+                chatty.set_property_f32(atom, Role::App, "timestamp_font_size", 10.).unwrap();
+                chatty.set_property_f32(atom, Role::App, "timestamp_width", 50.).unwrap();
+                chatty.set_property_f32(atom, Role::App, "line_height", 20.).unwrap();
+                chatty.set_property_f32(atom, Role::App, "message_spacing", 4.).unwrap();
+                let prop = chatty.get_property("text_color").unwrap();
+                for (i, c) in [1., 1., 1., 1.].into_iter().enumerate() {
+                    prop.set_f32(atom, Role::App, i, c).unwrap();
+                }
+                let prop = chatty.get_property("timestamp_color").unwrap();
+                for (i, c) in [0.5, 0.5, 0.5, 1.].into_iter().enumerate() {
+                    prop.set_f32(atom, Role::App, i, c).unwrap();
+                }
+            }
+            let i18n_fish = crate::util::i18n::I18nBabelFish::new(String::new(), "en-US");
+            let chatty = chatty
+                .setup(|me| {
+                    ChatView::new(
+                        me,
+                        kv_db.clone(),
+                        window_scale,
+                        i18n_fish,
+                        renderer.clone(),
+                        redraw_tx.clone(),
+                        ex.clone(),
+                    )
+                })
+                .await;
+            feed_layer.link(chatty.clone());
+
+            // Populate the feed tree so scrolling has range, bind, and
+            // start (spawns the loader pump and the animator).
+            let feed_tree = kv_db.open_tree_default(&ChatView::tree_name(FEED_CHANNEL)).unwrap();
+            for i in 0..300u64 {
+                let payload =
+                    codec::encode_privmsg_payload("alice", "some message text here", true, "#dev");
+                let val = codec::encode_value(MsgType::PrivMsg, &payload);
+                let key = codec::encode_key(1_000_000 + i * 60_000, &MessageId([i as u8; 32]));
+                feed_tree.insert(&key, &val).unwrap();
+            }
+            let Pimpl::ChatView(chatty_ptr) = chatty.pimpl() else { panic!("chatview pimpl") };
+            chatty_ptr.handle_set_channel(FEED_CHANNEL.to_string()).await;
+            chatty_ptr.clone().start(ex.clone()).await;
+
+            // The feed_layer's rect, as the draw path would pass it.
+            let feed_rect = Rectangle::new(15., 415., 970., 370.);
+
+            // Draw passes drive the production loop: the first reports
+            // the viewport (waking the pump's NearTop), the pump loads
+            // the tree, the second sets the content height. The draw
+            // calls enqueue renderer methods into the test channel —
+            // no GPU needed.
+            let atom = &mut PropertyAtomicGuard::none();
+            let draw1 = {
+                let obj = crate::ui::get_ui_object3(&chatty);
+                obj.draw(feed_rect, atom).await
+            };
+            assert!(draw1.is_some(), "first draw produced output");
+
+            // Let the pump load the feed tree.
+            ex.run(async {
+                smol::Timer::after(std::time::Duration::from_millis(100)).await;
+            })
+            .await;
+
+            // Diagnostic: how many records did the pump load? (The
+            // method handler runs on the executor, so the call must
+            // go through it.)
+            let loaded = ex
+                .run(async {
+                    chatty
+                        .call_method("get_line_ids", vec![])
+                        .await
+                        .unwrap()
+                        .map(|data| data.len() / (8 + 32))
+                        .unwrap_or(0)
+                })
+                .await;
+            assert!(loaded > 0, "pump loaded nothing into the buffer");
+
+            let atom = &mut PropertyAtomicGuard::none();
+            let _ = {
+                let obj = crate::ui::get_ui_object3(&chatty);
+                obj.draw(feed_rect, atom).await
+            };
+
+            // Window-space point over the middle of the feed view:
+            // feed_layer-local = (485, 200) → inside (0, 30, 970, 340).
+            let over_feed = Point::new(15. + 485., 415. + 200.);
+
+            let wallet_obj = crate::ui::get_ui_object3(&wallet_layer);
+            wallet_obj.handle_mouse_move(over_feed).await;
+            let swallowed = wallet_obj.handle_mouse_wheel(Point::new(0., 1.)).await;
+            assert!(swallowed, "wheel over the feed chatview was not swallowed by it");
+
+            // A point over the header band (feed-layer-local y < 30)
+            // is outside the chatview rect: the wheel falls through.
+            let over_header = Point::new(15. + 485., 415. + 10.);
+            wallet_obj.handle_mouse_move(over_header).await;
+            let swallowed_header = wallet_obj.handle_mouse_wheel(Point::new(0., 1.)).await;
+            assert!(!swallowed_header, "wheel over the header band must fall through");
+
+            // Wheel over the view again and let the animator run: the
+            // Anim deadline cadence advances the scroll off the bottom,
+            // flipping `is_at_bottom`.
+            wallet_obj.handle_mouse_move(over_feed).await;
+            let swallowed2 = wallet_obj.handle_mouse_wheel(Point::new(0., 1.)).await;
+            assert!(swallowed2, "second wheel tick swallowed");
+
+            let flipped = ex
+                .run(async {
+                    let deadline =
+                        std::time::Instant::now() + std::time::Duration::from_millis(500);
+                    while std::time::Instant::now() < deadline {
+                        smol::future::yield_now().await;
+                        if !chatty.get_property_bool("is_at_bottom").unwrap() {
+                            return true
+                        }
+                    }
+                    false
+                })
+                .await;
+            assert!(flipped, "animated scroll never moved the view off the bottom");
+        });
+    }
+
     /// Every property the chatview wraps must exist on the factory's
     /// node — catches factory/impl drift that would panic at runtime
     /// (a missing prop only explodes when the screen is built).
@@ -1698,6 +2165,7 @@ mod tests {
             "message_spacing",
             "baseline",
             "timestamp_color",
+            "show_channel",
             "text_color",
             "hi_bg_color",
             "is_at_bottom",
@@ -1706,6 +2174,51 @@ mod tests {
             "priority",
         ] {
             assert!(node.get_property(name).is_some(), "chatview factory missing '{name}'");
+        }
+    }
+
+    /// Bound to the feed, every channel shows; bound elsewhere, only
+    /// the message's own channel shows.
+    #[test]
+    fn receive_should_show_by_bound_channel() {
+        assert!(receive_should_show("#dev", "#dev"));
+        assert!(!receive_should_show("#ramen", "#dev"));
+        // The feed view shows every channel — including, trivially, a
+        // message "for" the feed itself (by equality).
+        assert!(receive_should_show(FEED_CHANNEL, "#dev"));
+        assert!(receive_should_show(FEED_CHANNEL, "#ramen"));
+        assert!(receive_should_show(FEED_CHANNEL, FEED_CHANNEL));
+    }
+
+    /// Side-channel persistence lands the entry in its own channel's
+    /// tree and the feed tree, carrying the channel, without
+    /// duplicates on repeat relays.
+    #[test]
+    fn side_channel_persist_lands_in_both_trees() {
+        let path = std::env::temp_dir()
+            .join(format!("darkfi-chatview-sidechan-{}.db", std::process::id()));
+        let _ = std::fs::remove_file(&path);
+        let db = KvDb::open_default(&path).unwrap();
+
+        let id = MessageId([b'x'; 32]);
+        persist_side_channel(&db, "#ramen", 1_756_000_000_000, &id, "alice", "hi");
+
+        let key = codec::encode_key(1_756_000_000_000, &id);
+        for name in [ChatView::tree_name("#ramen"), ChatView::tree_name(FEED_CHANNEL)] {
+            let tree = db.open_tree_default(&name).unwrap();
+            assert_eq!(tree.len().unwrap(), 1, "{name} holds the entry");
+            let val = tree.get(&key).unwrap().expect("entry present");
+            let rec = codec::decode_value(&val, 1_756_000_000_000, &id);
+            let (nick, text, _confirmed, channel) =
+                codec::decode_privmsg_payload(&rec.payload, rec.ts, &rec.id);
+            assert_eq!((nick.as_str(), text.as_str(), channel.as_str()), ("alice", "hi", "#ramen"));
+        }
+
+        // A duplicate relay changes nothing in either tree.
+        persist_side_channel(&db, "#ramen", 1_756_000_000_000, &id, "alice", "hi");
+        for name in [ChatView::tree_name("#ramen"), ChatView::tree_name(FEED_CHANNEL)] {
+            let tree = db.open_tree_default(&name).unwrap();
+            assert_eq!(tree.len().unwrap(), 1, "{name} still holds one entry");
         }
     }
 
@@ -1786,7 +2299,7 @@ mod tests {
             id[0] = idb;
             let id = MessageId(id);
             ids.push(id);
-            let payload = codec::encode_privmsg_payload("alice", text, true);
+            let payload = codec::encode_privmsg_payload("alice", text, true, "#dev");
             let rec = MsgRecord { ts, id, msg_type: MsgType::PrivMsg, payload, height: 0. };
             types.measure(&rec);
             assert!(buffer.insert(MsgRecord { height: 20., ..rec }));

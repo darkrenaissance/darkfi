@@ -75,6 +75,9 @@ pub struct App {
     /// the minimal baseline is active. The active theme name lives in
     /// `/setting/theme`.
     pub theme_ctx: SyncMutex<Option<theme::ThemeCtx>>,
+    /// The app kvdb, set once in `setup()`; widgets that persist to it
+    /// (e.g. the wallet screen's feed chatview) read it from here.
+    pub kv_db: std::sync::OnceLock<KvDb>,
 }
 
 impl App {
@@ -89,6 +92,7 @@ impl App {
             redraw_rx,
             is_first_time: AtomicBool::new(false),
             theme_ctx: SyncMutex::new(None),
+            kv_db: std::sync::OnceLock::new(),
         })
     }
 
@@ -96,6 +100,7 @@ impl App {
     /// the objects.
     pub async fn setup(self: &Arc<Self>, kv_db: KvDb, app_db: AppDbPtr) {
         t!("App::setup()");
+        let _ = self.kv_db.set(kv_db.clone());
 
         let app_version = env!("CARGO_PKG_VERSION");
         let is_first_time = app_db.app_version_get().await.unwrap().as_deref() != Some(app_version);

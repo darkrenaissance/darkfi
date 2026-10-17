@@ -251,7 +251,9 @@ impl FileMsgNode {
 
     fn img_size(&self, imgbuf: &GenericImageBuffer) -> (f32, f32) {
         const IMG_MAX_HEIGHT: f32 = 500.;
-        let max_width = self.shared.rect.get().w - self.shared.timestamp_width.get();
+        // File messages are continuation content: full view width,
+        // starting at the left edge like wrapped lines.
+        let max_width = self.shared.rect.get().w;
         let img_w = imgbuf.width() as f32;
         let img_h = imgbuf.height() as f32;
         let scale = (max_width / img_w).min(IMG_MAX_HEIGHT / img_h);
@@ -381,11 +383,11 @@ impl FileMsgNode {
 
         let Some(inst) = inner.instances.get_mut(&key) else { return DrawOutcome::Inline(vec![]) };
         let line_height = self.shared.line_height.get();
-        let timestamp_width = self.shared.timestamp_width.get();
         let timestamp_color = self.shared.timestamp_color.get();
         let font_size = self.shared.font_size.get();
         let window_scale = self.shared.window_scale.get();
-        let max_width = self.shared.rect.get().w - timestamp_width - GLOW_SIZE;
+        // Continuation content: full width from the left edge.
+        let max_width = self.shared.rect.get().w - GLOW_SIZE;
 
         if inst.instrs.is_none() {
             let (status, imgbuf) = {
@@ -401,7 +403,7 @@ impl FileMsgNode {
             if let Some(imgbuf) = imgbuf {
                 // Downloaded image: fitted to bounds, with a glow.
                 let (img_w, img_h) = self.img_size(&imgbuf);
-                let mesh_rect = Rectangle::from([timestamp_width, Self::MARGIN_TOP, img_w, img_h]);
+                let mesh_rect = Rectangle::from([0., Self::MARGIN_TOP, img_w, img_h]);
                 let width = imgbuf.width() as u16;
                 let height = imgbuf.height() as u16;
                 let bmp = imgbuf.as_raw().clone();
@@ -449,8 +451,7 @@ impl FileMsgNode {
                 let box_height = 2. * line_height + BOX_PADDING_Y * 2.;
                 let box_width = if text_width > max_width { max_width } else { text_width } +
                     BOX_PADDING_X * 2.;
-                let mesh_rect =
-                    Rectangle::new(timestamp_width, Self::MARGIN_TOP, box_width, box_height);
+                let mesh_rect = Rectangle::new(0., Self::MARGIN_TOP, box_width, box_height);
 
                 let mut mesh = MeshBuilder::new(gfxtag!("chatview_filemsg_box"));
                 mesh.draw_outline(&mesh_rect, color, 1.);
@@ -459,7 +460,7 @@ impl FileMsgNode {
                 instrs.push(DrawInstruction::Draw(mesh.alloc(renderer).draw_untextured()));
 
                 instrs.push(DrawInstruction::Move(Point::new(
-                    timestamp_width + BOX_PADDING_X,
+                    BOX_PADDING_X,
                     Self::MARGIN_TOP + BOX_PADDING_Y,
                 )));
                 for layout in layouts {
@@ -696,7 +697,7 @@ mod tests {
     #[test]
     fn derivation_keys_and_orders() {
         let payload =
-            codec::encode_privmsg_payload("alice", "grab fud://abcdef/file.tar now", true);
+            codec::encode_privmsg_payload("alice", "grab fud://abcdef/file.tar now", true, "#dev");
         let privmsg = MsgRecord {
             ts: 1000,
             id: MessageId([7; 32]),

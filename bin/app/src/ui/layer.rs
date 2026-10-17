@@ -282,11 +282,17 @@ impl UIObject for Layer {
         }
         false
     }
-    async fn handle_mouse_wheel(&self, mut wheel_pos: Point) -> bool {
+    async fn handle_mouse_wheel(&self, wheel_pos: Point) -> bool {
         if !self.is_visible.get() {
             return false
         }
-        wheel_pos -= self.rect.get().pos();
+        // The wheel payload is a scroll delta, not a position: it must
+        // pass through unmodified. Subtracting the layer origin here
+        // corrupts it — a +1 notch under a layer at y=415 arrives as
+        // −414, and every wheel consumer (chatview page_tick, menu,
+        // edit) clamps the inverted target to zero. Layers at (0,0)
+        // masked the bug; any offset layer (e.g. the wallet feed)
+        // could never wheel-scroll.
         for child in self.get_children() {
             let obj = get_ui_object3(&child);
             if obj.handle_mouse_wheel(wheel_pos).await {
