@@ -27,7 +27,7 @@ use crate::{
         App,
     },
     expr,
-    gfx::gfxtag,
+    gfx::{gfxtag, Point},
     mesh::{rgba, COLOR_CYAN, COLOR_TEAL},
     prop::{PropertyAtomicGuard, PropertyBool, PropertyFloat32, Role},
     scene::{Pimpl, SceneNodePtr, Slot},
@@ -81,28 +81,41 @@ pub async fn make(
     // ============================================
     // Feed Layer (bottom half of the screen)
     // ============================================
+    cc.add_const_f32("FEED_LAYER_MARGIN", FEED_LAYER_MARGIN);
     cc.add_const_f32("FEED_LAYER_PADDING", FEED_LAYER_PADDING);
     cc.add_const_f32("FEED_HEADER_HEIGHT", FEED_HEADER_HEIGHT);
+    cc.add_const_f32("FEED_HEADER_PAD", FEED_HEADER_PAD);
+    cc.add_const_f32("FEED_ARROW_SCALE", FEED_ARROW_SCALE);
+
+    // Renders above the chat-menu button bg and the logo (z 3/4) so
+    // the feed always stays on top of them.
+    const FEED_LAYER_Z: u32 = 2;
+
     let feed_layer = create_layer("feed_layer");
     let prop = feed_layer.get_property("rect").unwrap();
-    prop.set_default_f32(0, FEED_LAYER_PADDING).unwrap();
-    let code = cc.compile("h / 2 + FEED_LAYER_PADDING").unwrap();
+    prop.set_default_f32(0, FEED_LAYER_MARGIN).unwrap();
+    let code = cc.compile("h / 2 + FEED_LAYER_MARGIN").unwrap();
     prop.set_default_expr(1, code).unwrap();
-    let code = cc.compile("w - 2 * FEED_LAYER_PADDING").unwrap();
+    let code = cc.compile("w - 2 * FEED_LAYER_MARGIN").unwrap();
     prop.set_default_expr(2, code).unwrap();
-    let code = cc.compile("h / 2 - 2 * FEED_LAYER_PADDING").unwrap();
+    let code = cc.compile("h / 2 - 2 * FEED_LAYER_MARGIN").unwrap();
     prop.set_default_expr(3, code).unwrap();
     feed_layer.set_property_bool(atom, Role::App, "is_visible", true).unwrap();
-    feed_layer.set_property_u32(atom, Role::App, "z_index", 2).unwrap();
+    feed_layer.set_property_u32(atom, Role::App, "z_index", FEED_LAYER_Z).unwrap();
     let feed_layer = feed_layer
         .setup(|me| Layer::new(me, app.renderer.clone(), app.redraw_trigger.clone()))
         .await;
     // Child of the main wallet layer: shows with the main screen and
     // hides with it when navigating to send/receive screens.
     main_layer.link(feed_layer.clone());
+    let feed_layer_is_visible =
+        PropertyBool::wrap(&feed_layer, Role::App, "is_visible", 0).unwrap();
 
-    // Feed layer background: covers the entire layer. Transparent grey
-    // by default; the active theme may restyle it (scifi recolors it).
+    // Feed layer background: covers the entire layer, header band
+    // included — everything background-ish renders in this one shape.
+    // Minimal (dark) default: slightly lighter than the dark baseline
+    // with a one-shade-lighter header band; the active theme may
+    // restyle it (scifi gradient/darkens it, light lightens it).
     let node = create_vector_art("bg");
     let prop = node.get_property("rect").unwrap();
     prop.set_default_f32(0, 0.).unwrap();
@@ -116,7 +129,14 @@ pub async fn make(
         expr::const_f32(0.),
         expr::load_var("w"),
         expr::load_var("h"),
-        [0.5, 0.5, 0.5, 0.5],
+        [0.24, 0.24, 0.24, 1.],
+    );
+    shape.add_filled_box(
+        expr::const_f32(0.),
+        expr::const_f32(0.),
+        expr::load_var("w"),
+        expr::const_f32(FEED_HEADER_HEIGHT),
+        [0.28, 0.28, 0.28, 1.],
     );
     node.set_property_shape(atom, Role::App, "shape", shape).unwrap();
     let node =
@@ -124,14 +144,17 @@ pub async fn make(
     feed_layer.link(node);
 
     // The global feed chatview, bound to the reserved `*` pseudo-channel.
-    // Starts below the feed header band and fills the rest of the layer.
-    // Channel labels are forced on (the feed is unread without them).
+    // Starts below the feed header band; inset from the layer's sides
+    // and bottom by FEED_LAYER_PADDING (the top is flush under the
+    // header). Channel labels are forced on (the feed is unread
+    // without them).
     let node = create_chatview("feed_chatty");
     let prop = node.get_property("rect").unwrap();
-    prop.set_default_f32(0, 0.).unwrap();
+    prop.set_default_f32(0, FEED_LAYER_PADDING).unwrap();
     prop.set_default_f32(1, FEED_HEADER_HEIGHT).unwrap();
-    prop.set_default_expr(2, expr::load_var("w")).unwrap();
-    let code = cc.compile("h - FEED_HEADER_HEIGHT").unwrap();
+    let code = cc.compile("w - 2 * FEED_LAYER_PADDING").unwrap();
+    prop.set_default_expr(2, code).unwrap();
+    let code = cc.compile("h - FEED_HEADER_HEIGHT - FEED_LAYER_PADDING").unwrap();
     prop.set_default_expr(3, code).unwrap();
     node.get_property("font_size").unwrap().set_default_f32(0, FEED_FONTSIZE).unwrap();
     node.get_property("timestamp_font_size")
@@ -259,6 +282,99 @@ pub async fn make(
     // persists, so binding before start() spawns the pump is safe.
     let Pimpl::ChatView(feed_view) = feed_chatty.pimpl() else { unreachable!() };
     feed_view.handle_set_channel(FEED_CHANNEL.to_string()).await;
+
+    // The feed header: bg band, "CHAT" label on the left, a down
+    // arrow on the right, and a full-header toggle button. Built into
+    // both the expanded feed layer and the rolled-up strip below.
+    let hide_feed_btn =
+        make_feed_header(app, &feed_layer, &cc, &theme, &window_scale, i18n_fish, false)
+            .await
+            .expect("feed header");
+
+    // ============================================
+    // Feed Rolled Layer (header-only strip)
+    // ============================================
+    // Sits at the bottom edge of where the feed layer ends: the layer
+    // bottom minus the header height, exactly one header tall.
+    let feed_rolled_layer = create_layer("feed_rolled_layer");
+    let prop = feed_rolled_layer.get_property("rect").unwrap();
+    prop.set_default_f32(0, FEED_LAYER_MARGIN).unwrap();
+    let code = cc.compile("h - FEED_LAYER_MARGIN - FEED_HEADER_HEIGHT").unwrap();
+    prop.set_default_expr(1, code).unwrap();
+    let code = cc.compile("w - 2 * FEED_LAYER_MARGIN").unwrap();
+    prop.set_default_expr(2, code).unwrap();
+    prop.set_default_f32(3, FEED_HEADER_HEIGHT).unwrap();
+    feed_rolled_layer.set_property_bool(atom, Role::App, "is_visible", false).unwrap();
+    feed_rolled_layer.set_property_u32(atom, Role::App, "z_index", FEED_LAYER_Z).unwrap();
+    let feed_rolled_layer = feed_rolled_layer
+        .setup(|me| Layer::new(me, app.renderer.clone(), app.redraw_trigger.clone()))
+        .await;
+    main_layer.link(feed_rolled_layer.clone());
+    let feed_rolled_layer_is_visible =
+        PropertyBool::wrap(&feed_rolled_layer, Role::App, "is_visible", 0).unwrap();
+
+    // Rolled strip background: the whole strip is header, so its bg is
+    // the header-band shade. One shape, restyled by the theme.
+    let node = create_vector_art("bg");
+    let prop = node.get_property("rect").unwrap();
+    prop.set_default_f32(0, 0.).unwrap();
+    prop.set_default_f32(1, 0.).unwrap();
+    prop.set_default_expr(2, expr::load_var("w")).unwrap();
+    prop.set_default_expr(3, expr::load_var("h")).unwrap();
+    node.set_property_u32(atom, Role::App, "z_index", 0).unwrap();
+    let mut shape = VectorShape::new();
+    shape.add_filled_box(
+        expr::const_f32(0.),
+        expr::const_f32(0.),
+        expr::load_var("w"),
+        expr::load_var("h"),
+        [0.28, 0.28, 0.28, 1.],
+    );
+    node.set_property_shape(atom, Role::App, "shape", shape).unwrap();
+    let node =
+        node.setup(|me| VectorArt::new(me, app.renderer.clone(), app.redraw_trigger.clone())).await;
+    feed_rolled_layer.link(node);
+
+    // Same header construction as the expanded layer.
+    let show_feed_btn =
+        make_feed_header(app, &feed_rolled_layer, &cc, &theme, &window_scale, i18n_fish, true)
+            .await
+            .expect("feed header");
+
+    // Clicking the expanded header rolls the feed up (full layer
+    // hides, header-only strip shows); clicking the rolled header
+    // expands it again.
+    {
+        let (slot, recvr) = Slot::new("hide_feed");
+        hide_feed_btn.register("click", slot).unwrap();
+        let feed_vis = feed_layer_is_visible.clone();
+        let rolled_vis = feed_rolled_layer_is_visible.clone();
+        let redraw = app.redraw_trigger.clone();
+        let listen = app.ex.spawn(async move {
+            while let Ok(_) = recvr.recv().await {
+                let atom = &mut redraw.make_guard(gfxtag!("hide_feed"));
+                feed_vis.set(atom, false);
+                rolled_vis.set(atom, true);
+            }
+        });
+        app.tasks.lock().push(listen);
+    }
+
+    {
+        let (slot, recvr) = Slot::new("show_feed");
+        show_feed_btn.register("click", slot).unwrap();
+        let feed_vis = feed_layer_is_visible.clone();
+        let rolled_vis = feed_rolled_layer_is_visible.clone();
+        let redraw = app.redraw_trigger.clone();
+        let listen = app.ex.spawn(async move {
+            while let Ok(_) = recvr.recv().await {
+                let atom = &mut redraw.make_guard(gfxtag!("show_feed"));
+                feed_vis.set(atom, true);
+                rolled_vis.set(atom, false);
+            }
+        });
+        app.tasks.lock().push(listen);
+    }
 
     // Back arrow
     let node = create_vector_art("wallet_back_btn_bg");
@@ -395,7 +511,7 @@ pub async fn make(
     prop.set_default_f32(1, HEADER_HEIGHT / 2.).unwrap();
     prop.set_default_f32(2, BACKARROW_BG_W).unwrap();
     prop.set_default_f32(3, HEADER_HEIGHT).unwrap();
-    node.set_property_u32(atom, Role::App, "z_index", 3).unwrap();
+    node.set_property_u32(atom, Role::App, "z_index", 4).unwrap();
     node.set_property_bool(atom, Role::App, "is_visible", true).unwrap();
     let shape = shape::create_darkfi_logo([1., 1., 1., 1.]).scaled(DARKFI_LOGO_SCALE);
     node.set_property_shape(atom, Role::App, "shape", shape).unwrap();
@@ -810,4 +926,90 @@ async fn create_chat_btn(
     let node =
         node.setup(|me| Button::new(me, app.renderer.clone(), app.redraw_trigger.clone())).await;
     parent.link(node);
+}
+
+/// Build the feed header into `parent`: a "CHAT" label on the left, a
+/// chevron arrow on the right (pointing down in the expanded layer, up
+/// in the rolled strip), and the full-header `hide_feed` toggle button
+/// (returned; the caller wires its click — expansion vs. rolling
+/// depends on which layer this is). The header band's background is
+/// part of the layer's `bg` shape, not a node of its own.
+async fn make_feed_header(
+    app: &App,
+    parent: &SceneNodePtr,
+    cc: &expr::Compiler,
+    theme: &SceneNodePtr,
+    window_scale: &PropertyFloat32,
+    i18n_fish: &I18nBabelFish,
+    arrow_up: bool,
+) -> crate::error::Result<SceneNodePtr> {
+    let atom = &mut PropertyAtomicGuard::none();
+
+    // "CHAT" label on the left, vertically centered.
+    let node = create_text("feed_label");
+    let prop = node.get_property("rect").unwrap();
+    prop.set_default_f32(0, FEED_HEADER_PAD).unwrap();
+    prop.set_default_f32(1, (FEED_HEADER_HEIGHT - FEED_HEADER_FONTSIZE) / 2.).unwrap();
+    prop.set_default_expr(2, expr::load_var("w")).unwrap();
+    prop.set_default_f32(3, FEED_HEADER_FONTSIZE).unwrap();
+    node.get_property("font_size").unwrap().set_default_f32(0, FEED_HEADER_FONTSIZE).unwrap();
+    node.set_property_str(atom, Role::App, "text", "CHAT").unwrap();
+    node.set_property_bool(atom, Role::App, "use_i18n", false).unwrap();
+    wire_color(&node, "text_color", theme, "text_color")?;
+    node.set_property_u32(atom, Role::App, "z_index", 2).unwrap();
+    let node = node
+        .setup(|me| {
+            Text::new(
+                me,
+                window_scale.clone(),
+                app.renderer.clone(),
+                i18n_fish.clone(),
+                app.redraw_trigger.clone(),
+            )
+        })
+        .await;
+    parent.link(node);
+
+    // Down arrow on the right, vertically centered.
+    let node = create_vector_art("feed_arrow");
+    let prop = node.get_property("rect").unwrap();
+    let code = cc.compile("w - FEED_ARROW_SCALE - FEED_HEADER_PAD")?;
+    prop.set_default_expr(0, code)?;
+    prop.set_default_f32(1, FEED_ARROW_Y)?;
+    prop.set_default_f32(2, FEED_ARROW_SCALE)?;
+    prop.set_default_f32(3, FEED_ARROW_SCALE)?;
+    node.set_property_u32(atom, Role::App, "z_index", 2).unwrap();
+    // Chevron arrow: two lines from the apex to the wings; the rolled
+    // strip flips the y values so it points up. Native space is ~30
+    // units wide; scaled to FEED_ARROW_SCALE.
+    let (apex, left, right) = if arrow_up {
+        (Point::new(-0., -12.), Point::new(-15., 7.5), Point::new(15., 7.5))
+    } else {
+        (Point::new(-0., 12.), Point::new(-15., -7.5), Point::new(15., -7.5))
+    };
+    let mut shape = VectorShape::new();
+    shape.add_line(apex, left, 1., rgba!(0x00F0FFff));
+    shape.add_line(apex, right, 1., rgba!(0x00F0FFff));
+    let shape = shape.scaled(FEED_ARROW_SCALE / 30.);
+    node.set_property_shape(atom, Role::App, "shape", shape)?;
+    let node =
+        node.setup(|me| VectorArt::new(me, app.renderer.clone(), app.redraw_trigger.clone())).await;
+    parent.link(node);
+
+    // The toggle button covers the entire header. Priority above the
+    // chatview (0) so header taps don't reach the feed view beneath.
+    let node = create_button("hide_feed");
+    node.set_property_bool(atom, Role::App, "is_active", true)?;
+    let prop = node.get_property("rect").unwrap();
+    prop.set_default_f32(0, 0.)?;
+    prop.set_default_f32(1, 0.)?;
+    prop.set_default_expr(2, expr::load_var("w"))?;
+    prop.set_default_f32(3, FEED_HEADER_HEIGHT)?;
+    node.set_property_u32(atom, Role::App, "z_index", 3)?;
+    node.set_property_u32(atom, Role::App, "priority", 1)?;
+    let node =
+        node.setup(|me| Button::new(me, app.renderer.clone(), app.redraw_trigger.clone())).await;
+    parent.link(node.clone());
+
+    Ok(node)
 }

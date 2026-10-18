@@ -32,13 +32,14 @@ use crate::{
     app::{
         node::{create_vector_art, create_video},
         schema::{
-            wallet::data::{CHAT_BTN_MARGIN, CHAT_BTN_SIZE},
+            wallet::data::{CHAT_BTN_MARGIN, CHAT_BTN_SIZE, FEED_HEADER_HEIGHT},
             MAIN_MENU_HEADER_HEIGHT, VID_ASPECT_RATIO, VID_PATH,
         },
     },
     error::{Error, Result},
     expr::{self, Compiler},
     gfx::gfxtag,
+    mesh::rgba,
     prop::{
         Property, PropertyAtomicGuard, PropertyFloat32, PropertyPermission, PropertySubType,
         PropertyType, PropertyValue, Role,
@@ -117,11 +118,10 @@ async fn scifi_apply(ctx: &ThemeCtx) -> Result<()> {
     // Private-token proof: the netstatus overlay's P2P/OUTBOUND labels
     // follow `label_glow` through journaled edges (removed on unload).
     for label in ["p2p_label", "outbound_label"] {
-        let Some(node) =
-            ctx.sg_root().lookup_node(&format!("/window/content/chat/netstatus_overlay/{label}"))
-        else {
-            continue;
-        };
+        let node = ctx
+            .sg_root()
+            .lookup_node(&format!("/window/content/chat/netstatus_overlay/{label}"))
+            .unwrap();
         let Some(prop) = node.get_property("text_color") else { continue };
         for i in 0..4 {
             let local = format!("th_label_glow_{i}");
@@ -161,10 +161,16 @@ async fn scifi_apply(ctx: &ThemeCtx) -> Result<()> {
     king_video_node(ctx).await;
     bg_fade_node(ctx, "/window/content/chat/main_chat_layer", "bg").await?;
     bg_fade_node(ctx, "/window/content/wallet/main_layer", "wallet_bg").await?;
-
-    // Feed layer bg on the main wallet screen: restyle the schema's
-    // neutral fill with the scifi dark teal.
-    if let Some(node) = ctx.sg_root().lookup_node("/window/content/wallet/main_layer/feed_layer/bg")
+    // Feed bgs on the main wallet screen — everything (header band
+    // included) renders in the one bg shape per layer, journaled so
+    // unload reverts to the schema defaults:
+    // - feed_layer: teal body fill, header gradient in the top
+    //   FEED_HEADER_HEIGHT band, one cyan outline around it all.
+    // - rolled strip: the whole strip is header — gradient across it,
+    //   same outline.
+    // The "CHAT" labels get the scifi mint.
+    let node =
+        ctx.sg_root().lookup_node("/window/content/wallet/main_layer/feed_layer/bg").unwrap();
     {
         let mut shape = VectorShape::new();
         shape.add_filled_box(
@@ -172,10 +178,65 @@ async fn scifi_apply(ctx: &ThemeCtx) -> Result<()> {
             expr::const_f32(0.),
             expr::load_var("w"),
             expr::load_var("h"),
-            [0., 0.09, 0.106, 1.],
+            rgba!(0x14212499),
         );
-        node.set_property_shape(&mut PropertyAtomicGuard::none(), Role::Theme, "shape", shape)
-            .unwrap();
+        shape.add_smooth_vertical_gradient(
+            expr::const_f32(0.),
+            expr::const_f32(0.),
+            expr::load_var("w"),
+            expr::const_f32(FEED_HEADER_HEIGHT),
+            rgba!(0x0b4237ff),
+            rgba!(0x0c1d20ff),
+            8,
+            0.2,
+        );
+        shape.add_outline(
+            expr::const_f32(0.),
+            expr::const_f32(0.),
+            expr::load_var("w"),
+            expr::load_var("h"),
+            1.,
+            rgba!(0x00F0FFff),
+        );
+        let prop = node.get_property("shape").unwrap();
+        ctx.set_touched(atom, &prop, 0, PropertyValue::VectorShape(std::sync::Arc::new(shape)))?;
+    }
+    let node = ctx
+        .sg_root()
+        .lookup_node("/window/content/wallet/main_layer/feed_rolled_layer/bg")
+        .unwrap();
+    {
+        let mut shape = VectorShape::new();
+        shape.add_smooth_vertical_gradient(
+            expr::const_f32(0.),
+            expr::const_f32(0.),
+            expr::load_var("w"),
+            expr::load_var("h"),
+            rgba!(0x0b4237ff),
+            rgba!(0x0c1d20ff),
+            8,
+            0.2,
+        );
+        shape.add_outline(
+            expr::const_f32(0.),
+            expr::const_f32(0.),
+            expr::load_var("w"),
+            expr::load_var("h"),
+            1.,
+            rgba!(0x00F0FFff),
+        );
+        let prop = node.get_property("shape").unwrap();
+        ctx.set_touched(atom, &prop, 0, PropertyValue::VectorShape(std::sync::Arc::new(shape)))?;
+    }
+    for path in [
+        "/window/content/wallet/main_layer/feed_layer",
+        "/window/content/wallet/main_layer/feed_rolled_layer",
+    ] {
+        let Some(layer) = ctx.sg_root().lookup_node(path) else { continue };
+        if let Some(node) = layer.lookup_node("/feed_label") {
+            let prop = node.get_property("text_color").unwrap();
+            ctx.set_touched_color(atom, &prop, rgba!(0x77FFBEff))?;
+        }
     }
 
     // Bg for wallet btn to navigate to chat screen
@@ -187,7 +248,7 @@ async fn scifi_apply(ctx: &ThemeCtx) -> Result<()> {
     prop.set_default_expr(1, code).unwrap();
     prop.set_default_f32(2, CHAT_BTN_SIZE).unwrap();
     prop.set_default_f32(3, CHAT_BTN_SIZE).unwrap();
-    node.set_property_u32(atom, Role::App, "z_index", 2).unwrap();
+    node.set_property_u32(atom, Role::App, "z_index", 3).unwrap();
     let mut shape = VectorShape::new();
 
     shape.add_filled_box(
@@ -220,12 +281,9 @@ async fn scifi_apply(ctx: &ThemeCtx) -> Result<()> {
     //    the ctx (touched-set dedups the per-step journal entries).
     //    Replaces the in-handler fade from the reconnect click handler.
     // ------------------------------------------------------------------
-    let overlay = ctx
-        .sg_root()
-        .lookup_node("/window/content/chat/netstatus_overlay")
-        .ok_or(Error::NodeNotFound)?;
-    let is_visible = overlay.get_property("is_visible").ok_or(Error::PropertyNotFound)?;
-    let alpha = overlay.get_property("alpha").ok_or(Error::PropertyNotFound)?;
+    let overlay = ctx.sg_root().lookup_node("/window/content/chat/netstatus_overlay").unwrap();
+    let is_visible = overlay.get_property("is_visible").unwrap();
+    let alpha = overlay.get_property("alpha").unwrap();
     let sub = is_visible.subscribe_modify();
     let redraw = ctx.redraw().clone();
     let ctx2 = ThemeCtx::clone_shallow(ctx);

@@ -39,11 +39,21 @@ mod android_ui_consts {
     pub const TOKEN_NAME_OFFSET: f32 = 200.;
     pub const PADDING_X: f32 = 40.;
     pub const PADDING_Y: f32 = 30.;
-    /// Padding around the feed layer on the main wallet screen.
-    pub const FEED_LAYER_PADDING: f32 = 30.;
+    /// Margin between the feed layers and the screen edges.
+    pub const FEED_LAYER_MARGIN: f32 = 30.;
+    /// Inset padding of the feed view inside its layer (sides and
+    /// bottom; the top is flush under the header).
+    pub const FEED_LAYER_PADDING: f32 = 20.;
     /// Header band inside the feed layer (the feed chatview starts
     /// below it).
-    pub const FEED_HEADER_HEIGHT: f32 = 60.;
+    pub const FEED_HEADER_HEIGHT: f32 = 100.;
+    /// Horizontal padding of the header's contents.
+    pub const FEED_HEADER_PAD: f32 = 30.;
+    /// "CHAT" header label font size.
+    pub const FEED_HEADER_FONTSIZE: f32 = 40.;
+    /// The header's down-arrow glyph scale.
+    pub const FEED_ARROW_SCALE: f32 = 60.;
+    pub const FEED_ARROW_Y: f32 = 44.;
     // Feed chatview styling (mirrors the chat screen's values).
     pub const FEED_FONTSIZE: f32 = 50.;
     pub const FEED_TIMESTAMP_FONTSIZE: f32 = 24.;
@@ -110,11 +120,21 @@ mod ui_consts {
     pub const TOKEN_NAME_OFFSET: f32 = 90.;
     pub const PADDING_X: f32 = 20.;
     pub const PADDING_Y: f32 = 15.;
-    /// Padding around the feed layer on the main wallet screen.
-    pub const FEED_LAYER_PADDING: f32 = 15.;
+    /// Margin between the feed layers and the screen edges.
+    pub const FEED_LAYER_MARGIN: f32 = 15.;
+    /// Inset padding of the feed view inside its layer (sides and
+    /// bottom; the top is flush under the header).
+    pub const FEED_LAYER_PADDING: f32 = 10.;
     /// Header band inside the feed layer (the feed chatview starts
     /// below it).
-    pub const FEED_HEADER_HEIGHT: f32 = 30.;
+    pub const FEED_HEADER_HEIGHT: f32 = 50.;
+    /// Horizontal padding of the header's contents.
+    pub const FEED_HEADER_PAD: f32 = 15.;
+    /// "CHAT" header label font size.
+    pub const FEED_HEADER_FONTSIZE: f32 = 20.;
+    /// The header's down-arrow glyph scale.
+    pub const FEED_ARROW_SCALE: f32 = 30.;
+    pub const FEED_ARROW_Y: f32 = 22.;
     // Feed chatview styling (mirrors the chat screen's values).
     pub const FEED_FONTSIZE: f32 = 25.;
     pub const FEED_TIMESTAMP_FONTSIZE: f32 = 12.;

@@ -32,6 +32,7 @@ use crate::{
         schema::{
             chat::ui_consts::{BACKARROW_SCALE, EMOJI_CLOSE_SCALE, EMOJI_SCALE},
             menu::ui_consts::{MENU_ICON_SCALE, SETTINGS_ICON_SCALE},
+            wallet::data::FEED_HEADER_HEIGHT,
         },
     },
     error::{Error, Result},
@@ -72,6 +73,7 @@ async fn light_apply(ctx: &ThemeCtx) -> Result<()> {
         //("menu.role1_color", [0.40, 0.40, 0.40, 1.]),
         //("menu.role2_color", [0.25, 0.25, 0.25, 1.]),
         ("chatview.timestamp_color", [0.45, 0.45, 0.45, 1.]),
+        ("chatview.channel_color", [0.45, 0.45, 0.45, 1.]),
         ("chatview.text_color", [0.08, 0.08, 0.08, 1.]),
         ("chatview.hi_bg_color", [0.75, 0.75, 0.75, 1.]),
         ("chatview.action_text_color", [0.20, 0.20, 0.20, 1.]),
@@ -84,6 +86,46 @@ async fn light_apply(ctx: &ThemeCtx) -> Result<()> {
     king_vectorart_node(ctx).await;
 
     let sg_root = ctx.sg_root();
+
+    // Feed layers on the wallet main screen: slightly darker than the
+    // white baseline (single color; the header band a shade darker
+    // still — drawn inside the one bg shape per layer, header band
+    // included). Journaled as touched so unload reverts to the
+    // schema's minimal defaults.
+    //
+    // Expanded layer: body + header band. Rolled strip: the whole
+    // strip is header.
+    let feed_bg = sg_root.lookup_node("/window/content/wallet/main_layer/feed_layer/bg").unwrap();
+    let mut shape = VectorShape::new();
+    shape.add_filled_box(
+        expr::const_f32(0.),
+        expr::const_f32(0.),
+        expr::load_var("w"),
+        expr::load_var("h"),
+        [0.87, 0.87, 0.87, 1.],
+    );
+    shape.add_filled_box(
+        expr::const_f32(0.),
+        expr::const_f32(0.),
+        expr::load_var("w"),
+        expr::const_f32(FEED_HEADER_HEIGHT),
+        [0.82, 0.82, 0.82, 1.],
+    );
+    let prop = feed_bg.get_property("shape").unwrap();
+    ctx.set_touched(atom, &prop, 0, PropertyValue::VectorShape(Arc::new(shape)))?;
+
+    let rolled_bg =
+        sg_root.lookup_node("/window/content/wallet/main_layer/feed_rolled_layer/bg").unwrap();
+    let mut shape = VectorShape::new();
+    shape.add_filled_box(
+        expr::const_f32(0.),
+        expr::const_f32(0.),
+        expr::load_var("w"),
+        expr::load_var("h"),
+        [0.82, 0.82, 0.82, 1.],
+    );
+    let prop = rolled_bg.get_property("shape").unwrap();
+    ctx.set_touched(atom, &prop, 0, PropertyValue::VectorShape(Arc::new(shape)))?;
 
     let node = sg_root.lookup_node("/window/content/wallet/main_layer/chat_btn_shape").unwrap();
     let color = rgba!(0xF41740ff);
