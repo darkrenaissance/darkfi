@@ -33,13 +33,17 @@ use crate::{
     expr,
     gfx::gfxtag,
     mesh::{
-        COLOR_BLUE, COLOR_CYAN, COLOR_INACTIVE, COLOR_WALLET_SQUARE_BORDER, COLOR_WALLET_SQUARE_FILL,
+        COLOR_BLUE, COLOR_CYAN, COLOR_INACTIVE, COLOR_WALLET_SQUARE_BORDER,
+        COLOR_WALLET_SQUARE_FILL,
     },
     prop::{PropertyAtomicGuard, PropertyBool, PropertyFloat32, Role},
     scene::{SceneNodePtr, Slot},
     sfx, shape,
     theme::wire_color,
-    ui::{emoji_picker::EmojiMeshesPtr, Button, Layer, Menu, ShapeVertex, Text, VectorArt, VectorShape},
+    ui::{
+        emoji_picker::EmojiMeshesPtr, Button, Layer, Menu, ShapeVertex, Text, VectorArt,
+        VectorShape,
+    },
     util::i18n::I18nBabelFish,
 };
 
@@ -60,7 +64,6 @@ mod android_ui_consts {
     pub const VERBLOCK_Y: f32 = 130.;
     // Button constants
     pub const MENU_BTN_W_L: f32 = 250.;
-    pub const MENU_BTN_W_R: f32 = 200.;
     pub const MENU_BTN_H: f32 = 180.;
     pub const EDIT_BTN_OUTLINE_T: f32 = 2.;
     pub const BTN_TEXT_FONTSIZE: f32 = 50.;
@@ -73,10 +76,13 @@ mod android_ui_consts {
     pub const SETTINGS_ICON_SCALE: f32 = 55.;
 
     pub const DARKFI_LOGO_SCALE: f32 = 40.;
-    pub const MENU_ICON_GAP: f32 = 48.;
-    pub const MENU_ICON_ART_CX: f32 = 0.44753;
-    pub const MENU_ICON_ART_H: f32 = 0.704602;
-    pub const MENU_ICON_ART_Y1: f32 = 0.013432;
+    // Button-column metrics
+    pub const WRITE_BTN_H: f32 = 204.;
+    pub const WRITE_ICON_X: f32 = 219.;
+    pub const WRITE_ICON_Y: f32 = 140.;
+    pub const SETTINGS_BTN_Y: f32 = 244.;
+    pub const SETTINGS_ICON_Y: f32 = 364.;
+    pub const BTN_COL_H: f32 = 764.;
 }
 
 #[cfg(any(target_os = "android", feature = "emulate-android"))]
@@ -105,7 +111,6 @@ pub mod ui_consts {
     pub const VERBLOCK_Y: f32 = 75.;
     // Button constants
     pub const MENU_BTN_W_L: f32 = 110.;
-    pub const MENU_BTN_W_R: f32 = 85.;
     pub const MENU_BTN_H: f32 = 100.;
     pub const EDIT_BTN_OUTLINE_T: f32 = 1.;
     pub const BTN_TEXT_FONTSIZE: f32 = 20.;
@@ -118,10 +123,13 @@ pub mod ui_consts {
     pub const SETTINGS_ICON_SCALE: f32 = 28.;
 
     pub const DARKFI_LOGO_SCALE: f32 = 20.;
-    pub const MENU_ICON_GAP: f32 = 17.5;
-    pub const MENU_ICON_ART_CX: f32 = 0.44753;
-    pub const MENU_ICON_ART_H: f32 = 0.704602;
-    pub const MENU_ICON_ART_Y1: f32 = 0.013432;
+    // Button-column metrics
+    pub const WRITE_BTN_H: f32 = 74.;
+    pub const WRITE_ICON_X: f32 = 83.;
+    pub const WRITE_ICON_Y: f32 = 70.;
+    pub const SETTINGS_BTN_Y: f32 = 94.;
+    pub const SETTINGS_ICON_Y: f32 = 141.;
+    pub const BTN_COL_H: f32 = 299.;
 }
 
 pub mod channel;
@@ -185,15 +193,10 @@ pub async fn make(
     cc.add_const_f32("CHANNEL_HEADER_HEIGHT", CHANNEL_HEADER_HEIGHT);
     cc.add_const_f32("CHANNEL_ITEM_HEIGHT", CHANNEL_ITEM_HEIGHT);
     cc.add_const_f32("CHANNEL_LABEL_X", CHANNEL_LABEL_X);
-    cc.add_const_f32("MENU_BTN_W_L", MENU_BTN_W_L);
-    cc.add_const_f32("MENU_BTN_W_R", MENU_BTN_W_R);
     cc.add_const_f32("MENU_BTN_H", MENU_BTN_H);
     cc.add_const_f32("WALLET_SQUARE", WALLET_SQUARE);
-    cc.add_const_f32("MENU_ICON_GAP", MENU_ICON_GAP);
-    cc.add_const_f32("MENU_ICON_ART_CX", MENU_ICON_ART_CX);
-    cc.add_const_f32("MENU_ICON_ART_H", MENU_ICON_ART_H);
-    cc.add_const_f32("MENU_ICON_ART_Y1", MENU_ICON_ART_Y1);
-    cc.add_const_f32("MENU_ICON_SCALE", MENU_ICON_SCALE);
+    cc.add_const_f32("BTN_COL_H", BTN_COL_H);
+    cc.add_const_f32("WRITE_ICON_X", WRITE_ICON_X);
 
     let atom = &mut PropertyAtomicGuard::none();
 
@@ -319,15 +322,18 @@ pub async fn make(
         node.setup(|me| Button::new(me, app.renderer.clone(), app.redraw_trigger.clone())).await;
     layer_node.link(node);
 
-    // Main button layer
+    // Main button layer: the right-edge button column. Tall enough to
+    // hold the write button on top, the settings button in the middle
+    // and the wallet square at the bottom. Children are scissored to
+    // this rect, so it must cover everything it contains.
     let node = create_layer("mainbtn_layer");
     let prop = node.get_property("rect").unwrap();
     prop.set_default_f32(0, CHANNEL_LABEL_X).unwrap();
-    let code = cc.compile("h - WALLET_SQUARE - CHANNEL_LABEL_X").unwrap();
+    let code = cc.compile("h - BTN_COL_H - CHANNEL_LABEL_X").unwrap();
     prop.set_default_expr(1, code).unwrap();
     let code = cc.compile("w - 2 * CHANNEL_LABEL_X").unwrap();
     prop.set_default_expr(2, code).unwrap();
-    prop.set_default_f32(3, WALLET_SQUARE).unwrap();
+    prop.set_default_f32(3, BTN_COL_H).unwrap();
     node.set_property_bool(atom, Role::App, "is_visible", true).unwrap();
     node.set_property_u32(atom, Role::App, "z_index", 2).unwrap();
     node.set_property_u32(atom, Role::App, "priority", 1).unwrap();
@@ -355,19 +361,15 @@ pub async fn make(
         node.setup(|me| VectorArt::new(me, app.renderer.clone(), app.redraw_trigger.clone())).await;
     layer_node.link(node);
 
-    // Write / Menu button (stacked above the settings button)
+    // Write / Menu button (top of the button column, above the settings button)
     let node = create_button("write_btn");
     node.set_property_bool(atom, Role::App, "is_active", true).unwrap();
     let prop = node.get_property("rect").unwrap();
-    let code = cc.compile("w - WALLET_SQUARE - CHANNEL_LABEL_X").unwrap();
+    let code = cc.compile("w - WALLET_SQUARE").unwrap();
     prop.set_default_expr(0, code).unwrap();
-    let code = cc
-        .compile("h - 2 * CHANNEL_LABEL_X - 2 * MENU_BTN_W_R - MENU_ICON_GAP - MENU_ICON_SCALE * MENU_ICON_ART_H")
-        .unwrap();
-    prop.set_default_expr(1, code).unwrap();
+    prop.set_default_f32(1, 0.).unwrap();
     prop.set_default_f32(2, WALLET_SQUARE).unwrap();
-    let code = cc.compile("MENU_ICON_GAP + MENU_ICON_SCALE * MENU_ICON_ART_H").unwrap();
-    prop.set_default_expr(3, code).unwrap();
+    prop.set_default_f32(3, WRITE_BTN_H).unwrap();
     //Uncomment this to see the button outline
     //node.set_property_bool(atom, Role::App, "debug", true).unwrap();
     //node.set_property_u32(atom, Role::App, "z_index", 1).unwrap();
@@ -393,14 +395,9 @@ pub async fn make(
 
     let node = create_vector_art("write_icon");
     let prop = node.get_property("rect").unwrap();
-    let code = cc
-        .compile("w - WALLET_SQUARE / 2 - CHANNEL_LABEL_X - MENU_ICON_SCALE * MENU_ICON_ART_CX")
-        .unwrap();
+    let code = cc.compile("w - WRITE_ICON_X").unwrap();
     prop.set_default_expr(0, code).unwrap();
-    let code = cc
-        .compile("h - 2 * CHANNEL_LABEL_X - 2 * MENU_BTN_W_R - MENU_ICON_GAP + MENU_ICON_SCALE * MENU_ICON_ART_Y1")
-        .unwrap();
-    prop.set_default_expr(1, code).unwrap();
+    prop.set_default_f32(1, WRITE_ICON_Y).unwrap();
     prop.set_default_f32(2, MENU_ICON_SCALE).unwrap();
     prop.set_default_f32(3, MENU_ICON_SCALE).unwrap();
     node.set_property_u32(atom, Role::App, "z_index", 3).unwrap();
@@ -551,7 +548,8 @@ pub async fn setup_wallet_button(app: &App, chat_layer: SceneNodePtr, i18n_fish:
     let prop = node.get_property("rect").unwrap();
     let code = cc.compile("w - WALLET_SQUARE").unwrap();
     prop.set_expr(atom, Role::App, 0, code).unwrap();
-    prop.set_f32(atom, Role::App, 1, 0.).unwrap();
+    let code = cc.compile("h - WALLET_SQUARE").unwrap();
+    prop.set_expr(atom, Role::App, 1, code).unwrap();
     prop.set_f32(atom, Role::App, 2, WALLET_SQUARE).unwrap();
     prop.set_f32(atom, Role::App, 3, WALLET_SQUARE).unwrap();
     node.set_property_u32(atom, Role::App, "z_index", 1).unwrap();
@@ -577,12 +575,13 @@ pub async fn setup_wallet_button(app: &App, chat_layer: SceneNodePtr, i18n_fish:
     mainbtn_layer.link(node);
 
     // Wallet status icon (blockchain netlogo, all cyan = fully connected)
-    // Positioned at center of wallet button area, above write_btn
+    // Centered in the wallet square at the bottom of the button column
     let node = create_vector_art("wallet_icon");
     let prop = node.get_property("rect").unwrap();
     let code = cc.compile("w - WALLET_SQUARE / 2").unwrap();
     prop.set_default_expr(0, code).unwrap();
-    prop.set_default_f32(1, WALLET_SQUARE / 2.).unwrap();
+    let code = cc.compile("h - WALLET_SQUARE / 2").unwrap();
+    prop.set_default_expr(1, code).unwrap();
     prop.set_default_f32(2, 1.).unwrap();
     prop.set_default_f32(3, 1.).unwrap();
     node.set_property_u32(atom, Role::App, "z_index", 3).unwrap();
@@ -603,7 +602,8 @@ pub async fn setup_wallet_button(app: &App, chat_layer: SceneNodePtr, i18n_fish:
     let prop = node.get_property("rect").unwrap();
     let code = cc.compile("w - WALLET_SQUARE").unwrap();
     prop.set_default_expr(0, code).unwrap();
-    prop.set_default_f32(1, 0.).unwrap();
+    let code = cc.compile("h - WALLET_SQUARE").unwrap();
+    prop.set_default_expr(1, code).unwrap();
     prop.set_default_f32(2, WALLET_SQUARE).unwrap();
     prop.set_default_f32(3, WALLET_SQUARE).unwrap();
     //node.set_property_bool(atom, Role::App, "debug", true).unwrap();
@@ -638,18 +638,17 @@ pub async fn setup_wallet_button(app: &App, chat_layer: SceneNodePtr, i18n_fish:
 pub async fn setup_settings_button(app: &App, chat_layer: SceneNodePtr) {
     let atom = &mut PropertyAtomicGuard::none();
     let mut cc = expr::Compiler::new();
-    cc.add_const_f32("MENU_BTN_W_R", MENU_BTN_W_R);
-    cc.add_const_f32("CHANNEL_LABEL_X", CHANNEL_LABEL_X);
-    cc.add_const_f32("SETTINGS_ICON_SCALE", SETTINGS_ICON_SCALE);
+    cc.add_const_f32("WALLET_SQUARE", WALLET_SQUARE);
 
     let mainlayer_node = chat_layer.lookup_node("/menu_layer/mainbtn_layer").unwrap();
 
-    // Settings icon
+    // Settings icon (middle slot of the button column, between the
+    // write button above and the wallet square below)
     let node = create_vector_art("settings_icon");
     let prop = node.get_property("rect").unwrap();
-    let code = cc.compile("w - MENU_BTN_W_R / 2 - CHANNEL_LABEL_X").unwrap();
+    let code = cc.compile("w - WALLET_SQUARE / 2").unwrap();
     prop.set_default_expr(0, code).unwrap();
-    prop.set_default_f32(1, 1.5 * MENU_BTN_W_R + CHANNEL_LABEL_X).unwrap();
+    prop.set_default_f32(1, SETTINGS_ICON_Y).unwrap();
     prop.set_default_f32(2, SETTINGS_ICON_SCALE).unwrap();
     prop.set_default_f32(3, SETTINGS_ICON_SCALE).unwrap();
     node.set_property_u32(atom, Role::App, "z_index", 3).unwrap();
@@ -664,11 +663,11 @@ pub async fn setup_settings_button(app: &App, chat_layer: SceneNodePtr) {
     let node = create_button("settings_btn");
     node.set_property_bool(atom, Role::App, "is_active", true).unwrap();
     let prop = node.get_property("rect").unwrap();
-    let code = cc.compile("w - MENU_BTN_W_R - CHANNEL_LABEL_X").unwrap();
+    let code = cc.compile("w - WALLET_SQUARE").unwrap();
     prop.set_default_expr(0, code).unwrap();
-    prop.set_default_f32(1, MENU_BTN_W_R + CHANNEL_LABEL_X).unwrap();
-    prop.set_default_f32(2, MENU_BTN_W_R).unwrap();
-    prop.set_default_f32(3, MENU_BTN_W_R).unwrap();
+    prop.set_default_f32(1, SETTINGS_BTN_Y).unwrap();
+    prop.set_default_f32(2, WALLET_SQUARE).unwrap();
+    prop.set_default_f32(3, WALLET_SQUARE).unwrap();
     //node.set_property_bool(atom, Role::App, "debug", true).unwrap();
 
     let (slot, recvr) = Slot::new("settings_clicked");
